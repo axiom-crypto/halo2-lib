@@ -1,0 +1,1122 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `halo2-ecc/src/bn254/pairing.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>pairing.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../../normalize.css"><link rel="stylesheet" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../../ayu.css" disabled><link rel="stylesheet" href="../../../dark.css" disabled><link rel="stylesheet" href="../../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../../storage.js"></script><script defer src="../../../source-script.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../main.js"></script><noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../halo2_ecc/index.html"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></a><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../wheel.svg"></a></div></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<span id="2">2</span>
+<span id="3">3</span>
+<span id="4">4</span>
+<span id="5">5</span>
+<span id="6">6</span>
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
+<span id="10">10</span>
+<span id="11">11</span>
+<span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
+<span id="88">88</span>
+<span id="89">89</span>
+<span id="90">90</span>
+<span id="91">91</span>
+<span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
+<span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
+<span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
+<span id="357">357</span>
+<span id="358">358</span>
+<span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
+<span id="362">362</span>
+<span id="363">363</span>
+<span id="364">364</span>
+<span id="365">365</span>
+<span id="366">366</span>
+<span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
+<span id="394">394</span>
+<span id="395">395</span>
+<span id="396">396</span>
+<span id="397">397</span>
+<span id="398">398</span>
+<span id="399">399</span>
+<span id="400">400</span>
+<span id="401">401</span>
+<span id="402">402</span>
+<span id="403">403</span>
+<span id="404">404</span>
+<span id="405">405</span>
+<span id="406">406</span>
+<span id="407">407</span>
+<span id="408">408</span>
+<span id="409">409</span>
+<span id="410">410</span>
+<span id="411">411</span>
+<span id="412">412</span>
+<span id="413">413</span>
+<span id="414">414</span>
+<span id="415">415</span>
+<span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
+<span id="419">419</span>
+<span id="420">420</span>
+<span id="421">421</span>
+<span id="422">422</span>
+<span id="423">423</span>
+<span id="424">424</span>
+<span id="425">425</span>
+<span id="426">426</span>
+<span id="427">427</span>
+<span id="428">428</span>
+<span id="429">429</span>
+<span id="430">430</span>
+<span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
+<span id="451">451</span>
+<span id="452">452</span>
+<span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
+<span id="468">468</span>
+<span id="469">469</span>
+<span id="470">470</span>
+<span id="471">471</span>
+<span id="472">472</span>
+<span id="473">473</span>
+<span id="474">474</span>
+<span id="475">475</span>
+<span id="476">476</span>
+<span id="477">477</span>
+<span id="478">478</span>
+<span id="479">479</span>
+<span id="480">480</span>
+<span id="481">481</span>
+<span id="482">482</span>
+<span id="483">483</span>
+<span id="484">484</span>
+<span id="485">485</span>
+<span id="486">486</span>
+<span id="487">487</span>
+<span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
+<span id="495">495</span>
+<span id="496">496</span>
+<span id="497">497</span>
+<span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
+<span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
+<span id="510">510</span>
+<span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
+<span id="546">546</span>
+<span id="547">547</span>
+<span id="548">548</span>
+<span id="549">549</span>
+<span id="550">550</span>
+<span id="551">551</span>
+<span id="552">552</span>
+<span id="553">553</span>
+<span id="554">554</span>
+<span id="555">555</span>
+<span id="556">556</span>
+<span id="557">557</span>
+<span id="558">558</span>
+<span id="559">559</span>
+<span id="560">560</span>
+</pre><pre class="rust"><code><span class="attribute">#![allow(non_snake_case)]
+</span><span class="kw">use super</span>::{Fp12Chip, Fp2Chip, FpChip, FpPoint, FqPoint};
+<span class="kw">use </span><span class="kw">crate</span>::halo2_proofs::{
+    circuit::Value,
+    halo2curves::bn256::{<span class="self">self</span>, G1Affine, G2Affine, SIX_U_PLUS_2_NAF},
+    halo2curves::bn256::{Fq, Fq2, FROBENIUS_COEFF_FQ12_C1},
+    plonk::ConstraintSystem,
+};
+<span class="kw">use crate</span>::{
+    ecc::{EcPoint, EccChip},
+    fields::{fp::FpStrategy, fp12::mul_no_carry_w6},
+    fields::{FieldChip, FieldExtPoint},
+};
+<span class="kw">use </span>halo2_base::{
+    utils::{biguint_to_fe, fe_to_biguint, PrimeField},
+    Context,
+};
+<span class="kw">use </span>num_bigint::BigUint;
+
+<span class="kw">const </span>XI_0: i64 = <span class="number">9</span>;
+
+<span class="comment">// Inputs:
+//  Q0 = (x_1, y_1) and Q1 = (x_2, y_2) are points in E(Fp2)
+//  P is point (X, Y) in E(Fp)
+// Assuming Q0 != Q1
+// Output:
+//  line_{Psi(Q0), Psi(Q1)}(P) where Psi(x,y) = (w^2 x, w^3 y)
+//  - equals w^3 (y_1 - y_2) X + w^2 (x_2 - x_1) Y + w^5 (x_1 y_2 - x_2 y_1) =: out3 * w^3 + out2 * w^2 + out5 * w^5 where out2, out3, out5 are Fp2 points
+// Output is [None, None, out2, out3, None, out5] as vector of `Option&lt;FqPoint&gt;`s
+</span><span class="kw">pub fn </span>sparse_line_function_unequal&lt;<span class="lifetime">&#39;a</span>, F: PrimeField&gt;(
+    fp2_chip: <span class="kw-2">&amp;</span>Fp2Chip&lt;F&gt;,
+    ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+    Q: (<span class="kw-2">&amp;</span>EcPoint&lt;F, FqPoint&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;, <span class="kw-2">&amp;</span>EcPoint&lt;F, FqPoint&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;),
+    P: <span class="kw-2">&amp;</span>EcPoint&lt;F, FpPoint&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;,
+) -&gt; Vec&lt;<span class="prelude-ty">Option</span>&lt;FqPoint&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;&gt; {
+    <span class="kw">let </span>(x_1, y_1) = (<span class="kw-2">&amp;</span>Q.<span class="number">0</span>.x, <span class="kw-2">&amp;</span>Q.<span class="number">0</span>.y);
+    <span class="kw">let </span>(x_2, y_2) = (<span class="kw-2">&amp;</span>Q.<span class="number">1</span>.x, <span class="kw-2">&amp;</span>Q.<span class="number">1</span>.y);
+    <span class="kw">let </span>(X, Y) = (<span class="kw-2">&amp;</span>P.x, <span class="kw-2">&amp;</span>P.y);
+    <span class="macro">assert_eq!</span>(x_1.coeffs.len(), <span class="number">2</span>);
+    <span class="macro">assert_eq!</span>(y_1.coeffs.len(), <span class="number">2</span>);
+    <span class="macro">assert_eq!</span>(x_2.coeffs.len(), <span class="number">2</span>);
+    <span class="macro">assert_eq!</span>(y_2.coeffs.len(), <span class="number">2</span>);
+
+    <span class="kw">let </span>y1_minus_y2 = fp2_chip.sub_no_carry(ctx, y_1, y_2);
+    <span class="kw">let </span>x2_minus_x1 = fp2_chip.sub_no_carry(ctx, x_2, x_1);
+    <span class="kw">let </span>x1y2 = fp2_chip.mul_no_carry(ctx, x_1, y_2);
+    <span class="kw">let </span>x2y1 = fp2_chip.mul_no_carry(ctx, x_2, y_1);
+
+    <span class="kw">let </span>out3 = fp2_chip.fp_mul_no_carry(ctx, <span class="kw-2">&amp;</span>y1_minus_y2, X);
+    <span class="kw">let </span>out2 = fp2_chip.fp_mul_no_carry(ctx, <span class="kw-2">&amp;</span>x2_minus_x1, Y);
+    <span class="kw">let </span>out5 = fp2_chip.sub_no_carry(ctx, <span class="kw-2">&amp;</span>x1y2, <span class="kw-2">&amp;</span>x2y1);
+
+    <span class="comment">// so far we have not &quot;carried mod p&quot; for any of the outputs
+    // we do this below
+    </span><span class="macro">vec!</span>[<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(out2), <span class="prelude-val">Some</span>(out3), <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(out5)]
+        .iter()
+        .map(|option_nc| option_nc.as_ref().map(|nocarry| fp2_chip.carry_mod(ctx, nocarry)))
+        .collect()
+}
+
+<span class="comment">// Assuming curve is of form Y^2 = X^3 + b (a = 0) to save operations
+// Inputs:
+//  Q = (x, y) is a point in E(Fp2)
+//  P = (P.x, P.y) in E(Fp)
+// Output:
+//  line_{Psi(Q), Psi(Q)}(P) where Psi(x,y) = (w^2 x, w^3 y)
+//  - equals (3x^3 - 2y^2)(XI_0 + u) + w^4 (-3 x^2 * Q.x) + w^3 (2 y * Q.y) =: out0 + out4 * w^4 + out3 * w^3 where out0, out3, out4 are Fp2 points
+// Output is [out0, None, None, out3, out4, None] as vector of `Option&lt;FqPoint&gt;`s
+</span><span class="kw">pub fn </span>sparse_line_function_equal&lt;<span class="lifetime">&#39;a</span>, F: PrimeField&gt;(
+    fp2_chip: <span class="kw-2">&amp;</span>Fp2Chip&lt;F&gt;,
+    ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+    Q: <span class="kw-2">&amp;</span>EcPoint&lt;F, FqPoint&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;,
+    P: <span class="kw-2">&amp;</span>EcPoint&lt;F, FpPoint&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;,
+) -&gt; Vec&lt;<span class="prelude-ty">Option</span>&lt;FqPoint&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;&gt; {
+    <span class="kw">let </span>(x, y) = (<span class="kw-2">&amp;</span>Q.x, <span class="kw-2">&amp;</span>Q.y);
+    <span class="macro">assert_eq!</span>(x.coeffs.len(), <span class="number">2</span>);
+    <span class="macro">assert_eq!</span>(y.coeffs.len(), <span class="number">2</span>);
+
+    <span class="kw">let </span>x_sq = fp2_chip.mul(ctx, x, x);
+
+    <span class="kw">let </span>x_cube = fp2_chip.mul_no_carry(ctx, <span class="kw-2">&amp;</span>x_sq, x);
+    <span class="kw">let </span>three_x_cu = fp2_chip.scalar_mul_no_carry(ctx, <span class="kw-2">&amp;</span>x_cube, <span class="number">3</span>);
+    <span class="kw">let </span>y_sq = fp2_chip.mul_no_carry(ctx, y, y);
+    <span class="kw">let </span>two_y_sq = fp2_chip.scalar_mul_no_carry(ctx, <span class="kw-2">&amp;</span>y_sq, <span class="number">2</span>);
+    <span class="kw">let </span>out0_left = fp2_chip.sub_no_carry(ctx, <span class="kw-2">&amp;</span>three_x_cu, <span class="kw-2">&amp;</span>two_y_sq);
+    <span class="kw">let </span>out0 = mul_no_carry_w6::&lt;F, FpChip&lt;F&gt;, XI_0&gt;(fp2_chip.fp_chip, ctx, <span class="kw-2">&amp;</span>out0_left);
+
+    <span class="kw">let </span>x_sq_Px = fp2_chip.fp_mul_no_carry(ctx, <span class="kw-2">&amp;</span>x_sq, <span class="kw-2">&amp;</span>P.x);
+    <span class="kw">let </span>out4 = fp2_chip.scalar_mul_no_carry(ctx, <span class="kw-2">&amp;</span>x_sq_Px, -<span class="number">3</span>);
+
+    <span class="kw">let </span>y_Py = fp2_chip.fp_mul_no_carry(ctx, y, <span class="kw-2">&amp;</span>P.y);
+    <span class="kw">let </span>out3 = fp2_chip.scalar_mul_no_carry(ctx, <span class="kw-2">&amp;</span>y_Py, <span class="number">2</span>);
+
+    <span class="comment">// so far we have not &quot;carried mod p&quot; for any of the outputs
+    // we do this below
+    </span><span class="macro">vec!</span>[<span class="prelude-val">Some</span>(out0), <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(out3), <span class="prelude-val">Some</span>(out4), <span class="prelude-val">None</span>]
+        .iter()
+        .map(|option_nc| option_nc.as_ref().map(|nocarry| fp2_chip.carry_mod(ctx, nocarry)))
+        .collect()
+}
+
+<span class="comment">// multiply Fp12 point `a` with Fp12 point `b` where `b` is len 6 vector of Fp2 points, where some are `None` to represent zero.
+// Assumes `b` is not vector of all `None`s
+</span><span class="kw">pub fn </span>sparse_fp12_multiply&lt;<span class="lifetime">&#39;a</span>, F: PrimeField&gt;(
+    fp2_chip: <span class="kw-2">&amp;</span>Fp2Chip&lt;F&gt;,
+    ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+    a: <span class="kw-2">&amp;</span>FqPoint&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+    b_fp2_coeffs: <span class="kw-2">&amp;</span>Vec&lt;<span class="prelude-ty">Option</span>&lt;FqPoint&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;&gt;,
+) -&gt; FieldExtPoint&lt;FpPoint&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt; {
+    <span class="macro">assert_eq!</span>(a.coeffs.len(), <span class="number">12</span>);
+    <span class="macro">assert_eq!</span>(b_fp2_coeffs.len(), <span class="number">6</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>a_fp2_coeffs = Vec::with_capacity(<span class="number">6</span>);
+    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">6 </span>{
+        a_fp2_coeffs.push(FqPoint::construct(<span class="macro">vec!</span>[a.coeffs[i].clone(), a.coeffs[i + <span class="number">6</span>].clone()]));
+    }
+    <span class="comment">// a * b as element of Fp2[w] without evaluating w^6 = (XI_0 + u)
+    </span><span class="kw">let </span><span class="kw-2">mut </span>prod_2d: Vec&lt;<span class="prelude-ty">Option</span>&lt;FieldExtPoint&lt;FpPoint&lt;F&gt;&gt;&gt;&gt; = <span class="macro">vec!</span>[<span class="prelude-val">None</span>; <span class="number">11</span>];
+    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">6 </span>{
+        <span class="kw">for </span>j <span class="kw">in </span><span class="number">0</span>..<span class="number">6 </span>{
+            prod_2d[i + j] =
+                <span class="kw">match </span>(prod_2d[i + j].clone(), <span class="kw-2">&amp;</span>a_fp2_coeffs[i], b_fp2_coeffs[j].as_ref()) {
+                    (a, <span class="kw">_</span>, <span class="prelude-val">None</span>) =&gt; a,
+                    (<span class="prelude-val">None</span>, a, <span class="prelude-val">Some</span>(b)) =&gt; {
+                        <span class="kw">let </span>ab = fp2_chip.mul_no_carry(ctx, a, b);
+                        <span class="prelude-val">Some</span>(ab)
+                    }
+                    (<span class="prelude-val">Some</span>(a), b, <span class="prelude-val">Some</span>(c)) =&gt; {
+                        <span class="kw">let </span>bc = fp2_chip.mul_no_carry(ctx, b, c);
+                        <span class="kw">let </span>out = fp2_chip.add_no_carry(ctx, <span class="kw-2">&amp;</span>a, <span class="kw-2">&amp;</span>bc);
+                        <span class="prelude-val">Some</span>(out)
+                    }
+                };
+        }
+    }
+
+    <span class="kw">let </span><span class="kw-2">mut </span>out_fp2 = Vec::with_capacity(<span class="number">6</span>);
+    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">6 </span>{
+        <span class="comment">// prod_2d[i] + prod_2d[i+6] * w^6
+        </span><span class="kw">let </span>prod_nocarry = <span class="kw">if </span>i != <span class="number">5 </span>{
+            <span class="kw">let </span>eval_w6 = prod_2d[i + <span class="number">6</span>]
+                .as_ref()
+                .map(|a| mul_no_carry_w6::&lt;F, FpChip&lt;F&gt;, XI_0&gt;(fp2_chip.fp_chip, ctx, a));
+            <span class="kw">match </span>(prod_2d[i].as_ref(), eval_w6) {
+                (<span class="prelude-val">None</span>, b) =&gt; b.unwrap(), <span class="comment">// Our current use cases of 235 and 034 sparse multiplication always result in non-None value
+                </span>(<span class="prelude-val">Some</span>(a), <span class="prelude-val">None</span>) =&gt; a.clone(),
+                (<span class="prelude-val">Some</span>(a), <span class="prelude-val">Some</span>(b)) =&gt; fp2_chip.add_no_carry(ctx, a, <span class="kw-2">&amp;</span>b),
+            }
+        } <span class="kw">else </span>{
+            prod_2d[i].clone().unwrap()
+        };
+        <span class="kw">let </span>prod = fp2_chip.carry_mod(ctx, <span class="kw-2">&amp;</span>prod_nocarry);
+        out_fp2.push(prod);
+    }
+
+    <span class="kw">let </span><span class="kw-2">mut </span>out_coeffs = Vec::with_capacity(<span class="number">12</span>);
+    <span class="kw">for </span>fp2_coeff <span class="kw">in </span><span class="kw-2">&amp;</span>out_fp2 {
+        out_coeffs.push(fp2_coeff.coeffs[<span class="number">0</span>].clone());
+    }
+    <span class="kw">for </span>fp2_coeff <span class="kw">in </span><span class="kw-2">&amp;</span>out_fp2 {
+        out_coeffs.push(fp2_coeff.coeffs[<span class="number">1</span>].clone());
+    }
+    FqPoint::construct(out_coeffs)
+}
+
+<span class="comment">// Input:
+// - g is Fp12 point
+// - Q = (P0, P1) with Q0, Q1 points in E(Fp2)
+// - P is point in E(Fp)
+// Output:
+// - out = g * l_{Psi(Q0), Psi(Q1)}(P) as Fp12 point
+</span><span class="kw">pub fn </span>fp12_multiply_with_line_unequal&lt;<span class="lifetime">&#39;a</span>, F: PrimeField&gt;(
+    fp2_chip: <span class="kw-2">&amp;</span>Fp2Chip&lt;F&gt;,
+    ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+    g: <span class="kw-2">&amp;</span>FqPoint&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+    Q: (<span class="kw-2">&amp;</span>EcPoint&lt;F, FqPoint&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;, <span class="kw-2">&amp;</span>EcPoint&lt;F, FqPoint&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;),
+    P: <span class="kw-2">&amp;</span>EcPoint&lt;F, FpPoint&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;,
+) -&gt; FqPoint&lt;<span class="lifetime">&#39;a</span>, F&gt; {
+    <span class="kw">let </span>line = sparse_line_function_unequal::&lt;F&gt;(fp2_chip, ctx, Q, P);
+    sparse_fp12_multiply::&lt;F&gt;(fp2_chip, ctx, g, <span class="kw-2">&amp;</span>line)
+}
+
+<span class="comment">// Input:
+// - g is Fp12 point
+// - Q is point in E(Fp2)
+// - P is point in E(Fp)
+// Output:
+// - out = g * l_{Psi(Q), Psi(Q)}(P) as Fp12 point
+</span><span class="kw">pub fn </span>fp12_multiply_with_line_equal&lt;<span class="lifetime">&#39;a</span>, F: PrimeField&gt;(
+    fp2_chip: <span class="kw-2">&amp;</span>Fp2Chip&lt;F&gt;,
+    ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+    g: <span class="kw-2">&amp;</span>FqPoint&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+    Q: <span class="kw-2">&amp;</span>EcPoint&lt;F, FqPoint&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;,
+    P: <span class="kw-2">&amp;</span>EcPoint&lt;F, FpPoint&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;,
+) -&gt; FqPoint&lt;<span class="lifetime">&#39;a</span>, F&gt; {
+    <span class="kw">let </span>line = sparse_line_function_equal::&lt;F&gt;(fp2_chip, ctx, Q, P);
+    sparse_fp12_multiply::&lt;F&gt;(fp2_chip, ctx, g, <span class="kw-2">&amp;</span>line)
+}
+
+<span class="comment">// Assuming curve is of form `y^2 = x^3 + b` for now (a = 0) for less operations
+// Value of `b` is never used
+// Inputs:
+// - Q = (x, y) is a point in E(Fp2)
+// - P is a point in E(Fp)
+// - `pseudo_binary_encoding` is fixed vector consisting of {-1, 0, 1} entries such that `loop_count = sum pseudo_binary_encoding[i] * 2^i`
+// Output:
+//  - f_{loop_count}(Q,P) * l_{[loop_count] Q&#39;, Frob_p(Q&#39;)}(P) * l_{[loop_count] Q&#39; + Frob_p(Q&#39;), -Frob_p^2(Q&#39;)}(P)
+//  - where we start with `f_1(Q,P) = 1` and use Miller&#39;s algorithm f_{i+j} = f_i * f_j * l_{i,j}(Q,P)
+//  - Q&#39; = Psi(Q) in E(Fp12)
+//  - Frob_p(x,y) = (x^p, y^p)
+//  - Above formula is specific to BN curves
+// Assume:
+//  - Q != O and the order of Q in E(Fp2) is r
+//  - r is prime, so [i]Q != [j]Q for i != j in Z/r
+//  - `0 &lt;= loop_count &lt; r` and `loop_count &lt; p` (to avoid [loop_count]Q&#39; = Frob_p(Q&#39;))
+//  - x^3 + b = 0 has no solution in Fp2, i.e., the y-coordinate of Q cannot be 0.
+
+</span><span class="kw">pub fn </span>miller_loop_BN&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, F: PrimeField&gt;(
+    ecc_chip: <span class="kw-2">&amp;</span>EccChip&lt;F, Fp2Chip&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;,
+    ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;b</span>, F&gt;,
+    Q: <span class="kw-2">&amp;</span>EcPoint&lt;F, FqPoint&lt;<span class="lifetime">&#39;b</span>, F&gt;&gt;,
+    P: <span class="kw-2">&amp;</span>EcPoint&lt;F, FpPoint&lt;<span class="lifetime">&#39;b</span>, F&gt;&gt;,
+    pseudo_binary_encoding: <span class="kw-2">&amp;</span>[i8],
+) -&gt; FqPoint&lt;<span class="lifetime">&#39;b</span>, F&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>i = pseudo_binary_encoding.len() - <span class="number">1</span>;
+    <span class="kw">while </span>pseudo_binary_encoding[i] == <span class="number">0 </span>{
+        i -= <span class="number">1</span>;
+    }
+    <span class="kw">let </span>last_index = i;
+
+    <span class="kw">let </span>neg_Q = ecc_chip.negate(ctx, Q);
+    <span class="macro">assert!</span>(pseudo_binary_encoding[i] == <span class="number">1 </span>|| pseudo_binary_encoding[i] == -<span class="number">1</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>R = <span class="kw">if </span>pseudo_binary_encoding[i] == <span class="number">1 </span>{ Q.clone() } <span class="kw">else </span>{ neg_Q.clone() };
+    i -= <span class="number">1</span>;
+
+    <span class="comment">// initialize the first line function into Fq12 point
+    </span><span class="kw">let </span>sparse_f = sparse_line_function_equal::&lt;F&gt;(ecc_chip.field_chip(), ctx, <span class="kw-2">&amp;</span>R, P);
+    <span class="macro">assert_eq!</span>(sparse_f.len(), <span class="number">6</span>);
+
+    <span class="kw">let </span>zero_fp = ecc_chip.field_chip.fp_chip.load_constant(ctx, BigUint::from(<span class="number">0u64</span>));
+    <span class="kw">let </span><span class="kw-2">mut </span>f_coeffs = Vec::with_capacity(<span class="number">12</span>);
+    <span class="kw">for </span>coeff <span class="kw">in </span><span class="kw-2">&amp;</span>sparse_f {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(fp2_point) = coeff {
+            f_coeffs.push(fp2_point.coeffs[<span class="number">0</span>].clone());
+        } <span class="kw">else </span>{
+            f_coeffs.push(zero_fp.clone());
+        }
+    }
+    <span class="kw">for </span>coeff <span class="kw">in </span><span class="kw-2">&amp;</span>sparse_f {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(fp2_point) = coeff {
+            f_coeffs.push(fp2_point.coeffs[<span class="number">1</span>].clone());
+        } <span class="kw">else </span>{
+            f_coeffs.push(zero_fp.clone());
+        }
+    }
+
+    <span class="kw">let </span><span class="kw-2">mut </span>f = FqPoint::construct(f_coeffs);
+
+    <span class="kw">loop </span>{
+        <span class="kw">if </span>i != last_index - <span class="number">1 </span>{
+            <span class="kw">let </span>fp12_chip = Fp12Chip::&lt;F&gt;::construct(ecc_chip.field_chip.fp_chip);
+            <span class="kw">let </span>f_sq = fp12_chip.mul(ctx, <span class="kw-2">&amp;</span>f, <span class="kw-2">&amp;</span>f);
+            f = fp12_multiply_with_line_equal::&lt;F&gt;(ecc_chip.field_chip(), ctx, <span class="kw-2">&amp;</span>f_sq, <span class="kw-2">&amp;</span>R, P);
+        }
+        R = ecc_chip.double(ctx, <span class="kw-2">&amp;</span>R);
+
+        <span class="macro">assert!</span>(pseudo_binary_encoding[i] &lt;= <span class="number">1 </span>&amp;&amp; pseudo_binary_encoding[i] &gt;= -<span class="number">1</span>);
+        <span class="kw">if </span>pseudo_binary_encoding[i] != <span class="number">0 </span>{
+            <span class="kw">let </span>sign_Q = <span class="kw">if </span>pseudo_binary_encoding[i] == <span class="number">1 </span>{ Q } <span class="kw">else </span>{ <span class="kw-2">&amp;</span>neg_Q };
+            f = fp12_multiply_with_line_unequal::&lt;F&gt;(
+                ecc_chip.field_chip(),
+                ctx,
+                <span class="kw-2">&amp;</span>f,
+                (<span class="kw-2">&amp;</span>R, sign_Q),
+                P,
+            );
+            R = ecc_chip.add_unequal(ctx, <span class="kw-2">&amp;</span>R, sign_Q, <span class="bool-val">false</span>);
+        }
+        <span class="kw">if </span>i == <span class="number">0 </span>{
+            <span class="kw">break</span>;
+        }
+        i -= <span class="number">1</span>;
+    }
+
+    <span class="comment">// Frobenius coefficient coeff[1][j] = ((9+u)^{(p-1)/6})^j
+    // load coeff[1][2], coeff[1][3]
+    </span><span class="kw">let </span>c2 = FROBENIUS_COEFF_FQ12_C1[<span class="number">1</span>] * FROBENIUS_COEFF_FQ12_C1[<span class="number">1</span>];
+    <span class="kw">let </span>c3 = c2 * FROBENIUS_COEFF_FQ12_C1[<span class="number">1</span>];
+    <span class="kw">let </span>c2 = ecc_chip.field_chip.load_constant(ctx, c2);
+    <span class="kw">let </span>c3 = ecc_chip.field_chip.load_constant(ctx, c3);
+
+    <span class="kw">let </span>Q_1 = twisted_frobenius::&lt;F&gt;(ecc_chip, ctx, Q, <span class="kw-2">&amp;</span>c2, <span class="kw-2">&amp;</span>c3);
+    <span class="kw">let </span>neg_Q_2 = neg_twisted_frobenius::&lt;F&gt;(ecc_chip, ctx, <span class="kw-2">&amp;</span>Q_1, <span class="kw-2">&amp;</span>c2, <span class="kw-2">&amp;</span>c3);
+    f = fp12_multiply_with_line_unequal::&lt;F&gt;(ecc_chip.field_chip(), ctx, <span class="kw-2">&amp;</span>f, (<span class="kw-2">&amp;</span>R, <span class="kw-2">&amp;</span>Q_1), P);
+    R = ecc_chip.add_unequal(ctx, <span class="kw-2">&amp;</span>R, <span class="kw-2">&amp;</span>Q_1, <span class="bool-val">false</span>);
+    f = fp12_multiply_with_line_unequal::&lt;F&gt;(ecc_chip.field_chip(), ctx, <span class="kw-2">&amp;</span>f, (<span class="kw-2">&amp;</span>R, <span class="kw-2">&amp;</span>neg_Q_2), P);
+
+    f
+}
+
+<span class="comment">// let pairs = [(a_i, b_i)], a_i in G_1, b_i in G_2
+// output is Prod_i e&#39;(a_i, b_i), where e&#39;(a_i, b_i) is the output of `miller_loop_BN(b_i, a_i)`
+</span><span class="kw">pub fn </span>multi_miller_loop_BN&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, F: PrimeField&gt;(
+    ecc_chip: <span class="kw-2">&amp;</span>EccChip&lt;F, Fp2Chip&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;,
+    ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;b</span>, F&gt;,
+    pairs: Vec&lt;(<span class="kw-2">&amp;</span>EcPoint&lt;F, FpPoint&lt;<span class="lifetime">&#39;b</span>, F&gt;&gt;, <span class="kw-2">&amp;</span>EcPoint&lt;F, FqPoint&lt;<span class="lifetime">&#39;b</span>, F&gt;&gt;)&gt;,
+    pseudo_binary_encoding: <span class="kw-2">&amp;</span>[i8],
+) -&gt; FqPoint&lt;<span class="lifetime">&#39;b</span>, F&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>i = pseudo_binary_encoding.len() - <span class="number">1</span>;
+    <span class="kw">while </span>pseudo_binary_encoding[i] == <span class="number">0 </span>{
+        i -= <span class="number">1</span>;
+    }
+    <span class="kw">let </span>last_index = i;
+    <span class="macro">assert_eq!</span>(pseudo_binary_encoding[last_index], <span class="number">1</span>);
+
+    <span class="kw">let </span>neg_b = pairs.iter().map(|pair| ecc_chip.negate(ctx, pair.<span class="number">1</span>)).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+
+    <span class="comment">// initialize the first line function into Fq12 point
+    </span><span class="kw">let </span><span class="kw-2">mut </span>f = {
+        <span class="kw">let </span>sparse_f =
+            sparse_line_function_equal::&lt;F&gt;(ecc_chip.field_chip(), ctx, pairs[<span class="number">0</span>].<span class="number">1</span>, pairs[<span class="number">0</span>].<span class="number">0</span>);
+        <span class="macro">assert_eq!</span>(sparse_f.len(), <span class="number">6</span>);
+
+        <span class="kw">let </span>zero_fp = ecc_chip.field_chip.fp_chip.load_constant(ctx, BigUint::from(<span class="number">0u64</span>));
+        <span class="kw">let </span><span class="kw-2">mut </span>f_coeffs = Vec::with_capacity(<span class="number">12</span>);
+        <span class="kw">for </span>coeff <span class="kw">in </span><span class="kw-2">&amp;</span>sparse_f {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(fp2_point) = coeff {
+                f_coeffs.push(fp2_point.coeffs[<span class="number">0</span>].clone());
+            } <span class="kw">else </span>{
+                f_coeffs.push(zero_fp.clone());
+            }
+        }
+        <span class="kw">for </span>coeff <span class="kw">in </span><span class="kw-2">&amp;</span>sparse_f {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(fp2_point) = coeff {
+                f_coeffs.push(fp2_point.coeffs[<span class="number">1</span>].clone());
+            } <span class="kw">else </span>{
+                f_coeffs.push(zero_fp.clone());
+            }
+        }
+        FqPoint::construct(f_coeffs)
+    };
+    <span class="kw">for </span><span class="kw-2">&amp;</span>(a, b) <span class="kw">in </span>pairs.iter().skip(<span class="number">1</span>) {
+        f = fp12_multiply_with_line_equal::&lt;F&gt;(ecc_chip.field_chip(), ctx, <span class="kw-2">&amp;</span>f, b, a);
+    }
+
+    i -= <span class="number">1</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>r = pairs.iter().map(|pair| pair.<span class="number">1</span>.clone()).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+    <span class="kw">let </span>fp12_chip = Fp12Chip::&lt;F&gt;::construct(ecc_chip.field_chip.fp_chip);
+    <span class="kw">loop </span>{
+        <span class="kw">if </span>i != last_index - <span class="number">1 </span>{
+            f = fp12_chip.mul(ctx, <span class="kw-2">&amp;</span>f, <span class="kw-2">&amp;</span>f);
+            <span class="kw">for </span>(r, <span class="kw-2">&amp;</span>(a, <span class="kw">_</span>)) <span class="kw">in </span>r.iter().zip(pairs.iter()) {
+                f = fp12_multiply_with_line_equal::&lt;F&gt;(ecc_chip.field_chip(), ctx, <span class="kw-2">&amp;</span>f, r, a);
+            }
+        }
+        <span class="kw">for </span>r <span class="kw">in </span>r.iter_mut() {
+            <span class="kw-2">*</span>r = ecc_chip.double(ctx, r);
+        }
+
+        <span class="macro">assert!</span>(pseudo_binary_encoding[i] &lt;= <span class="number">1 </span>&amp;&amp; pseudo_binary_encoding[i] &gt;= -<span class="number">1</span>);
+        <span class="kw">if </span>pseudo_binary_encoding[i] != <span class="number">0 </span>{
+            <span class="kw">for </span>((r, neg_b), <span class="kw-2">&amp;</span>(a, b)) <span class="kw">in </span>r.iter_mut().zip(neg_b.iter()).zip(pairs.iter()) {
+                <span class="kw">let </span>sign_b = <span class="kw">if </span>pseudo_binary_encoding[i] == <span class="number">1 </span>{ b } <span class="kw">else </span>{ neg_b };
+                f = fp12_multiply_with_line_unequal::&lt;F&gt;(
+                    ecc_chip.field_chip(),
+                    ctx,
+                    <span class="kw-2">&amp;</span>f,
+                    (r, sign_b),
+                    a,
+                );
+                <span class="kw-2">*</span>r = ecc_chip.add_unequal(ctx, r, sign_b, <span class="bool-val">false</span>);
+            }
+        }
+        <span class="kw">if </span>i == <span class="number">0 </span>{
+            <span class="kw">break</span>;
+        }
+        i -= <span class="number">1</span>;
+    }
+
+    <span class="comment">// Frobenius coefficient coeff[1][j] = ((9+u)^{(p-1)/6})^j
+    // load coeff[1][2], coeff[1][3]
+    </span><span class="kw">let </span>c2 = FROBENIUS_COEFF_FQ12_C1[<span class="number">1</span>] * FROBENIUS_COEFF_FQ12_C1[<span class="number">1</span>];
+    <span class="kw">let </span>c3 = c2 * FROBENIUS_COEFF_FQ12_C1[<span class="number">1</span>];
+    <span class="kw">let </span>c2 = ecc_chip.field_chip.load_constant(ctx, c2);
+    <span class="kw">let </span>c3 = ecc_chip.field_chip.load_constant(ctx, c3);
+
+    <span class="comment">// finish multiplying remaining line functions outside the loop
+    </span><span class="kw">for </span>(r, <span class="kw-2">&amp;</span>(a, b)) <span class="kw">in </span>r.iter_mut().zip(pairs.iter()) {
+        <span class="kw">let </span>b_1 = twisted_frobenius::&lt;F&gt;(ecc_chip, ctx, b, <span class="kw-2">&amp;</span>c2, <span class="kw-2">&amp;</span>c3);
+        <span class="kw">let </span>neg_b_2 = neg_twisted_frobenius::&lt;F&gt;(ecc_chip, ctx, <span class="kw-2">&amp;</span>b_1, <span class="kw-2">&amp;</span>c2, <span class="kw-2">&amp;</span>c3);
+        f = fp12_multiply_with_line_unequal::&lt;F&gt;(ecc_chip.field_chip(), ctx, <span class="kw-2">&amp;</span>f, (r, <span class="kw-2">&amp;</span>b_1), a);
+        <span class="kw-2">*</span>r = ecc_chip.add_unequal(ctx, r, <span class="kw-2">&amp;</span>b_1, <span class="bool-val">false</span>);
+        f = fp12_multiply_with_line_unequal::&lt;F&gt;(ecc_chip.field_chip(), ctx, <span class="kw-2">&amp;</span>f, (r, <span class="kw-2">&amp;</span>neg_b_2), a);
+    }
+    f
+}
+
+<span class="comment">// Frobenius coefficient coeff[1][j] = ((9+u)^{(p-1)/6})^j
+// Frob_p( twist(Q) ) = ( (w^2 x)^p, (w^3 y)^p ) = twist( coeff[1][2] * x^p, coeff[1][3] * y^p )
+// Input:
+// - Q = (x, y) point in E(Fp2)
+// - coeff[1][2], coeff[1][3] as assigned cells: this is an optimization to avoid loading new constants
+// Output:
+// - (coeff[1][2] * x^p, coeff[1][3] * y^p) point in E(Fp2)
+</span><span class="kw">pub fn </span>twisted_frobenius&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, F: PrimeField&gt;(
+    ecc_chip: <span class="kw-2">&amp;</span>EccChip&lt;F, Fp2Chip&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;,
+    ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;b</span>, F&gt;,
+    Q: <span class="kw-2">&amp;</span>EcPoint&lt;F, FqPoint&lt;<span class="lifetime">&#39;b</span>, F&gt;&gt;,
+    c2: <span class="kw-2">&amp;</span>FqPoint&lt;<span class="lifetime">&#39;b</span>, F&gt;,
+    c3: <span class="kw-2">&amp;</span>FqPoint&lt;<span class="lifetime">&#39;b</span>, F&gt;,
+) -&gt; EcPoint&lt;F, FqPoint&lt;<span class="lifetime">&#39;b</span>, F&gt;&gt; {
+    <span class="macro">assert_eq!</span>(c2.coeffs.len(), <span class="number">2</span>);
+    <span class="macro">assert_eq!</span>(c3.coeffs.len(), <span class="number">2</span>);
+
+    <span class="kw">let </span>frob_x = ecc_chip.field_chip.conjugate(ctx, <span class="kw-2">&amp;</span>Q.x);
+    <span class="kw">let </span>frob_y = ecc_chip.field_chip.conjugate(ctx, <span class="kw-2">&amp;</span>Q.y);
+    <span class="kw">let </span>out_x = ecc_chip.field_chip.mul(ctx, c2, <span class="kw-2">&amp;</span>frob_x);
+    <span class="kw">let </span>out_y = ecc_chip.field_chip.mul(ctx, c3, <span class="kw-2">&amp;</span>frob_y);
+    EcPoint::construct(out_x, out_y)
+}
+
+<span class="comment">// Frobenius coefficient coeff[1][j] = ((9+u)^{(p-1)/6})^j
+// -Frob_p( twist(Q) ) = ( (w^2 x)^p, -(w^3 y)^p ) = twist( coeff[1][2] * x^p, coeff[1][3] * -y^p )
+// Input:
+// - Q = (x, y) point in E(Fp2)
+// Output:
+// - (coeff[1][2] * x^p, coeff[1][3] * -y^p) point in E(Fp2)
+</span><span class="kw">pub fn </span>neg_twisted_frobenius&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, F: PrimeField&gt;(
+    ecc_chip: <span class="kw-2">&amp;</span>EccChip&lt;F, Fp2Chip&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;,
+    ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;b</span>, F&gt;,
+    Q: <span class="kw-2">&amp;</span>EcPoint&lt;F, FqPoint&lt;<span class="lifetime">&#39;b</span>, F&gt;&gt;,
+    c2: <span class="kw-2">&amp;</span>FqPoint&lt;<span class="lifetime">&#39;b</span>, F&gt;,
+    c3: <span class="kw-2">&amp;</span>FqPoint&lt;<span class="lifetime">&#39;b</span>, F&gt;,
+) -&gt; EcPoint&lt;F, FqPoint&lt;<span class="lifetime">&#39;b</span>, F&gt;&gt; {
+    <span class="macro">assert_eq!</span>(c2.coeffs.len(), <span class="number">2</span>);
+    <span class="macro">assert_eq!</span>(c3.coeffs.len(), <span class="number">2</span>);
+
+    <span class="kw">let </span>frob_x = ecc_chip.field_chip.conjugate(ctx, <span class="kw-2">&amp;</span>Q.x);
+    <span class="kw">let </span>neg_frob_y = ecc_chip.field_chip.neg_conjugate(ctx, <span class="kw-2">&amp;</span>Q.y);
+    <span class="kw">let </span>out_x = ecc_chip.field_chip.mul(ctx, c2, <span class="kw-2">&amp;</span>frob_x);
+    <span class="kw">let </span>out_y = ecc_chip.field_chip.mul(ctx, c3, <span class="kw-2">&amp;</span>neg_frob_y);
+    EcPoint::construct(out_x, out_y)
+}
+
+<span class="comment">// To avoid issues with mutably borrowing twice (not allowed in Rust), we only store fp_chip and construct g2_chip and fp12_chip in scope when needed for temporary mutable borrows
+</span><span class="kw">pub struct </span>PairingChip&lt;<span class="lifetime">&#39;a</span>, F: PrimeField&gt; {
+    <span class="kw">pub </span>fp_chip: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>FpChip&lt;F&gt;,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, F: PrimeField&gt; PairingChip&lt;<span class="lifetime">&#39;a</span>, F&gt; {
+    <span class="kw">pub fn </span>construct(fp_chip: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>FpChip&lt;F&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ fp_chip }
+    }
+
+    <span class="kw">pub fn </span>configure(
+        meta: <span class="kw-2">&amp;mut </span>ConstraintSystem&lt;F&gt;,
+        strategy: FpStrategy,
+        num_advice: <span class="kw-2">&amp;</span>[usize],
+        num_lookup_advice: <span class="kw-2">&amp;</span>[usize],
+        num_fixed: usize,
+        lookup_bits: usize,
+        limb_bits: usize,
+        num_limbs: usize,
+        context_id: usize,
+        k: usize,
+    ) -&gt; FpChip&lt;F&gt; {
+        FpChip::&lt;F&gt;::configure(
+            meta,
+            strategy,
+            num_advice,
+            num_lookup_advice,
+            num_fixed,
+            lookup_bits,
+            limb_bits,
+            num_limbs,
+            halo2_base::utils::modulus::&lt;Fq&gt;(),
+            context_id,
+            k,
+        )
+    }
+
+    <span class="kw">pub fn </span>load_private_g1&lt;<span class="lifetime">&#39;v</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;_</span>, F&gt;,
+        point: Value&lt;G1Affine&gt;,
+    ) -&gt; EcPoint&lt;F, FpPoint&lt;<span class="lifetime">&#39;v</span>, F&gt;&gt; {
+        <span class="comment">// go from pse/pairing::bn256::Fq to forked Fq
+        </span><span class="kw">let </span>convert_fp = |x: bn256::Fq| biguint_to_fe(<span class="kw-2">&amp;</span>fe_to_biguint(<span class="kw-2">&amp;</span>x));
+        <span class="kw">let </span>g1_chip = EccChip::construct(<span class="self">self</span>.fp_chip.clone());
+        g1_chip
+            .load_private(ctx, (point.map(|pt| convert_fp(pt.x)), point.map(|pt| convert_fp(pt.y))))
+    }
+
+    <span class="kw">pub fn </span>load_private_g2&lt;<span class="lifetime">&#39;v</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;_</span>, F&gt;,
+        point: Value&lt;G2Affine&gt;,
+    ) -&gt; EcPoint&lt;F, FieldExtPoint&lt;FpPoint&lt;<span class="lifetime">&#39;v</span>, F&gt;&gt;&gt; {
+        <span class="kw">let </span>fp2_chip = Fp2Chip::&lt;F&gt;::construct(<span class="self">self</span>.fp_chip);
+        <span class="kw">let </span>g2_chip = EccChip::construct(fp2_chip);
+        <span class="comment">// go from pse/pairing::bn256::Fq2 to forked public Fq2
+        </span><span class="kw">let </span>convert_fp2 = |c0: bn256::Fq, c1: bn256::Fq| Fq2 {
+            c0: biguint_to_fe(<span class="kw-2">&amp;</span>fe_to_biguint(<span class="kw-2">&amp;</span>c0)),
+            c1: biguint_to_fe(<span class="kw-2">&amp;</span>fe_to_biguint(<span class="kw-2">&amp;</span>c1)),
+        };
+        <span class="kw">let </span>x = point.map(|pt| convert_fp2(pt.x.c0, pt.x.c1));
+        <span class="kw">let </span>y = point.map(|pt| convert_fp2(pt.y.c0, pt.y.c1));
+
+        g2_chip.load_private(ctx, (x, y))
+    }
+
+    <span class="kw">pub fn </span>miller_loop&lt;<span class="lifetime">&#39;v</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;v</span>, F&gt;,
+        Q: <span class="kw-2">&amp;</span>EcPoint&lt;F, FqPoint&lt;<span class="lifetime">&#39;v</span>, F&gt;&gt;,
+        P: <span class="kw-2">&amp;</span>EcPoint&lt;F, FpPoint&lt;<span class="lifetime">&#39;v</span>, F&gt;&gt;,
+    ) -&gt; FqPoint&lt;<span class="lifetime">&#39;v</span>, F&gt; {
+        <span class="kw">let </span>fp2_chip = Fp2Chip::&lt;F&gt;::construct(<span class="self">self</span>.fp_chip);
+        <span class="kw">let </span>g2_chip = EccChip::construct(fp2_chip);
+        miller_loop_BN::&lt;F&gt;(
+            <span class="kw-2">&amp;</span>g2_chip,
+            ctx,
+            Q,
+            P,
+            <span class="kw-2">&amp;</span>SIX_U_PLUS_2_NAF, <span class="comment">// pseudo binary encoding for BN254
+        </span>)
+    }
+
+    <span class="kw">pub fn </span>multi_miller_loop&lt;<span class="lifetime">&#39;v</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;v</span>, F&gt;,
+        pairs: Vec&lt;(<span class="kw-2">&amp;</span>EcPoint&lt;F, FpPoint&lt;<span class="lifetime">&#39;v</span>, F&gt;&gt;, <span class="kw-2">&amp;</span>EcPoint&lt;F, FqPoint&lt;<span class="lifetime">&#39;v</span>, F&gt;&gt;)&gt;,
+    ) -&gt; FqPoint&lt;<span class="lifetime">&#39;v</span>, F&gt; {
+        <span class="kw">let </span>fp2_chip = Fp2Chip::&lt;F&gt;::construct(<span class="self">self</span>.fp_chip);
+        <span class="kw">let </span>g2_chip = EccChip::construct(fp2_chip);
+        multi_miller_loop_BN::&lt;F&gt;(
+            <span class="kw-2">&amp;</span>g2_chip,
+            ctx,
+            pairs,
+            <span class="kw-2">&amp;</span>SIX_U_PLUS_2_NAF, <span class="comment">// pseudo binary encoding for BN254
+        </span>)
+    }
+
+    <span class="kw">pub fn </span>final_exp&lt;<span class="lifetime">&#39;v</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;v</span>, F&gt;, f: <span class="kw-2">&amp;</span>FqPoint&lt;<span class="lifetime">&#39;v</span>, F&gt;) -&gt; FqPoint&lt;<span class="lifetime">&#39;v</span>, F&gt; {
+        <span class="kw">let </span>fp12_chip = Fp12Chip::&lt;F&gt;::construct(<span class="self">self</span>.fp_chip);
+        fp12_chip.final_exp(ctx, f)
+    }
+
+    <span class="comment">// optimal Ate pairing
+    </span><span class="kw">pub fn </span>pairing&lt;<span class="lifetime">&#39;v</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;v</span>, F&gt;,
+        Q: <span class="kw-2">&amp;</span>EcPoint&lt;F, FqPoint&lt;<span class="lifetime">&#39;v</span>, F&gt;&gt;,
+        P: <span class="kw-2">&amp;</span>EcPoint&lt;F, FpPoint&lt;<span class="lifetime">&#39;v</span>, F&gt;&gt;,
+    ) -&gt; FqPoint&lt;<span class="lifetime">&#39;v</span>, F&gt; {
+        <span class="kw">let </span>f0 = <span class="self">self</span>.miller_loop(ctx, Q, P);
+        <span class="kw">let </span>fp12_chip = Fp12Chip::&lt;F&gt;::construct(<span class="self">self</span>.fp_chip);
+        <span class="comment">// final_exp implemented in final_exp module
+        </span>fp12_chip.final_exp(ctx, <span class="kw-2">&amp;</span>f0)
+    }
+}
+</code></pre></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="halo2_ecc" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (0da281b60 2022-10-27)" ></div></body></html>

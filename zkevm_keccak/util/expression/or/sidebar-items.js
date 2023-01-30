@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["expr","Returns an expression that evaluates to 1 if any expression in the given list is 1. Returns 0 if all the expressions were 0."],["value","Returns the value after passing all given values through the OR gate."]]};

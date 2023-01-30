@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["assign","only use case is when coeffs has only a single 1, rest are 0"],["crt","only use case is when coeffs has only a single 1, rest are 0"]]};

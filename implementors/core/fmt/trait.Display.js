@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"halo2_base":[["impl&lt;'a, F:&nbsp;<a class=\"trait\" href=\"halo2_base/utils/trait.ScalarField.html\" title=\"trait halo2_base::utils::ScalarField\">ScalarField</a>&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/fmt/trait.Display.html\" title=\"trait core::fmt::Display\">Display</a> for <a class=\"struct\" href=\"halo2_base/struct.Context.html\" title=\"struct halo2_base::Context\">Context</a>&lt;'a, F&gt;"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

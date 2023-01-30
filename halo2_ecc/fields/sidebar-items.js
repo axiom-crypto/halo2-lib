@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":[["fp",""],["fp12",""],["fp2",""]],"struct":[["FieldExtPoint",""]],"trait":[["FieldChip","Common functionality for finite field chips"],["FieldExtConstructor",""],["PrimeFieldChip",""],["Selectable",""]]};

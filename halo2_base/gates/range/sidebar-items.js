@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":[["RangeStrategy",""]],"struct":[["RangeConfig",""]]};

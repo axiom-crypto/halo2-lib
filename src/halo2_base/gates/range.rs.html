@@ -1,0 +1,876 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `halo2-base/src/gates/range.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>range.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../../normalize.css"><link rel="stylesheet" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../../ayu.css" disabled><link rel="stylesheet" href="../../../dark.css" disabled><link rel="stylesheet" href="../../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../../storage.js"></script><script defer src="../../../source-script.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../main.js"></script><noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../halo2_base/index.html"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></a><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../wheel.svg"></a></div></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<span id="2">2</span>
+<span id="3">3</span>
+<span id="4">4</span>
+<span id="5">5</span>
+<span id="6">6</span>
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
+<span id="10">10</span>
+<span id="11">11</span>
+<span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
+<span id="88">88</span>
+<span id="89">89</span>
+<span id="90">90</span>
+<span id="91">91</span>
+<span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
+<span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
+<span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
+<span id="357">357</span>
+<span id="358">358</span>
+<span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
+<span id="362">362</span>
+<span id="363">363</span>
+<span id="364">364</span>
+<span id="365">365</span>
+<span id="366">366</span>
+<span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
+<span id="394">394</span>
+<span id="395">395</span>
+<span id="396">396</span>
+<span id="397">397</span>
+<span id="398">398</span>
+<span id="399">399</span>
+<span id="400">400</span>
+<span id="401">401</span>
+<span id="402">402</span>
+<span id="403">403</span>
+<span id="404">404</span>
+<span id="405">405</span>
+<span id="406">406</span>
+<span id="407">407</span>
+<span id="408">408</span>
+<span id="409">409</span>
+<span id="410">410</span>
+<span id="411">411</span>
+<span id="412">412</span>
+<span id="413">413</span>
+<span id="414">414</span>
+<span id="415">415</span>
+<span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
+<span id="419">419</span>
+<span id="420">420</span>
+<span id="421">421</span>
+<span id="422">422</span>
+<span id="423">423</span>
+<span id="424">424</span>
+<span id="425">425</span>
+<span id="426">426</span>
+<span id="427">427</span>
+<span id="428">428</span>
+<span id="429">429</span>
+<span id="430">430</span>
+<span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+</pre><pre class="rust"><code><span class="kw">use crate</span>::{
+    gates::{
+        flex_gate::{FlexGateConfig, GateStrategy, MAX_PHASE},
+        GateInstructions,
+    },
+    utils::{decompose_fe_to_u64_limbs, value_to_option, ScalarField},
+    AssignedValue,
+    QuantumCell::{<span class="self">self</span>, Constant, Existing, Witness},
+};
+<span class="kw">use crate</span>::{
+    halo2_proofs::{
+        circuit::{Layouter, Value},
+        plonk::{
+            Advice, Column, ConstraintSystem, Error, SecondPhase, Selector, TableColumn, ThirdPhase,
+        },
+        poly::Rotation,
+    },
+    utils::PrimeField,
+};
+<span class="kw">use </span>std::cmp::Ordering;
+
+<span class="kw">use super</span>::{Context, RangeInstructions};
+
+<span class="attribute">#[derive(Clone, Copy, Debug, PartialEq)]
+</span><span class="kw">pub enum </span>RangeStrategy {
+    Vertical, <span class="comment">// vanilla implementation with vertical basic gate(s)
+    // CustomVerticalShort, // vertical basic gate(s) and vertical custom range gates of length 2,3
+    </span>PlonkPlus,
+    <span class="comment">// CustomHorizontal, // vertical basic gate and dedicated horizontal custom gate
+</span>}
+
+<span class="attribute">#[derive(Clone, Debug)]
+</span><span class="kw">pub struct </span>RangeConfig&lt;F: ScalarField&gt; {
+    <span class="comment">// `lookup_advice` are special advice columns only used for lookups
+    //
+    // If `strategy` is `Vertical` or `CustomVertical`:
+    // * If `gate` has only 1 advice column, enable lookups for that column, in which case `lookup_advice` is empty
+    // * Otherwise, add some user-specified number of `lookup_advice` columns
+    //   * In this case, we don&#39;t even need a selector so `q_lookup` is empty
+    // If `strategy` is `CustomHorizontal`:
+    // * TODO
+    </span><span class="kw">pub </span>lookup_advice: [Vec&lt;Column&lt;Advice&gt;&gt;; MAX_PHASE],
+    <span class="kw">pub </span>q_lookup: Vec&lt;<span class="prelude-ty">Option</span>&lt;Selector&gt;&gt;,
+    <span class="kw">pub </span>lookup: TableColumn,
+    <span class="kw">pub </span>lookup_bits: usize,
+    <span class="kw">pub </span>limb_bases: Vec&lt;QuantumCell&lt;<span class="lifetime">&#39;static</span>, <span class="lifetime">&#39;static</span>, F&gt;&gt;,
+    <span class="comment">// selector for custom range gate
+    // `q_range[k][i]` stores the selector for a custom range gate of length `k`
+    // pub q_range: HashMap&lt;usize, Vec&lt;Selector&gt;&gt;,
+    </span><span class="kw">pub </span>gate: FlexGateConfig&lt;F&gt;,
+    strategy: RangeStrategy,
+    <span class="kw">pub </span>context_id: usize,
+}
+
+<span class="kw">impl</span>&lt;F: ScalarField&gt; RangeConfig&lt;F&gt; {
+    <span class="kw">pub fn </span>configure(
+        meta: <span class="kw-2">&amp;mut </span>ConstraintSystem&lt;F&gt;,
+        range_strategy: RangeStrategy,
+        num_advice: <span class="kw-2">&amp;</span>[usize],
+        num_lookup_advice: <span class="kw-2">&amp;</span>[usize],
+        num_fixed: usize,
+        lookup_bits: usize,
+        context_id: usize,
+        <span class="comment">// params.k()
+        </span>circuit_degree: usize,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="macro">assert!</span>(lookup_bits &lt;= <span class="number">28</span>);
+        <span class="kw">let </span>lookup = meta.lookup_table_column();
+
+        <span class="kw">let </span>gate = FlexGateConfig::configure(
+            meta,
+            <span class="kw">match </span>range_strategy {
+                RangeStrategy::Vertical =&gt; GateStrategy::Vertical,
+                RangeStrategy::PlonkPlus =&gt; GateStrategy::PlonkPlus,
+            },
+            num_advice,
+            num_fixed,
+            context_id,
+            circuit_degree,
+        );
+
+        <span class="comment">// For now, we apply the same range lookup table to each phase
+        </span><span class="kw">let </span><span class="kw-2">mut </span>q_lookup = Vec::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>lookup_advice = [(); MAX_PHASE].map(|<span class="kw">_</span>| Vec::new());
+        <span class="kw">for </span>(phase, <span class="kw-2">&amp;</span>num_columns) <span class="kw">in </span>num_lookup_advice.iter().enumerate() {
+            <span class="comment">// if num_columns is set to 0, then we assume you do not want to perform any lookups in that phase
+            </span><span class="kw">if </span>num_advice[phase] == <span class="number">1 </span>&amp;&amp; num_columns != <span class="number">0 </span>{
+                q_lookup.push(<span class="prelude-val">Some</span>(meta.complex_selector()));
+            } <span class="kw">else </span>{
+                q_lookup.push(<span class="prelude-val">None</span>);
+                <span class="kw">for _ in </span><span class="number">0</span>..num_columns {
+                    <span class="kw">let </span>a = <span class="kw">match </span>phase {
+                        <span class="number">0 </span>=&gt; meta.advice_column(),
+                        <span class="number">1 </span>=&gt; meta.advice_column_in(SecondPhase),
+                        <span class="number">2 </span>=&gt; meta.advice_column_in(ThirdPhase),
+                        <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">&quot;Currently RangeConfig only supports {MAX_PHASE} phases&quot;</span>),
+                    };
+                    meta.enable_equality(a);
+                    lookup_advice[phase].push(a);
+                }
+            }
+        }
+
+        <span class="kw">let </span>limb_base = F::from(<span class="number">1u64 </span>&lt;&lt; lookup_bits);
+        <span class="kw">let </span><span class="kw-2">mut </span>running_base = limb_base;
+        <span class="kw">let </span>num_bases = F::NUM_BITS <span class="kw">as </span>usize / lookup_bits;
+        <span class="kw">let </span><span class="kw-2">mut </span>limb_bases = Vec::with_capacity(num_bases + <span class="number">1</span>);
+        limb_bases.extend([Constant(F::one()), Constant(running_base)]);
+        <span class="kw">for _ in </span><span class="number">2</span>..=num_bases {
+            running_base <span class="kw-2">*</span>= <span class="kw-2">&amp;</span>limb_base;
+            limb_bases.push(Constant(running_base));
+        }
+
+        <span class="kw">let </span>config = <span class="self">Self </span>{
+            lookup_advice,
+            q_lookup,
+            lookup,
+            lookup_bits,
+            limb_bases,
+            gate,
+            strategy: range_strategy,
+            context_id,
+        };
+        config.create_lookup(meta);
+
+        config
+    }
+
+    <span class="kw">fn </span>create_lookup(<span class="kw-2">&amp;</span><span class="self">self</span>, meta: <span class="kw-2">&amp;mut </span>ConstraintSystem&lt;F&gt;) {
+        <span class="kw">for </span>(phase, q_l) <span class="kw">in </span><span class="self">self</span>.q_lookup.iter().enumerate() {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(q) = q_l {
+                meta.lookup(<span class="string">&quot;lookup&quot;</span>, |meta| {
+                    <span class="kw">let </span>q = meta.query_selector(<span class="kw-2">*</span>q);
+                    <span class="comment">// there should only be 1 advice column in phase `phase`
+                    </span><span class="kw">let </span>a =
+                        meta.query_advice(<span class="self">self</span>.gate.basic_gates[phase][<span class="number">0</span>].value, Rotation::cur());
+                    <span class="macro">vec!</span>[(q * a, <span class="self">self</span>.lookup)]
+                });
+            }
+        }
+        <span class="kw">for </span>la <span class="kw">in </span><span class="self">self</span>.lookup_advice.iter().flat_map(|advices| advices.iter()) {
+            meta.lookup(<span class="string">&quot;lookup wo selector&quot;</span>, |meta| {
+                <span class="kw">let </span>a = meta.query_advice(<span class="kw-2">*</span>la, Rotation::cur());
+                <span class="macro">vec!</span>[(a, <span class="self">self</span>.lookup)]
+            });
+        }
+    }
+
+    <span class="kw">pub fn </span>load_lookup_table(<span class="kw-2">&amp;</span><span class="self">self</span>, layouter: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Layouter&lt;F&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+        layouter.assign_table(
+            || <span class="macro">format!</span>(<span class="string">&quot;{} bit lookup&quot;</span>, <span class="self">self</span>.lookup_bits),
+            |<span class="kw-2">mut </span>table| {
+                <span class="kw">for </span>idx <span class="kw">in </span><span class="number">0</span>..(<span class="number">1u32 </span>&lt;&lt; <span class="self">self</span>.lookup_bits) {
+                    table.assign_cell(
+                        || <span class="string">&quot;lookup table&quot;</span>,
+                        <span class="self">self</span>.lookup,
+                        idx <span class="kw">as </span>usize,
+                        || Value::known(F::from(idx <span class="kw">as </span>u64)),
+                    )<span class="question-mark">?</span>;
+                }
+                <span class="prelude-val">Ok</span>(())
+            },
+        )<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Call this at the end of a phase to assign cells to special columns for lookup arguments
+    ///
+    /// returns total number of lookup cells assigned
+    </span><span class="kw">pub fn </span>finalize(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;_</span>, F&gt;) -&gt; usize {
+        ctx.copy_and_lookup_cells(<span class="self">self</span>.lookup_advice[ctx.current_phase].clone())
+    }
+
+    <span class="doccomment">/// assuming this is called when ctx.region is not in shape mode
+    /// `offset` is the offset of the cell in `ctx.region`
+    /// `offset` is only used if there is a single advice column
+    </span><span class="kw">fn </span>enable_lookup&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;a</span>, F&gt;, acell: AssignedValue&lt;<span class="lifetime">&#39;a</span>, F&gt;) {
+        <span class="kw">let </span>phase = ctx.current_phase();
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(q) = <span class="kw-2">&amp;</span><span class="self">self</span>.q_lookup[phase] {
+            q.enable(<span class="kw-2">&amp;mut </span>ctx.region, acell.row()).expect(<span class="string">&quot;enable selector should not fail&quot;</span>);
+        } <span class="kw">else </span>{
+            ctx.cells_to_lookup.push(acell);
+        }
+    }
+
+    <span class="comment">// returns the limbs
+    </span><span class="kw">fn </span>range_check_simple&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+        a: <span class="kw-2">&amp;</span>AssignedValue&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+        range_bits: usize,
+        limbs_assigned: <span class="kw-2">&amp;mut </span>Vec&lt;AssignedValue&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;,
+    ) {
+        <span class="kw">let </span>k = (range_bits + <span class="self">self</span>.lookup_bits - <span class="number">1</span>) / <span class="self">self</span>.lookup_bits;
+        <span class="comment">// println!(&quot;range check {} bits {} len&quot;, range_bits, k);
+        </span><span class="kw">let </span>rem_bits = range_bits % <span class="self">self</span>.lookup_bits;
+
+        <span class="macro">assert!</span>(<span class="self">self</span>.limb_bases.len() &gt;= k);
+        <span class="kw">if </span>k == <span class="number">1 </span>{
+            limbs_assigned.clear();
+            limbs_assigned.push(a.clone())
+        } <span class="kw">else </span>{
+            <span class="kw">let </span>acc = <span class="kw">match </span>value_to_option(a.value()) {
+                <span class="prelude-val">Some</span>(a) =&gt; {
+                    <span class="kw">let </span>limbs = decompose_fe_to_u64_limbs(a, k, <span class="self">self</span>.lookup_bits)
+                        .into_iter()
+                        .map(|x| Witness(Value::known(F::from(x))));
+                    <span class="self">self</span>.gate.inner_product_left(
+                        ctx,
+                        limbs,
+                        <span class="self">self</span>.limb_bases[..k].iter().cloned(),
+                        limbs_assigned,
+                    )
+                }
+                <span class="kw">_ </span>=&gt; <span class="self">self</span>.gate.inner_product_left(
+                    ctx,
+                    <span class="macro">vec!</span>[Witness(Value::unknown()); k],
+                    <span class="self">self</span>.limb_bases[..k].iter().cloned(),
+                    limbs_assigned,
+                ),
+            };
+            <span class="comment">// the inner product above must equal `a`
+            </span>ctx.region.constrain_equal(a.cell(), acc.cell());
+        };
+        <span class="macro">assert_eq!</span>(limbs_assigned.len(), k);
+
+        <span class="comment">// range check all the limbs
+        </span><span class="kw">for </span>limb <span class="kw">in </span>limbs_assigned.iter() {
+            <span class="self">self</span>.enable_lookup(ctx, limb.clone());
+        }
+
+        <span class="comment">// additional constraints for the last limb if rem_bits != 0
+        </span><span class="kw">match </span>rem_bits.cmp(<span class="kw-2">&amp;</span><span class="number">1</span>) {
+            <span class="comment">// we want to check x := limbs[k-1] is boolean
+            // we constrain x*(x-1) = 0 + x * x - x == 0
+            // | 0 | x | x | x |
+            </span>Ordering::Equal =&gt; {
+                <span class="self">self</span>.gate.assert_bit(ctx, <span class="kw-2">&amp;</span>limbs_assigned[k - <span class="number">1</span>]);
+            }
+            Ordering::Greater =&gt; {
+                <span class="kw">let </span>mult_val = <span class="self">self</span>.gate.get_field_element(<span class="number">1u64 </span>&lt;&lt; (<span class="self">self</span>.lookup_bits - rem_bits));
+                <span class="kw">let </span>check = <span class="self">self</span>.gate.assign_region_last(
+                    ctx,
+                    <span class="macro">vec!</span>[
+                        Constant(F::zero()),
+                        Existing(<span class="kw-2">&amp;</span>limbs_assigned[k - <span class="number">1</span>]),
+                        Constant(mult_val),
+                        Witness(limbs_assigned[k - <span class="number">1</span>].value().map(|limb| mult_val * limb)),
+                    ],
+                    <span class="macro">vec!</span>[(<span class="number">0</span>, <span class="prelude-val">None</span>)],
+                );
+                <span class="self">self</span>.enable_lookup(ctx, check);
+            }
+            <span class="kw">_ </span>=&gt; {}
+        }
+    }
+
+    <span class="doccomment">/// breaks up `a` into smaller pieces to lookup and stores them in `limbs_assigned`
+    ///
+    /// this is an internal function to avoid memory re-allocation of `limbs_assigned`
+    </span><span class="kw">pub fn </span>range_check_limbs&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+        a: <span class="kw-2">&amp;</span>AssignedValue&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+        range_bits: usize,
+        limbs_assigned: <span class="kw-2">&amp;mut </span>Vec&lt;AssignedValue&lt;<span class="lifetime">&#39;a</span>, F&gt;&gt;,
+    ) {
+        <span class="macro">assert_ne!</span>(range_bits, <span class="number">0</span>);
+        <span class="attribute">#[cfg(feature = <span class="string">&quot;display&quot;</span>)]
+        </span>{
+            <span class="kw">let </span>key = <span class="macro">format!</span>(
+                <span class="string">&quot;range check length {}&quot;</span>,
+                (range_bits + <span class="self">self</span>.lookup_bits - <span class="number">1</span>) / <span class="self">self</span>.lookup_bits
+            );
+            <span class="kw">let </span>count = ctx.op_count.entry(key).or_insert(<span class="number">0</span>);
+            <span class="kw-2">*</span>count += <span class="number">1</span>;
+        }
+        <span class="kw">match </span><span class="self">self</span>.strategy {
+            RangeStrategy::Vertical | RangeStrategy::PlonkPlus =&gt; {
+                <span class="self">self</span>.range_check_simple(ctx, a, range_bits, limbs_assigned)
+            }
+        }
+    }
+
+    <span class="doccomment">/// assume `a` has been range checked already to `limb_bits` bits
+    </span><span class="kw">pub fn </span>get_last_bit&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+        a: <span class="kw-2">&amp;</span>AssignedValue&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+        limb_bits: usize,
+    ) -&gt; AssignedValue&lt;<span class="lifetime">&#39;a</span>, F&gt; {
+        <span class="kw">let </span>a_v = a.value();
+        <span class="kw">let </span>bit_v = a_v.map(|a| {
+            <span class="kw">let </span>a = a.get_lower_32();
+            <span class="kw">if </span>a ^ <span class="number">1 </span>== <span class="number">0 </span>{
+                F::zero()
+            } <span class="kw">else </span>{
+                F::one()
+            }
+        });
+        <span class="kw">let </span>two = <span class="self">self</span>.gate.get_field_element(<span class="number">2u64</span>);
+        <span class="kw">let </span>h_v = a.value().zip(bit_v).map(|(a, b)| (<span class="kw-2">*</span>a - b) * two.invert().unwrap());
+        <span class="kw">let </span>assignments = <span class="self">self</span>.gate.assign_region_smart(
+            ctx,
+            <span class="macro">vec!</span>[Witness(bit_v), Witness(h_v), Constant(two), Existing(a)],
+            <span class="macro">vec!</span>[<span class="number">0</span>],
+            <span class="macro">vec!</span>[],
+            <span class="macro">vec!</span>[],
+        );
+
+        <span class="self">self</span>.range_check(ctx, <span class="kw-2">&amp;</span>assignments[<span class="number">1</span>], limb_bits - <span class="number">1</span>);
+        assignments.into_iter().next().unwrap()
+    }
+}
+
+<span class="kw">impl</span>&lt;F: ScalarField&gt; RangeInstructions&lt;F&gt; <span class="kw">for </span>RangeConfig&lt;F&gt; {
+    <span class="kw">type </span>Gate = FlexGateConfig&lt;F&gt;;
+
+    <span class="kw">fn </span>gate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Gate {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.gate
+    }
+    <span class="kw">fn </span>strategy(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RangeStrategy {
+        <span class="self">self</span>.strategy
+    }
+
+    <span class="kw">fn </span>lookup_bits(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.lookup_bits
+    }
+
+    <span class="kw">fn </span>range_check&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+        a: <span class="kw-2">&amp;</span>AssignedValue&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+        range_bits: usize,
+    ) {
+        <span class="kw">let </span>tmp = ctx.preallocated_vec_to_assign();
+        <span class="self">self</span>.range_check_limbs(ctx, a, range_bits, <span class="kw-2">&amp;mut </span>tmp.as_ref().borrow_mut());
+    }
+
+    <span class="doccomment">/// Warning: This may fail silently if a or b have more than num_bits
+    </span><span class="kw">fn </span>check_less_than&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+        a: QuantumCell&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;a</span>, F&gt;,
+        b: QuantumCell&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;a</span>, F&gt;,
+        num_bits: usize,
+    ) {
+        <span class="kw">let </span>pow_of_two = <span class="self">self</span>.gate.pow_of_two[num_bits];
+        <span class="kw">let </span>check_cell = <span class="kw">match </span><span class="self">self</span>.strategy {
+            RangeStrategy::Vertical =&gt; {
+                <span class="kw">let </span>shift_a_val = a.value().map(|av| pow_of_two + av);
+                <span class="comment">// | a + 2^(num_bits) - b | b | 1 | a + 2^(num_bits) | - 2^(num_bits) | 1 | a |
+                </span><span class="kw">let </span>cells = <span class="macro">vec!</span>[
+                    Witness(shift_a_val - b.value()),
+                    b,
+                    Constant(F::one()),
+                    Witness(shift_a_val),
+                    Constant(-pow_of_two),
+                    Constant(F::one()),
+                    a,
+                ];
+                <span class="kw">let </span>assigned_cells =
+                    <span class="self">self</span>.gate.assign_region(ctx, cells, <span class="macro">vec!</span>[(<span class="number">0</span>, <span class="prelude-val">None</span>), (<span class="number">3</span>, <span class="prelude-val">None</span>)]);
+                assigned_cells.into_iter().next().unwrap()
+            }
+            RangeStrategy::PlonkPlus =&gt; {
+                <span class="comment">// | a | 1 | b | a + 2^{num_bits} - b |
+                // selectors:
+                // | 1 | 0 | 0 |
+                // | 0 | 2^{num_bits} | -1 |
+                </span><span class="kw">let </span>out_val = Value::known(pow_of_two) + a.value() - b.value();
+                <span class="kw">let </span>assigned_cells = <span class="self">self</span>.gate.assign_region(
+                    ctx,
+                    <span class="macro">vec!</span>[a, Constant(F::one()), b, Witness(out_val)],
+                    <span class="macro">vec!</span>[(<span class="number">0</span>, <span class="prelude-val">Some</span>([F::zero(), pow_of_two, -F::one()]))],
+                );
+                assigned_cells.into_iter().nth(<span class="number">3</span>).unwrap()
+            }
+        };
+
+        <span class="self">self</span>.range_check(ctx, <span class="kw-2">&amp;</span>check_cell, num_bits);
+    }
+
+    <span class="doccomment">/// Warning: This may fail silently if a or b have more than num_bits
+    </span><span class="kw">fn </span>is_less_than&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;a</span>, F&gt;,
+        a: QuantumCell&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;a</span>, F&gt;,
+        b: QuantumCell&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;a</span>, F&gt;,
+        num_bits: usize,
+    ) -&gt; AssignedValue&lt;<span class="lifetime">&#39;a</span>, F&gt; {
+        <span class="comment">// TODO: optimize this for PlonkPlus strategy
+        </span><span class="kw">let </span>k = (num_bits + <span class="self">self</span>.lookup_bits - <span class="number">1</span>) / <span class="self">self</span>.lookup_bits;
+        <span class="kw">let </span>padded_bits = k * <span class="self">self</span>.lookup_bits;
+        <span class="kw">let </span>pow_padded = <span class="self">self</span>.gate.pow_of_two[padded_bits];
+
+        <span class="kw">let </span>shift_a_val = a.value().map(|av| pow_padded + av);
+        <span class="kw">let </span>shifted_val = shift_a_val - b.value();
+        <span class="kw">let </span>shifted_cell = <span class="kw">match </span><span class="self">self</span>.strategy {
+            RangeStrategy::Vertical =&gt; {
+                <span class="kw">let </span>assignments = <span class="self">self</span>.gate.assign_region_smart(
+                    ctx,
+                    <span class="macro">vec!</span>[
+                        Witness(shifted_val),
+                        b,
+                        Constant(F::one()),
+                        Witness(shift_a_val),
+                        Constant(-pow_padded),
+                        Constant(F::one()),
+                        a,
+                    ],
+                    <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">3</span>],
+                    <span class="macro">vec!</span>[],
+                    <span class="macro">vec!</span>[],
+                );
+                assignments.into_iter().next().unwrap()
+            }
+            RangeStrategy::PlonkPlus =&gt; <span class="self">self</span>.gate.assign_region_last(
+                ctx,
+                <span class="macro">vec!</span>[a, Constant(pow_padded), b, Witness(shifted_val)],
+                <span class="macro">vec!</span>[(<span class="number">0</span>, <span class="prelude-val">Some</span>([F::zero(), F::one(), -F::one()]))],
+            ),
+        };
+
+        <span class="comment">// check whether a - b + 2^padded_bits &lt; 2^padded_bits ?
+        // since assuming a, b &lt; 2^padded_bits we are guaranteed a - b + 2^padded_bits &lt; 2^{padded_bits + 1}
+        </span><span class="kw">let </span>limbs = ctx.preallocated_vec_to_assign();
+        <span class="self">self</span>.range_check_limbs(
+            ctx,
+            <span class="kw-2">&amp;</span>shifted_cell,
+            padded_bits + <span class="self">self</span>.lookup_bits,
+            <span class="kw-2">&amp;mut </span>limbs.borrow_mut(),
+        );
+        <span class="kw">let </span>res = <span class="self">self</span>.gate().is_zero(ctx, limbs.borrow().get(k).unwrap());
+        res
+    }
+}
+</code></pre></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="halo2_base" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (0da281b60 2022-10-27)" ></div></body></html>

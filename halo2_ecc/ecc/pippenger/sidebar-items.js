@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["decompose",""],["multi_exp",""],["multi_product",""]]};

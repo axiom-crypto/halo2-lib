@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["assign",""],["crt",""],["positive","assume you know that the limbs of `a` are all in [0, 2^{a.max_limb_bits})"]]};
