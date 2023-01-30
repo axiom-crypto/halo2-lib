@@ -1,0 +1,692 @@
+---------------------- degree = 22 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 27.278246583s
+Time elapsed in generating vkey: 13.992930625s
+test bn254::tests::bench_pairing has been running for over 60 seconds
+Time elapsed in generating pkey: 45.861797958s
+Time elapsed in filling circuit: 243.584µs
+optimal ate pairing:
+actual f: Gt(
+    Fq12 {
+        c0: Fq6 {
+            c0: Fq2 {
+                c0: 0x23f8716681b3e55143936e24d3079b55ffe7c32514d3173641e2dfb3d8a3cf43,
+                c1: 0x0e9b64529161e90b93578425fba75c6bae408067d455b43a8d677ff96ff4b48a,
+            },
+            c1: Fq2 {
+                c0: 0x25c4d1d4420efbde924c9d584c8ee8849790b5cc8333bc367416c5ba8ae9b4a7,
+                c1: 0x1894c7927cfc56dd4f7bc27f8b0e738f83d49115289e028370a3650153e1382a,
+            },
+            c2: Fq2 {
+                c0: 0x12e2be8f7be66544d2d17c27ff5565254b007c19a106908d0c8c5ef2533527ad,
+                c1: 0x24dd9c30ab633691db6a9b8c18c55b778f4c8fe59e01ff9bbcb9f97047c1b43c,
+            },
+        },
+        c1: Fq6 {
+            c0: Fq2 {
+                c0: 0x254654440f137e53b4493944308d8bd8e7fa497e13bceaf35403b43f77cbcc46,
+                c1: 0x0bf54ea3d4fb2ff28168286aec8186cd51fac9e3385d9e13cb76aa971b585927,
+            },
+            c1: Fq2 {
+                c0: 0x29a510bde714c164057fcbd4549c2dfc86676586259026478a91b446d2e7a6cc,
+                c1: 0x0da6ab5a9bb17606af566b4442deb87cafb60c4fba72c94bc138a0dd004c6aa2,
+            },
+            c2: Fq2 {
+                c0: 0x0f06348301fa8f811bfaa3fec3539035f469c57e94f92bee40c90d0c293f65ee,
+                c1: 0x0670aebbdf131f76e53f43db7d5fa877e422b9c01c06dd6d95c9508c397b1715,
+            },
+        },
+    },
+)
+circuit f: [
+    "23f8716681b3e55143936e24d3079b55ffe7c32514d3173641e2dfb3d8a3cf43",
+    "254654440f137e53b4493944308d8bd8e7fa497e13bceaf35403b43f77cbcc46",
+    "25c4d1d4420efbde924c9d584c8ee8849790b5cc8333bc367416c5ba8ae9b4a7",
+    "29a510bde714c164057fcbd4549c2dfc86676586259026478a91b446d2e7a6cc",
+    "12e2be8f7be66544d2d17c27ff5565254b007c19a106908d0c8c5ef2533527ad",
+    "f06348301fa8f811bfaa3fec3539035f469c57e94f92bee40c90d0c293f65ee",
+    "e9b64529161e90b93578425fba75c6bae408067d455b43a8d677ff96ff4b48a",
+    "bf54ea3d4fb2ff28168286aec8186cd51fac9e3385d9e13cb76aa971b585927",
+    "1894c7927cfc56dd4f7bc27f8b0e738f83d49115289e028370a3650153e1382a",
+    "da6ab5a9bb17606af566b4442deb87cafb60c4fba72c94bc138a0dd004c6aa2",
+    "24dd9c30ab633691db6a9b8c18c55b778f4c8fe59e01ff9bbcb9f97047c1b43c",
+    "670aebbdf131f76e53f43db7d5fa877e422b9c01c06dd6d95c9508c397b1715",
+]
+Using:
+advice columns: 1
+special lookup advice columns: 0
+fixed columns: 1
+lookup bits: 21
+limb bits: 88
+num limbs: 3
+maximum rows used by an advice column: 3103660
+minimum rows used by an advice column: 3103660
+total cells used: 3103660
+cells used in special lookup column: 0
+maximum rows used by a fixed column: 123
+Proving time: 108.858797333s
+Verify time: 6.111ms
+---------------------- degree = 21 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 14.360272041s
+Time elapsed in generating vkey: 13.883735625s
+Time elapsed in generating pkey: 28.111832s
+Time elapsed in filling circuit: 177.542µs
+optimal ate pairing:
+actual f: Gt(
+    Fq12 {
+        c0: Fq6 {
+            c0: Fq2 {
+                c0: 0x22ad6747989f8e27f11c763a86a2ff7ba59143261d2b51847fe89f61236b6923,
+                c1: 0x01479c3ec4201f5ac83097e7450193d946cf98ceb6f0f4a393e507c00f5c30e3,
+            },
+            c1: Fq2 {
+                c0: 0x08155e00679fae3e1eead89cbd825fcc0fb8f69d37460501fc2d67aba3a4c965,
+                c1: 0x1d442215d46a21dd8971cb8d8bd1078a4f117191b6659afacaa3ed8dd5ceea58,
+            },
+            c2: Fq2 {
+                c0: 0x29eb579a4d76f02089a837062ea2d888395ff69bd3e18da435ca8f8dad3dd8a0,
+                c1: 0x173c006e100b050f7d14d432033b4e75834f142918ec2f1b3e53eabc01aeba82,
+            },
+        },
+        c1: Fq6 {
+            c0: Fq2 {
+                c0: 0x0f50f5f331fc4cd6ffdf0be5d9155267f624f44921b1cbda440557e133e44ce4,
+                c1: 0x07bb802031009b543aeb5aab1f9ed97cc1e366fbe76c91121646aab734a09967,
+            },
+            c1: Fq2 {
+                c0: 0x1a4a1607542a0c80f8be2a58495f0de2ae09b3cb7498f8a3f2c38547c182bc67,
+                c1: 0x22c61e14a0bb8ec22e2bd50d098fd07607373942550d245ffbaf4c5c11184390,
+            },
+            c2: Fq2 {
+                c0: 0x242ad4b8a7720b04c984fa5d037197e052b46208deb39530e96987a2c7aff545,
+                c1: 0x10481d8523aba6e0874cca444df2b50124f97878ccb1ac380c003faf150a1e13,
+            },
+        },
+    },
+)
+circuit f: [
+    "22ad6747989f8e27f11c763a86a2ff7ba59143261d2b51847fe89f61236b6923",
+    "f50f5f331fc4cd6ffdf0be5d9155267f624f44921b1cbda440557e133e44ce4",
+    "8155e00679fae3e1eead89cbd825fcc0fb8f69d37460501fc2d67aba3a4c965",
+    "1a4a1607542a0c80f8be2a58495f0de2ae09b3cb7498f8a3f2c38547c182bc67",
+    "29eb579a4d76f02089a837062ea2d888395ff69bd3e18da435ca8f8dad3dd8a0",
+    "242ad4b8a7720b04c984fa5d037197e052b46208deb39530e96987a2c7aff545",
+    "1479c3ec4201f5ac83097e7450193d946cf98ceb6f0f4a393e507c00f5c30e3",
+    "7bb802031009b543aeb5aab1f9ed97cc1e366fbe76c91121646aab734a09967",
+    "1d442215d46a21dd8971cb8d8bd1078a4f117191b6659afacaa3ed8dd5ceea58",
+    "22c61e14a0bb8ec22e2bd50d098fd07607373942550d245ffbaf4c5c11184390",
+    "173c006e100b050f7d14d432033b4e75834f142918ec2f1b3e53eabc01aeba82",
+    "10481d8523aba6e0874cca444df2b50124f97878ccb1ac380c003faf150a1e13",
+]
+Using:
+advice columns: 2
+special lookup advice columns: 1
+fixed columns: 1
+lookup bits: 20
+limb bits: 88
+num limbs: 3
+maximum rows used by an advice column: 1551833
+minimum rows used by an advice column: 1551827
+total cells used: 3103660
+cells used in special lookup column: 308580
+maximum rows used by a fixed column: 122
+Proving time: 63.351649125s
+Verify time: 6.473708ms
+---------------------- degree = 20 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 6.695991083s
+Time elapsed in generating vkey: 11.556116042s
+Time elapsed in generating pkey: 19.479236833s
+Time elapsed in filling circuit: 226.917µs
+optimal ate pairing:
+actual f: Gt(
+    Fq12 {
+        c0: Fq6 {
+            c0: Fq2 {
+                c0: 0x022bb48caccf55d91d55ff55d710e39558a25ba3b6930d92fec4127c265865aa,
+                c1: 0x04318ee2315b10db240f026aa76a2e4f9c1875965a46ca293cf0e276d65006a8,
+            },
+            c1: Fq2 {
+                c0: 0x0a0ca918d2d0b7111dc22357c18376922308df36a000928d4c02c5f388afbf4e,
+                c1: 0x23d5eaad802ba805dfcc6f005eef6d13ffaa64641cb4a205f7ba70b40cca8751,
+            },
+            c2: Fq2 {
+                c0: 0x14c2d1b10c7970409bf8c4bf564f17f059b81fd34ef7b86485626781d7c71b18,
+                c1: 0x038357ea89bfa04a495788198b3e3b155e3ccae084d7e7062a2fdcc4d1f4e922,
+            },
+        },
+        c1: Fq6 {
+            c0: Fq2 {
+                c0: 0x2bbb58af82344ee1bf2a42ca85eb30461bd7d218c06b753460aa691e178d0200,
+                c1: 0x2ccf4d8ef48c734f1bb67de0b4dfe6c1ea9ccc09f2fc3ec83aebc0d728ee16bc,
+            },
+            c1: Fq2 {
+                c0: 0x1a4d77be8aacdd1579871582b7d546754be44f30f35f431e5f6e7e9d2eda0914,
+                c1: 0x0f367615d4dbc13994439c14b9165fbd9ef1c7d8dd4b8a38e6340ca763f3dab0,
+            },
+            c2: Fq2 {
+                c0: 0x24fbcd5185511db58ebfccb2e67089a10adba2187c08aba4326d72a04c1bc8f9,
+                c1: 0x18295c30d104fcc7cf9acbd5c867b6bb73d29e338f9a81a8e190366c7ee5c22d,
+            },
+        },
+    },
+)
+circuit f: [
+    "22bb48caccf55d91d55ff55d710e39558a25ba3b6930d92fec4127c265865aa",
+    "2bbb58af82344ee1bf2a42ca85eb30461bd7d218c06b753460aa691e178d0200",
+    "a0ca918d2d0b7111dc22357c18376922308df36a000928d4c02c5f388afbf4e",
+    "1a4d77be8aacdd1579871582b7d546754be44f30f35f431e5f6e7e9d2eda0914",
+    "14c2d1b10c7970409bf8c4bf564f17f059b81fd34ef7b86485626781d7c71b18",
+    "24fbcd5185511db58ebfccb2e67089a10adba2187c08aba4326d72a04c1bc8f9",
+    "4318ee2315b10db240f026aa76a2e4f9c1875965a46ca293cf0e276d65006a8",
+    "2ccf4d8ef48c734f1bb67de0b4dfe6c1ea9ccc09f2fc3ec83aebc0d728ee16bc",
+    "23d5eaad802ba805dfcc6f005eef6d13ffaa64641cb4a205f7ba70b40cca8751",
+    "f367615d4dbc13994439c14b9165fbd9ef1c7d8dd4b8a38e6340ca763f3dab0",
+    "38357ea89bfa04a495788198b3e3b155e3ccae084d7e7062a2fdcc4d1f4e922",
+    "18295c30d104fcc7cf9acbd5c867b6bb73d29e338f9a81a8e190366c7ee5c22d",
+]
+Using:
+advice columns: 4
+special lookup advice columns: 1
+fixed columns: 1
+lookup bits: 19
+limb bits: 88
+num limbs: 3
+maximum rows used by an advice column: 790857
+minimum rows used by an advice column: 790848
+total cells used: 3163402
+cells used in special lookup column: 328494
+maximum rows used by a fixed column: 124
+Proving time: 40.914635041s
+Verify time: 3.633167ms
+---------------------- degree = 19 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 3.455247625s
+Time elapsed in generating vkey: 8.962057125s
+Time elapsed in generating pkey: 13.224039791s
+Time elapsed in filling circuit: 232.709µs
+optimal ate pairing:
+actual f: Gt(
+    Fq12 {
+        c0: Fq6 {
+            c0: Fq2 {
+                c0: 0x2ade60c33f9a7b1acd140334d69b2186701493103dfe9f2384e352d9796bc645,
+                c1: 0x124a21c731563d40b8e118d7ecfb3cdb50daec7ce2423378a1e7579267440be2,
+            },
+            c1: Fq2 {
+                c0: 0x0f6b8a821874a1860d72530a4d7df4f25f08ff55398eaafab066e8e1a84ba470,
+                c1: 0x1e6efc75b0312943b255eea0cffb66ba481e92a4330acbe7d05e3a885082b740,
+            },
+            c2: Fq2 {
+                c0: 0x28a05f0adde4bdc662f2b960ef376dc117320332195be6d676101462371505f8,
+                c1: 0x198b381f93299dff95093ec8d74fccc25f892594fa685d76f279ebc67f13813f,
+            },
+        },
+        c1: Fq6 {
+            c0: Fq2 {
+                c0: 0x0045bbe8b6c32da3b11e8d815ded2f1b1ab50c7d68a5e3b3d1e44e21121383c4,
+                c1: 0x1be966a56fa5e2a21cbe45788431e40745255ff787adc64e035a97777791d867,
+            },
+            c1: Fq2 {
+                c0: 0x26ef726f580d504d182217ba7be760090f11ec28f4bdd2f1ac2b943e49ce120d,
+                c1: 0x14d6f5d9083460e35d2458b875867e1fee78fce756c89b49e721b6a1608a87fb,
+            },
+            c2: Fq2 {
+                c0: 0x12adfa0800a551b4a199a0f3ade37c3542fb1242edf5eafabfe7f498f48cf877,
+                c1: 0x22c04697e24856621b46040d887b21fca95c866a4d871597f374387f011c4edb,
+            },
+        },
+    },
+)
+circuit f: [
+    "2ade60c33f9a7b1acd140334d69b2186701493103dfe9f2384e352d9796bc645",
+    "45bbe8b6c32da3b11e8d815ded2f1b1ab50c7d68a5e3b3d1e44e21121383c4",
+    "f6b8a821874a1860d72530a4d7df4f25f08ff55398eaafab066e8e1a84ba470",
+    "26ef726f580d504d182217ba7be760090f11ec28f4bdd2f1ac2b943e49ce120d",
+    "28a05f0adde4bdc662f2b960ef376dc117320332195be6d676101462371505f8",
+    "12adfa0800a551b4a199a0f3ade37c3542fb1242edf5eafabfe7f498f48cf877",
+    "124a21c731563d40b8e118d7ecfb3cdb50daec7ce2423378a1e7579267440be2",
+    "1be966a56fa5e2a21cbe45788431e40745255ff787adc64e035a97777791d867",
+    "1e6efc75b0312943b255eea0cffb66ba481e92a4330acbe7d05e3a885082b740",
+    "14d6f5d9083460e35d2458b875867e1fee78fce756c89b49e721b6a1608a87fb",
+    "198b381f93299dff95093ec8d74fccc25f892594fa685d76f279ebc67f13813f",
+    "22c04697e24856621b46040d887b21fca95c866a4d871597f374387f011c4edb",
+]
+Using:
+advice columns: 7
+special lookup advice columns: 1
+fixed columns: 1
+lookup bits: 18
+limb bits: 90
+num limbs: 3
+maximum rows used by an advice column: 452273
+minimum rows used by an advice column: 452262
+total cells used: 3165880
+cells used in special lookup column: 309000
+maximum rows used by a fixed column: 121
+Proving time: 29.8487535s
+Verify time: 4.560708ms
+---------------------- degree = 18 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 1.841088083s
+Time elapsed in generating vkey: 8.741611583s
+Time elapsed in generating pkey: 10.582710834s
+Time elapsed in filling circuit: 126.166µs
+optimal ate pairing:
+actual f: Gt(
+    Fq12 {
+        c0: Fq6 {
+            c0: Fq2 {
+                c0: 0x1dc9ee36016f9ea889bd56ba2b94df07e3e0daa5b9c00f3dc264e1a1efc21385,
+                c1: 0x0e919401ce3c8c939ba0cc7dc25ee919e38c2a8dff85985ba533670f0ca94410,
+            },
+            c1: Fq2 {
+                c0: 0x14a115385087b77e61873fe0db0615a8ff4f22a7b3a412e95203d36b10ad46d1,
+                c1: 0x27cf2ae2f8f8588f22d939f759ca37d0c77d5fdfc61c4194761bfc4dc22c5175,
+            },
+            c2: Fq2 {
+                c0: 0x1b530d147488378d4956ae1d570209cc2c05a8d9fbeb935b6a20b10185178092,
+                c1: 0x1fd389970c3bc02a1b57cfe114630127d34f35e8291e468205e4f999a4e4ffae,
+            },
+        },
+        c1: Fq6 {
+            c0: Fq2 {
+                c0: 0x283c2a15ce4fb8ed8fc2df9071182a0df68789dfb1576008221d910e4deba67f,
+                c1: 0x286a770c6015d6451541ce952dc70b447f3742a75529957ca4155aa7d24d6f12,
+            },
+            c1: Fq2 {
+                c0: 0x2d951b3f59ce21e12cc7167473c3c47601758101c3693b3fc23b28321b6bb5a9,
+                c1: 0x1bae636562fa5fa38856b8dc4be9bd7ed46e89f72440da50ba266786250cfba6,
+            },
+            c2: Fq2 {
+                c0: 0x2a61ed99d11015c08d4b7fef72b520834460c6754eae89b5e3d0e668d95bc5cf,
+                c1: 0x25578eadd72707995b8311db6600f6eccfd03231175779bbbbff128bb28b1684,
+            },
+        },
+    },
+)
+circuit f: [
+    "1dc9ee36016f9ea889bd56ba2b94df07e3e0daa5b9c00f3dc264e1a1efc21385",
+    "283c2a15ce4fb8ed8fc2df9071182a0df68789dfb1576008221d910e4deba67f",
+    "14a115385087b77e61873fe0db0615a8ff4f22a7b3a412e95203d36b10ad46d1",
+    "2d951b3f59ce21e12cc7167473c3c47601758101c3693b3fc23b28321b6bb5a9",
+    "1b530d147488378d4956ae1d570209cc2c05a8d9fbeb935b6a20b10185178092",
+    "2a61ed99d11015c08d4b7fef72b520834460c6754eae89b5e3d0e668d95bc5cf",
+    "e919401ce3c8c939ba0cc7dc25ee919e38c2a8dff85985ba533670f0ca94410",
+    "286a770c6015d6451541ce952dc70b447f3742a75529957ca4155aa7d24d6f12",
+    "27cf2ae2f8f8588f22d939f759ca37d0c77d5fdfc61c4194761bfc4dc22c5175",
+    "1bae636562fa5fa38856b8dc4be9bd7ed46e89f72440da50ba266786250cfba6",
+    "1fd389970c3bc02a1b57cfe114630127d34f35e8291e468205e4f999a4e4ffae",
+    "25578eadd72707995b8311db6600f6eccfd03231175779bbbbff128bb28b1684",
+]
+Using:
+advice columns: 13
+special lookup advice columns: 2
+fixed columns: 1
+lookup bits: 17
+limb bits: 88
+num limbs: 3
+maximum rows used by an advice column: 251554
+minimum rows used by an advice column: 251543
+total cells used: 3270142
+cells used in special lookup column: 364074
+maximum rows used by a fixed column: 124
+Proving time: 25.221047792s
+Verify time: 6.036083ms
+---------------------- degree = 17 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 902.645375ms
+Time elapsed in generating vkey: 9.427334041s
+Time elapsed in generating pkey: 9.44115625s
+Time elapsed in filling circuit: 157.709µs
+optimal ate pairing:
+actual f: Gt(
+    Fq12 {
+        c0: Fq6 {
+            c0: Fq2 {
+                c0: 0x2f6b5fb559355078b85623bc1314b30c03eee6d39fd0fa7a18c5dd7797610748,
+                c1: 0x1677069d40821974bdf767cf3d07dc7dbd9aa24a700d847928f28b8506ae0ee2,
+            },
+            c1: Fq2 {
+                c0: 0x28f407b2820778fe3ddb941c30ddbfb4444519b3a040cdc957c9b53f26c11514,
+                c1: 0x02d10f22fc47193dd4c87e6886adab94890ac7e7dc4797185db00bede7257f0a,
+            },
+            c2: Fq2 {
+                c0: 0x23d1256f3e68b2a4e459411e579f7b9003cec25940f501f513f94dbdc258a815,
+                c1: 0x211c94870a2d8ef5aa31f8d0f3370f7b5baee369d56c14d50094061593820895,
+            },
+        },
+        c1: Fq6 {
+            c0: Fq2 {
+                c0: 0x132ecd2ac18921c2bf93fa25705efc55a028ac277381d61ddc2964d90e4b1b7d,
+                c1: 0x07cb8e1067f0249fea57384457aa428310f9f389e8206219bdec48af133e5ccf,
+            },
+            c1: Fq2 {
+                c0: 0x2e05ca4dced66f3951a3627bd7092b3e50abd7ad12380d231f27b4fe1b8c1081,
+                c1: 0x26d7f859fede048d5d7259e96644f01878ea3b010cea4c2a699506495916285b,
+            },
+            c2: Fq2 {
+                c0: 0x24137579a8c915ec245765a2d9466d9775a397ef714e233c2833ea31b935a002,
+                c1: 0x081076c36be6a1301eab412b3846e8551763b7240d637aff1c8414d5eb9534b6,
+            },
+        },
+    },
+)
+circuit f: [
+    "2f6b5fb559355078b85623bc1314b30c03eee6d39fd0fa7a18c5dd7797610748",
+    "132ecd2ac18921c2bf93fa25705efc55a028ac277381d61ddc2964d90e4b1b7d",
+    "28f407b2820778fe3ddb941c30ddbfb4444519b3a040cdc957c9b53f26c11514",
+    "2e05ca4dced66f3951a3627bd7092b3e50abd7ad12380d231f27b4fe1b8c1081",
+    "23d1256f3e68b2a4e459411e579f7b9003cec25940f501f513f94dbdc258a815",
+    "24137579a8c915ec245765a2d9466d9775a397ef714e233c2833ea31b935a002",
+    "1677069d40821974bdf767cf3d07dc7dbd9aa24a700d847928f28b8506ae0ee2",
+    "7cb8e1067f0249fea57384457aa428310f9f389e8206219bdec48af133e5ccf",
+    "2d10f22fc47193dd4c87e6886adab94890ac7e7dc4797185db00bede7257f0a",
+    "26d7f859fede048d5d7259e96644f01878ea3b010cea4c2a699506495916285b",
+    "211c94870a2d8ef5aa31f8d0f3370f7b5baee369d56c14d50094061593820895",
+    "81076c36be6a1301eab412b3846e8551763b7240d637aff1c8414d5eb9534b6",
+]
+Using:
+advice columns: 26
+special lookup advice columns: 3
+fixed columns: 1
+lookup bits: 16
+limb bits: 88
+num limbs: 3
+maximum rows used by an advice column: 127100
+minimum rows used by an advice column: 127084
+total cells used: 3304378
+cells used in special lookup column: 375486
+maximum rows used by a fixed column: 124
+Suggestions:
+Have you tried using 26 advice columns?
+Have you tried using 3 lookup columns?
+Have you tried using 1 fixed columns?
+Proving time: 21.984741416s
+Verify time: 9.293792ms
+---------------------- degree = 16 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 480.439875ms
+Time elapsed in generating vkey: 9.627523708s
+test bn254::tests::bench_pairing has been running for over 60 seconds
+Time elapsed in generating pkey: 8.621027917s
+Time elapsed in filling circuit: 132.291µs
+optimal ate pairing:
+actual f: Gt(
+    Fq12 {
+        c0: Fq6 {
+            c0: Fq2 {
+                c0: 0x05fa25049d6fa380dd098e4db39cbc79ed45abb26bed7eec92affe6c56a7dfc0,
+                c1: 0x0f358196c1ec664b5dd6830ba49182f2105b80109d4ff41921c0d62c63d76c04,
+            },
+            c1: Fq2 {
+                c0: 0x04e06254d755c656aab953f287b774040901d00d2cb73217505b3b08035b3d24,
+                c1: 0x0c21194592f686402b84fed5a02784fc7cb276fb4f9bfd4402f403f528669395,
+            },
+            c2: Fq2 {
+                c0: 0x22e815ce69f4837104a94592dd4097c331f25b1622bc830196cd6f2edfd2975e,
+                c1: 0x10ca8d29eae1de72055333b9fafe49eda152f89f73538a61bc044fe764cb1e7a,
+            },
+        },
+        c1: Fq6 {
+            c0: Fq2 {
+                c0: 0x1ad38e7cceecc2cab831f9140255c1386c697ba7bdc922b6792266e1dd864ddb,
+                c1: 0x29b5248c5b7567b81792b7811def89f1a69c98bbbe8c5c85cbf3b420c48c071b,
+            },
+            c1: Fq2 {
+                c0: 0x08aef22052f4b02f02590fcd20fc3d4a6a08c28969a77f97710238a6f02c5858,
+                c1: 0x29b2268d4f95279da44634aa984d6a68bdc92769bdaf488ef2463baa04fc8aab,
+            },
+            c2: Fq2 {
+                c0: 0x27a760074bc589429b62fbe7c91632148fca433c5d8bd3aaf6d9b22e21d6811a,
+                c1: 0x1ac058c71295b3f6539fe4b0248f05da1e8c42c3c8e19ab635e4fe279142f350,
+            },
+        },
+    },
+)
+circuit f: [
+    "5fa25049d6fa380dd098e4db39cbc79ed45abb26bed7eec92affe6c56a7dfc0",
+    "1ad38e7cceecc2cab831f9140255c1386c697ba7bdc922b6792266e1dd864ddb",
+    "4e06254d755c656aab953f287b774040901d00d2cb73217505b3b08035b3d24",
+    "8aef22052f4b02f02590fcd20fc3d4a6a08c28969a77f97710238a6f02c5858",
+    "22e815ce69f4837104a94592dd4097c331f25b1622bc830196cd6f2edfd2975e",
+    "27a760074bc589429b62fbe7c91632148fca433c5d8bd3aaf6d9b22e21d6811a",
+    "f358196c1ec664b5dd6830ba49182f2105b80109d4ff41921c0d62c63d76c04",
+    "29b5248c5b7567b81792b7811def89f1a69c98bbbe8c5c85cbf3b420c48c071b",
+    "c21194592f686402b84fed5a02784fc7cb276fb4f9bfd4402f403f528669395",
+    "29b2268d4f95279da44634aa984d6a68bdc92769bdaf488ef2463baa04fc8aab",
+    "10ca8d29eae1de72055333b9fafe49eda152f89f73538a61bc044fe764cb1e7a",
+    "1ac058c71295b3f6539fe4b0248f05da1e8c42c3c8e19ab635e4fe279142f350",
+]
+Using:
+advice columns: 51
+special lookup advice columns: 6
+fixed columns: 1
+lookup bits: 15
+limb bits: 90
+num limbs: 3
+maximum rows used by an advice column: 64994
+minimum rows used by an advice column: 64975
+total cells used: 3314074
+cells used in special lookup column: 358398
+maximum rows used by a fixed column: 121
+Suggestions:
+Have you tried using 51 advice columns?
+Have you tried using 6 lookup columns?
+Have you tried using 1 fixed columns?
+Proving time: 20.796019042s
+Verify time: 14.581125ms
+---------------------- degree = 15 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 259.291208ms
+Time elapsed in generating vkey: 10.518665125s
+Time elapsed in generating pkey: 8.573772417s
+Time elapsed in filling circuit: 132.416µs
+optimal ate pairing:
+actual f: Gt(
+    Fq12 {
+        c0: Fq6 {
+            c0: Fq2 {
+                c0: 0x12667b6947e8758e8b58f334c77592aefcc7ed257ed4c5b89d06079a3767fa2c,
+                c1: 0x1d9d38b3ffae375807bf68c3ed7bc8721d31b48641913fc6b762f3c8aa8712c8,
+            },
+            c1: Fq2 {
+                c0: 0x001fbcce1b77e363c5b595e762b0ea8a97c40e0d7d773c7f5af88c458acabb36,
+                c1: 0x1a891a0f23f9b9afe9c825d227786fd0772cb1be65d98047b44bd84d34610ff4,
+            },
+            c2: Fq2 {
+                c0: 0x02cc1a3715d113e79d83d9e5a2f0c7c62d947ae0732e848c63af34c91b4dffdb,
+                c1: 0x25235641f460563a5a84b1d09bea2ae36c9da6e0658f4f69a3b260986fac0be6,
+            },
+        },
+        c1: Fq6 {
+            c0: Fq2 {
+                c0: 0x24508435ac8500731c958875652476306507746838c6a6751ac7da75413bf448,
+                c1: 0x0fe0778ce2f8a314e97775fb7a6f597351058ee63b350a5dc475c008d44c59c8,
+            },
+            c1: Fq2 {
+                c0: 0x248ecfeb01938008b3f4358997c69e7b123e06505fe3b9e2a10a186848d4dc36,
+                c1: 0x02d4435962585d1b92b4ed87bf1629ec33ac31e89e0ad9c3900c485f4cc96ff5,
+            },
+            c2: Fq2 {
+                c0: 0x291792a23dcc866c0f4a807f19366ab587d62484fa0c8df5d79269661e880018,
+                c1: 0x203eed4d7cb2b3089f65a83773fa48e3a8c79305929c29788f32fab0bce17659,
+            },
+        },
+    },
+)
+circuit f: [
+    "12667b6947e8758e8b58f334c77592aefcc7ed257ed4c5b89d06079a3767fa2c",
+    "24508435ac8500731c958875652476306507746838c6a6751ac7da75413bf448",
+    "1fbcce1b77e363c5b595e762b0ea8a97c40e0d7d773c7f5af88c458acabb36",
+    "248ecfeb01938008b3f4358997c69e7b123e06505fe3b9e2a10a186848d4dc36",
+    "2cc1a3715d113e79d83d9e5a2f0c7c62d947ae0732e848c63af34c91b4dffdb",
+    "291792a23dcc866c0f4a807f19366ab587d62484fa0c8df5d79269661e880018",
+    "1d9d38b3ffae375807bf68c3ed7bc8721d31b48641913fc6b762f3c8aa8712c8",
+    "fe0778ce2f8a314e97775fb7a6f597351058ee63b350a5dc475c008d44c59c8",
+    "1a891a0f23f9b9afe9c825d227786fd0772cb1be65d98047b44bd84d34610ff4",
+    "2d4435962585d1b92b4ed87bf1629ec33ac31e89e0ad9c3900c485f4cc96ff5",
+    "25235641f460563a5a84b1d09bea2ae36c9da6e0658f4f69a3b260986fac0be6",
+    "203eed4d7cb2b3089f65a83773fa48e3a8c79305929c29788f32fab0bce17659",
+]
+Using:
+advice columns: 106
+special lookup advice columns: 14
+fixed columns: 1
+lookup bits: 14
+limb bits: 90
+num limbs: 3
+maximum rows used by an advice column: 32757
+minimum rows used by an advice column: 32734
+total cells used: 3470860
+cells used in special lookup column: 430980
+maximum rows used by a fixed column: 126
+Suggestions:
+Have you tried using 106 advice columns?
+Have you tried using 14 lookup columns?
+Have you tried using 1 fixed columns?
+Proving time: 23.438619875s
+Verify time: 25.235459ms
+---------------------- degree = 14 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 121.8535ms
+Time elapsed in generating vkey: 12.176505416s
+Time elapsed in generating pkey: 9.08229325s
+Time elapsed in filling circuit: 225.417µs
+optimal ate pairing:
+actual f: Gt(
+    Fq12 {
+        c0: Fq6 {
+            c0: Fq2 {
+                c0: 0x058742387deecf38a640a1d950f087c4133e9b04c28c64107651788816d19e17,
+                c1: 0x2d300ef28ee6280b7daa508ff4a2c802e4c74daf963dd4da66b25c43cc01a890,
+            },
+            c1: Fq2 {
+                c0: 0x11ccac753ce7c2f373544f01ff370629ba335688e35a7f7831a8d43c99dfe063,
+                c1: 0x1208b3837c8829bddc9abd52e38f07e6cf847edb4124f820162b570b754b307a,
+            },
+            c2: Fq2 {
+                c0: 0x0478c3cd6061ccb56cba3d7dd9468db138fa76d8032dd3aaf3b96c4dae3cdf0e,
+                c1: 0x2497ad50d789c263a47310f084003a9b85e53c9e4859fbf25f67bdba9297c5e2,
+            },
+        },
+        c1: Fq6 {
+            c0: Fq2 {
+                c0: 0x1014151950b5258db9fc15b68037b0a3945303a16c38f70d508c79bf948b8289,
+                c1: 0x2558754a750d53d5e33f7a199c4b539bf1628beaff1340b3a4f749d4a66ac2bf,
+            },
+            c1: Fq2 {
+                c0: 0x23c09080e8d84838d9a05c89c110a2d5788e18b1b67f2a8ac9b65584f4bf35dc,
+                c1: 0x172cee9f44a3964dd47ba733f384a2d4e92e44e21d54244adb89705c6abdb902,
+            },
+            c2: Fq2 {
+                c0: 0x2588706eaef78e17546dae15833ff04b2f0e728261134f7505bce4cca690c174,
+                c1: 0x0d9991fe897d2dc6b432bb9680658a197689bd50b2ce020af9d789b7b2893929,
+            },
+        },
+    },
+)
+circuit f: [
+    "58742387deecf38a640a1d950f087c4133e9b04c28c64107651788816d19e17",
+    "1014151950b5258db9fc15b68037b0a3945303a16c38f70d508c79bf948b8289",
+    "11ccac753ce7c2f373544f01ff370629ba335688e35a7f7831a8d43c99dfe063",
+    "23c09080e8d84838d9a05c89c110a2d5788e18b1b67f2a8ac9b65584f4bf35dc",
+    "478c3cd6061ccb56cba3d7dd9468db138fa76d8032dd3aaf3b96c4dae3cdf0e",
+    "2588706eaef78e17546dae15833ff04b2f0e728261134f7505bce4cca690c174",
+    "2d300ef28ee6280b7daa508ff4a2c802e4c74daf963dd4da66b25c43cc01a890",
+    "2558754a750d53d5e33f7a199c4b539bf1628beaff1340b3a4f749d4a66ac2bf",
+    "1208b3837c8829bddc9abd52e38f07e6cf847edb4124f820162b570b754b307a",
+    "172cee9f44a3964dd47ba733f384a2d4e92e44e21d54244adb89705c6abdb902",
+    "2497ad50d789c263a47310f084003a9b85e53c9e4859fbf25f67bdba9297c5e2",
+    "d9991fe897d2dc6b432bb9680658a197689bd50b2ce020af9d789b7b2893929",
+]
+Using:
+advice columns: 213
+special lookup advice columns: 26
+fixed columns: 1
+lookup bits: 13
+limb bits: 91
+num limbs: 3
+maximum rows used by an advice column: 16354
+minimum rows used by an advice column: 16329
+total cells used: 3480556
+cells used in special lookup column: 413892
+maximum rows used by a fixed column: 123
+Suggestions:
+Have you tried using 213 advice columns?
+Have you tried using 26 lookup columns?
+Have you tried using 1 fixed columns?
+Proving time: 24.405766042s
+Verify time: 60.342208ms
+---------------------- degree = 13 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 72.068125ms
+Time elapsed in generating vkey: 14.526949125s
+Time elapsed in generating pkey: 9.846653125s
+Time elapsed in filling circuit: 130.083µs
+optimal ate pairing:
+actual f: Gt(
+    Fq12 {
+        c0: Fq6 {
+            c0: Fq2 {
+                c0: 0x1638bb2426c4d48ca6700f3e4e2cc368a080453bfb24354f1cc2993d623adebb,
+                c1: 0x1794dbdefc6661d4912240a3c6af6f96a4b6ce94f8de3d12c1be1a19a39f7c2f,
+            },
+            c1: Fq2 {
+                c0: 0x03d44155bf3610456062d73e1d5acc91b6396336fac651c0a4eb09f1911a0402,
+                c1: 0x240fcaffc3feb0322791e710fd0d557c3c7c0f82afe1766d35c84ac06c2fb175,
+            },
+            c2: Fq2 {
+                c0: 0x0ed1775fab5830bf0b46b1ab2dba21c2daeeeef48e82ed177c617984a292de8a,
+                c1: 0x276a48d858ed9858dc3c74addae7746c867e82ec1550d76ca3be4c57ad5a04e6,
+            },
+        },
+        c1: Fq6 {
+            c0: Fq2 {
+                c0: 0x1f96d977e7d8e633b44eec985debfd5b687667dc54fd4fbca31f53f1dca5c5eb,
+                c1: 0x2bc6d16be77e9ceb4c077611a5570a53561e32ac82899d9cb390284bf060ab95,
+            },
+            c1: Fq2 {
+                c0: 0x0f7fb989442a1a81ca7656368988fe4a94f3a505d7d733b73afe723617e48481,
+                c1: 0x24d845ded32529b7caf59eb04951a6d8bf2fbe7960db5536286620d0b239847a,
+            },
+            c2: Fq2 {
+                c0: 0x118fa4c34c476ad206983f9cc1067fcfe9157113c1bf903a1ded48e3f6a0a171,
+                c1: 0x1a4768079c715ddce2adc1c1b13cb42b5c16a5d1c538362d0b940ba0cf428ee2,
+            },
+        },
+    },
+)
+circuit f: [
+    "1638bb2426c4d48ca6700f3e4e2cc368a080453bfb24354f1cc2993d623adebb",
+    "1f96d977e7d8e633b44eec985debfd5b687667dc54fd4fbca31f53f1dca5c5eb",
+    "3d44155bf3610456062d73e1d5acc91b6396336fac651c0a4eb09f1911a0402",
+    "f7fb989442a1a81ca7656368988fe4a94f3a505d7d733b73afe723617e48481",
+    "ed1775fab5830bf0b46b1ab2dba21c2daeeeef48e82ed177c617984a292de8a",
+    "118fa4c34c476ad206983f9cc1067fcfe9157113c1bf903a1ded48e3f6a0a171",
+    "1794dbdefc6661d4912240a3c6af6f96a4b6ce94f8de3d12c1be1a19a39f7c2f",
+    "2bc6d16be77e9ceb4c077611a5570a53561e32ac82899d9cb390284bf060ab95",
+    "240fcaffc3feb0322791e710fd0d557c3c7c0f82afe1766d35c84ac06c2fb175",
+    "24d845ded32529b7caf59eb04951a6d8bf2fbe7960db5536286620d0b239847a",
+    "276a48d858ed9858dc3c74addae7746c867e82ec1550d76ca3be4c57ad5a04e6",
+    "1a4768079c715ddce2adc1c1b13cb42b5c16a5d1c538362d0b940ba0cf428ee2",
+]
+Using:
+advice columns: 446
+special lookup advice columns: 60
+fixed columns: 1
+lookup bits: 12
+limb bits: 88
+num limbs: 3
+maximum rows used by an advice column: 8173
+minimum rows used by an advice column: 8147
+total cells used: 3637342
+cells used in special lookup column: 486474
+maximum rows used by a fixed column: 127
+Suggestions:
+Have you tried using 445 advice columns?
+Have you tried using 60 lookup columns?
+Have you tried using 1 fixed columns?
+Proving time: 28.738033583s
+Verify time: 104.588125ms

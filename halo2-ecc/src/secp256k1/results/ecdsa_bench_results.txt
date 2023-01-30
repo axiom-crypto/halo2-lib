@@ -1,0 +1,253 @@
+---------------------- degree = 19 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 3.405966541s
+ecdsa done
+Time elapsed in generating vkey: 2.123023125s
+ecdsa done
+Time elapsed in generating pkey: 5.21121525s
+Time elapsed in filling circuit: 340.292µs
+ECDSA res AssignedCell { value: Some(0x0000000000000000000000000000000000000000000000000000000000000001), cell: Cell { region_index: RegionIndex(58470), row_offset: 3, column: Column { index: 0, column_type: Advice } }, _marker: PhantomData }
+Using:
+advice columns: 1
+special lookup advice columns: 0
+fixed columns: 1
+lookup bits: 18
+limb bits: 88
+num limbs: 3
+maximum rows used by an advice column: 488463
+minimum rows used by an advice column: 488463
+total cells used: 488463
+cells used in special lookup column: 0
+maximum rows used by a fixed column: 8026
+Suggestions:
+Have you tried using 1 advice columns?
+Have you tried using 0 lookup columns?
+Have you tried using 1 fixed columns?
+ecdsa done
+Proving time: 13.385351667s
+Verify time: 3.0945ms
+---------------------- degree = 18 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 1.678767125s
+ecdsa done
+Time elapsed in generating vkey: 2.120563625s
+ecdsa done
+Time elapsed in generating pkey: 3.271299875s
+Time elapsed in filling circuit: 343.416µs
+ECDSA res AssignedCell { value: Some(0x0000000000000000000000000000000000000000000000000000000000000001), cell: Cell { region_index: RegionIndex(58470), row_offset: 3, column: Column { index: 1, column_type: Advice } }, _marker: PhantomData }
+Using:
+advice columns: 2
+special lookup advice columns: 1
+fixed columns: 1
+lookup bits: 17
+limb bits: 88
+num limbs: 3
+maximum rows used by an advice column: 249145
+minimum rows used by an advice column: 249144
+total cells used: 498289
+cells used in special lookup column: 69615
+maximum rows used by a fixed column: 8026
+Suggestions:
+Have you tried using 2 advice columns?
+Have you tried using 1 lookup columns?
+Have you tried using 1 fixed columns?
+ecdsa done
+Proving time: 8.359564584s
+Verify time: 6.137958ms
+---------------------- degree = 17 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 845.511958ms
+ecdsa done
+Time elapsed in generating vkey: 1.821084583s
+ecdsa done
+Time elapsed in generating pkey: 2.1293145s
+Time elapsed in filling circuit: 350.042µs
+ECDSA res AssignedCell { value: Some(0x0000000000000000000000000000000000000000000000000000000000000001), cell: Cell { region_index: RegionIndex(58470), row_offset: 3, column: Column { index: 2, column_type: Advice } }, _marker: PhantomData }
+Using:
+advice columns: 4
+special lookup advice columns: 1
+fixed columns: 1
+lookup bits: 16
+limb bits: 88
+num limbs: 3
+maximum rows used by an advice column: 125487
+minimum rows used by an advice column: 125483
+total cells used: 501940
+cells used in special lookup column: 70832
+maximum rows used by a fixed column: 8026
+Suggestions:
+Have you tried using 4 advice columns?
+Have you tried using 1 lookup columns?
+Have you tried using 1 fixed columns?
+ecdsa done
+Proving time: 5.56246375s
+Verify time: 5.302292ms
+---------------------- degree = 16 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 476.735291ms
+ecdsa done
+Time elapsed in generating vkey: 1.889539709s
+ecdsa done
+Time elapsed in generating pkey: 1.838861167s
+Time elapsed in filling circuit: 361.875µs
+ECDSA res AssignedCell { value: Some(0x0000000000000000000000000000000000000000000000000000000000000001), cell: Cell { region_index: RegionIndex(60200), row_offset: 3, column: Column { index: 5, column_type: Advice } }, _marker: PhantomData }
+Using:
+advice columns: 9
+special lookup advice columns: 2
+fixed columns: 1
+lookup bits: 15
+limb bits: 90
+num limbs: 3
+maximum rows used by an advice column: 59389
+minimum rows used by an advice column: 59366
+total cells used: 534362
+cells used in special lookup column: 71669
+maximum rows used by a fixed column: 8269
+Suggestions:
+Have you tried using 9 advice columns?
+Have you tried using 2 lookup columns?
+Have you tried using 1 fixed columns?
+ecdsa done
+Proving time: 5.090631625s
+Verify time: 6.617666ms
+---------------------- degree = 15 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 234.525125ms
+ecdsa done
+test secp256k1::ecdsa::bench_secp has been running for over 60 seconds
+Time elapsed in generating vkey: 1.897827708s
+ecdsa done
+Time elapsed in generating pkey: 1.611605583s
+Time elapsed in filling circuit: 347.375µs
+ECDSA res AssignedCell { value: Some(0x0000000000000000000000000000000000000000000000000000000000000001), cell: Cell { region_index: RegionIndex(60200), row_offset: 3, column: Column { index: 3, column_type: Advice } }, _marker: PhantomData }
+Using:
+advice columns: 17
+special lookup advice columns: 3
+fixed columns: 1
+lookup bits: 14
+limb bits: 90
+num limbs: 3
+maximum rows used by an advice column: 32707
+minimum rows used by an advice column: 32678
+total cells used: 555735
+cells used in special lookup column: 85486
+maximum rows used by a fixed column: 8268
+Suggestions:
+Have you tried using 17 advice columns?
+Have you tried using 3 lookup columns?
+Have you tried using 1 fixed columns?
+ecdsa done
+Proving time: 4.457021917s
+Verify time: 7.191958ms
+---------------------- degree = 14 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 127.057375ms
+ecdsa done
+Time elapsed in generating vkey: 2.217236041s
+ecdsa done
+Time elapsed in generating pkey: 1.632434708s
+Time elapsed in filling circuit: 344.458µs
+ECDSA res AssignedCell { value: Some(0x0000000000000000000000000000000000000000000000000000000000000001), cell: Cell { region_index: RegionIndex(61065), row_offset: 3, column: Column { index: 20, column_type: Advice } }, _marker: PhantomData }
+Using:
+advice columns: 36
+special lookup advice columns: 6
+fixed columns: 1
+lookup bits: 13
+limb bits: 91
+num limbs: 3
+maximum rows used by an advice column: 15931
+minimum rows used by an advice column: 15895
+total cells used: 572648
+cells used in special lookup column: 85441
+maximum rows used by a fixed column: 8390
+Suggestions:
+Have you tried using 35 advice columns?
+Have you tried using 6 lookup columns?
+Have you tried using 1 fixed columns?
+ecdsa done
+Proving time: 4.635864542s
+Verify time: 11.689375ms
+---------------------- degree = 13 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 61.105375ms
+ecdsa done
+Time elapsed in generating vkey: 2.53718925s
+ecdsa done
+Time elapsed in generating pkey: 1.570442167s
+Time elapsed in filling circuit: 344.25µs
+ECDSA res AssignedCell { value: Some(0x0000000000000000000000000000000000000000000000000000000000000001), cell: Cell { region_index: RegionIndex(58470), row_offset: 3, column: Column { index: 16, column_type: Advice } }, _marker: PhantomData }
+Using:
+advice columns: 71
+special lookup advice columns: 12
+fixed columns: 1
+lookup bits: 12
+limb bits: 88
+num limbs: 3
+maximum rows used by an advice column: 8096
+minimum rows used by an advice column: 8057
+total cells used: 572742
+cells used in special lookup column: 91593
+maximum rows used by a fixed column: 8026
+Suggestions:
+Have you tried using 70 advice columns?
+Have you tried using 12 lookup columns?
+Have you tried using 1 fixed columns?
+ecdsa done
+Proving time: 4.887099708s
+Verify time: 16.996459ms
+---------------------- degree = 12 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 34.131375ms
+ecdsa done
+Time elapsed in generating vkey: 2.9427305s
+ecdsa done
+Time elapsed in generating pkey: 1.724485125s
+Time elapsed in filling circuit: 338.666µs
+ECDSA res AssignedCell { value: Some(0x0000000000000000000000000000000000000000000000000000000000000001), cell: Cell { region_index: RegionIndex(58470), row_offset: 3, column: Column { index: 45, column_type: Advice } }, _marker: PhantomData }
+Using:
+advice columns: 145
+special lookup advice columns: 23
+fixed columns: 2
+lookup bits: 11
+limb bits: 88
+num limbs: 3
+maximum rows used by an advice column: 4064
+minimum rows used by an advice column: 4023
+total cells used: 584948
+cells used in special lookup column: 94029
+maximum rows used by a fixed column: 4014
+Suggestions:
+Have you tried using 143 advice columns?
+Have you tried using 23 lookup columns?
+Have you tried using 2 fixed columns?
+ecdsa done
+Proving time: 5.740054292s
+Verify time: 51.147917ms
+---------------------- degree = 11 ------------------------------
+Found existing params file. Reading params...
+Time elapsed in circuit & params construction: 17.605458ms
+ecdsa done
+Time elapsed in generating vkey: 3.72480825s
+ecdsa done
+Time elapsed in generating pkey: 2.107728542s
+Time elapsed in filling circuit: 338.25µs
+ECDSA res AssignedCell { value: Some(0x0000000000000000000000000000000000000000000000000000000000000001), cell: Cell { region_index: RegionIndex(58470), row_offset: 3, column: Column { index: 302, column_type: Advice } }, _marker: PhantomData }
+Using:
+advice columns: 305
+special lookup advice columns: 53
+fixed columns: 4
+lookup bits: 10
+limb bits: 88
+num limbs: 3
+maximum rows used by an advice column: 2038
+minimum rows used by an advice column: 1995
+total cells used: 611812
+cells used in special lookup column: 107456
+maximum rows used by a fixed column: 2007
+Suggestions:
+Have you tried using 299 advice columns?
+Have you tried using 53 lookup columns?
+Have you tried using 4 fixed columns?
+ecdsa done
+Proving time: 7.244600792s
+Verify time: 55.647375ms

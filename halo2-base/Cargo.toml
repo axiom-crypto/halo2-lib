@@ -1,22 +1,51 @@
 [package]
-name = "halo2_base"
-version = "0.1.0"
+name = "halo2-base"
+version = "0.2.2"
 edition = "2021"
 
 [dependencies]
+itertools = "0.10"
 num-bigint = { version = "0.4", features = ["rand"] }
 num-integer = "0.1"
 num-traits = "0.2"
-ff = "0.12.0"
+rand_chacha = "0.3"
+rustc-hash = "1.1"
+ff = "0.12"
 
-# halo2
-halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2022_09_10" }
+# Use Axiom's custom halo2 monorepo for faster proving when feature = "halo2-axiom" is on
+halo2_proofs_axiom = { git = "https://github.com/axiom-crypto/halo2.git", tag = "v2023_01_17", package = "halo2_proofs", optional = true }
+# Use PSE halo2 and halo2curves for compatibility when feature = "halo2-pse" is on
+halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2023_01_20", optional = true }
 
 # plotting circuit layout
 plotters = { version = "0.3.0", optional = true }
 tabbycat = { version = "0.1", features = ["attributes"], optional = true }
 
+[dev-dependencies]
+ark-std = { version = "0.3.0", features = ["print-trace"] }
+rand = "0.8"
+pprof = { version = "0.11", features = ["criterion", "flamegraph"] }
+criterion = "0.4"
+criterion-macro = "0.4"
+
+# memory allocation
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+jemallocator = { version = "0.5", optional = true }
+
+mimalloc = { version = "0.1", default-features = false, optional = true }
+
 [features]
-default = ["display"]
-dev-graph = ["halo2_proofs/dev-graph", "plotters"]
+default = ["halo2-axiom", "display"]
+dev-graph = ["halo2_proofs?/dev-graph", "halo2_proofs_axiom?/dev-graph", "plotters"]
+halo2-pse = ["halo2_proofs"]
+halo2-axiom = ["halo2_proofs_axiom"]
 display = []
+profile = ["halo2_proofs_axiom?/profile"]
+
+[[bench]]
+name = "mul"
+harness = false
+
+[[bench]]
+name = "inner_product"
+harness = false

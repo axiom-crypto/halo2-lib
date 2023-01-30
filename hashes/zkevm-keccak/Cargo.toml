@@ -1,0 +1,33 @@
+[package]
+name = "zkevm-keccak"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+array-init = "2.0.0"
+ethers-core = "0.17.0"
+rand = "0.8"
+itertools = "0.10.3"
+lazy_static = "1.4"
+log = "0.4"
+num-bigint = { version = "0.4" }
+halo2-base = { path = "../../halo2-base", default-features = false }
+rayon = "1.6.1"
+
+[dev-dependencies]
+criterion = "0.3"
+ctor = "0.1.22"
+ethers-signers = "0.17.0"
+hex = "0.4.3"
+itertools = "0.10.1"
+pretty_assertions = "1.0.0"
+rand_core = "0.6.4"
+rand_xorshift = "0.3"
+env_logger = "0.10"
+
+[features]
+default = ["halo2-axiom", "display"]
+display = ["halo2-base/display"]
+halo2-pse = ["halo2-base/halo2-pse"]
+halo2-axiom = ["halo2-base/halo2-axiom"]
