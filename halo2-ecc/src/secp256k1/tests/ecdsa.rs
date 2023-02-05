@@ -13,7 +13,7 @@ use crate::halo2_proofs::{
     halo2curves::bn256::{Bn256, Fr, G1Affine},
     halo2curves::secp256k1::{Fp, Fq, Secp256k1Affine},
     plonk::*,
-    poly::commitment::{Params, ParamsProver},
+    poly::commitment::{ParamsProver},
     transcript::{Blake2bRead, Blake2bWrite, Challenge255},
 };
 use rand_core::OsRng;
@@ -99,9 +99,9 @@ impl<F: PrimeField> Circuit<F> for ECDSACircuit<F> {
 
         let limb_bits = fp_chip.limb_bits;
         let num_limbs = fp_chip.num_limbs;
-        let num_fixed = fp_chip.range.gate.constants.len();
-        let lookup_bits = fp_chip.range.lookup_bits;
-        let num_advice = fp_chip.range.gate.num_advice;
+        let _num_fixed = fp_chip.range.gate.constants.len();
+        let _lookup_bits = fp_chip.range.lookup_bits;
+        let _num_advice = fp_chip.range.gate.num_advice;
 
         let mut first_pass = SKIP_FIRST_PASS;
         // ECDSA verify
@@ -218,7 +218,7 @@ fn bench_secp256_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
 
     use crate::halo2_proofs::{
         poly::kzg::{
-            commitment::{KZGCommitmentScheme, ParamsKZG},
+            commitment::{KZGCommitmentScheme},
             multiopen::{ProverSHPLONK, VerifierSHPLONK},
             strategy::SingleStrategy,
         },
@@ -226,7 +226,7 @@ fn bench_secp256_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
     };
     use std::{env::set_var, fs, io::BufRead};
 
-    let mut rng = OsRng;
+    let _rng = OsRng;
 
     let mut folder = std::path::PathBuf::new();
     folder.push("./src/secp256k1");
