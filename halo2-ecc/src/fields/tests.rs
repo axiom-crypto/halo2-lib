@@ -90,8 +90,7 @@ mod fp {
                     #[cfg(feature = "display")]
                     {
                         println!(
-                            "Using {} advice columns and {} fixed columns",
-                            NUM_ADVICE, NUM_FIXED
+                            "Using {NUM_ADVICE} advice columns and {NUM_FIXED} fixed columns"
                         );
                         println!("total cells: {}", ctx.total_advice);
 
@@ -224,8 +223,7 @@ mod fp12 {
                     #[cfg(feature = "display")]
                     {
                         println!(
-                            "Using {} advice columns and {} fixed columns",
-                            NUM_ADVICE, NUM_FIXED
+                            "Using {NUM_ADVICE} advice columns and {NUM_FIXED} fixed columns"
                         );
                         println!("total advice cells: {}", ctx.total_advice);
 

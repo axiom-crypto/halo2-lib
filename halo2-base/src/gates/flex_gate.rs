@@ -802,7 +802,6 @@ impl<F: ScalarField> GateInstructions<F> for FlexGateConfig<F> {
                     .iter()
                     .flat_map(|byte| (0..8).map(|i| (*byte as u64 >> i) & 1))
                     .take(range_bits)
-                    .into_iter()
                     .map(|x| F::from(x))
                     .collect::<Vec<_>>()
             })

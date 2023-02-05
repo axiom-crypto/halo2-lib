@@ -30,19 +30,17 @@ pub mod sub;
 pub mod sub_no_carry;
 
 #[derive(Clone, Debug, PartialEq)]
+#[derive(Default)]
 pub enum BigIntStrategy {
     // use existing gates
+    #[default]
     Simple,
     // vertical custom gates of length 4 for dot product between an unknown vector and a constant vector, both of length 3
     // we restrict to gate of length 4 since this uses the same set of evaluation points Rotation(0..=3) as our simple gate
     // CustomVerticalShort,
 }
 
-impl Default for BigIntStrategy {
-    fn default() -> Self {
-        BigIntStrategy::Simple
-    }
-}
+
 
 #[derive(Clone, Debug)]
 pub struct OverflowInteger<'v, F: PrimeField> {
