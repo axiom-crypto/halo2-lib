@@ -91,7 +91,7 @@ fn gate_tests<F: ScalarField>(ctx: &mut Context<F>, inputs: [F; 3]) {
     chip.idx_to_indicator(ctx, Constant(F::from(3u64)), 4);
 
     let bits = ctx.assign_witnesses([F::zero(), F::one()]);
-    //chip.bits_to_indicator(ctx, &bits);
+    chip.bits_to_indicator(ctx, &bits);
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn test_gates() {
     gate_tests(builder.main(0), inputs);
 
     // auto-tune circuit
-    builder.config(k);
+    builder.config(k, Some(9));
     // create circuit
     let circuit =
         MyCircuit { inputs, builder: RefCell::new(builder), break_points: RefCell::default() };

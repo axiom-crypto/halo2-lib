@@ -516,11 +516,13 @@ pub trait GateInstructions<F: ScalarField> {
                 vec![(1, 5)],
                 vec![],
             );
-            ind.push(ctx.get(-2));
             // need to use assigned idx after i > 0 so equality constraint holds
             if i == 0 {
                 idx = Existing(ctx.get(-5));
             }
+            let ind_cell = ctx.get(-2);
+            self.assert_bit(ctx, ind_cell);
+            ind.push(ind_cell);
         }
         ind
     }

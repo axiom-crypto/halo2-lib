@@ -58,8 +58,8 @@ impl<F: ScalarField> GateThreadBuilder<F> {
     }
 
     /// Auto-calculate configuration parameters for the circuit
-    pub fn config(&self, k: usize) -> FlexGateConfigParams {
-        let max_rows = 1 << k;
+    pub fn config(&self, k: usize, minimum_rows: Option<usize>) -> FlexGateConfigParams {
+        let max_rows = (1 << k) - minimum_rows.unwrap_or(0);
         let total_advice_per_phase = self
             .threads
             .iter()
@@ -69,7 +69,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
         // if this is too small, manual configuration will be needed
         let num_advice_per_phase = total_advice_per_phase
             .iter()
-            .map(|count| (count + max_rows - 1) >> k)
+            .map(|count| (count + max_rows - 1) / max_rows)
             .collect::<Vec<_>>();
 
         let total_lookup_advice_per_phase = self
@@ -79,7 +79,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
             .collect::<Vec<_>>();
         let num_lookup_advice_per_phase = total_lookup_advice_per_phase
             .iter()
-            .map(|count| (count + max_rows - 1) >> k)
+            .map(|count| (count + max_rows - 1) / max_rows)
             .collect::<Vec<_>>();
 
         let total_fixed: usize = self
@@ -87,7 +87,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
             .iter()
             .map(|threads| threads.iter().map(|ctx| ctx.constants.len()).sum::<usize>())
             .sum();
-        let num_fixed = (total_fixed + max_rows - 1) >> k;
+        let num_fixed = (total_fixed + (1 << k) - 1) >> k;
 
         let params = FlexGateConfigParams {
             strategy: GateStrategy::Vertical,
@@ -145,7 +145,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
                     }
                     let basic_gate = config.basic_gates[phase]
                         .get(gate_index)
-                        .unwrap_or_else(|| panic!("NOT ENOUGH ADVICE COLUMNS IN PHASE {phase}"));
+                        .unwrap_or_else(|| panic!("NOT ENOUGH ADVICE COLUMNS IN PHASE {phase}. Perhaps blinding factors were not taken into account. The max non-poisoned rows is {max_rows}"));
                     let column = basic_gate.value;
                     let value = if use_unknown { Value::unknown() } else { Value::known(advice) };
                     #[cfg(feature = "halo2-axiom")]
