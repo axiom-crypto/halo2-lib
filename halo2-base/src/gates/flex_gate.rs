@@ -1,10 +1,3 @@
-use serde::{Deserialize, Serialize};
-
-use super::{
-    AssignedValue, Context,
-    QuantumCell::{self, Constant, Existing, Witness, WitnessFraction},
-};
-use crate::utils::ScalarField;
 use crate::{
     halo2_proofs::{
         plonk::{
@@ -13,8 +6,11 @@ use crate::{
         },
         poly::Rotation,
     },
-    ContextCell,
+    utils::ScalarField,
+    AssignedValue, Context, ContextCell,
+    QuantumCell::{self, Constant, Existing, Witness, WitnessFraction},
 };
+use serde::{Deserialize, Serialize};
 use std::{
     iter::{self},
     marker::PhantomData,

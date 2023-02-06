@@ -1,9 +1,7 @@
-use halo2_base::gates::{
-    flex_gate::{FlexGateConfig, GateStrategy},
-    GateInstructions,
-};
+use ff::Field;
+use halo2_base::gates::builder::{GateCircuitBuilder, GateThreadBuilder};
+use halo2_base::gates::flex_gate::{GateChip, GateInstructions};
 use halo2_base::halo2_proofs::{
-    circuit::*,
     halo2curves::bn256::{Bn256, Fr, G1Affine},
     plonk::*,
     poly::kzg::{
@@ -12,11 +10,8 @@ use halo2_base::halo2_proofs::{
     },
     transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer},
 };
-use halo2_base::{
-    Context, ContextParams,
-    QuantumCell::{Existing, Witness},
-    SKIP_FIRST_PASS,
-};
+use halo2_base::utils::ScalarField;
+use halo2_base::Context;
 use rand::rngs::OsRng;
 
 use criterion::{criterion_group, criterion_main};
@@ -26,92 +21,43 @@ use pprof::criterion::{Output, PProfProfiler};
 // Thanks to the example provided by @jebbow in his article
 // https://www.jibbow.com/posts/criterion-flamegraphs/
 
-#[derive(Clone, Default)]
-struct MyCircuit<F> {
-    a: Value<F>,
-    b: Value<F>,
-    c: Value<F>,
-}
-
-const NUM_ADVICE: usize = 1;
 const K: u32 = 9;
 
-impl Circuit<Fr> for MyCircuit<Fr> {
-    type Config = FlexGateConfig<Fr>;
-    type FloorPlanner = SimpleFloorPlanner;
+fn mul_bench<F: ScalarField>(ctx: &mut Context<F>, inputs: [F; 2]) {
+    let [a, b]: [_; 2] = ctx.assign_witnesses(inputs).try_into().unwrap();
+    let chip = GateChip::default();
 
-    fn without_witnesses(&self) -> Self {
-        Self::default()
-    }
-
-    fn configure(meta: &mut ConstraintSystem<Fr>) -> Self::Config {
-        FlexGateConfig::configure(meta, GateStrategy::PlonkPlus, &[NUM_ADVICE], 1, 0, K as usize)
-    }
-
-    fn synthesize(
-        &self,
-        config: Self::Config,
-        mut layouter: impl Layouter<Fr>,
-    ) -> Result<(), Error> {
-        let mut first_pass = SKIP_FIRST_PASS;
-
-        layouter.assign_region(
-            || "gate",
-            |region| {
-                if first_pass {
-                    first_pass = false;
-                    return Ok(());
-                }
-
-                let mut aux = Context::new(
-                    region,
-                    ContextParams {
-                        max_rows: config.max_rows,
-                        num_context_ids: 1,
-                        fixed_columns: config.constants.clone(),
-                    },
-                );
-                let ctx = &mut aux;
-
-                let (_a_cell, b_cell, c_cell) = {
-                    let cells = config.assign_region_smart(
-                        ctx,
-                        vec![Witness(self.a), Witness(self.b), Witness(self.c)],
-                        vec![],
-                        vec![],
-                        vec![],
-                    );
-                    (cells[0].clone(), cells[1].clone(), cells[2].clone())
-                };
-
-                for _ in 0..120 {
-                    config.mul(ctx, Existing(&c_cell), Existing(&b_cell));
-                }
-
-                Ok(())
-            },
-        )
+    for _ in 0..120 {
+        chip.mul(ctx, a, b);
     }
 }
 
 fn bench(c: &mut Criterion) {
-    let circuit = MyCircuit::<Fr> {
-        a: Value::known(Fr::from(10u64)),
-        b: Value::known(Fr::from(12u64)),
-        c: Value::known(Fr::from(120u64)),
-    };
+    // create circuit for keygen
+    let mut builder = GateThreadBuilder::new(false);
+    mul_bench(builder.main(0), [Fr::zero(); 2]);
+    builder.config(K as usize, Some(9));
+    let circuit = GateCircuitBuilder::keygen(builder);
 
     let params = ParamsKZG::<Bn256>::setup(K, OsRng);
     let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
     let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
 
+    let break_points = circuit.break_points.take();
+
+    let a = Fr::random(OsRng);
+    let b = Fr::random(OsRng);
     // native multiplication 120 times
     c.bench_with_input(
         BenchmarkId::new("native mul", K),
-        &(&params, &pk, &circuit),
-        |b, &(params, pk, circuit)| {
-            b.iter(|| {
-                let rng = OsRng;
+        &(&params, &pk, [a, b]),
+        |bencher, &(params, pk, inputs)| {
+            bencher.iter(|| {
+                let mut builder = GateThreadBuilder::new(true);
+                // do the computation
+                mul_bench(builder.main(0), inputs);
+                let circuit = GateCircuitBuilder::witness_gen(builder, break_points.clone());
+
                 let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
                 create_proof::<
                     KZGCommitmentScheme<Bn256>,
@@ -120,8 +66,8 @@ fn bench(c: &mut Criterion) {
                     _,
                     Blake2bWrite<Vec<u8>, G1Affine, Challenge255<_>>,
                     _,
-                >(params, pk, &[circuit.clone()], &[&[]], rng, &mut transcript)
-                .expect("prover should not fail");
+                >(params, pk, &[circuit], &[&[]], OsRng, &mut transcript)
+                .unwrap();
             })
         },
     );

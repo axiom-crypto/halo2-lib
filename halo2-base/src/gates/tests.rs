@@ -1,78 +1,8 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
-use super::flex_gate::{FlexGateConfig, GateChip, GateInstructions, GateStrategy, MAX_PHASE};
-use super::{
-    assign_threads_in, FlexGateConfigParams, GateThreadBuilder, MultiPhaseThreadBreakPoints,
-    ThreadBreakPoints,
-};
-use crate::halo2_proofs::{circuit::*, dev::MockProver, halo2curves::bn256::Fr, plonk::*};
+use super::builder::{GateCircuitBuilder, GateThreadBuilder};
+use super::flex_gate::{GateChip, GateInstructions};
+use crate::halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use crate::utils::ScalarField;
-use crate::{
-    Context,
-    QuantumCell::{Constant, Existing, Witness},
-    SKIP_FIRST_PASS,
-};
-
-struct MyCircuit<F: ScalarField> {
-    inputs: [F; 3],
-    builder: RefCell<GateThreadBuilder<F>>, // trick `synthesize` to take ownership of `builder`
-    break_points: RefCell<MultiPhaseThreadBreakPoints>,
-}
-
-impl<F: ScalarField> Circuit<F> for MyCircuit<F> {
-    type Config = FlexGateConfig<F>;
-    type FloorPlanner = SimpleFloorPlanner;
-
-    fn without_witnesses(&self) -> Self {
-        unimplemented!()
-    }
-
-    fn configure(meta: &mut ConstraintSystem<F>) -> FlexGateConfig<F> {
-        let FlexGateConfigParams {
-            strategy,
-            num_advice_per_phase,
-            num_lookup_advice_per_phase: _,
-            num_fixed,
-            k,
-        } = serde_json::from_str(&std::env::var("FLEX_GATE_CONFIG_PARAMS").unwrap()).unwrap();
-        FlexGateConfig::configure(meta, strategy, &num_advice_per_phase, num_fixed, k)
-    }
-
-    fn synthesize(
-        &self,
-        config: Self::Config,
-        mut layouter: impl Layouter<F>,
-    ) -> Result<(), Error> {
-        let mut first_pass = SKIP_FIRST_PASS;
-        layouter.assign_region(
-            || "gate",
-            |mut region| {
-                if first_pass {
-                    first_pass = false;
-                    return Ok(());
-                }
-                let builder = self.builder.take();
-                if !builder.witness_gen_only {
-                    *self.break_points.borrow_mut() = builder.assign_all(&config, &[], &mut region);
-                } else {
-                    // only test first phase for now
-                    let mut threads = builder.threads.into_iter();
-                    assign_threads_in(
-                        0,
-                        threads.next().unwrap(),
-                        &config,
-                        &[],
-                        &mut region,
-                        self.break_points.borrow()[0].clone(),
-                    )
-                }
-
-                Ok(())
-            },
-        )
-    }
-}
+use crate::{Context, QuantumCell::Constant};
 
 fn gate_tests<F: ScalarField>(ctx: &mut Context<F>, inputs: [F; 3]) {
     let [a, b, c]: [_; 3] = ctx.assign_witnesses(inputs).try_into().unwrap();
@@ -104,8 +34,7 @@ fn test_gates() {
     // auto-tune circuit
     builder.config(k, Some(9));
     // create circuit
-    let circuit =
-        MyCircuit { inputs, builder: RefCell::new(builder), break_points: RefCell::default() };
+    let circuit = GateCircuitBuilder::mock(builder);
 
     MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
 }
