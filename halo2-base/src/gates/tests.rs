@@ -1,111 +1,71 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use super::flex_gate::{FlexGateConfig, GateChip, GateInstructions, GateStrategy, MAX_PHASE};
 use super::{
-    flex_gate::{FlexGateConfig, GateStrategy},
-    range, GateInstructions, RangeInstructions,
+    assign_threads_in, FlexGateConfigParams, GateThreadBuilder, MultiPhaseThreadBreakPoints,
+    ThreadBreakPoints,
 };
 use crate::halo2_proofs::{circuit::*, dev::MockProver, halo2curves::bn256::Fr, plonk::*};
+use crate::utils::ScalarField;
 use crate::{
-    Context, ContextParams,
+    Context,
     QuantumCell::{Constant, Existing, Witness},
     SKIP_FIRST_PASS,
 };
 
-#[derive(Default)]
-struct MyCircuit<F> {
-    a: Value<F>,
-    b: Value<F>,
-    c: Value<F>,
+struct MyCircuit<F: ScalarField> {
+    inputs: [F; 3],
+    builder: RefCell<GateThreadBuilder<F>>, // trick `synthesize` to take ownership of `builder`
+    break_points: RefCell<MultiPhaseThreadBreakPoints>,
 }
 
-const NUM_ADVICE: usize = 2;
-
-impl Circuit<Fr> for MyCircuit<Fr> {
-    type Config = FlexGateConfig<Fr>;
+impl<F: ScalarField> Circuit<F> for MyCircuit<F> {
+    type Config = FlexGateConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
-        Self::default()
+        unimplemented!()
     }
 
-    fn configure(meta: &mut ConstraintSystem<Fr>) -> Self::Config {
-        FlexGateConfig::configure(
-            meta,
-            GateStrategy::Vertical,
-            &[NUM_ADVICE],
-            1,
-            0,
-            6, /* params K */
-        )
+    fn configure(meta: &mut ConstraintSystem<F>) -> FlexGateConfig<F> {
+        let FlexGateConfigParams {
+            strategy,
+            num_advice_per_phase,
+            num_lookup_advice_per_phase: _,
+            num_fixed,
+            k,
+        } = serde_json::from_str(&std::env::var("FLEX_GATE_CONFIG_PARAMS").unwrap()).unwrap();
+        FlexGateConfig::configure(meta, strategy, &num_advice_per_phase, num_fixed, k)
     }
 
     fn synthesize(
         &self,
         config: Self::Config,
-        mut layouter: impl Layouter<Fr>,
+        mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         let mut first_pass = SKIP_FIRST_PASS;
-
         layouter.assign_region(
             || "gate",
-            |region| {
+            |mut region| {
                 if first_pass {
                     first_pass = false;
                     return Ok(());
                 }
-
-                let mut aux = Context::new(
-                    region,
-                    ContextParams {
-                        max_rows: config.max_rows,
-                        num_context_ids: 1,
-                        fixed_columns: config.constants.clone(),
-                    },
-                );
-                let ctx = &mut aux;
-
-                let (a_cell, b_cell, c_cell) = {
-                    let cells = config.assign_region_smart(
-                        ctx,
-                        vec![Witness(self.a), Witness(self.b), Witness(self.c)],
-                        vec![],
-                        vec![],
-                        vec![],
-                    );
-                    (cells[0].clone(), cells[1].clone(), cells[2].clone())
-                };
-
-                // test add
-                {
-                    config.add(ctx, Existing(&a_cell), Existing(&b_cell));
-                }
-
-                // test sub
-                {
-                    config.sub(ctx, Existing(&a_cell), Existing(&b_cell));
-                }
-
-                // test multiply
-                {
-                    config.mul(ctx, Existing(&c_cell), Existing(&b_cell));
-                }
-
-                // test idx_to_indicator
-                {
-                    config.idx_to_indicator(ctx, Constant(Fr::from(3u64)), 4);
-                }
-
-                {
-                    let bits = config.assign_witnesses(
-                        ctx,
-                        vec![Value::known(Fr::zero()), Value::known(Fr::one())],
-                    );
-                    config.bits_to_indicator(ctx, &bits);
-                }
-
-                #[cfg(feature = "display")]
-                {
-                    println!("total advice cells: {}", ctx.total_advice);
-                    let const_rows = ctx.fixed_offset + 1;
-                    println!("maximum rows used by a fixed column: {const_rows}");
+                let builder = self.builder.take();
+                if !builder.witness_gen_only {
+                    *self.break_points.borrow_mut() = builder.assign_all(&config, &[], &mut region);
+                } else {
+                    // only test first phase for now
+                    let mut threads = builder.threads.into_iter();
+                    assign_threads_in(
+                        0,
+                        threads.next().unwrap(),
+                        &config,
+                        &[],
+                        &mut region,
+                        self.break_points.borrow()[0].clone(),
+                    )
                 }
 
                 Ok(())
@@ -114,18 +74,40 @@ impl Circuit<Fr> for MyCircuit<Fr> {
     }
 }
 
+fn gate_tests<F: ScalarField>(ctx: &mut Context<F>, inputs: [F; 3]) {
+    let [a, b, c]: [_; 3] = ctx.assign_witnesses(inputs).try_into().unwrap();
+    let chip = GateChip::default();
+
+    // test add
+    chip.add(ctx, a, b);
+
+    // test sub
+    chip.sub(ctx, a, b);
+
+    // test multiply
+    chip.mul(ctx, c, b);
+
+    // test idx_to_indicator
+    chip.idx_to_indicator(ctx, Constant(F::from(3u64)), 4);
+
+    let bits = ctx.assign_witnesses([F::zero(), F::one()]);
+    //chip.bits_to_indicator(ctx, &bits);
+}
+
 #[test]
 fn test_gates() {
     let k = 6;
-    let circuit = MyCircuit::<Fr> {
-        a: Value::known(Fr::from(10u64)),
-        b: Value::known(Fr::from(12u64)),
-        c: Value::known(Fr::from(120u64)),
-    };
+    let inputs = [10u64, 12u64, 120u64].map(Fr::from);
+    let mut builder = GateThreadBuilder::new(false);
+    gate_tests(builder.main(0), inputs);
 
-    let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-    prover.assert_satisfied();
-    // assert_eq!(prover.verify(), Ok(()));
+    // auto-tune circuit
+    builder.config(k);
+    // create circuit
+    let circuit =
+        MyCircuit { inputs, builder: RefCell::new(builder), break_points: RefCell::default() };
+
+    MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
 #[cfg(feature = "dev-graph")]
@@ -138,10 +120,22 @@ fn plot_gates() {
     root.fill(&WHITE).unwrap();
     let root = root.titled("Gates Layout", ("sans-serif", 60)).unwrap();
 
-    let circuit = MyCircuit::<Fr>::default();
+    let inputs = [Fr::zero(); 3];
+    let builder = GateThreadBuilder::new(false);
+    gate_tests(builder.main(0), inputs);
+
+    // auto-tune circuit
+    builder.config(k);
+    // create circuit
+    let circuit = MyCircuit {
+        inputs,
+        builder: RefCell::new(builder.unknown(true)),
+        break_points: RefCell::default(),
+    };
     halo2_proofs::dev::CircuitLayout::default().render(k, &circuit, &root).unwrap();
 }
 
+/*
 #[derive(Default)]
 struct RangeTestCircuit<F> {
     range_bits: usize,
@@ -461,3 +455,4 @@ mod lagrange {
         Ok(())
     }
 }
+*/

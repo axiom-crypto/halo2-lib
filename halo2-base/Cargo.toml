@@ -1,6 +1,6 @@
 [package]
 name = "halo2-base"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2021"
 
 [dependencies]
@@ -11,6 +11,9 @@ num-traits = "0.2"
 rand_chacha = "0.3"
 rustc-hash = "1.1"
 ff = "0.12"
+crossbeam = "0.8.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
 # Use Axiom's custom halo2 monorepo for faster proving when feature = "halo2-axiom" is on
 halo2_proofs_axiom = { git = "https://github.com/axiom-crypto/halo2.git", tag = "v2023_01_17", package = "halo2_proofs", optional = true }

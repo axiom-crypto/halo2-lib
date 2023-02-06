@@ -52,10 +52,10 @@ where
 #[cfg(feature = "halo2-axiom")]
 pub trait PrimeField = BigPrimeField;
 #[cfg(feature = "halo2-pse")]
-pub trait PrimeField = FieldExt<Repr = [u8; 32]>;
+pub trait PrimeField = FieldExt<Repr = [u8; 32]> + Hash;
 
 #[cfg(feature = "halo2-pse")]
-pub trait ScalarField = FieldExt;
+pub trait ScalarField = FieldExt + Hash;
 
 #[inline(always)]
 pub(crate) fn decompose_u64_digits_to_limbs(
@@ -288,7 +288,10 @@ pub mod fs {
             bn256::{Bn256, G1Affine},
             CurveAffine,
         },
-        poly::{commitment::{Params, ParamsProver}, kzg::commitment::ParamsKZG},
+        poly::{
+            commitment::{Params, ParamsProver},
+            kzg::commitment::ParamsKZG,
+        },
     };
     use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 

@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "halo2-base",
-    "halo2-ecc",
+    # "halo2-ecc",
     "hashes/zkevm-keccak",
 ]
 
