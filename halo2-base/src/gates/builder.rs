@@ -291,9 +291,11 @@ pub fn assign_threads_in<F: ScalarField>(
 
     let mut break_points = break_points.into_iter();
     let mut break_point = break_points.next();
+
     let mut gate_index = 0;
     let mut column = config.basic_gates[phase][gate_index].value;
     let mut row_offset = 0;
+
     let mut lookup_offset = 0;
     let mut lookup_advice = lookup_advice.iter();
     let mut lookup_column = lookup_advice.next();
@@ -304,11 +306,13 @@ pub fn assign_threads_in<F: ScalarField>(
                 lookup_column = lookup_advice.next();
             }
             let value = advice.value;
-            let column = *lookup_column.unwrap();
+            let lookup_column = *lookup_column.unwrap();
             #[cfg(feature = "halo2-axiom")]
-            region.assign_advice(column, lookup_offset, Value::known(value)).unwrap();
+            region.assign_advice(lookup_column, lookup_offset, Value::known(value)).unwrap();
             #[cfg(not(feature = "halo2-axiom"))]
-            region.assign_advice(|| "", column, lookup_offset, || Value::known(value)).unwrap();
+            region
+                .assign_advice(|| "", lookup_column, lookup_offset, || Value::known(value))
+                .unwrap();
 
             lookup_offset += 1;
         }
@@ -400,18 +404,22 @@ impl<F: ScalarField> Circuit<F> for GateCircuitBuilder<F> {
                     first_pass = false;
                     return Ok(());
                 }
-                let builder = self.builder.take();
-                if !builder.witness_gen_only {
+                if !self.builder.borrow().witness_gen_only {
+                    // clone the builder so we can re-use the circuit for both vk and pk gen
+                    let builder = self.builder.borrow().clone();
                     *self.break_points.borrow_mut() =
                         builder.assign_all(&config, &[], &[], &mut region);
                 } else {
+                    let builder = self.builder.take();
                     let break_points = self.break_points.take();
                     for (phase, (threads, break_points)) in
                         builder.threads.into_iter().zip(break_points.into_iter()).enumerate()
                     {
-                        assign_threads_in(phase, threads, &config, &[], &mut region, break_points);
                         #[cfg(feature = "halo2-axiom")]
-                        region.next_phase();
+                        if phase != 0 && !threads.is_empty() {
+                            region.next_phase();
+                        }
+                        assign_threads_in(phase, threads, &config, &[], &mut region, break_points);
                     }
                 }
                 Ok(())
@@ -487,19 +495,25 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
                     first_pass = false;
                     return Ok(());
                 }
-                let builder = self.0.builder.take();
-                if !builder.witness_gen_only {
+                if !self.0.builder.borrow().witness_gen_only {
+                    // clone the builder so we can re-use the circuit for both vk and pk gen
+                    let builder = self.0.builder.borrow().clone();
                     *self.0.break_points.borrow_mut() = builder.assign_all(
                         &config.gate,
                         &config.lookup_advice,
                         &config.q_lookup,
                         &mut region,
-                    )
+                    );
                 } else {
+                    let builder = self.0.builder.take();
                     let break_points = self.0.break_points.take();
                     for (phase, (threads, break_points)) in
                         builder.threads.into_iter().zip(break_points.into_iter()).enumerate()
                     {
+                        #[cfg(feature = "halo2-axiom")]
+                        if phase != 0 && !threads.is_empty() {
+                            region.next_phase();
+                        }
                         assign_threads_in(
                             phase,
                             threads,
@@ -508,8 +522,6 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
                             &mut region,
                             break_points,
                         );
-                        #[cfg(feature = "halo2-axiom")]
-                        region.next_phase();
                     }
                 }
                 Ok(())

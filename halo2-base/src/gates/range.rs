@@ -92,9 +92,15 @@ impl<F: ScalarField> RangeConfig<F> {
             }
         }
 
-        let config =
+        let mut config =
             Self { lookup_advice, q_lookup, lookup, lookup_bits, gate, _strategy: range_strategy };
+
         config.create_lookup(meta);
+        config.gate.max_rows = (1 << circuit_degree) - meta.minimum_rows();
+        assert!(
+            (1 << lookup_bits) <= config.gate.max_rows,
+            "lookup table is too large for the circuit degree plus blinding factors!"
+        );
 
         config
     }
@@ -365,6 +371,10 @@ impl<F: ScalarField> RangeChip<F> {
         });
 
         Self { strategy, gate, lookup_bits, limb_bases }
+    }
+
+    pub fn default(lookup_bits: usize) -> Self {
+        Self::new(RangeStrategy::Vertical, lookup_bits)
     }
 }
 

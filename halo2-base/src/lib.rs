@@ -107,7 +107,7 @@ pub struct Context<F: ScalarField> {
     /// this is the single column of advice cells exactly as they should be assigned
     pub advice: Vec<Assigned<F>>,
     /// `cells_to_lookup` is a vector keeping track of all cells that we want to enable lookup for. When there is more than 1 advice column we will copy_advice all of these cells to the single lookup enabled column and do lookups there
-    pub cells_to_lookup: Vec<usize>, // `i` in `cells_to_lookup` means we want to lookup `advice[i]`
+    pub cells_to_lookup: Vec<AssignedValue<F>>,
 
     pub zero_cell: Option<AssignedValue<F>>,
 

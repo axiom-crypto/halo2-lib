@@ -52,7 +52,9 @@ where
 #[cfg(feature = "halo2-axiom")]
 pub trait PrimeField = BigPrimeField;
 #[cfg(feature = "halo2-pse")]
-pub trait PrimeField = FieldExt<Repr = [u8; 32]> + Hash;
+pub trait BigPrimeField = FieldExt<Repr = [u8; 32]> + Hash;
+#[cfg(feature = "halo2-pse")]
+pub trait PrimeField = BigPrimeField;
 
 #[cfg(feature = "halo2-pse")]
 pub trait ScalarField = FieldExt + Hash;
