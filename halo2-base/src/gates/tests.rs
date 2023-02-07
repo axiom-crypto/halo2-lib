@@ -3,6 +3,9 @@ use super::flex_gate::{GateChip, GateInstructions};
 use crate::halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use crate::utils::ScalarField;
 use crate::{Context, QuantumCell::Constant};
+use ff::Field;
+use rand::rngs::OsRng;
+use rayon::prelude::*;
 
 fn gate_tests<F: ScalarField>(ctx: &mut Context<F>, inputs: [F; 3]) {
     let [a, b, c]: [_; 3] = ctx.assign_witnesses(inputs).try_into().unwrap();
@@ -30,6 +33,32 @@ fn test_gates() {
     let inputs = [10u64, 12u64, 120u64].map(Fr::from);
     let mut builder = GateThreadBuilder::new(false);
     gate_tests(builder.main(0), inputs);
+
+    // auto-tune circuit
+    builder.config(k, Some(9));
+    // create circuit
+    let circuit = GateCircuitBuilder::mock(builder);
+
+    MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
+}
+
+#[test]
+fn test_multithread_gates() {
+    let k = 6;
+    let inputs = [10u64, 12u64, 120u64].map(Fr::from);
+    let mut builder = GateThreadBuilder::new(false);
+    gate_tests(builder.main(0), inputs);
+
+    let thread_ids = (0..4).map(|_| builder.get_new_thread_id()).collect::<Vec<_>>();
+    let new_threads = thread_ids
+        .into_par_iter()
+        .map(|id| {
+            let mut ctx = Context::new(builder.witness_gen_only(), id);
+            gate_tests(&mut ctx, [(); 3].map(|_| Fr::random(OsRng)));
+            ctx
+        })
+        .collect::<Vec<_>>();
+    builder.threads[0].extend(new_threads);
 
     // auto-tune circuit
     builder.config(k, Some(9));
