@@ -13,7 +13,7 @@ use crate::halo2_proofs::{
     halo2curves::bn256::{Bn256, Fr, G1Affine},
     halo2curves::secp256k1::{Fp, Fq, Secp256k1Affine},
     plonk::*,
-    poly::commitment::{ParamsProver},
+    poly::commitment::ParamsProver,
     transcript::{Blake2bRead, Blake2bWrite, Challenge255},
 };
 use rand_core::OsRng;
@@ -229,7 +229,7 @@ fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
 
     use crate::halo2_proofs::{
         poly::kzg::{
-            commitment::{KZGCommitmentScheme},
+            commitment::KZGCommitmentScheme,
             multiopen::{ProverSHPLONK, VerifierSHPLONK},
             strategy::SingleStrategy,
         },
@@ -251,7 +251,7 @@ fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
     let mut fs_results = std::fs::File::create(folder.as_path()).unwrap();
     folder.pop();
     folder.pop();
-    writeln!(fs_results, "degree,num_advice,num_lookup,num_fixed,lookup_bits,limb_bits,num_limbs,vk_size,proof_time,proof_size,verify_time")?;
+    writeln!(fs_results, "degree,num_advice,num_lookup,num_fixed,lookup_bits,limb_bits,num_limbs,proof_time,proof_size,verify_time")?;
     folder.push("data");
     if !folder.is_dir() {
         std::fs::create_dir(folder.as_path())?;
