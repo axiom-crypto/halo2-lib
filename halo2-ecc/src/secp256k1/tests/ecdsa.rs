@@ -117,23 +117,43 @@ impl<F: PrimeField> Circuit<F> for ECDSACircuit<F> {
                 let ctx = &mut aux;
 
                 let (r_assigned, s_assigned, m_assigned) = {
-                    let fq_chip = FpConfig::<F, Fq>::construct(fp_chip.range.clone(), limb_bits, num_limbs, modulus::<Fq>());
+                    let fq_chip = FpConfig::<F, Fq>::construct(
+                        fp_chip.range.clone(),
+                        limb_bits,
+                        num_limbs,
+                        modulus::<Fq>(),
+                    );
 
                     let m_assigned = fq_chip.load_private(
                         ctx,
-                        FpConfig::<F, Fq>::fe_to_witness(&self.msghash.map_or(Value::unknown(), Value::known)),
+                        FpConfig::<F, Fq>::fe_to_witness(
+                            &self.msghash.map_or(Value::unknown(), Value::known),
+                        ),
                     );
 
-                    let r_assigned = fq_chip
-                        .load_private(ctx, FpConfig::<F,Fq>::fe_to_witness(&self.r.map_or(Value::unknown(), Value::known)));
-                    let s_assigned = fq_chip
-                        .load_private(ctx, FpConfig::<F,Fq>::fe_to_witness(&self.s.map_or(Value::unknown(), Value::known)));
+                    let r_assigned = fq_chip.load_private(
+                        ctx,
+                        FpConfig::<F, Fq>::fe_to_witness(
+                            &self.r.map_or(Value::unknown(), Value::known),
+                        ),
+                    );
+                    let s_assigned = fq_chip.load_private(
+                        ctx,
+                        FpConfig::<F, Fq>::fe_to_witness(
+                            &self.s.map_or(Value::unknown(), Value::known),
+                        ),
+                    );
                     (r_assigned, s_assigned, m_assigned)
                 };
 
                 let ecc_chip = EccChip::<F, FpChip<F>>::construct(fp_chip.clone());
-                let pk_assigned = ecc_chip
-                    .load_private(ctx, (self.pk.map_or(Value::unknown(), |pt| Value::known(pt.x)), self.pk.map_or(Value::unknown(), |pt| Value::known(pt.y))));
+                let pk_assigned = ecc_chip.load_private(
+                    ctx,
+                    (
+                        self.pk.map_or(Value::unknown(), |pt| Value::known(pt.x)),
+                        self.pk.map_or(Value::unknown(), |pt| Value::known(pt.y)),
+                    ),
+                );
                 // test ECDSA
                 let ecdsa = ecdsa_verify_no_pubkey_check::<F, Fp, Fq, Secp256k1Affine>(
                     &ecc_chip.field_chip,
@@ -156,8 +176,9 @@ impl<F: PrimeField> Circuit<F> for ECDSACircuit<F> {
 
                     ctx.print_stats(&["Range"]);
                 }
-            Ok(())
-        })
+                Ok(())
+            },
+        )
     }
 }
 
@@ -203,17 +224,7 @@ fn test_secp256k1_ecdsa() {
 
 #[cfg(test)]
 #[test]
-fn bench_secp256_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
-    /*
-    // Parameters for use with FpStrategy::CustomVerticalCRT
-    const DEGREE: [u32; 9] = [19, 18, 17, 16, 15, 14, 13, 12, 11];
-    const NUM_ADVICE: [usize; 9] = [1, 2, 3, 6, 12, 25, 49, 98, 201];
-    const NUM_LOOKUP: [usize; 9] = [0, 1, 1, 2, 3, 6, 12, 24, 53];
-    const NUM_FIXED: [usize; 9] = [1, 1, 1, 1, 1, 1, 1, 2, 5];
-    const LOOKUP_BITS: [usize; 9] = [18, 17, 16, 15, 14, 13, 12, 11, 10];
-    const LIMB_BITS: [usize; 9] = [88, 88, 88, 88, 88, 88, 88, 88, 88];
-    */
-
+fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
     use halo2_base::utils::fs::gen_srs;
 
     use crate::halo2_proofs::{
