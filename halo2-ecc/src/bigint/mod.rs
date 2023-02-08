@@ -3,7 +3,7 @@ use crate::halo2_proofs::{
     plonk::ConstraintSystem,
 };
 use halo2_base::{
-    gates::{flex_gate::FlexGateConfig, GateInstructions},
+    gates::flex_gate::{FlexGateConfig, GateInstructions},
     utils::{biguint_to_fe, decompose_biguint, fe_to_biguint, PrimeField},
     AssignedValue, Context,
     QuantumCell::{Constant, Existing, Witness},

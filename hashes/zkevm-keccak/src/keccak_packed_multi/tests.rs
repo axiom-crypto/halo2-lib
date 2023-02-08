@@ -38,6 +38,9 @@ impl<F: Field> Circuit<F> for KeccakCircuit<F> {
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+        // MockProver complains if you only have columns in SecondPhase, so let's just make an empty column in FirstPhase
+        meta.advice_column();
+
         let challenge = meta.challenge_usable_after(FirstPhase);
         KeccakCircuitConfig::new(meta, challenge)
     }

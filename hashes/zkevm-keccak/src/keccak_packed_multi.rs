@@ -16,7 +16,7 @@ use crate::halo2_proofs::{
     },
     poly::Rotation,
 };
-use halo2_base::AssignedValue;
+use halo2_base::halo2_proofs::{circuit::AssignedCell, plonk::Assigned};
 use itertools::Itertools;
 use log::{debug, info};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
@@ -382,33 +382,26 @@ impl KeccakTable {
     }
 }
 
+#[cfg(feature = "halo2-axiom")]
+type KeccakAssignedValue<'v, F> = AssignedCell<&'v Assigned<F>, F>;
+#[cfg(not(feature = "halo2-axiom"))]
+type KeccakAssignedValue<'v, F> = AssignedCell<F, F>;
+
 pub fn assign_advice_custom<'v, F: Field>(
     region: &mut Region<F>,
     column: Column<Advice>,
     offset: usize,
     value: Value<F>,
-) -> AssignedValue<'v, F> {
+) -> KeccakAssignedValue<'v, F> {
     #[cfg(feature = "halo2-axiom")]
     {
-        AssignedValue {
-            cell: region.assign_advice(column, offset, value).unwrap(),
-            #[cfg(feature = "display")]
-            context_id: usize::MAX,
-        }
+        region.assign_advice(column, offset, value).unwrap()
     }
     #[cfg(feature = "halo2-pse")]
     {
-        AssignedValue {
-            cell: region
-                .assign_advice(|| format!("assign advice {}", offset), column, offset, || value)
-                .unwrap()
-                .cell(),
-            value,
-            row_offset: offset,
-            _marker: PhantomData,
-            #[cfg(feature = "display")]
-            context_id: usize::MAX,
-        }
+        region
+            .assign_advice(|| format!("assign advice {}", offset), column, offset, || value)
+            .unwrap()
     }
 }
 
@@ -1604,7 +1597,7 @@ pub fn keccak_phase1<'v, F: Field>(
     keccak_table: &KeccakTable,
     bytes: &[u8],
     challenge: Value<F>,
-    input_rlcs: &mut Vec<AssignedValue<'v, F>>,
+    input_rlcs: &mut Vec<KeccakAssignedValue<'v, F>>,
     offset: &mut usize,
 ) {
     let num_chunks = get_num_keccak_f(bytes.len());
@@ -1967,7 +1960,7 @@ pub fn multi_keccak_phase1<'a, 'v, F: Field>(
     bytes: impl IntoIterator<Item = &'a [u8]>,
     challenge: Value<F>,
     squeeze_digests: Vec<[F; NUM_WORDS_TO_SQUEEZE]>,
-) -> (Vec<AssignedValue<'v, F>>, Vec<AssignedValue<'v, F>>) {
+) -> (Vec<KeccakAssignedValue<'v, F>>, Vec<KeccakAssignedValue<'v, F>>) {
     let mut input_rlcs = Vec::with_capacity(squeeze_digests.len());
     let mut output_rlcs = Vec::with_capacity(squeeze_digests.len());
 

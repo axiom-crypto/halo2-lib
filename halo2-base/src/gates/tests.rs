@@ -5,7 +5,6 @@ use crate::halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use crate::utils::{BigPrimeField, ScalarField};
 use crate::{Context, QuantumCell::Constant};
 use ff::Field;
-use itertools::Itertools;
 use rand::rngs::OsRng;
 use rayon::prelude::*;
 

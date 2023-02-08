@@ -4,11 +4,11 @@
 #![feature(int_log)]
 
 pub mod bigint;
-pub mod ecc;
-pub mod fields;
+//pub mod ecc;
+//pub mod fields;
 
-pub mod bn254;
-pub mod secp256k1;
+//pub mod bn254;
+//pub mod secp256k1;
 
 pub use halo2_base;
 pub(crate) use halo2_base::halo2_proofs;
