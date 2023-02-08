@@ -185,7 +185,7 @@ fn bench_pairing() -> Result<(), Box<dyn std::error::Error>> {
     let mut fs_results = std::fs::File::create(folder.as_path()).unwrap();
     folder.pop();
     folder.pop();
-    writeln!(fs_results, "degree,num_advice,num_lookup,num_fixed,lookup_bits,limb_bits,num_limbs,vk_size,proof_time,proof_size,verify_time")?;
+    writeln!(fs_results, "degree,num_advice,num_lookup,num_fixed,lookup_bits,limb_bits,num_limbs,proof_time,proof_size(bytes),verify_time")?;
     folder.push("data");
     if !folder.is_dir() {
         std::fs::create_dir(folder.as_path())?;
