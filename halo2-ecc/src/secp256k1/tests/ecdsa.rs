@@ -137,7 +137,7 @@ fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
     fs::create_dir_all("data").unwrap();
     let results_path = "results/secp256k1/ecdsa_bench.csv";
     let mut fs_results = File::create(results_path).unwrap();
-    writeln!(fs_results, "degree,num_advice,num_lookup,num_fixed,lookup_bits,limb_bits,num_limbs,vk_size,proof_time,proof_size,verify_time")?;
+    writeln!(fs_results, "degree,num_advice,num_lookup,num_fixed,lookup_bits,limb_bits,num_limbs,proof_time,proof_size,verify_time")?;
 
     let bench_params_reader = BufReader::new(bench_params_file);
     for line in bench_params_reader.lines() {
