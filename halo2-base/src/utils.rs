@@ -62,7 +62,7 @@ pub(crate) fn decompose_u64_digits_to_limbs(
     number_of_limbs: usize,
     bit_len: usize,
 ) -> Vec<u64> {
-    debug_assert!(bit_len <= 64);
+    debug_assert!(bit_len < 64);
 
     let mut e = e.into_iter();
     let mask: u64 = (1u64 << bit_len) - 1u64;
@@ -196,22 +196,22 @@ pub fn decompose_biguint<F: BigPrimeField>(
     num_limbs: usize,
     bit_len: usize,
 ) -> Vec<F> {
-    debug_assert!(bit_len > 64 && bit_len <= 128);
+    debug_assert!((64..128).contains(&bit_len));
     let mut e = e.iter_u64_digits();
 
     let mut limb0 = e.next().unwrap_or(0) as u128;
     let mut rem = bit_len - 64;
     let mut u64_digit = e.next().unwrap_or(0);
-    limb0 |= ((u64_digit & ((1 << rem) - 1)) as u128) << 64;
+    limb0 |= ((u64_digit & ((1 << rem) - 1u64)) as u128) << 64u32;
     u64_digit >>= rem;
     rem = 64 - rem;
 
     core::iter::once(F::from_u128(limb0))
         .chain((1..num_limbs).map(|_| {
-            let mut limb: u128 = u64_digit.into();
+            let mut limb = u64_digit as u128;
             let mut bits = rem;
             u64_digit = e.next().unwrap_or(0);
-            if bit_len - bits >= 64 {
+            if bit_len >= 64 + bits {
                 limb |= (u64_digit as u128) << bits;
                 u64_digit = e.next().unwrap_or(0);
                 bits += 64;
@@ -256,13 +256,6 @@ pub fn value_to_option<V>(value: Value<V>) -> Option<V> {
 /// Returns the sum of all limbs scaled by 2^(bit_len * i)
 pub fn compose(input: Vec<BigUint>, bit_len: usize) -> BigUint {
     input.iter().rev().fold(BigUint::zero(), |acc, val| (acc << bit_len) + val)
-}
-
-#[cfg(test)]
-#[test]
-fn test_signed_roundtrip() {
-    use crate::halo2_proofs::halo2curves::bn256::Fr;
-    assert_eq!(fe_to_bigint(&bigint_to_fe::<Fr>(&-BigInt::one())), -BigInt::one());
 }
 
 #[cfg(feature = "halo2-axiom")]
@@ -335,5 +328,78 @@ pub mod fs {
         read_or_create_srs::<G1Affine, _>(k, |k| {
             ParamsKZG::<Bn256>::setup(k, ChaCha20Rng::from_seed(Default::default()))
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::halo2_proofs::halo2curves::bn256::Fr;
+    use num_bigint::RandomBits;
+    use rand::{rngs::OsRng, Rng};
+    use std::ops::Shl;
+
+    use super::*;
+
+    #[test]
+    fn test_signed_roundtrip() {
+        use crate::halo2_proofs::halo2curves::bn256::Fr;
+        assert_eq!(fe_to_bigint(&bigint_to_fe::<Fr>(&-BigInt::one())), -BigInt::one());
+    }
+
+    #[test]
+    fn test_decompose_biguint() {
+        let mut rng = OsRng;
+        const MAX_LIMBS: u64 = 5;
+        for bit_len in 64..128usize {
+            for num_limbs in 1..=MAX_LIMBS {
+                for _ in 0..10_000usize {
+                    let mut e: BigUint = rng.sample(RandomBits::new(num_limbs * bit_len as u64));
+                    let limbs = decompose_biguint::<Fr>(&e, num_limbs as usize, bit_len);
+
+                    let limbs2 = {
+                        let mut limbs = vec![];
+                        let mask = BigUint::one().shl(bit_len) - 1usize;
+                        for _ in 0..num_limbs {
+                            let limb = &e & &mask;
+                            let mut bytes_le = limb.to_bytes_le();
+                            bytes_le.resize(32, 0u8);
+                            limbs.push(Fr::from_bytes(&bytes_le.try_into().unwrap()).unwrap());
+                            e >>= bit_len;
+                        }
+                        limbs
+                    };
+                    assert_eq!(limbs, limbs2);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_decompose_u64_digits_to_limbs() {
+        let mut rng = OsRng;
+        const MAX_LIMBS: u64 = 5;
+        for bit_len in 0..64usize {
+            for num_limbs in 1..=MAX_LIMBS {
+                for _ in 0..10_000usize {
+                    let mut e: BigUint = rng.sample(RandomBits::new(num_limbs * bit_len as u64));
+                    let limbs = decompose_u64_digits_to_limbs(
+                        e.to_u64_digits(),
+                        num_limbs as usize,
+                        bit_len,
+                    );
+                    let limbs2 = {
+                        let mut limbs = vec![];
+                        let mask = BigUint::one().shl(bit_len) - 1usize;
+                        for _ in 0..num_limbs {
+                            let limb = &e & &mask;
+                            limbs.push(u64::try_from(limb).unwrap());
+                            e >>= bit_len;
+                        }
+                        limbs
+                    };
+                    assert_eq!(limbs, limbs2);
+                }
+            }
+        }
     }
 }

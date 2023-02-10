@@ -2,6 +2,7 @@
 #![feature(trait_alias)]
 #![deny(clippy::perf)]
 #![allow(clippy::too_many_arguments)]
+#![warn(clippy::default_numeric_fallback)]
 
 // different memory allocator options:
 // mimalloc is fastest on Mac M2
