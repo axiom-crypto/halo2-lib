@@ -123,8 +123,8 @@ where
         .flat_map(|scalar_chunk| chip.gate().num_to_bits(ctx, scalar_chunk, max_bits))
         .collect::<Vec<_>>();
 
-    let cached_point_window_rev = cached_points.chunks(1usize << window_bits).into_iter().rev();
-    let bit_window_rev = bits.chunks(window_bits).into_iter().rev();
+    let cached_point_window_rev = cached_points.chunks(1usize << window_bits).rev();
+    let bit_window_rev = bits.chunks(window_bits).rev();
     let mut curr_point = None;
     // `is_started` is just a way to deal with if `curr_point` is actually identity
     let mut is_started = ctx.load_zero();
@@ -228,12 +228,11 @@ where
 
     let sm = cached_points
         .chunks(cached_points.len() / points.len())
-        .into_iter()
-        .zip(bits.chunks(total_bits).into_iter())
+        .zip(bits.chunks(total_bits))
         .map(|(cached_points, bits)| {
             let cached_point_window_rev =
-                cached_points.chunks(1usize << window_bits).into_iter().rev();
-            let bit_window_rev = bits.chunks(window_bits).into_iter().rev();
+                cached_points.chunks(1usize << window_bits).rev();
+            let bit_window_rev = bits.chunks(window_bits).rev();
             let mut curr_point = None;
             // `is_started` is just a way to deal with if `curr_point` is actually identity
             let mut is_started = ctx.load_zero();

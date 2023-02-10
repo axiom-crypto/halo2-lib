@@ -526,8 +526,7 @@ where
         }
         for (cached_points, rounded_bits) in cached_points
             .chunks(cache_size)
-            .into_iter()
-            .zip(rounded_bits.chunks(rounded_bitlen).into_iter())
+            .zip(rounded_bits.chunks(rounded_bitlen))
         {
             let add_point = ec_select_from_bits::<F, FC>(
                 chip,
