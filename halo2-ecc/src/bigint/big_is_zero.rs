@@ -1,7 +1,5 @@
 use super::{CRTInteger, OverflowInteger};
 use halo2_base::{gates::GateInstructions, utils::ScalarField, AssignedValue, Context};
-use num_bigint::BigInt;
-use num_traits::Zero;
 
 /// assume you know that the limbs of `a` are all in [0, 2^{a.max_limb_bits})
 pub fn positive<F: ScalarField>(
@@ -40,7 +38,6 @@ pub fn crt<F: ScalarField>(
     ctx: &mut Context<F>,
     a: &CRTInteger<F>,
 ) -> AssignedValue<F> {
-    debug_assert_eq!(a.value, BigInt::zero());
     let out_trunc = assign::<F>(gate, ctx, &a.truncation);
     let out_native = gate.is_zero(ctx, a.native);
     gate.and(ctx, out_trunc, out_native)

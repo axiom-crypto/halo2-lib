@@ -315,21 +315,24 @@ pub fn assign_threads_in<F: ScalarField>(
     let mut lookup_advice = lookup_advice.iter();
     let mut lookup_column = lookup_advice.next();
     for ctx in threads {
-        for advice in ctx.cells_to_lookup {
-            if lookup_offset >= config.max_rows {
-                lookup_offset = 0;
-                lookup_column = lookup_advice.next();
-            }
-            let value = advice.value;
-            let lookup_column = *lookup_column.unwrap();
-            #[cfg(feature = "halo2-axiom")]
-            region.assign_advice(lookup_column, lookup_offset, Value::known(value));
-            #[cfg(not(feature = "halo2-axiom"))]
-            region
-                .assign_advice(|| "", lookup_column, lookup_offset, || Value::known(value))
-                .unwrap();
+        // if lookup_column is empty, that means there should be a single advice column and it has lookup enabled, so we don't need to copy to special lookup advice columns
+        if lookup_column.is_some() {
+            for advice in ctx.cells_to_lookup {
+                if lookup_offset >= config.max_rows {
+                    lookup_offset = 0;
+                    lookup_column = lookup_advice.next();
+                }
+                let value = advice.value;
+                let lookup_column = *lookup_column.unwrap();
+                #[cfg(feature = "halo2-axiom")]
+                region.assign_advice(lookup_column, lookup_offset, Value::known(value));
+                #[cfg(not(feature = "halo2-axiom"))]
+                region
+                    .assign_advice(|| "", lookup_column, lookup_offset, || Value::known(value))
+                    .unwrap();
 
-            lookup_offset += 1;
+                lookup_offset += 1;
+            }
         }
         for advice in ctx.advice {
             #[cfg(feature = "halo2-axiom")]
