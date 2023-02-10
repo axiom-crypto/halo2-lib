@@ -168,7 +168,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
                     let column = basic_gate.value;
                     let value = if use_unknown { Value::unknown() } else { Value::known(advice) };
                     #[cfg(feature = "halo2-axiom")]
-                    let cell = region.assign_advice(column, row_offset, value);
+                    let cell = *region.assign_advice(column, row_offset, value).cell();
                     #[cfg(not(feature = "halo2-axiom"))]
                     let cell =
                         region.assign_advice(|| "", column, row_offset, || value).unwrap().cell();
@@ -188,7 +188,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
                         #[cfg(feature = "halo2-axiom")]
                         {
                             let ncell = region.assign_advice(column, row_offset, value);
-                            region.constrain_equal(&ncell, &cell);
+                            region.constrain_equal(ncell.cell(), &cell);
                         }
                         #[cfg(not(feature = "halo2-axiom"))]
                         {
@@ -270,7 +270,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
                     #[cfg(feature = "halo2-axiom")]
                     {
                         let bcell = region.assign_advice(column, lookup_offset, value);
-                        region.constrain_equal(&acell, &bcell);
+                        region.constrain_equal(&acell, bcell.cell());
                     }
                     #[cfg(not(feature = "halo2-axiom"))]
                     {
