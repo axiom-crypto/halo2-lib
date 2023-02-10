@@ -13,8 +13,8 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 
-type ThreadBreakPoints = Vec<usize>;
-type MultiPhaseThreadBreakPoints = Vec<ThreadBreakPoints>;
+pub type ThreadBreakPoints = Vec<usize>;
+pub type MultiPhaseThreadBreakPoints = Vec<ThreadBreakPoints>;
 
 #[derive(Clone, Debug, Default)]
 pub struct GateThreadBuilder<F: ScalarField> {
@@ -33,12 +33,28 @@ impl<F: ScalarField> GateThreadBuilder<F> {
         Self { threads, thread_count: 1, witness_gen_only, use_unknown: false }
     }
 
+    pub fn mock() -> Self {
+        Self::new(false)
+    }
+
+    pub fn keygen() -> Self {
+        Self::new(false)
+    }
+
+    pub fn prover() -> Self {
+        Self::new(true)
+    }
+
     pub fn unknown(self, use_unknown: bool) -> Self {
         Self { use_unknown, ..self }
     }
 
     pub fn main(&mut self, phase: usize) -> &mut Context<F> {
-        self.threads[phase].first_mut().unwrap()
+        if self.threads[phase].is_empty() {
+            self.new_thread(phase)
+        } else {
+            self.threads[phase].last_mut().unwrap()
+        }
     }
 
     pub fn witness_gen_only(&self) -> bool {
@@ -141,10 +157,11 @@ impl<F: ScalarField> GateThreadBuilder<F> {
             let mut row_offset = 0;
             let mut lookup_offset = 0;
             let mut lookup_col = 0;
-            for ctx in threads {
+            for mut ctx in threads {
                 let mut basic_gate = config.basic_gates[phase]
                         .get(gate_index)
                         .unwrap_or_else(|| panic!("NOT ENOUGH ADVICE COLUMNS IN PHASE {phase}. Perhaps blinding factors were not taken into account. The max non-poisoned rows is {max_rows}"));
+                ctx.selector.resize(ctx.advice.len(), false);
 
                 for (i, (advice, q)) in ctx.advice.iter().zip(ctx.selector.into_iter()).enumerate()
                 {
@@ -214,6 +231,8 @@ impl<F: ScalarField> GateThreadBuilder<F> {
                     }
                 }
 
+                // warning: currently we assume equality constraints in thread i only involves threads <= i
+                // I guess a fix is to just rerun this several times?
                 for (left, right) in ctx.advice_equality_constraints {
                     let (left, _) = assigned_advices[&(left.context_id, left.offset)];
                     let (right, _) = assigned_advices[&(right.context_id, right.offset)];
@@ -364,7 +383,7 @@ impl<F: ScalarField> GateCircuitBuilder<F> {
         Self { builder: RefCell::new(builder.unknown(false)), break_points: RefCell::new(vec![]) }
     }
 
-    pub fn witness_gen(
+    pub fn prover(
         builder: GateThreadBuilder<F>,
         break_points: MultiPhaseThreadBreakPoints,
     ) -> Self {
@@ -441,11 +460,11 @@ impl<F: ScalarField> RangeCircuitBuilder<F> {
         Self(GateCircuitBuilder::mock(builder))
     }
 
-    pub fn witness_gen(
+    pub fn prover(
         builder: GateThreadBuilder<F>,
         break_points: MultiPhaseThreadBreakPoints,
     ) -> Self {
-        Self(GateCircuitBuilder::witness_gen(builder, break_points))
+        Self(GateCircuitBuilder::prover(builder, break_points))
     }
 }
 
@@ -528,4 +547,11 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
             },
         )
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum CircuitBuilderStage {
+    Keygen,
+    Prover,
+    Mock,
 }

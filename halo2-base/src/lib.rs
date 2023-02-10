@@ -233,18 +233,22 @@ impl<F: ScalarField> Context<F> {
     ) where
         Q: Into<QuantumCell<F>>,
     {
-        for input in inputs {
-            self.assign_cell(input);
-        }
-
-        if !self.witness_gen_only {
-            let row_offset = self.selector.len();
+        if self.witness_gen_only {
+            for input in inputs {
+                self.assign_cell(input);
+            }
+        } else {
+            let row_offset = self.advice.len();
+            // note: row_offset may not equal self.selector.len() at this point if we previously used `load_constant` or `load_witness`
+            for input in inputs {
+                self.assign_cell(input);
+            }
             self.selector.resize(self.advice.len(), false);
             for offset in gate_offsets {
                 *self
                     .selector
                     .get_mut(row_offset.checked_add_signed(offset).expect("Invalid gate offset"))
-                    .expect("Gate offset out of bounds") = true;
+                    .expect("Invalid selector offset") = true;
             }
         }
     }
@@ -322,11 +326,17 @@ impl<F: ScalarField> Context<F> {
 
     pub fn load_witness(&mut self, witness: F) -> AssignedValue<F> {
         self.assign_cell(QuantumCell::Witness(witness));
+        if !self.witness_gen_only {
+            self.selector.resize(self.advice.len(), false);
+        }
         self.last().unwrap()
     }
 
     pub fn load_constant(&mut self, c: F) -> AssignedValue<F> {
         self.assign_cell(QuantumCell::Constant(c));
+        if !self.witness_gen_only {
+            self.selector.resize(self.advice.len(), false);
+        }
         self.last().unwrap()
     }
 

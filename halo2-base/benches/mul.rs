@@ -56,7 +56,7 @@ fn bench(c: &mut Criterion) {
                 let mut builder = GateThreadBuilder::new(true);
                 // do the computation
                 mul_bench(builder.main(0), inputs);
-                let circuit = GateCircuitBuilder::witness_gen(builder, break_points.clone());
+                let circuit = GateCircuitBuilder::prover(builder, break_points.clone());
 
                 let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
                 create_proof::<

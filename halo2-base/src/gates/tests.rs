@@ -36,7 +36,7 @@ fn gate_tests<F: ScalarField>(ctx: &mut Context<F>, inputs: [F; 3]) {
 fn test_gates() {
     let k = 6;
     let inputs = [10u64, 12u64, 120u64].map(Fr::from);
-    let mut builder = GateThreadBuilder::new(false);
+    let mut builder = GateThreadBuilder::mock();
     gate_tests(builder.main(0), inputs);
 
     // auto-tune circuit
@@ -51,7 +51,7 @@ fn test_gates() {
 fn test_multithread_gates() {
     let k = 6;
     let inputs = [10u64, 12u64, 120u64].map(Fr::from);
-    let mut builder = GateThreadBuilder::new(false);
+    let mut builder = GateThreadBuilder::mock();
     gate_tests(builder.main(0), inputs);
 
     let thread_ids = (0..4).map(|_| builder.get_new_thread_id()).collect::<Vec<_>>();
@@ -120,7 +120,7 @@ fn range_tests<F: BigPrimeField>(
 fn test_range_single() {
     let k = 11;
     let inputs = [100, 101].map(Fr::from);
-    let mut builder = GateThreadBuilder::new(false);
+    let mut builder = GateThreadBuilder::mock();
     range_tests(builder.main(0), 3, inputs, 8, 8);
 
     // auto-tune circuit
@@ -135,7 +135,7 @@ fn test_range_single() {
 fn test_range_multicolumn() {
     let k = 5;
     let inputs = [100, 101].map(Fr::from);
-    let mut builder = GateThreadBuilder::new(false);
+    let mut builder = GateThreadBuilder::mock();
     range_tests(builder.main(0), 3, inputs, 8, 8);
 
     // auto-tune circuit

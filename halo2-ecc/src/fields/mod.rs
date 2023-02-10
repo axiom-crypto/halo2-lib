@@ -1,6 +1,11 @@
-use crate::halo2_proofs::{arithmetic::Field, circuit::Value};
-use halo2_base::{gates::RangeInstructions, utils::PrimeField, AssignedValue, Context};
+use crate::halo2_proofs::arithmetic::Field;
+use halo2_base::{
+    gates::RangeInstructions,
+    utils::{BigPrimeField, ScalarField},
+    AssignedValue, Context,
+};
 use num_bigint::BigUint;
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
 pub mod fp;
@@ -9,6 +14,8 @@ pub mod fp2;
 
 #[cfg(test)]
 mod tests;
+
+pub trait PrimeField = BigPrimeField;
 
 #[derive(Clone, Debug)]
 pub struct FieldExtPoint<FieldPoint: Clone + Debug> {
@@ -28,12 +35,12 @@ impl<FieldPoint: Clone + Debug> FieldExtPoint<FieldPoint> {
 }
 
 /// Common functionality for finite field chips
-pub trait FieldChip<F: PrimeField> {
+pub trait FieldChip<F: PrimeField>: Clone + Debug + Send + Sync {
     const PRIME_FIELD_NUM_BITS: u32;
 
     type ConstantType: Debug;
     type WitnessType: Debug;
-    type FieldPoint<'v>: Clone + Debug;
+    type FieldPoint: Clone + Debug + Send + Sync;
     // a type implementing `Field` trait to help with witness generation (for example with inverse)
     type FieldType: Field;
     type RangeChip: RangeInstructions<F>;
@@ -45,159 +52,126 @@ pub trait FieldChip<F: PrimeField> {
     fn range(&self) -> &Self::RangeChip;
     fn limb_bits(&self) -> usize;
 
-    fn get_assigned_value(&self, x: &Self::FieldPoint<'_>) -> Value<Self::FieldType>;
+    fn get_assigned_value(&self, x: &Self::FieldPoint) -> Self::FieldType;
 
     fn fe_to_constant(x: Self::FieldType) -> Self::ConstantType;
-    fn fe_to_witness(x: &Value<Self::FieldType>) -> Self::WitnessType;
+    fn fe_to_witness(x: &Self::FieldType) -> Self::WitnessType;
 
-    fn load_private<'v>(
-        &self,
-        ctx: &mut Context<'_, F>,
-        coeffs: Self::WitnessType,
-    ) -> Self::FieldPoint<'v>;
+    fn load_private(&self, ctx: &mut Context<F>, coeffs: Self::WitnessType) -> Self::FieldPoint;
 
-    fn load_constant<'v>(
-        &self,
-        ctx: &mut Context<'_, F>,
-        coeffs: Self::ConstantType,
-    ) -> Self::FieldPoint<'v>;
+    fn load_constant(&self, ctx: &mut Context<F>, coeffs: Self::ConstantType) -> Self::FieldPoint;
 
-    fn add_no_carry<'v>(
+    fn add_no_carry(
         &self,
-        ctx: &mut Context<'v, F>,
-        a: &Self::FieldPoint<'v>,
-        b: &Self::FieldPoint<'v>,
-    ) -> Self::FieldPoint<'v>;
+        ctx: &mut Context<F>,
+        a: &Self::FieldPoint,
+        b: &Self::FieldPoint,
+    ) -> Self::FieldPoint;
 
     /// output: `a + c`
-    fn add_constant_no_carry<'v>(
+    fn add_constant_no_carry(
         &self,
-        ctx: &mut Context<'v, F>,
-        a: &Self::FieldPoint<'v>,
+        ctx: &mut Context<F>,
+        a: &Self::FieldPoint,
         c: Self::ConstantType,
-    ) -> Self::FieldPoint<'v>;
+    ) -> Self::FieldPoint;
 
-    fn sub_no_carry<'v>(
+    fn sub_no_carry(
         &self,
-        ctx: &mut Context<'v, F>,
-        a: &Self::FieldPoint<'v>,
-        b: &Self::FieldPoint<'v>,
-    ) -> Self::FieldPoint<'v>;
+        ctx: &mut Context<F>,
+        a: &Self::FieldPoint,
+        b: &Self::FieldPoint,
+    ) -> Self::FieldPoint;
 
-    fn negate<'v>(
-        &self,
-        ctx: &mut Context<'v, F>,
-        a: &Self::FieldPoint<'v>,
-    ) -> Self::FieldPoint<'v>;
+    fn negate(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> Self::FieldPoint;
 
     /// a * c
-    fn scalar_mul_no_carry<'v>(
+    fn scalar_mul_no_carry(
         &self,
-        ctx: &mut Context<'v, F>,
-        a: &Self::FieldPoint<'v>,
+        ctx: &mut Context<F>,
+        a: &Self::FieldPoint,
         c: i64,
-    ) -> Self::FieldPoint<'v>;
+    ) -> Self::FieldPoint;
 
     /// a * c + b
-    fn scalar_mul_and_add_no_carry<'v>(
+    fn scalar_mul_and_add_no_carry(
         &self,
-        ctx: &mut Context<'v, F>,
-        a: &Self::FieldPoint<'v>,
-        b: &Self::FieldPoint<'v>,
+        ctx: &mut Context<F>,
+        a: &Self::FieldPoint,
+        b: &Self::FieldPoint,
         c: i64,
-    ) -> Self::FieldPoint<'v>;
+    ) -> Self::FieldPoint;
 
-    fn mul_no_carry<'v>(
+    fn mul_no_carry(
         &self,
-        ctx: &mut Context<'v, F>,
-        a: &Self::FieldPoint<'v>,
-        b: &Self::FieldPoint<'v>,
-    ) -> Self::FieldPoint<'v>;
+        ctx: &mut Context<F>,
+        a: &Self::FieldPoint,
+        b: &Self::FieldPoint,
+    ) -> Self::FieldPoint;
 
-    fn check_carry_mod_to_zero<'v>(&self, ctx: &mut Context<'v, F>, a: &Self::FieldPoint<'v>);
+    fn check_carry_mod_to_zero(&self, ctx: &mut Context<F>, a: &Self::FieldPoint);
 
-    fn carry_mod<'v>(
-        &self,
-        ctx: &mut Context<'v, F>,
-        a: &Self::FieldPoint<'v>,
-    ) -> Self::FieldPoint<'v>;
+    fn carry_mod(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> Self::FieldPoint;
 
-    fn range_check<'v>(&self, ctx: &mut Context<'v, F>, a: &Self::FieldPoint<'v>, max_bits: usize);
+    fn range_check(&self, ctx: &mut Context<F>, a: &Self::FieldPoint, max_bits: usize);
 
-    fn enforce_less_than<'v>(&self, ctx: &mut Context<'v, F>, a: &Self::FieldPoint<'v>);
+    fn enforce_less_than(&self, ctx: &mut Context<F>, a: &Self::FieldPoint);
 
-    // Assumes the witness for a is 0
-    // Constrains that the underlying big integer is 0 and < p.
+    // Returns 1 iff the underlying big integer for `a` is 0. Otherwise returns 0.
     // For field extensions, checks coordinate-wise.
-    fn is_soft_zero<'v>(
-        &self,
-        ctx: &mut Context<'v, F>,
-        a: &Self::FieldPoint<'v>,
-    ) -> AssignedValue<'v, F>;
+    fn is_soft_zero(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> AssignedValue<F>;
 
-    // Constrains that the underlying big integer is in [1, p - 1].
+    // Constrains that the underlying big integer is in [0, p - 1].
+    // Then returns 1 iff the underlying big integer for `a` is 0. Otherwise returns 0.
     // For field extensions, checks coordinate-wise.
-    fn is_soft_nonzero<'v>(
-        &self,
-        ctx: &mut Context<'v, F>,
-        a: &Self::FieldPoint<'v>,
-    ) -> AssignedValue<'v, F>;
+    fn is_soft_nonzero(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> AssignedValue<F>;
 
-    fn is_zero<'v>(
-        &self,
-        ctx: &mut Context<'v, F>,
-        a: &Self::FieldPoint<'v>,
-    ) -> AssignedValue<'v, F>;
+    fn is_zero(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> AssignedValue<F>;
 
     // assuming `a, b` have been range checked to be a proper BigInt
     // constrain the witnesses `a, b` to be `< p`
     // then check `a == b` as BigInts
-    fn is_equal<'v>(
+    fn is_equal(
         &self,
-        ctx: &mut Context<'v, F>,
-        a: &Self::FieldPoint<'v>,
-        b: &Self::FieldPoint<'v>,
-    ) -> AssignedValue<'v, F> {
+        ctx: &mut Context<F>,
+        a: &Self::FieldPoint,
+        b: &Self::FieldPoint,
+    ) -> AssignedValue<F> {
         self.enforce_less_than(ctx, a);
         self.enforce_less_than(ctx, b);
         // a.native and b.native are derived from `a.truncation, b.truncation`, so no need to check if they're equal
         self.is_equal_unenforced(ctx, a, b)
     }
 
-    fn is_equal_unenforced<'v>(
+    fn is_equal_unenforced(
         &self,
-        ctx: &mut Context<'v, F>,
-        a: &Self::FieldPoint<'v>,
-        b: &Self::FieldPoint<'v>,
-    ) -> AssignedValue<'v, F>;
+        ctx: &mut Context<F>,
+        a: &Self::FieldPoint,
+        b: &Self::FieldPoint,
+    ) -> AssignedValue<F>;
 
-    fn assert_equal<'v>(
-        &self,
-        ctx: &mut Context<'v, F>,
-        a: &Self::FieldPoint<'v>,
-        b: &Self::FieldPoint<'v>,
-    );
+    fn assert_equal(&self, ctx: &mut Context<F>, a: &Self::FieldPoint, b: &Self::FieldPoint);
 
-    fn mul<'v>(
+    fn mul(
         &self,
-        ctx: &mut Context<'v, F>,
-        a: &Self::FieldPoint<'v>,
-        b: &Self::FieldPoint<'v>,
-    ) -> Self::FieldPoint<'v> {
+        ctx: &mut Context<F>,
+        a: &Self::FieldPoint,
+        b: &Self::FieldPoint,
+    ) -> Self::FieldPoint {
         let no_carry = self.mul_no_carry(ctx, a, b);
         self.carry_mod(ctx, &no_carry)
     }
 
-    fn divide<'v>(
+    fn divide(
         &self,
-        ctx: &mut Context<'v, F>,
-        a: &Self::FieldPoint<'v>,
-        b: &Self::FieldPoint<'v>,
-    ) -> Self::FieldPoint<'v> {
+        ctx: &mut Context<F>,
+        a: &Self::FieldPoint,
+        b: &Self::FieldPoint,
+    ) -> Self::FieldPoint {
         let a_val = self.get_assigned_value(a);
         let b_val = self.get_assigned_value(b);
-        let b_inv = b_val.map(|bv| bv.invert().unwrap());
-        let quot_val = a_val.zip(b_inv).map(|(a, bi)| a * bi);
+        let b_inv = b_val.invert().unwrap();
+        let quot_val = a_val * b_inv;
 
         let quot = self.load_private(ctx, Self::fe_to_witness(&quot_val));
 
@@ -211,16 +185,16 @@ pub trait FieldChip<F: PrimeField> {
 
     // constrain and output -a / b
     // this is usually cheaper constraint-wise than computing -a and then (-a) / b separately
-    fn neg_divide<'v>(
+    fn neg_divide(
         &self,
-        ctx: &mut Context<'v, F>,
-        a: &Self::FieldPoint<'v>,
-        b: &Self::FieldPoint<'v>,
-    ) -> Self::FieldPoint<'v> {
+        ctx: &mut Context<F>,
+        a: &Self::FieldPoint,
+        b: &Self::FieldPoint,
+    ) -> Self::FieldPoint {
         let a_val = self.get_assigned_value(a);
         let b_val = self.get_assigned_value(b);
-        let b_inv = b_val.map(|bv| bv.invert().unwrap());
-        let quot_val = a_val.zip(b_inv).map(|(a, b)| -a * b);
+        let b_inv = b_val.invert().unwrap();
+        let quot_val = -a_val * b_inv;
 
         let quot = self.load_private(ctx, Self::fe_to_witness(&quot_val));
         self.range_check(ctx, &quot, Self::PRIME_FIELD_NUM_BITS as usize);
@@ -234,23 +208,23 @@ pub trait FieldChip<F: PrimeField> {
     }
 }
 
-pub trait Selectable<F: PrimeField> {
-    type Point<'v>;
+pub trait Selectable<F: ScalarField> {
+    type Point;
 
-    fn select<'v>(
+    fn select(
         &self,
-        ctx: &mut Context<'_, F>,
-        a: &Self::Point<'v>,
-        b: &Self::Point<'v>,
-        sel: &AssignedValue<'v, F>,
-    ) -> Self::Point<'v>;
+        ctx: &mut Context<F>,
+        a: &Self::Point,
+        b: &Self::Point,
+        sel: AssignedValue<F>,
+    ) -> Self::Point;
 
-    fn select_by_indicator<'v>(
+    fn select_by_indicator(
         &self,
-        ctx: &mut Context<'_, F>,
-        a: &[Self::Point<'v>],
-        coeffs: &[AssignedValue<'v, F>],
-    ) -> Self::Point<'v>;
+        ctx: &mut Context<F>,
+        a: &[Self::Point],
+        coeffs: &[AssignedValue<F>],
+    ) -> Self::Point;
 }
 
 // Common functionality for prime field chips
@@ -265,8 +239,13 @@ where
 
 // helper trait so we can actually construct and read the Fp2 struct
 // needs to be implemented for Fp2 struct for use cases below
-pub trait FieldExtConstructor<Fp: PrimeField, const DEGREE: usize> {
+pub trait FieldExtConstructor<Fp: ff::PrimeField, const DEGREE: usize> {
     fn new(c: [Fp; DEGREE]) -> Self;
 
     fn coeffs(&self) -> Vec<Fp>;
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum FpStrategy {
+    Simple,
 }

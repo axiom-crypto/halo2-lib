@@ -68,7 +68,7 @@ fn main() {
     let a = (0..5).map(|_| Fr::random(OsRng)).collect_vec();
     let b = (0..5).map(|_| Fr::random(OsRng)).collect_vec();
     inner_prod_bench(builder.main(0), a, b);
-    let circuit = GateCircuitBuilder::witness_gen(builder, break_points);
+    let circuit = GateCircuitBuilder::prover(builder, break_points);
 
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
     create_proof::<

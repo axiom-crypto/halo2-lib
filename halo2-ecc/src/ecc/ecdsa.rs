@@ -1,10 +1,9 @@
 use crate::bigint::{big_less_than, CRTInteger};
-use crate::fields::{fp::FpConfig, FieldChip};
+use crate::fields::{fp::FpChip, FieldChip, PrimeField};
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
-    utils::{modulus, CurveAffineExt, PrimeField},
+    utils::CurveAffineExt,
     AssignedValue, Context,
-    QuantumCell::Existing,
 };
 
 use super::fixed_base;
@@ -14,25 +13,21 @@ use super::{ec_add_unequal, scalar_multiply, EcPoint};
 // p = coordinate field modulus
 // n = scalar field modulus
 // Only valid when p is very close to n in size (e.g. for Secp256k1)
-pub fn ecdsa_verify_no_pubkey_check<'v, F: PrimeField, CF: PrimeField, SF: PrimeField, GA>(
-    base_chip: &FpConfig<F, CF>,
-    ctx: &mut Context<'v, F>,
-    pubkey: &EcPoint<F, <FpConfig<F, CF> as FieldChip<F>>::FieldPoint<'v>>,
-    r: &CRTInteger<'v, F>,
-    s: &CRTInteger<'v, F>,
-    msghash: &CRTInteger<'v, F>,
+pub fn ecdsa_verify_no_pubkey_check<F: PrimeField, CF: PrimeField, SF: PrimeField, GA>(
+    base_chip: &FpChip<F, CF>,
+    ctx: &mut Context<F>,
+    pubkey: &EcPoint<F, <FpChip<F, CF> as FieldChip<F>>::FieldPoint>,
+    r: &CRTInteger<F>,
+    s: &CRTInteger<F>,
+    msghash: &CRTInteger<F>,
     var_window_bits: usize,
     fixed_window_bits: usize,
-) -> AssignedValue<'v, F>
+) -> AssignedValue<F>
 where
     GA: CurveAffineExt<Base = CF, ScalarExt = SF>,
 {
-    let scalar_chip = FpConfig::<F, SF>::construct(
-        base_chip.range.clone(),
-        base_chip.limb_bits,
-        base_chip.num_limbs,
-        modulus::<SF>(),
-    );
+    let scalar_chip =
+        FpChip::<F, SF>::new(base_chip.range, base_chip.limb_bits, base_chip.num_limbs);
     let n = scalar_chip.load_constant(ctx, scalar_chip.p.to_biguint().unwrap());
 
     // check r,s are in [1, n - 1]
@@ -50,7 +45,7 @@ where
         base_chip,
         ctx,
         &GA::generator(),
-        &u1.truncation.limbs,
+        u1.truncation.limbs.clone(),
         base_chip.limb_bits,
         fixed_window_bits,
     );
@@ -58,7 +53,7 @@ where
         base_chip,
         ctx,
         pubkey,
-        &u2.truncation.limbs,
+        u2.truncation.limbs.clone(),
         base_chip.limb_bits,
         var_window_bits,
     );
@@ -69,7 +64,7 @@ where
     // coordinates of u1_mul and u2_mul are in proper bigint form, and lie in but are not constrained to [0, n)
     // we therefore need hard inequality here
     let u1_u2_x_eq = base_chip.is_equal(ctx, &u1_mul.x, &u2_mul.x);
-    let u1_u2_not_neg = base_chip.range.gate().not(ctx, Existing(&u1_u2_x_eq));
+    let u1_u2_not_neg = base_chip.range.gate().not(ctx, u1_u2_x_eq);
 
     // compute (x1, y1) = u1 * G + u2 * pubkey and check (r mod n) == x1 as integers
     // WARNING: For optimization reasons, does not reduce x1 mod n, which is
@@ -98,10 +93,10 @@ where
     );
 
     // check (r in [1, n - 1]) and (s in [1, n - 1]) and (u1_mul != - u2_mul) and (r == x1 mod n)
-    let res1 = base_chip.range.gate().and(ctx, Existing(&r_valid), Existing(&s_valid));
-    let res2 = base_chip.range.gate().and(ctx, Existing(&res1), Existing(&u1_small));
-    let res3 = base_chip.range.gate().and(ctx, Existing(&res2), Existing(&u2_small));
-    let res4 = base_chip.range.gate().and(ctx, Existing(&res3), Existing(&u1_u2_not_neg));
-    let res5 = base_chip.range.gate().and(ctx, Existing(&res4), Existing(&equal_check));
+    let res1 = base_chip.gate().and(ctx, r_valid, s_valid);
+    let res2 = base_chip.gate().and(ctx, res1, u1_small);
+    let res3 = base_chip.gate().and(ctx, res2, u2_small);
+    let res4 = base_chip.gate().and(ctx, res3, u1_u2_not_neg);
+    let res5 = base_chip.gate().and(ctx, res4, equal_check);
     res5
 }

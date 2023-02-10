@@ -48,13 +48,10 @@ where
     }
 }
 
-// Later: will need to separate PrimeField from ScalarField when Goldilocks is introduced
-#[cfg(feature = "halo2-axiom")]
-pub trait PrimeField = BigPrimeField;
+// Later: will need to separate BigPrimeField from ScalarField when Goldilocks is introduced
+
 #[cfg(feature = "halo2-pse")]
 pub trait BigPrimeField = FieldExt<Repr = [u8; 32]> + Hash;
-#[cfg(feature = "halo2-pse")]
-pub trait PrimeField = BigPrimeField;
 
 #[cfg(feature = "halo2-pse")]
 pub trait ScalarField = FieldExt + Hash;
@@ -105,16 +102,16 @@ pub fn log2_ceil(x: u64) -> usize {
     (u64::BITS - x.leading_zeros() - (x & (x - 1) == 0) as u32) as usize
 }
 
-pub fn modulus<F: PrimeField>() -> BigUint {
+pub fn modulus<F: BigPrimeField>() -> BigUint {
     fe_to_biguint(&-F::one()) + 1u64
 }
 
-pub fn power_of_two<F: PrimeField>(n: usize) -> F {
+pub fn power_of_two<F: BigPrimeField>(n: usize) -> F {
     biguint_to_fe(&(BigUint::one() << n))
 }
 
 /// assume `e` less than modulus of F
-pub fn biguint_to_fe<F: PrimeField>(e: &BigUint) -> F {
+pub fn biguint_to_fe<F: BigPrimeField>(e: &BigUint) -> F {
     #[cfg(feature = "halo2-axiom")]
     {
         F::from_u64_digits(&e.to_u64_digits())
@@ -130,7 +127,7 @@ pub fn biguint_to_fe<F: PrimeField>(e: &BigUint) -> F {
 }
 
 /// assume `|e|` less than modulus of F
-pub fn bigint_to_fe<F: PrimeField>(e: &BigInt) -> F {
+pub fn bigint_to_fe<F: BigPrimeField>(e: &BigInt) -> F {
     #[cfg(feature = "halo2-axiom")]
     {
         let (sign, digits) = e.to_u64_digits();
@@ -158,7 +155,7 @@ pub fn fe_to_biguint<F: ff::PrimeField>(fe: &F) -> BigUint {
     BigUint::from_bytes_le(fe.to_repr().as_ref())
 }
 
-pub fn fe_to_bigint<F: PrimeField>(fe: &F) -> BigInt {
+pub fn fe_to_bigint<F: BigPrimeField>(fe: &F) -> BigInt {
     // TODO: `F` should just have modulus as lazy_static or something
     let modulus = modulus::<F>();
     let e = fe_to_biguint(fe);
@@ -169,7 +166,7 @@ pub fn fe_to_bigint<F: PrimeField>(fe: &F) -> BigInt {
     }
 }
 
-pub fn decompose<F: PrimeField>(e: &F, number_of_limbs: usize, bit_len: usize) -> Vec<F> {
+pub fn decompose<F: BigPrimeField>(e: &F, number_of_limbs: usize, bit_len: usize) -> Vec<F> {
     if bit_len > 64 {
         decompose_biguint(&fe_to_biguint(e), number_of_limbs, bit_len)
     } else {
@@ -194,7 +191,11 @@ pub fn decompose_fe_to_u64_limbs<F: ScalarField>(
     }
 }
 
-pub fn decompose_biguint<F: PrimeField>(e: &BigUint, num_limbs: usize, bit_len: usize) -> Vec<F> {
+pub fn decompose_biguint<F: BigPrimeField>(
+    e: &BigUint,
+    num_limbs: usize,
+    bit_len: usize,
+) -> Vec<F> {
     debug_assert!(bit_len > 64 && bit_len <= 128);
     let mut e = e.iter_u64_digits();
 
@@ -224,7 +225,7 @@ pub fn decompose_biguint<F: PrimeField>(e: &BigUint, num_limbs: usize, bit_len: 
         .collect()
 }
 
-pub fn decompose_bigint<F: PrimeField>(e: &BigInt, num_limbs: usize, bit_len: usize) -> Vec<F> {
+pub fn decompose_bigint<F: BigPrimeField>(e: &BigInt, num_limbs: usize, bit_len: usize) -> Vec<F> {
     if e.is_negative() {
         decompose_biguint::<F>(e.magnitude(), num_limbs, bit_len).into_iter().map(|x| -x).collect()
     } else {
@@ -232,7 +233,7 @@ pub fn decompose_bigint<F: PrimeField>(e: &BigInt, num_limbs: usize, bit_len: us
     }
 }
 
-pub fn decompose_bigint_option<F: PrimeField>(
+pub fn decompose_bigint_option<F: BigPrimeField>(
     value: Value<&BigInt>,
     number_of_limbs: usize,
     bit_len: usize,

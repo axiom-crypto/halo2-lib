@@ -1,20 +1,14 @@
 #![allow(non_snake_case)]
 use super::{Fp12Chip, Fp2Chip, FpChip, FpPoint, FqPoint};
-use crate::halo2_proofs::{
-    circuit::Value,
-    halo2curves::bn256::{self, G1Affine, G2Affine, SIX_U_PLUS_2_NAF},
-    halo2curves::bn256::{Fq, Fq2, FROBENIUS_COEFF_FQ12_C1},
-    plonk::ConstraintSystem,
+use crate::halo2_proofs::halo2curves::bn256::{
+    G1Affine, G2Affine, FROBENIUS_COEFF_FQ12_C1, SIX_U_PLUS_2_NAF,
 };
 use crate::{
     ecc::{EcPoint, EccChip},
-    fields::{fp::FpStrategy, fp12::mul_no_carry_w6},
-    fields::{FieldChip, FieldExtPoint},
+    fields::fp12::mul_no_carry_w6,
+    fields::{FieldChip, FieldExtPoint, PrimeField},
 };
-use halo2_base::{
-    utils::{biguint_to_fe, fe_to_biguint, PrimeField},
-    Context,
-};
+use halo2_base::Context;
 use num_bigint::BigUint;
 
 const XI_0: i64 = 9;
@@ -27,12 +21,12 @@ const XI_0: i64 = 9;
 //  line_{Psi(Q0), Psi(Q1)}(P) where Psi(x,y) = (w^2 x, w^3 y)
 //  - equals w^3 (y_1 - y_2) X + w^2 (x_2 - x_1) Y + w^5 (x_1 y_2 - x_2 y_1) =: out3 * w^3 + out2 * w^2 + out5 * w^5 where out2, out3, out5 are Fp2 points
 // Output is [None, None, out2, out3, None, out5] as vector of `Option<FqPoint>`s
-pub fn sparse_line_function_unequal<'a, F: PrimeField>(
+pub fn sparse_line_function_unequal<F: PrimeField>(
     fp2_chip: &Fp2Chip<F>,
-    ctx: &mut Context<'a, F>,
-    Q: (&EcPoint<F, FqPoint<'a, F>>, &EcPoint<F, FqPoint<'a, F>>),
-    P: &EcPoint<F, FpPoint<'a, F>>,
-) -> Vec<Option<FqPoint<'a, F>>> {
+    ctx: &mut Context<F>,
+    Q: (&EcPoint<F, FqPoint<F>>, &EcPoint<F, FqPoint<F>>),
+    P: &EcPoint<F, FpPoint<F>>,
+) -> Vec<Option<FqPoint<F>>> {
     let (x_1, y_1) = (&Q.0.x, &Q.0.y);
     let (x_2, y_2) = (&Q.1.x, &Q.1.y);
     let (X, Y) = (&P.x, &P.y);
@@ -66,12 +60,12 @@ pub fn sparse_line_function_unequal<'a, F: PrimeField>(
 //  line_{Psi(Q), Psi(Q)}(P) where Psi(x,y) = (w^2 x, w^3 y)
 //  - equals (3x^3 - 2y^2)(XI_0 + u) + w^4 (-3 x^2 * Q.x) + w^3 (2 y * Q.y) =: out0 + out4 * w^4 + out3 * w^3 where out0, out3, out4 are Fp2 points
 // Output is [out0, None, None, out3, out4, None] as vector of `Option<FqPoint>`s
-pub fn sparse_line_function_equal<'a, F: PrimeField>(
+pub fn sparse_line_function_equal<F: PrimeField>(
     fp2_chip: &Fp2Chip<F>,
-    ctx: &mut Context<'a, F>,
-    Q: &EcPoint<F, FqPoint<'a, F>>,
-    P: &EcPoint<F, FpPoint<'a, F>>,
-) -> Vec<Option<FqPoint<'a, F>>> {
+    ctx: &mut Context<F>,
+    Q: &EcPoint<F, FqPoint<F>>,
+    P: &EcPoint<F, FpPoint<F>>,
+) -> Vec<Option<FqPoint<F>>> {
     let (x, y) = (&Q.x, &Q.y);
     assert_eq!(x.coeffs.len(), 2);
     assert_eq!(y.coeffs.len(), 2);
@@ -101,12 +95,12 @@ pub fn sparse_line_function_equal<'a, F: PrimeField>(
 
 // multiply Fp12 point `a` with Fp12 point `b` where `b` is len 6 vector of Fp2 points, where some are `None` to represent zero.
 // Assumes `b` is not vector of all `None`s
-pub fn sparse_fp12_multiply<'a, F: PrimeField>(
+pub fn sparse_fp12_multiply<F: PrimeField>(
     fp2_chip: &Fp2Chip<F>,
-    ctx: &mut Context<'a, F>,
-    a: &FqPoint<'a, F>,
-    b_fp2_coeffs: &Vec<Option<FqPoint<'a, F>>>,
-) -> FieldExtPoint<FpPoint<'a, F>> {
+    ctx: &mut Context<F>,
+    a: &FqPoint<F>,
+    b_fp2_coeffs: &Vec<Option<FqPoint<F>>>,
+) -> FieldExtPoint<FpPoint<F>> {
     assert_eq!(a.coeffs.len(), 12);
     assert_eq!(b_fp2_coeffs.len(), 6);
     let mut a_fp2_coeffs = Vec::with_capacity(6);
@@ -168,13 +162,13 @@ pub fn sparse_fp12_multiply<'a, F: PrimeField>(
 // - P is point in E(Fp)
 // Output:
 // - out = g * l_{Psi(Q0), Psi(Q1)}(P) as Fp12 point
-pub fn fp12_multiply_with_line_unequal<'a, F: PrimeField>(
+pub fn fp12_multiply_with_line_unequal<F: PrimeField>(
     fp2_chip: &Fp2Chip<F>,
-    ctx: &mut Context<'a, F>,
-    g: &FqPoint<'a, F>,
-    Q: (&EcPoint<F, FqPoint<'a, F>>, &EcPoint<F, FqPoint<'a, F>>),
-    P: &EcPoint<F, FpPoint<'a, F>>,
-) -> FqPoint<'a, F> {
+    ctx: &mut Context<F>,
+    g: &FqPoint<F>,
+    Q: (&EcPoint<F, FqPoint<F>>, &EcPoint<F, FqPoint<F>>),
+    P: &EcPoint<F, FpPoint<F>>,
+) -> FqPoint<F> {
     let line = sparse_line_function_unequal::<F>(fp2_chip, ctx, Q, P);
     sparse_fp12_multiply::<F>(fp2_chip, ctx, g, &line)
 }
@@ -185,13 +179,13 @@ pub fn fp12_multiply_with_line_unequal<'a, F: PrimeField>(
 // - P is point in E(Fp)
 // Output:
 // - out = g * l_{Psi(Q), Psi(Q)}(P) as Fp12 point
-pub fn fp12_multiply_with_line_equal<'a, F: PrimeField>(
+pub fn fp12_multiply_with_line_equal<F: PrimeField>(
     fp2_chip: &Fp2Chip<F>,
-    ctx: &mut Context<'a, F>,
-    g: &FqPoint<'a, F>,
-    Q: &EcPoint<F, FqPoint<'a, F>>,
-    P: &EcPoint<F, FpPoint<'a, F>>,
-) -> FqPoint<'a, F> {
+    ctx: &mut Context<F>,
+    g: &FqPoint<F>,
+    Q: &EcPoint<F, FqPoint<F>>,
+    P: &EcPoint<F, FpPoint<F>>,
+) -> FqPoint<F> {
     let line = sparse_line_function_equal::<F>(fp2_chip, ctx, Q, P);
     sparse_fp12_multiply::<F>(fp2_chip, ctx, g, &line)
 }
@@ -214,13 +208,13 @@ pub fn fp12_multiply_with_line_equal<'a, F: PrimeField>(
 //  - `0 <= loop_count < r` and `loop_count < p` (to avoid [loop_count]Q' = Frob_p(Q'))
 //  - x^3 + b = 0 has no solution in Fp2, i.e., the y-coordinate of Q cannot be 0.
 
-pub fn miller_loop_BN<'a, 'b, F: PrimeField>(
-    ecc_chip: &EccChip<F, Fp2Chip<'a, F>>,
-    ctx: &mut Context<'b, F>,
-    Q: &EcPoint<F, FqPoint<'b, F>>,
-    P: &EcPoint<F, FpPoint<'b, F>>,
+pub fn miller_loop_BN<F: PrimeField>(
+    ecc_chip: &EccChip<F, Fp2Chip<F>>,
+    ctx: &mut Context<F>,
+    Q: &EcPoint<F, FqPoint<F>>,
+    P: &EcPoint<F, FpPoint<F>>,
     pseudo_binary_encoding: &[i8],
-) -> FqPoint<'b, F> {
+) -> FqPoint<F> {
     let mut i = pseudo_binary_encoding.len() - 1;
     while pseudo_binary_encoding[i] == 0 {
         i -= 1;
@@ -257,7 +251,7 @@ pub fn miller_loop_BN<'a, 'b, F: PrimeField>(
 
     loop {
         if i != last_index - 1 {
-            let fp12_chip = Fp12Chip::<F>::construct(ecc_chip.field_chip.fp_chip);
+            let fp12_chip = Fp12Chip::<F>::new(ecc_chip.field_chip.fp_chip);
             let f_sq = fp12_chip.mul(ctx, &f, &f);
             f = fp12_multiply_with_line_equal::<F>(ecc_chip.field_chip(), ctx, &f_sq, &R, P);
         }
@@ -299,12 +293,12 @@ pub fn miller_loop_BN<'a, 'b, F: PrimeField>(
 
 // let pairs = [(a_i, b_i)], a_i in G_1, b_i in G_2
 // output is Prod_i e'(a_i, b_i), where e'(a_i, b_i) is the output of `miller_loop_BN(b_i, a_i)`
-pub fn multi_miller_loop_BN<'a, 'b, F: PrimeField>(
-    ecc_chip: &EccChip<F, Fp2Chip<'a, F>>,
-    ctx: &mut Context<'b, F>,
-    pairs: Vec<(&EcPoint<F, FpPoint<'b, F>>, &EcPoint<F, FqPoint<'b, F>>)>,
+pub fn multi_miller_loop_BN<F: PrimeField>(
+    ecc_chip: &EccChip<F, Fp2Chip<F>>,
+    ctx: &mut Context<F>,
+    pairs: Vec<(&EcPoint<F, FpPoint<F>>, &EcPoint<F, FqPoint<F>>)>,
     pseudo_binary_encoding: &[i8],
-) -> FqPoint<'b, F> {
+) -> FqPoint<F> {
     let mut i = pseudo_binary_encoding.len() - 1;
     while pseudo_binary_encoding[i] == 0 {
         i -= 1;
@@ -344,7 +338,7 @@ pub fn multi_miller_loop_BN<'a, 'b, F: PrimeField>(
 
     i -= 1;
     let mut r = pairs.iter().map(|pair| pair.1.clone()).collect::<Vec<_>>();
-    let fp12_chip = Fp12Chip::<F>::construct(ecc_chip.field_chip.fp_chip);
+    let fp12_chip = Fp12Chip::<F>::new(ecc_chip.field_chip.fp_chip);
     loop {
         if i != last_index - 1 {
             f = fp12_chip.mul(ctx, &f, &f);
@@ -401,13 +395,13 @@ pub fn multi_miller_loop_BN<'a, 'b, F: PrimeField>(
 // - coeff[1][2], coeff[1][3] as assigned cells: this is an optimization to avoid loading new constants
 // Output:
 // - (coeff[1][2] * x^p, coeff[1][3] * y^p) point in E(Fp2)
-pub fn twisted_frobenius<'a, 'b, F: PrimeField>(
-    ecc_chip: &EccChip<F, Fp2Chip<'a, F>>,
-    ctx: &mut Context<'b, F>,
-    Q: &EcPoint<F, FqPoint<'b, F>>,
-    c2: &FqPoint<'b, F>,
-    c3: &FqPoint<'b, F>,
-) -> EcPoint<F, FqPoint<'b, F>> {
+pub fn twisted_frobenius<F: PrimeField>(
+    ecc_chip: &EccChip<F, Fp2Chip<F>>,
+    ctx: &mut Context<F>,
+    Q: &EcPoint<F, FqPoint<F>>,
+    c2: &FqPoint<F>,
+    c3: &FqPoint<F>,
+) -> EcPoint<F, FqPoint<F>> {
     assert_eq!(c2.coeffs.len(), 2);
     assert_eq!(c3.coeffs.len(), 2);
 
@@ -424,13 +418,13 @@ pub fn twisted_frobenius<'a, 'b, F: PrimeField>(
 // - Q = (x, y) point in E(Fp2)
 // Output:
 // - (coeff[1][2] * x^p, coeff[1][3] * -y^p) point in E(Fp2)
-pub fn neg_twisted_frobenius<'a, 'b, F: PrimeField>(
-    ecc_chip: &EccChip<F, Fp2Chip<'a, F>>,
-    ctx: &mut Context<'b, F>,
-    Q: &EcPoint<F, FqPoint<'b, F>>,
-    c2: &FqPoint<'b, F>,
-    c3: &FqPoint<'b, F>,
-) -> EcPoint<F, FqPoint<'b, F>> {
+pub fn neg_twisted_frobenius<F: PrimeField>(
+    ecc_chip: &EccChip<F, Fp2Chip<F>>,
+    ctx: &mut Context<F>,
+    Q: &EcPoint<F, FqPoint<F>>,
+    c2: &FqPoint<F>,
+    c3: &FqPoint<F>,
+) -> EcPoint<F, FqPoint<F>> {
     assert_eq!(c2.coeffs.len(), 2);
     assert_eq!(c3.coeffs.len(), 2);
 
@@ -442,80 +436,38 @@ pub fn neg_twisted_frobenius<'a, 'b, F: PrimeField>(
 }
 
 // To avoid issues with mutably borrowing twice (not allowed in Rust), we only store fp_chip and construct g2_chip and fp12_chip in scope when needed for temporary mutable borrows
-pub struct PairingChip<'a, F: PrimeField> {
-    pub fp_chip: &'a FpChip<F>,
+pub struct PairingChip<'chip, F: PrimeField> {
+    pub fp_chip: &'chip FpChip<'chip, F>,
 }
 
-impl<'a, F: PrimeField> PairingChip<'a, F> {
-    pub fn construct(fp_chip: &'a FpChip<F>) -> Self {
+impl<'chip, F: PrimeField> PairingChip<'chip, F> {
+    pub fn new(fp_chip: &'chip FpChip<F>) -> Self {
         Self { fp_chip }
     }
 
-    pub fn configure(
-        meta: &mut ConstraintSystem<F>,
-        strategy: FpStrategy,
-        num_advice: &[usize],
-        num_lookup_advice: &[usize],
-        num_fixed: usize,
-        lookup_bits: usize,
-        limb_bits: usize,
-        num_limbs: usize,
-        context_id: usize,
-        k: usize,
-    ) -> FpChip<F> {
-        FpChip::<F>::configure(
-            meta,
-            strategy,
-            num_advice,
-            num_lookup_advice,
-            num_fixed,
-            lookup_bits,
-            limb_bits,
-            num_limbs,
-            halo2_base::utils::modulus::<Fq>(),
-            context_id,
-            k,
-        )
+    pub fn load_private_g1(&self, ctx: &mut Context<F>, point: G1Affine) -> EcPoint<F, FpPoint<F>> {
+        let g1_chip = EccChip::new(self.fp_chip);
+        g1_chip.load_private(ctx, (point.x, point.y))
     }
 
-    pub fn load_private_g1<'v>(
+    pub fn load_private_g2(
         &self,
-        ctx: &mut Context<'_, F>,
-        point: Value<G1Affine>,
-    ) -> EcPoint<F, FpPoint<'v, F>> {
-        // go from pse/pairing::bn256::Fq to forked Fq
-        let convert_fp = |x: bn256::Fq| biguint_to_fe(&fe_to_biguint(&x));
-        let g1_chip = EccChip::construct(self.fp_chip.clone());
-        g1_chip
-            .load_private(ctx, (point.map(|pt| convert_fp(pt.x)), point.map(|pt| convert_fp(pt.y))))
+        ctx: &mut Context<F>,
+        point: G2Affine,
+    ) -> EcPoint<F, FieldExtPoint<FpPoint<F>>> {
+        let fp2_chip = Fp2Chip::<F>::new(self.fp_chip);
+        let g2_chip = EccChip::new(&fp2_chip);
+        g2_chip.load_private(ctx, (point.x, point.y))
     }
 
-    pub fn load_private_g2<'v>(
+    pub fn miller_loop(
         &self,
-        ctx: &mut Context<'_, F>,
-        point: Value<G2Affine>,
-    ) -> EcPoint<F, FieldExtPoint<FpPoint<'v, F>>> {
-        let fp2_chip = Fp2Chip::<F>::construct(self.fp_chip);
-        let g2_chip = EccChip::construct(fp2_chip);
-        // go from pse/pairing::bn256::Fq2 to forked public Fq2
-        let convert_fp2 = |c0: bn256::Fq, c1: bn256::Fq| Fq2 {
-            c0: biguint_to_fe(&fe_to_biguint(&c0)),
-            c1: biguint_to_fe(&fe_to_biguint(&c1)),
-        };
-        let x = point.map(|pt| convert_fp2(pt.x.c0, pt.x.c1));
-        let y = point.map(|pt| convert_fp2(pt.y.c0, pt.y.c1));
-
-        g2_chip.load_private(ctx, (x, y))
-    }
-
-    pub fn miller_loop<'v>(
-        &self,
-        ctx: &mut Context<'v, F>,
-        Q: &EcPoint<F, FqPoint<'v, F>>,
-        P: &EcPoint<F, FpPoint<'v, F>>,
-    ) -> FqPoint<'v, F> {
-        let fp2_chip = Fp2Chip::<F>::construct(self.fp_chip);
-        let g2_chip = EccChip::construct(fp2_chip);
+        ctx: &mut Context<F>,
+        Q: &EcPoint<F, FqPoint<F>>,
+        P: &EcPoint<F, FpPoint<F>>,
+    ) -> FqPoint<F> {
+        let fp2_chip = Fp2Chip::<F>::new(self.fp_chip);
+        let g2_chip = EccChip::new(&fp2_chip);
         miller_loop_BN::<F>(
             &g2_chip,
             ctx,
@@ -525,13 +477,13 @@ impl<'a, F: PrimeField> PairingChip<'a, F> {
         )
     }
 
-    pub fn multi_miller_loop<'v>(
+    pub fn multi_miller_loop(
         &self,
-        ctx: &mut Context<'v, F>,
-        pairs: Vec<(&EcPoint<F, FpPoint<'v, F>>, &EcPoint<F, FqPoint<'v, F>>)>,
-    ) -> FqPoint<'v, F> {
-        let fp2_chip = Fp2Chip::<F>::construct(self.fp_chip);
-        let g2_chip = EccChip::construct(fp2_chip);
+        ctx: &mut Context<F>,
+        pairs: Vec<(&EcPoint<F, FpPoint<F>>, &EcPoint<F, FqPoint<F>>)>,
+    ) -> FqPoint<F> {
+        let fp2_chip = Fp2Chip::<F>::new(self.fp_chip);
+        let g2_chip = EccChip::new(&fp2_chip);
         multi_miller_loop_BN::<F>(
             &g2_chip,
             ctx,
@@ -540,20 +492,20 @@ impl<'a, F: PrimeField> PairingChip<'a, F> {
         )
     }
 
-    pub fn final_exp<'v>(&self, ctx: &mut Context<'v, F>, f: &FqPoint<'v, F>) -> FqPoint<'v, F> {
-        let fp12_chip = Fp12Chip::<F>::construct(self.fp_chip);
+    pub fn final_exp(&self, ctx: &mut Context<F>, f: &FqPoint<F>) -> FqPoint<F> {
+        let fp12_chip = Fp12Chip::<F>::new(self.fp_chip);
         fp12_chip.final_exp(ctx, f)
     }
 
     // optimal Ate pairing
-    pub fn pairing<'v>(
+    pub fn pairing(
         &self,
-        ctx: &mut Context<'v, F>,
-        Q: &EcPoint<F, FqPoint<'v, F>>,
-        P: &EcPoint<F, FpPoint<'v, F>>,
-    ) -> FqPoint<'v, F> {
+        ctx: &mut Context<F>,
+        Q: &EcPoint<F, FqPoint<F>>,
+        P: &EcPoint<F, FpPoint<F>>,
+    ) -> FqPoint<F> {
         let f0 = self.miller_loop(ctx, Q, P);
-        let fp12_chip = Fp12Chip::<F>::construct(self.fp_chip);
+        let fp12_chip = Fp12Chip::<F>::new(self.fp_chip);
         // final_exp implemented in final_exp module
         fp12_chip.final_exp(ctx, &f0)
     }

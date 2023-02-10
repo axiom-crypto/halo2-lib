@@ -1,13 +1,5 @@
 use crate::{
     gates::flex_gate::{FlexGateConfig, GateInstructions, GateStrategy, MAX_PHASE},
-    utils::{
-        biguint_to_fe, bit_length, decompose_fe_to_u64_limbs, fe_to_biguint, BigPrimeField,
-        ScalarField,
-    },
-    AssignedValue,
-    QuantumCell::{self, Constant, Existing, Witness},
-};
-use crate::{
     halo2_proofs::{
         circuit::{Layouter, Value},
         plonk::{
@@ -15,8 +7,12 @@ use crate::{
         },
         poly::Rotation,
     },
-    utils::PrimeField,
-    Context,
+    utils::{
+        biguint_to_fe, bit_length, decompose_fe_to_u64_limbs, fe_to_biguint, BigPrimeField,
+        ScalarField,
+    },
+    AssignedValue, Context,
+    QuantumCell::{self, Constant, Existing, Witness},
 };
 use num_bigint::BigUint;
 use num_integer::Integer;
@@ -249,17 +245,14 @@ pub trait RangeInstructions<F: ScalarField> {
         a_num_bits: usize,
     ) -> (AssignedValue<F>, AssignedValue<F>)
     where
-        F: PrimeField,
+        F: BigPrimeField,
     {
         let a = a.into();
         let b = b.into();
         let a_val = fe_to_biguint(a.value());
         let (div, rem) = a_val.div_mod_floor(&b);
         let [div, rem] = [div, rem].map(|v| biguint_to_fe(&v));
-        ctx.assign_region(
-            vec![Witness(rem), Constant(biguint_to_fe(&b)), Witness(div), a],
-            vec![0],
-        );
+        ctx.assign_region([Witness(rem), Constant(biguint_to_fe(&b)), Witness(div), a], [0]);
         let rem = ctx.get(-4);
         let div = ctx.get(-2);
         self.check_big_less_than_safe(
@@ -301,8 +294,8 @@ pub trait RangeInstructions<F: ScalarField> {
         let x_fe = self.gate().pow_of_two()[b_num_bits];
         let [div, div_hi, div_lo, rem] = [div, div_hi, div_lo, rem].map(|v| biguint_to_fe(&v));
         ctx.assign_region(
-            vec![Witness(div_lo), Witness(div_hi), Constant(x_fe), Witness(div), Witness(rem)],
-            vec![0],
+            [Witness(div_lo), Witness(div_hi), Constant(x_fe), Witness(div), Witness(rem)],
+            [0],
         );
         let [div_lo, div_hi, div, rem] = [-5, -4, -2, -1].map(|i| ctx.get(i));
         self.range_check(ctx, div_lo, b_num_bits);
@@ -337,7 +330,7 @@ pub trait RangeInstructions<F: ScalarField> {
         };
         let two = self.gate().get_field_element(2u64);
         let h_v = (*a_v - bit_v) * two.invert().unwrap();
-        ctx.assign_region(vec![Witness(bit_v), Witness(h_v), Constant(two), Existing(a)], vec![0]);
+        ctx.assign_region([Witness(bit_v), Witness(h_v), Constant(two), Existing(a)], [0]);
 
         let half = ctx.get(-3);
         self.range_check(ctx, half, limb_bits - 1);
@@ -450,7 +443,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
             RangeStrategy::Vertical => {
                 let shift_a_val = pow_of_two + a.value();
                 // | a + 2^(num_bits) - b | b | 1 | a + 2^(num_bits) | - 2^(num_bits) | 1 | a |
-                let cells = vec![
+                let cells = [
                     Witness(shift_a_val - b.value()),
                     b,
                     Constant(F::one()),
@@ -459,7 +452,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
                     Constant(F::one()),
                     a,
                 ];
-                ctx.assign_region(cells, vec![0, 3]);
+                ctx.assign_region(cells, [0, 3]);
                 ctx.get(-7)
             }
         };
@@ -487,7 +480,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         let shifted_cell = match self.strategy {
             RangeStrategy::Vertical => {
                 ctx.assign_region(
-                    vec![
+                    [
                         Witness(shifted_val),
                         b,
                         Constant(F::one()),
@@ -496,7 +489,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
                         Constant(F::one()),
                         a,
                     ],
-                    vec![0, 3],
+                    [0, 3],
                 );
                 ctx.get(-7)
             }
