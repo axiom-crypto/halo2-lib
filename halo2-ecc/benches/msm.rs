@@ -82,6 +82,7 @@ fn msm_circuit(
     scalars: Vec<Fr>,
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
+    let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
     let k = params.degree as usize;
     let builder = match stage {
         CircuitBuilderStage::Mock => GateThreadBuilder::mock(),
@@ -90,7 +91,6 @@ fn msm_circuit(
     };
     let builder = Mutex::new(builder);
 
-    let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
     msm_bench(&builder, params, bases, scalars);
 
     let builder = builder.into_inner().unwrap();

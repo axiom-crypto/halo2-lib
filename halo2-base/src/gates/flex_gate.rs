@@ -290,7 +290,7 @@ pub trait GateInstructions<F: ScalarField> {
             return ctx.assign_region_last([start], []);
         }
         let (len, hi) = a.size_hint();
-        debug_assert_eq!(Some(len), hi);
+        assert_eq!(Some(len), hi);
 
         let mut sum = *start.value();
         let cells = iter::once(start).chain(a.flat_map(|a| {
@@ -320,7 +320,7 @@ pub trait GateInstructions<F: ScalarField> {
             return Box::new(iter::once(ctx.assign_region_last([start], [])));
         }
         let (len, hi) = a.size_hint();
-        debug_assert_eq!(Some(len), hi);
+        assert_eq!(Some(len), hi);
 
         let mut sum = *start.value();
         let cells = iter::once(start).chain(a.flat_map(|a| {
@@ -532,7 +532,7 @@ pub trait GateInstructions<F: ScalarField> {
         let mut sum = F::zero();
         let a = a.into_iter();
         let (len, hi) = a.size_hint();
-        debug_assert_eq!(Some(len), hi);
+        assert_eq!(Some(len), hi);
 
         let cells = std::iter::once(Constant(F::zero())).chain(
             a.zip(indicator.into_iter()).flat_map(|(a, ind)| {
@@ -555,7 +555,7 @@ pub trait GateInstructions<F: ScalarField> {
     {
         let cells = cells.into_iter();
         let (len, hi) = cells.size_hint();
-        debug_assert_eq!(Some(len), hi);
+        assert_eq!(Some(len), hi);
 
         let ind = self.idx_to_indicator(ctx, idx, len);
         self.select_by_indicator(ctx, cells, ind)
@@ -706,15 +706,14 @@ impl<F: ScalarField> GateChip<F> {
             [a, b, Witness(sum)]
         }));
 
-        let gate_offsets = if ctx.witness_gen_only() {
-            vec![]
+        if ctx.witness_gen_only() {
+            ctx.assign_region(cells, vec![]);
         } else {
-            let (lo, hi) = cells.size_hint();
-            debug_assert_eq!(Some(lo), hi);
+            let cells = cells.collect::<Vec<_>>();
+            let lo = cells.len();
             let len = lo / 3;
-            (0..len).map(|i| 3 * i as isize).collect()
+            ctx.assign_region(cells, (0..len).map(|i| 3 * i as isize));
         };
-        ctx.assign_region(cells, gate_offsets);
         b_starts_with_one
     }
 }
@@ -899,8 +898,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
             .iter()
             .flat_map(|byte| (0..8).map(|i| (*byte as u64 >> i) & 1))
             .map(|x| Witness(F::from(x)))
-            .take(range_bits)
-            .collect::<Vec<_>>();
+            .take(range_bits);
 
         let mut bit_cells = Vec::with_capacity(range_bits);
         let row_offset = ctx.advice.len();

@@ -168,7 +168,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
                     let column = basic_gate.value;
                     let value = if use_unknown { Value::unknown() } else { Value::known(advice) };
                     #[cfg(feature = "halo2-axiom")]
-                    let cell = *region.assign_advice(column, row_offset, value).unwrap().cell();
+                    let cell = region.assign_advice(column, row_offset, value);
                     #[cfg(not(feature = "halo2-axiom"))]
                     let cell =
                         region.assign_advice(|| "", column, row_offset, || value).unwrap().cell();
@@ -187,8 +187,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
 
                         #[cfg(feature = "halo2-axiom")]
                         {
-                            let ncell =
-                                *region.assign_advice(column, row_offset, value).unwrap().cell();
+                            let ncell = region.assign_advice(column, row_offset, value);
                             region.constrain_equal(&ncell, &cell);
                         }
                         #[cfg(not(feature = "halo2-axiom"))]
@@ -270,10 +269,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
 
                     #[cfg(feature = "halo2-axiom")]
                     {
-                        let bcell = *region
-                            .assign_advice(column, lookup_offset, value)
-                            .expect("assign_advice should not fail")
-                            .cell();
+                        let bcell = region.assign_advice(column, lookup_offset, value);
                         region.constrain_equal(&acell, &bcell);
                     }
                     #[cfg(not(feature = "halo2-axiom"))]
@@ -327,7 +323,7 @@ pub fn assign_threads_in<F: ScalarField>(
             let value = advice.value;
             let lookup_column = *lookup_column.unwrap();
             #[cfg(feature = "halo2-axiom")]
-            region.assign_advice(lookup_column, lookup_offset, Value::known(value)).unwrap();
+            region.assign_advice(lookup_column, lookup_offset, Value::known(value));
             #[cfg(not(feature = "halo2-axiom"))]
             region
                 .assign_advice(|| "", lookup_column, lookup_offset, || Value::known(value))
@@ -337,7 +333,7 @@ pub fn assign_threads_in<F: ScalarField>(
         }
         for advice in ctx.advice {
             #[cfg(feature = "halo2-axiom")]
-            region.assign_advice(column, row_offset, Value::known(advice)).unwrap();
+            region.assign_advice(column, row_offset, Value::known(advice));
             #[cfg(not(feature = "halo2-axiom"))]
             region.assign_advice(|| "", column, row_offset, || Value::known(advice)).unwrap();
 
@@ -348,7 +344,7 @@ pub fn assign_threads_in<F: ScalarField>(
                 column = config.basic_gates[phase][gate_index].value;
 
                 #[cfg(feature = "halo2-axiom")]
-                region.assign_advice(column, row_offset, Value::known(advice)).unwrap();
+                region.assign_advice(column, row_offset, Value::known(advice));
                 #[cfg(not(feature = "halo2-axiom"))]
                 region.assign_advice(|| "", column, row_offset, || Value::known(advice)).unwrap();
             }
@@ -423,21 +419,28 @@ impl<F: ScalarField> Circuit<F> for GateCircuitBuilder<F> {
                     first_pass = false;
                     return Ok(());
                 }
+                // only support FirstPhase in this Builder because getting challenge value requires more specialized witness generation during synthesize
                 if !self.builder.borrow().witness_gen_only {
                     // clone the builder so we can re-use the circuit for both vk and pk gen
                     let builder = self.builder.borrow().clone();
+                    for threads in builder.threads.iter().skip(1) {
+                        assert!(
+                            threads.is_empty(),
+                            "GateCircuitBuilder only supports FirstPhase for now"
+                        );
+                    }
                     *self.break_points.borrow_mut() =
                         builder.assign_all(&config, &[], &[], &mut region);
                 } else {
                     let builder = self.builder.take();
                     let break_points = self.break_points.take();
-                    for (phase, (threads, break_points)) in
-                        builder.threads.into_iter().zip(break_points.into_iter()).enumerate()
+                    for (phase, (threads, break_points)) in builder
+                        .threads
+                        .into_iter()
+                        .zip(break_points.into_iter())
+                        .enumerate()
+                        .take(1)
                     {
-                        #[cfg(feature = "halo2-axiom")]
-                        if phase != 0 && !threads.is_empty() {
-                            region.next_phase();
-                        }
                         assign_threads_in(phase, threads, &config, &[], &mut region, break_points);
                     }
                 }
@@ -514,9 +517,16 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
                     first_pass = false;
                     return Ok(());
                 }
+                // only support FirstPhase in this Builder because getting challenge value requires more specialized witness generation during synthesize
                 if !self.0.builder.borrow().witness_gen_only {
                     // clone the builder so we can re-use the circuit for both vk and pk gen
                     let builder = self.0.builder.borrow().clone();
+                    for threads in builder.threads.iter().skip(1) {
+                        assert!(
+                            threads.is_empty(),
+                            "GateCircuitBuilder only supports FirstPhase for now"
+                        );
+                    }
                     *self.0.break_points.borrow_mut() = builder.assign_all(
                         &config.gate,
                         &config.lookup_advice,
@@ -524,15 +534,17 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
                         &mut region,
                     );
                 } else {
+                    #[cfg(feature = "display")]
+                    let start0 = std::time::Instant::now();
                     let builder = self.0.builder.take();
                     let break_points = self.0.break_points.take();
-                    for (phase, (threads, break_points)) in
-                        builder.threads.into_iter().zip(break_points.into_iter()).enumerate()
+                    for (phase, (threads, break_points)) in builder
+                        .threads
+                        .into_iter()
+                        .zip(break_points.into_iter())
+                        .enumerate()
+                        .take(1)
                     {
-                        #[cfg(feature = "halo2-axiom")]
-                        if phase != 0 && !threads.is_empty() {
-                            region.next_phase();
-                        }
                         assign_threads_in(
                             phase,
                             threads,
@@ -542,6 +554,8 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
                             break_points,
                         );
                     }
+                    #[cfg(feature = "display")]
+                    println!("assign threads in {:?}", start0.elapsed());
                 }
                 Ok(())
             },
