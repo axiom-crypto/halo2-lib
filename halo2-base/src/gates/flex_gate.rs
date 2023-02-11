@@ -88,7 +88,7 @@ pub struct FlexGateConfig<F: ScalarField> {
 }
 
 impl<F: ScalarField> FlexGateConfig<F> {
-    pub fn configure(
+    pub fn configure<const ZK: bool>(
         meta: &mut ConstraintSystem<F>,
         strategy: GateStrategy,
         num_advice: &[usize],
@@ -116,13 +116,23 @@ impl<F: ScalarField> FlexGateConfig<F> {
                         .collect();
                     num_advice_array[phase] = num_columns;
                 }
+                let n = 1 << circuit_degree;
+                #[cfg(feature = "halo2-axiom")]
+                let max_rows = meta.usable_rows::<ZK>(n).end;
+                #[cfg(not(feature = "halo2-axiom"))]
+                assert!(
+                    ZK,
+                    "You are trying to turn ZK off in a fork of halo2 that does not support it!"
+                );
+                #[cfg(not(feature = "halo2-axiom"))]
+                let max_rows = meta.usable_rows(n).end;
                 Self {
                     basic_gates,
                     constants,
                     num_advice: num_advice_array,
                     _strategy: strategy,
                     /// Warning: this needs to be updated if you create more advice columns after this `FlexGateConfig` is created
-                    max_rows: (1 << circuit_degree) - meta.minimum_rows(),
+                    max_rows,
                 }
             }
         }

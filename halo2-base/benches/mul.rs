@@ -22,6 +22,7 @@ use pprof::criterion::{Output, PProfProfiler};
 // https://www.jibbow.com/posts/criterion-flamegraphs/
 
 const K: u32 = 9;
+const ZK: bool = false;
 
 fn mul_bench<F: ScalarField>(ctx: &mut Context<F>, inputs: [F; 2]) {
     let [a, b]: [_; 2] = ctx.assign_witnesses(inputs).try_into().unwrap();
@@ -37,11 +38,11 @@ fn bench(c: &mut Criterion) {
     let mut builder = GateThreadBuilder::new(false);
     mul_bench(builder.main(0), [Fr::zero(); 2]);
     builder.config(K as usize, Some(9));
-    let circuit = GateCircuitBuilder::keygen(builder);
+    let circuit = GateCircuitBuilder::<_, ZK>::keygen(builder);
 
     let params = ParamsKZG::<Bn256>::setup(K, OsRng);
-    let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
-    let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
+    let vk = keygen_vk::<_, _, _, ZK>(&params, &circuit).expect("vk should not fail");
+    let pk = keygen_pk::<_, _, _, ZK>(&params, vk, &circuit).expect("pk should not fail");
 
     let break_points = circuit.break_points.take();
 
@@ -56,7 +57,7 @@ fn bench(c: &mut Criterion) {
                 let mut builder = GateThreadBuilder::new(true);
                 // do the computation
                 mul_bench(builder.main(0), inputs);
-                let circuit = GateCircuitBuilder::prover(builder, break_points.clone());
+                let circuit = GateCircuitBuilder::<_, ZK>::prover(builder, break_points.clone());
 
                 let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
                 create_proof::<
@@ -66,6 +67,7 @@ fn bench(c: &mut Criterion) {
                     _,
                     Blake2bWrite<Vec<u8>, G1Affine, Challenge255<_>>,
                     _,
+                    ZK,
                 >(params, pk, &[circuit], &[&[]], OsRng, &mut transcript)
                 .unwrap();
             })

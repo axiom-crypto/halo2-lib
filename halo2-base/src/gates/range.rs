@@ -43,7 +43,7 @@ pub struct RangeConfig<F: ScalarField> {
 }
 
 impl<F: ScalarField> RangeConfig<F> {
-    pub fn configure(
+    pub fn configure<const ZK: bool>(
         meta: &mut ConstraintSystem<F>,
         range_strategy: RangeStrategy,
         num_advice: &[usize],
@@ -56,7 +56,7 @@ impl<F: ScalarField> RangeConfig<F> {
         assert!(lookup_bits <= 28);
         let lookup = meta.lookup_table_column();
 
-        let gate = FlexGateConfig::configure(
+        let gate = FlexGateConfig::configure::<ZK>(
             meta,
             match range_strategy {
                 RangeStrategy::Vertical => GateStrategy::Vertical,
@@ -92,7 +92,17 @@ impl<F: ScalarField> RangeConfig<F> {
             Self { lookup_advice, q_lookup, lookup, lookup_bits, gate, _strategy: range_strategy };
 
         config.create_lookup(meta);
-        config.gate.max_rows = (1 << circuit_degree) - meta.minimum_rows();
+        let n = 1 << circuit_degree;
+        #[cfg(feature = "halo2-axiom")]
+        config.gate.max_rows = meta.usable_rows::<ZK>(n).end;
+        #[cfg(not(feature = "halo2-axiom"))]
+        {
+            assert!(
+                ZK,
+                "You are trying to turn ZK off in a fork of halo2 that does not support it!"
+            );
+            config.gate.max_rows = meta.usable_rows(n).end;
+        }
         assert!(
             (1 << lookup_bits) <= config.gate.max_rows,
             "lookup table is too large for the circuit degree plus blinding factors!"

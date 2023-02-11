@@ -31,6 +31,7 @@ use pprof::criterion::{Output, PProfProfiler};
 // https://www.jibbow.com/posts/criterion-flamegraphs/
 
 const K: u32 = 19;
+const ZK: bool = false;
 
 fn fp_mul_bench<F: PrimeField>(
     ctx: &mut Context<F>,
@@ -55,7 +56,7 @@ fn fp_mul_circuit(
     a: Fq,
     b: Fq,
     break_points: Option<MultiPhaseThreadBreakPoints>,
-) -> RangeCircuitBuilder<Fr> {
+) -> RangeCircuitBuilder<Fr, ZK> {
     let k = K as usize;
     let mut builder = match stage {
         CircuitBuilderStage::Mock => GateThreadBuilder::mock(),
@@ -85,8 +86,8 @@ fn bench(c: &mut Criterion) {
     let circuit = fp_mul_circuit(CircuitBuilderStage::Keygen, Fq::zero(), Fq::zero(), None);
 
     let params = ParamsKZG::<Bn256>::setup(K, OsRng);
-    let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
-    let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
+    let vk = keygen_vk::<_, _, _, ZK>(&params, &circuit).expect("vk should not fail");
+    let pk = keygen_pk::<_, _, _, ZK>(&params, vk, &circuit).expect("pk should not fail");
     let break_points = circuit.0.break_points.take();
 
     let a = Fq::random(OsRng);
@@ -109,6 +110,7 @@ fn bench(c: &mut Criterion) {
                     _,
                     Blake2bWrite<Vec<u8>, G1Affine, Challenge255<_>>,
                     _,
+                    ZK,
                 >(params, pk, &[circuit], &[&[]], OsRng, &mut transcript)
                 .expect("prover should not fail");
             })

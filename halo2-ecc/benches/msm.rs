@@ -46,6 +46,8 @@ const BEST_100_CONFIG: MSMCircuitParams = MSMCircuitParams {
 };
 const TEST_CONFIG: MSMCircuitParams = BEST_100_CONFIG;
 
+const ZK: bool = false;
+
 fn msm_bench(
     thread_pool: &Mutex<GateThreadBuilder<Fr>>,
     params: MSMCircuitParams,
@@ -81,7 +83,7 @@ fn msm_circuit(
     bases: Vec<G1Affine>,
     scalars: Vec<Fr>,
     break_points: Option<MultiPhaseThreadBreakPoints>,
-) -> RangeCircuitBuilder<Fr> {
+) -> RangeCircuitBuilder<Fr, ZK> {
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
     let k = params.degree as usize;
     let builder = match stage {
@@ -96,11 +98,11 @@ fn msm_circuit(
     let builder = builder.into_inner().unwrap();
     let circuit = match stage {
         CircuitBuilderStage::Mock => {
-            builder.config(k, Some(20));
+            builder.config(k, ZK.then_some(20));
             RangeCircuitBuilder::mock(builder)
         }
         CircuitBuilderStage::Keygen => {
-            builder.config(k, Some(20));
+            builder.config(k, ZK.then_some(20));
             RangeCircuitBuilder::keygen(builder)
         }
         CircuitBuilderStage::Prover => RangeCircuitBuilder::prover(builder, break_points.unwrap()),
@@ -123,8 +125,8 @@ fn bench(c: &mut Criterion) {
     );
 
     let params = ParamsKZG::<Bn256>::setup(k, &mut rng);
-    let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
-    let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
+    let vk = keygen_vk::<_, _, _, ZK>(&params, &circuit).expect("vk should not fail");
+    let pk = keygen_pk::<_, _, _, ZK>(&params, vk, &circuit).expect("pk should not fail");
     let break_points = circuit.0.break_points.take();
     drop(circuit);
 
@@ -153,6 +155,7 @@ fn bench(c: &mut Criterion) {
                     _,
                     Blake2bWrite<Vec<u8>, G1Affine, Challenge255<_>>,
                     _,
+                    ZK,
                 >(params, pk, &[circuit], &[&[]], &mut rng, &mut transcript)
                 .expect("prover should not fail");
             })

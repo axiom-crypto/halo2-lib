@@ -368,12 +368,12 @@ pub struct FlexGateConfigParams {
 
 /// A wrapper struct to auto-build a circuit from a `GateThreadBuilder`.
 #[derive(Clone, Debug)]
-pub struct GateCircuitBuilder<F: ScalarField> {
+pub struct GateCircuitBuilder<F: ScalarField, const ZK: bool> {
     pub builder: RefCell<GateThreadBuilder<F>>, // `RefCell` is just to trick circuit `synthesize` to take ownership of the inner builder
     pub break_points: RefCell<MultiPhaseThreadBreakPoints>, // `RefCell` allows the circuit to record break points in a keygen call of `synthesize` for use in later witness gen
 }
 
-impl<F: ScalarField> GateCircuitBuilder<F> {
+impl<F: ScalarField, const ZK: bool> GateCircuitBuilder<F, ZK> {
     pub fn keygen(builder: GateThreadBuilder<F>) -> Self {
         Self { builder: RefCell::new(builder.unknown(true)), break_points: RefCell::new(vec![]) }
     }
@@ -390,7 +390,7 @@ impl<F: ScalarField> GateCircuitBuilder<F> {
     }
 }
 
-impl<F: ScalarField> Circuit<F> for GateCircuitBuilder<F> {
+impl<F: ScalarField, const ZK: bool> Circuit<F> for GateCircuitBuilder<F, ZK> {
     type Config = FlexGateConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
@@ -406,7 +406,7 @@ impl<F: ScalarField> Circuit<F> for GateCircuitBuilder<F> {
             num_fixed,
             k,
         } = serde_json::from_str(&std::env::var("FLEX_GATE_CONFIG_PARAMS").unwrap()).unwrap();
-        FlexGateConfig::configure(meta, strategy, &num_advice_per_phase, num_fixed, k)
+        FlexGateConfig::configure::<ZK>(meta, strategy, &num_advice_per_phase, num_fixed, k)
     }
 
     fn synthesize(
@@ -455,9 +455,9 @@ impl<F: ScalarField> Circuit<F> for GateCircuitBuilder<F> {
 
 /// A wrapper struct to auto-build a circuit from a `GateThreadBuilder`.
 #[derive(Clone, Debug)]
-pub struct RangeCircuitBuilder<F: ScalarField>(pub GateCircuitBuilder<F>);
+pub struct RangeCircuitBuilder<F: ScalarField, const ZK: bool>(pub GateCircuitBuilder<F, ZK>);
 
-impl<F: ScalarField> RangeCircuitBuilder<F> {
+impl<F: ScalarField, const ZK: bool> RangeCircuitBuilder<F, ZK> {
     pub fn keygen(builder: GateThreadBuilder<F>) -> Self {
         Self(GateCircuitBuilder::keygen(builder))
     }
@@ -474,7 +474,7 @@ impl<F: ScalarField> RangeCircuitBuilder<F> {
     }
 }
 
-impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
+impl<F: ScalarField, const ZK: bool> Circuit<F> for RangeCircuitBuilder<F, ZK> {
     type Config = RangeConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
@@ -494,7 +494,7 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
             GateStrategy::Vertical => RangeStrategy::Vertical,
         };
         let lookup_bits = std::env::var("LOOKUP_BITS").unwrap().parse().unwrap();
-        RangeConfig::configure(
+        RangeConfig::configure::<ZK>(
             meta,
             strategy,
             &num_advice_per_phase,

@@ -96,10 +96,10 @@ impl<F: Field> KeccakCircuit<F> {
     }
 }
 
-fn verify<F: Field>(k: u32, inputs: Vec<Vec<u8>>, _success: bool) {
+fn verify<F: Field, const ZK: bool>(k: u32, inputs: Vec<Vec<u8>>, _success: bool) {
     let circuit = KeccakCircuit::new(Some(2usize.pow(k)), inputs);
 
-    let prover = MockProver::<F>::run(k, &circuit, vec![]).unwrap();
+    let prover = MockProver::<F>::run::<_, ZK>(k, &circuit, vec![]).unwrap();
     prover.assert_satisfied();
 }
 
@@ -116,11 +116,13 @@ fn packed_multi_keccak_simple() {
         (0u8..136).collect::<Vec<_>>(),
         (0u8..200).collect::<Vec<_>>(),
     ];
-    verify::<Fr>(k, inputs, true);
+    const ZK: bool = false;
+    verify::<Fr, ZK>(k, inputs, true);
 }
 
 #[test]
 fn packed_multi_keccak_prover() {
+    const ZK: bool = false;
     let _ = env_logger::builder().is_test(true).try_init();
 
     let k: u32 = var("KECCAK_DEGREE").unwrap_or_else(|_| "14".to_string()).parse().unwrap();
@@ -135,8 +137,8 @@ fn packed_multi_keccak_prover() {
     ];
     let circuit = KeccakCircuit::new(Some(2usize.pow(k)), inputs);
 
-    let vk = keygen_vk(&params, &circuit).unwrap();
-    let pk = keygen_pk(&params, vk, &circuit).unwrap();
+    let vk = keygen_vk::<_, _, _, ZK>(&params, &circuit).unwrap();
+    let pk = keygen_pk::<_, _, _, ZK>(&params, vk, &circuit).unwrap();
 
     let verifier_params: ParamsVerifierKZG<Bn256> = params.verifier_params().clone();
     let mut transcript = Blake2bWrite::<_, G1Affine, Challenge255<_>>::init(vec![]);
@@ -148,6 +150,7 @@ fn packed_multi_keccak_prover() {
         _,
         Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
         _,
+        ZK,
     >(&params, &pk, &[circuit], &[&[]], OsRng, &mut transcript)
     .expect("proof generation should not fail");
     let proof = transcript.finalize();
@@ -161,6 +164,7 @@ fn packed_multi_keccak_prover() {
         Challenge255<G1Affine>,
         Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
         SingleStrategy<'_, Bn256>,
+        ZK,
     >(&verifier_params, pk.get_vk(), strategy, &[&[]], &mut verifier_transcript)
     .expect("failed to verify bench circuit");
 }

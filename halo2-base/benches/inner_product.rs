@@ -32,6 +32,7 @@ use pprof::criterion::{Output, PProfProfiler};
 // https://www.jibbow.com/posts/criterion-flamegraphs/
 
 const K: u32 = 19;
+const ZK: bool = false;
 
 fn inner_prod_bench<F: ScalarField>(ctx: &mut Context<F>, a: Vec<F>, b: Vec<F>) {
     assert_eq!(a.len(), b.len());
@@ -50,14 +51,14 @@ fn bench(c: &mut Criterion) {
     let mut builder = GateThreadBuilder::new(false);
     inner_prod_bench(builder.main(0), vec![Fr::zero(); 5], vec![Fr::zero(); 5]);
     builder.config(k as usize, Some(20));
-    let circuit = GateCircuitBuilder::mock(builder);
+    let circuit = GateCircuitBuilder::<_, ZK>::mock(builder);
 
     // check the circuit is correct just in case
-    MockProver::run(k, &circuit, vec![]).unwrap().assert_satisfied();
+    MockProver::run::<_, ZK>(k, &circuit, vec![]).unwrap().assert_satisfied();
 
     let params = ParamsKZG::<Bn256>::setup(k, OsRng);
-    let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
-    let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
+    let vk = keygen_vk::<_, _, _, ZK>(&params, &circuit).expect("vk should not fail");
+    let pk = keygen_pk::<_, _, _, ZK>(&params, vk, &circuit).expect("pk should not fail");
 
     let break_points = circuit.break_points.take();
     drop(circuit);
@@ -73,7 +74,7 @@ fn bench(c: &mut Criterion) {
                 let a = (0..5).map(|_| Fr::random(OsRng)).collect_vec();
                 let b = (0..5).map(|_| Fr::random(OsRng)).collect_vec();
                 inner_prod_bench(builder.main(0), a, b);
-                let circuit = GateCircuitBuilder::prover(builder, break_points.clone());
+                let circuit = GateCircuitBuilder::<_, ZK>::prover(builder, break_points.clone());
 
                 let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
                 create_proof::<
@@ -83,6 +84,7 @@ fn bench(c: &mut Criterion) {
                     _,
                     Blake2bWrite<Vec<u8>, G1Affine, Challenge255<_>>,
                     _,
+                    ZK,
                 >(params, pk, &[circuit], &[&[]], OsRng, &mut transcript)
                 .expect("prover should not fail");
             })
