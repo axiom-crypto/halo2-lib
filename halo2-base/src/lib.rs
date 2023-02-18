@@ -32,7 +32,6 @@ pub use halo2_proofs;
 pub use halo2_proofs_axiom as halo2_proofs;
 
 use halo2_proofs::plonk::Assigned;
-use std::collections::HashMap;
 use utils::ScalarField;
 
 pub mod gates;
@@ -121,15 +120,13 @@ pub struct Context<F: ScalarField> {
     // ========================================
     // General principle: we don't need to optimize anything specific to `witness_gen_only == false` because it is only done during keygen
     // If `witness_gen_only == false`:
-    /// the constants used in this context
-    pub constants: HashMap<F, usize>,
     /// one selector column accompanying each advice column, should have same length as `advice`
     pub selector: Vec<bool>,
     // TODO: gates that use fixed columns as selectors?
     /// A pair of context cells, both assumed to be `advice`, that must be constrained equal
     pub advice_equality_constraints: Vec<(ContextCell, ContextCell)>,
-    /// A pair of context cells, where the first is in `constant` and the second in `advice` that must be constrained equal
-    pub constant_equality_constraints: Vec<(ContextCell, ContextCell)>,
+    /// A pair of (constant, advice_cell) that must be constrained equal
+    pub constant_equality_constraints: Vec<(F, ContextCell)>,
 }
 
 impl<F: ScalarField> Context<F> {
@@ -140,7 +137,6 @@ impl<F: ScalarField> Context<F> {
             advice: Vec::new(),
             cells_to_lookup: Vec::new(),
             zero_cell: None,
-            constants: HashMap::new(),
             selector: Vec::new(),
             advice_equality_constraints: Vec::new(),
             constant_equality_constraints: Vec::new(),
@@ -149,17 +145,6 @@ impl<F: ScalarField> Context<F> {
 
     pub fn witness_gen_only(&self) -> bool {
         self.witness_gen_only
-    }
-
-    pub fn assign_fixed(&mut self, c: F) -> usize {
-        let index = self.constants.get(&c);
-        if let Some(index) = index {
-            *index
-        } else {
-            let index = self.constants.len();
-            self.constants.insert(c, index);
-            index
-        }
     }
 
     /// Push a `QuantumCell` onto the stack of advice cells to be assigned
@@ -182,11 +167,9 @@ impl<F: ScalarField> Context<F> {
             QuantumCell::Constant(c) => {
                 self.advice.push(Assigned::Trivial(c));
                 if !self.witness_gen_only {
-                    let c_cell =
-                        ContextCell { context_id: self.context_id, offset: self.assign_fixed(c) };
                     let new_cell =
                         ContextCell { context_id: self.context_id, offset: self.advice.len() - 1 };
-                    self.constant_equality_constraints.push((c_cell, new_cell));
+                    self.constant_equality_constraints.push((c, new_cell));
                 }
             }
         }
