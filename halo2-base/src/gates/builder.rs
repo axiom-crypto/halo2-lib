@@ -4,17 +4,27 @@ use super::{
 };
 use crate::{
     halo2_proofs::{
-        circuit::{Layouter, Region, SimpleFloorPlanner, Value},
+        circuit::{self, Layouter, Region, SimpleFloorPlanner, Value},
         plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Selector},
     },
     utils::ScalarField,
     Context, SKIP_FIRST_PASS,
 };
 use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, collections::HashMap};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+};
 
 pub type ThreadBreakPoints = Vec<usize>;
 pub type MultiPhaseThreadBreakPoints = Vec<ThreadBreakPoints>;
+
+#[derive(Clone, Debug, Default)]
+pub struct KeygenAssignments<F: ScalarField> {
+    pub assigned_advices: HashMap<(usize, usize), (circuit::Cell, usize)>, // (key = ContextCell, value = (circuit::Cell, row offset))
+    pub assigned_constants: HashMap<F, circuit::Cell>, // (key = constant, value = circuit::Cell)
+    pub break_points: MultiPhaseThreadBreakPoints,
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct GateThreadBuilder<F: ScalarField> {
@@ -61,6 +71,10 @@ impl<F: ScalarField> GateThreadBuilder<F> {
         self.witness_gen_only
     }
 
+    pub fn use_unknown(&self) -> bool {
+        self.use_unknown
+    }
+
     pub fn thread_count(&self) -> usize {
         self.thread_count
     }
@@ -103,11 +117,10 @@ impl<F: ScalarField> GateThreadBuilder<F> {
             .map(|count| (count + max_rows - 1) / max_rows)
             .collect::<Vec<_>>();
 
-        let total_fixed: usize = self
-            .threads
-            .iter()
-            .map(|threads| threads.iter().map(|ctx| ctx.constants.len()).sum::<usize>())
-            .sum();
+        let total_fixed: usize = HashSet::<F>::from_iter(self.threads.iter().flat_map(|threads| {
+            threads.iter().flat_map(|ctx| ctx.constant_equality_constraints.iter().map(|(c, _)| *c))
+        }))
+        .len();
         let num_fixed = (total_fixed + (1 << k) - 1) >> k;
 
         let params = FlexGateConfigParams {
@@ -137,41 +150,42 @@ impl<F: ScalarField> GateThreadBuilder<F> {
     /// Assigns all advice and fixed cells, turns on selectors, imposes equality constraints.
     /// This should only be called during keygen.
     pub fn assign_all(
-        self,
+        &self,
         config: &FlexGateConfig<F>,
         lookup_advice: &[Vec<Column<Advice>>],
         q_lookup: &[Option<Selector>],
         region: &mut Region<F>,
-    ) -> MultiPhaseThreadBreakPoints {
+        KeygenAssignments {
+            mut assigned_advices,
+            mut assigned_constants,
+            mut break_points
+        }: KeygenAssignments<F>,
+    ) -> KeygenAssignments<F> {
         assert!(!self.witness_gen_only);
         let use_unknown = self.use_unknown;
         let max_rows = config.max_rows;
-        let mut break_points = vec![];
-        let mut assigned_advices = HashMap::new();
-        let mut assigned_constants = HashMap::new();
         let mut fixed_col = 0;
         let mut fixed_offset = 0;
-        for (phase, threads) in self.threads.into_iter().enumerate() {
+        for (phase, threads) in self.threads.iter().enumerate() {
             let mut break_point = vec![];
             let mut gate_index = 0;
             let mut row_offset = 0;
-            let mut lookup_offset = 0;
-            let mut lookup_col = 0;
-            for mut ctx in threads {
+            for ctx in threads {
                 let mut basic_gate = config.basic_gates[phase]
                         .get(gate_index)
                         .unwrap_or_else(|| panic!("NOT ENOUGH ADVICE COLUMNS IN PHASE {phase}. Perhaps blinding factors were not taken into account. The max non-poisoned rows is {max_rows}"));
-                ctx.selector.resize(ctx.advice.len(), false);
+                assert_eq!(ctx.selector.len(), ctx.advice.len());
 
-                for (i, (advice, q)) in ctx.advice.iter().zip(ctx.selector.into_iter()).enumerate()
-                {
+                for (i, (advice, &q)) in ctx.advice.iter().zip(ctx.selector.iter()).enumerate() {
                     let column = basic_gate.value;
                     let value = if use_unknown { Value::unknown() } else { Value::known(advice) };
                     #[cfg(feature = "halo2-axiom")]
                     let cell = *region.assign_advice(column, row_offset, value).cell();
                     #[cfg(not(feature = "halo2-axiom"))]
-                    let cell =
-                        region.assign_advice(|| "", column, row_offset, || value).unwrap().cell();
+                    let cell = region
+                        .assign_advice(|| "", column, row_offset, || value.map(|v| *v))
+                        .unwrap()
+                        .cell();
                     assigned_advices.insert((ctx.context_id, i), (cell, row_offset));
 
                     if (q && row_offset + 4 > max_rows) || row_offset >= max_rows - 1 {
@@ -193,7 +207,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
                         #[cfg(not(feature = "halo2-axiom"))]
                         {
                             let ncell = region
-                                .assign_advice(|| "", column, row_offset, || value)
+                                .assign_advice(|| "", column, row_offset, || value.map(|v| *v))
                                 .unwrap()
                                 .cell();
                             region.constrain_equal(ncell, cell).unwrap();
@@ -209,30 +223,38 @@ impl<F: ScalarField> GateThreadBuilder<F> {
 
                     row_offset += 1;
                 }
-                for (c, i) in ctx.constants.into_iter() {
-                    #[cfg(feature = "halo2-axiom")]
-                    let cell = region.assign_fixed(config.constants[fixed_col], fixed_offset, c);
-                    #[cfg(not(feature = "halo2-axiom"))]
-                    let cell = region
-                        .assign_fixed(
-                            || "",
-                            config.constants[fixed_col],
-                            fixed_offset,
-                            || Value::known(c),
-                        )
-                        .unwrap()
-                        .cell();
-                    assigned_constants.insert((ctx.context_id, i), cell);
-                    fixed_col += 1;
-                    if fixed_col >= config.constants.len() {
-                        fixed_col = 0;
-                        fixed_offset += 1;
+                for (c, _) in ctx.constant_equality_constraints.iter() {
+                    if assigned_constants.get(c).is_none() {
+                        #[cfg(feature = "halo2-axiom")]
+                        let cell =
+                            region.assign_fixed(config.constants[fixed_col], fixed_offset, c);
+                        #[cfg(not(feature = "halo2-axiom"))]
+                        let cell = region
+                            .assign_fixed(
+                                || "",
+                                config.constants[fixed_col],
+                                fixed_offset,
+                                || Value::known(*c),
+                            )
+                            .unwrap()
+                            .cell();
+                        assigned_constants.insert(*c, cell);
+                        fixed_col += 1;
+                        if fixed_col >= config.constants.len() {
+                            fixed_col = 0;
+                            fixed_offset += 1;
+                        }
                     }
                 }
-
-                // warning: currently we assume equality constraints in thread i only involves threads <= i
-                // I guess a fix is to just rerun this several times?
-                for (left, right) in ctx.advice_equality_constraints {
+            }
+            break_points.push(break_point);
+        }
+        // we constrain equality constraints in a separate loop in case context `i` contains references to context `j` for `j > i`
+        for (phase, threads) in self.threads.iter().enumerate() {
+            let mut lookup_offset = 0;
+            let mut lookup_col = 0;
+            for ctx in threads {
+                for (left, right) in &ctx.advice_equality_constraints {
                     let (left, _) = assigned_advices[&(left.context_id, left.offset)];
                     let (right, _) = assigned_advices[&(right.context_id, right.offset)];
                     #[cfg(feature = "halo2-axiom")]
@@ -240,8 +262,8 @@ impl<F: ScalarField> GateThreadBuilder<F> {
                     #[cfg(not(feature = "halo2-axiom"))]
                     region.constrain_equal(left, right).unwrap();
                 }
-                for (left, right) in ctx.constant_equality_constraints {
-                    let left = assigned_constants[&(left.context_id, left.offset)];
+                for (left, right) in &ctx.constant_equality_constraints {
+                    let left = assigned_constants[left];
                     let (right, _) = assigned_advices[&(right.context_id, right.offset)];
                     #[cfg(feature = "halo2-axiom")]
                     region.constrain_equal(&left, &right);
@@ -249,7 +271,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
                     region.constrain_equal(left, right).unwrap();
                 }
 
-                for advice in ctx.cells_to_lookup {
+                for advice in &ctx.cells_to_lookup {
                     // if q_lookup is Some, that means there should be a single advice column and it has lookup enabled
                     let cell = advice.cell.unwrap();
                     let (acell, row_offset) = assigned_advices[&(cell.context_id, cell.offset)];
@@ -283,9 +305,8 @@ impl<F: ScalarField> GateThreadBuilder<F> {
                     lookup_offset += 1;
                 }
             }
-            break_points.push(break_point);
         }
-        break_points
+        KeygenAssignments { assigned_advices, assigned_constants, break_points }
     }
 }
 
@@ -432,8 +453,9 @@ impl<F: ScalarField> Circuit<F> for GateCircuitBuilder<F> {
                             "GateCircuitBuilder only supports FirstPhase for now"
                         );
                     }
-                    *self.break_points.borrow_mut() =
-                        builder.assign_all(&config, &[], &[], &mut region);
+                    *self.break_points.borrow_mut() = builder
+                        .assign_all(&config, &[], &[], &mut region, Default::default())
+                        .break_points;
                 } else {
                     let builder = self.builder.take();
                     let break_points = self.break_points.take();
@@ -530,12 +552,15 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
                             "GateCircuitBuilder only supports FirstPhase for now"
                         );
                     }
-                    *self.0.break_points.borrow_mut() = builder.assign_all(
-                        &config.gate,
-                        &config.lookup_advice,
-                        &config.q_lookup,
-                        &mut region,
-                    );
+                    *self.0.break_points.borrow_mut() = builder
+                        .assign_all(
+                            &config.gate,
+                            &config.lookup_advice,
+                            &config.q_lookup,
+                            &mut region,
+                            Default::default(),
+                        )
+                        .break_points;
                 } else {
                     #[cfg(feature = "display")]
                     let start0 = std::time::Instant::now();
