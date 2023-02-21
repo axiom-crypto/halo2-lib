@@ -71,6 +71,10 @@ impl<F: ScalarField> GateThreadBuilder<F> {
         self.witness_gen_only
     }
 
+    pub fn use_unknown(&self) -> bool {
+        self.use_unknown
+    }
+
     pub fn thread_count(&self) -> usize {
         self.thread_count
     }
