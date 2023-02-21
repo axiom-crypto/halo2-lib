@@ -19,6 +19,7 @@ use std::{
 pub type ThreadBreakPoints = Vec<usize>;
 pub type MultiPhaseThreadBreakPoints = Vec<ThreadBreakPoints>;
 
+#[derive(Clone, Debug, Default)]
 pub struct KeygenAssignments<F: ScalarField> {
     pub assigned_advices: HashMap<(usize, usize), (circuit::Cell, usize)>, // (key = ContextCell, value = (circuit::Cell, row offset))
     pub assigned_constants: HashMap<F, circuit::Cell>, // (key = constant, value = circuit::Cell)
@@ -150,13 +151,15 @@ impl<F: ScalarField> GateThreadBuilder<F> {
         lookup_advice: &[Vec<Column<Advice>>],
         q_lookup: &[Option<Selector>],
         region: &mut Region<F>,
+        KeygenAssignments {
+            mut assigned_advices,
+            mut assigned_constants,
+            mut break_points
+        }: KeygenAssignments<F>,
     ) -> KeygenAssignments<F> {
         assert!(!self.witness_gen_only);
         let use_unknown = self.use_unknown;
         let max_rows = config.max_rows;
-        let mut break_points = vec![];
-        let mut assigned_advices = HashMap::new();
-        let mut assigned_constants = HashMap::new();
         let mut fixed_col = 0;
         let mut fixed_offset = 0;
         for (phase, threads) in self.threads.iter().enumerate() {
@@ -446,8 +449,9 @@ impl<F: ScalarField> Circuit<F> for GateCircuitBuilder<F> {
                             "GateCircuitBuilder only supports FirstPhase for now"
                         );
                     }
-                    *self.break_points.borrow_mut() =
-                        builder.assign_all(&config, &[], &[], &mut region).break_points;
+                    *self.break_points.borrow_mut() = builder
+                        .assign_all(&config, &[], &[], &mut region, Default::default())
+                        .break_points;
                 } else {
                     let builder = self.builder.take();
                     let break_points = self.break_points.take();
@@ -550,6 +554,7 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
                             &config.lookup_advice,
                             &config.q_lookup,
                             &mut region,
+                            Default::default(),
                         )
                         .break_points;
                 } else {
