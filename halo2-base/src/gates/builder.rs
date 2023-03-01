@@ -141,7 +141,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
                 }
             }
             println!("Total {total_fixed} fixed cells");
-            println!("Auto-calculated config params:\n {params:#?}");
+            log::info!("Auto-calculated config params:\n {params:#?}");
         }
         std::env::set_var("FLEX_GATE_CONFIG_PARAMS", serde_json::to_string(&params).unwrap());
         params
