@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["expr","Returns an expression that represents the XOR of the given expression."],["value","Returns a value that represents the XOR of the given value."]]};

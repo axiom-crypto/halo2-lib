@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":[["MAX_PHASE","The maximum number of phases halo2 currently supports"]],"enum":[["GateStrategy",""]],"struct":[["BasicGateConfig",""],["FlexGateConfig",""],["GateChip",""]],"trait":[["GateInstructions",""]]};

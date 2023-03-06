@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["expr","Returns the `when_true` expression when the selector is true, else returns the `when_false` expression."],["value","Returns the `when_true` value when the selector is true, else returns the `when_false` value."],["value_word","Returns the `when_true` word when selector is true, else returns the `when_false` word."]]};

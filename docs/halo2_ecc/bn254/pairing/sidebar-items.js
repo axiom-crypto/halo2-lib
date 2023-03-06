@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["fp12_multiply_with_line_equal",""],["fp12_multiply_with_line_unequal",""],["miller_loop_BN",""],["multi_miller_loop_BN",""],["neg_twisted_frobenius",""],["sparse_fp12_multiply",""],["sparse_line_function_equal",""],["sparse_line_function_unequal",""],["twisted_frobenius",""]],"struct":[["PairingChip",""]]};

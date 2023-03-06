@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":[["final_exp",""],["pairing",""]],"type":[["Fp12Chip",""],["Fp2Chip",""],["FpChip",""],["FpPoint",""],["FqPoint",""]]};

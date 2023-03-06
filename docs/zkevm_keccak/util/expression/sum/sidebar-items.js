@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["expr","Returns an expression for the sum of the list of expressions."],["value","Returns the sum of the given list of values within the field."]]};
