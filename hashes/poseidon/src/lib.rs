@@ -4,16 +4,16 @@ use ::poseidon::{SparseMDSMatrix, Spec, State};
 use halo2_base::halo2_proofs::plonk::Error;
 use halo2_base::{
     gates::GateInstructions,
-    utils::BigPrimeField as PrimeField,
+    utils::ScalarField,
     AssignedValue, Context,
     QuantumCell::{Constant, Existing},
 };
 
-struct PoseidonState<F: PrimeField, const T: usize, const RATE: usize> {
+struct PoseidonState<F: ScalarField, const T: usize, const RATE: usize> {
     s: [AssignedValue<F>; T],
 }
 
-impl<F: PrimeField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE> {
+impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE> {
     fn x_power5_with_constant(
         ctx: &mut Context<F>,
         gate: &impl GateInstructions<F>,
@@ -107,14 +107,14 @@ impl<F: PrimeField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE>
     }
 }
 
-pub struct PoseidonChip<F: PrimeField, const T: usize, const RATE: usize> {
+pub struct PoseidonChip<F: ScalarField, const T: usize, const RATE: usize> {
     init_state: [AssignedValue<F>; T],
     state: PoseidonState<F, T, RATE>,
     spec: Spec<F, T, RATE>,
     absorbing: Vec<AssignedValue<F>>,
 }
 
-impl<F: PrimeField, const T: usize, const RATE: usize> PoseidonChip<F, T, RATE> {
+impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonChip<F, T, RATE> {
     pub fn new(ctx: &mut Context<F>, r_f: usize, r_p: usize) -> Result<Self, Error> {
         let init_state = State::<F, T>::default()
             .words()
