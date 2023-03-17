@@ -368,7 +368,7 @@ impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, F
         self.enforce_less_than_p(ctx, a);
         self.enforce_less_than_p(ctx, b);
         // a.native and b.native are derived from `a.truncation, b.truncation`, so no need to check if they're equal
-        for (limb_a, limb_b) in a.truncation.limbs.iter().zip(a.truncation.limbs.iter()) {
+        for (limb_a, limb_b) in a.truncation.limbs.iter().zip(b.truncation.limbs.iter()) {
             ctx.constrain_equal(limb_a, limb_b);
         }
     }
