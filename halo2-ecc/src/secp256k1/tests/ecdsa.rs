@@ -1,186 +1,27 @@
 #![allow(non_snake_case)]
 use ark_std::{end_timer, start_timer};
-use halo2_base::{utils::PrimeField, SKIP_FIRST_PASS};
-use serde::{Deserialize, Serialize};
-use std::fs::File;
+use halo2_base::utils::PrimeField;
 use std::marker::PhantomData;
-use std::{env::var, io::Write};
+use std::{
+    env::var,
+    io::{BufWriter, Write},
+};
 
 use crate::halo2_proofs::{
     arithmetic::CurveAffine,
-    circuit::*,
     dev::MockProver,
     halo2curves::bn256::{Bn256, Fr, G1Affine},
-    halo2curves::secp256k1::{Fp, Fq, Secp256k1Affine},
+    halo2curves::secp256k1::{Fq, Secp256k1Affine},
     plonk::*,
     poly::commitment::ParamsProver,
     transcript::{Blake2bRead, Blake2bWrite, Challenge255},
+    SerdeFormat,
 };
 use rand_core::OsRng;
 
-use crate::fields::fp::FpConfig;
-use crate::secp256k1::FpChip;
-use crate::{
-    ecc::{ecdsa::ecdsa_verify_no_pubkey_check, EccChip},
-    fields::{fp::FpStrategy, FieldChip},
-};
 use halo2_base::utils::{biguint_to_fe, fe_to_biguint, modulus};
 
-#[derive(Serialize, Deserialize)]
-struct CircuitParams {
-    strategy: FpStrategy,
-    degree: u32,
-    num_advice: usize,
-    num_lookup_advice: usize,
-    num_fixed: usize,
-    lookup_bits: usize,
-    limb_bits: usize,
-    num_limbs: usize,
-}
-
-pub struct ECDSACircuit<F> {
-    pub r: Option<Fq>,
-    pub s: Option<Fq>,
-    pub msghash: Option<Fq>,
-    pub pk: Option<Secp256k1Affine>,
-    pub G: Secp256k1Affine,
-    pub _marker: PhantomData<F>,
-}
-impl<F: PrimeField> Default for ECDSACircuit<F> {
-    fn default() -> Self {
-        Self {
-            r: None,
-            s: None,
-            msghash: None,
-            pk: None,
-            G: Secp256k1Affine::generator(),
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<F: PrimeField> Circuit<F> for ECDSACircuit<F> {
-    type Config = FpChip<F>;
-    type FloorPlanner = SimpleFloorPlanner;
-
-    fn without_witnesses(&self) -> Self {
-        Self::default()
-    }
-
-    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        let path = var("ECDSA_CONFIG")
-            .unwrap_or_else(|_| "./src/secp256k1/configs/ecdsa_circuit.config".to_string());
-        let params: CircuitParams = serde_json::from_reader(
-            File::open(&path).unwrap_or_else(|_| panic!("{path:?} file should exist")),
-        )
-        .unwrap();
-
-        FpChip::<F>::configure(
-            meta,
-            params.strategy,
-            &[params.num_advice],
-            &[params.num_lookup_advice],
-            params.num_fixed,
-            params.lookup_bits,
-            params.limb_bits,
-            params.num_limbs,
-            modulus::<Fp>(),
-            0,
-            params.degree as usize,
-        )
-    }
-
-    fn synthesize(
-        &self,
-        fp_chip: Self::Config,
-        mut layouter: impl Layouter<F>,
-    ) -> Result<(), Error> {
-        fp_chip.range.load_lookup_table(&mut layouter)?;
-
-        let limb_bits = fp_chip.limb_bits;
-        let num_limbs = fp_chip.num_limbs;
-        let _num_fixed = fp_chip.range.gate.constants.len();
-        let _lookup_bits = fp_chip.range.lookup_bits;
-        let _num_advice = fp_chip.range.gate.num_advice;
-
-        let mut first_pass = SKIP_FIRST_PASS;
-        // ECDSA verify
-        layouter.assign_region(
-            || "ECDSA",
-            |region| {
-                if first_pass {
-                    first_pass = false;
-                    return Ok(());
-                }
-
-                let mut aux = fp_chip.new_context(region);
-                let ctx = &mut aux;
-
-                let (r_assigned, s_assigned, m_assigned) = {
-                    let fq_chip = FpConfig::<F, Fq>::construct(
-                        fp_chip.range.clone(),
-                        limb_bits,
-                        num_limbs,
-                        modulus::<Fq>(),
-                    );
-
-                    let m_assigned = fq_chip.load_private(
-                        ctx,
-                        FpConfig::<F, Fq>::fe_to_witness(
-                            &self.msghash.map_or(Value::unknown(), Value::known),
-                        ),
-                    );
-
-                    let r_assigned = fq_chip.load_private(
-                        ctx,
-                        FpConfig::<F, Fq>::fe_to_witness(
-                            &self.r.map_or(Value::unknown(), Value::known),
-                        ),
-                    );
-                    let s_assigned = fq_chip.load_private(
-                        ctx,
-                        FpConfig::<F, Fq>::fe_to_witness(
-                            &self.s.map_or(Value::unknown(), Value::known),
-                        ),
-                    );
-                    (r_assigned, s_assigned, m_assigned)
-                };
-
-                let ecc_chip = EccChip::<F, FpChip<F>>::construct(fp_chip.clone());
-                let pk_assigned = ecc_chip.load_private(
-                    ctx,
-                    (
-                        self.pk.map_or(Value::unknown(), |pt| Value::known(pt.x)),
-                        self.pk.map_or(Value::unknown(), |pt| Value::known(pt.y)),
-                    ),
-                );
-                // test ECDSA
-                let ecdsa = ecdsa_verify_no_pubkey_check::<F, Fp, Fq, Secp256k1Affine>(
-                    &ecc_chip.field_chip,
-                    ctx,
-                    &pk_assigned,
-                    &r_assigned,
-                    &s_assigned,
-                    &m_assigned,
-                    4,
-                    4,
-                );
-
-                // IMPORTANT: this copies cells to the lookup advice column to perform range check lookups
-                // This is not optional.
-                fp_chip.finalize(ctx);
-
-                #[cfg(feature = "display")]
-                if self.r.is_some() {
-                    println!("ECDSA res {ecdsa:?}");
-
-                    ctx.print_stats(&["Range"]);
-                }
-                Ok(())
-            },
-        )
-    }
-}
+use crate::secp256k1::ecdsa::{CircuitParams, ECDSACircuit};
 
 #[cfg(test)]
 #[test]
@@ -273,7 +114,7 @@ fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
             write!(f, "{}", serde_json::to_string(&bench_params).unwrap())?;
             folder.pop();
             folder.pop();
-            folder.push("data");
+            folder.push("keys")
         }
         let params_time = start_timer!(|| "Time elapsed in circuit & params construction");
         let params = gen_srs(bench_params.degree);
@@ -284,9 +125,31 @@ fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
         let vk = keygen_vk(&params, &circuit)?;
         end_timer!(vk_time);
 
+        // write the verifying key to a file
+        {
+            folder.push(format!("ecdsa_{}.vk", bench_params.degree));
+            let f = std::fs::File::create(folder.as_path()).unwrap();
+            let mut writer = BufWriter::new(f);
+            vk.write(&mut writer, SerdeFormat::RawBytes).unwrap();
+            writer.flush().unwrap();
+            folder.pop();
+        }
+        folder.pop();
+        folder.push("data");
+
         let pk_time = start_timer!(|| "Time elapsed in generating pkey");
         let pk = keygen_pk(&params, vk, &circuit)?;
         end_timer!(pk_time);
+
+        // write the proving key to a file
+        {
+            folder.push(format!("ecdsa_{}.pk", bench_params.degree));
+            let f = std::fs::File::create(folder.as_path()).unwrap();
+            let mut writer = BufWriter::new(f);
+            pk.write(&mut writer, SerdeFormat::RawBytes).unwrap();
+            writer.flush().unwrap();
+            folder.pop();
+        }
 
         // generate random pub key and sign random message
         let G = Secp256k1Affine::generator();

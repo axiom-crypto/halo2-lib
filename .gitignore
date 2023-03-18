@@ -13,7 +13,7 @@ Cargo.lock
 
 *.png
 
-**/halo2_ecc/params/*
-/halo2_ecc/src/bn254/data/*
-/halo2_ecc/src/secp256k1/data/*
-/halo2_ecc/src/secp256k1/keys/*
+/halo2-ecc/params/
+/halo2-ecc/src/bn254/data/
+/halo2-ecc/src/secp256k1/data/
+/halo2-ecc/**/secp256k1/keys/

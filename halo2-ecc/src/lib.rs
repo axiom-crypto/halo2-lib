@@ -12,3 +12,5 @@ pub mod secp256k1;
 
 pub use halo2_base;
 pub(crate) use halo2_base::halo2_proofs;
+
+pub mod wasm;

@@ -3,6 +3,8 @@ use crate::halo2_proofs::halo2curves::secp256k1::Fp;
 use crate::ecc;
 use crate::fields::fp;
 
+pub(crate) mod ecdsa;
+
 #[allow(dead_code)]
 type FpChip<F> = fp::FpConfig<F, Fp>;
 #[allow(dead_code)]
