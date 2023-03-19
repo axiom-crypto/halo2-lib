@@ -2,7 +2,7 @@ import { wrap } from "comlink";
 
 export default function Home() {
   return (
-    <div>
+    <main>
       <button
         onClick={async () => {
           const worker = new Worker(
@@ -16,11 +16,31 @@ export default function Home() {
           const workerApi =
             wrap<import("../lib/halo2Prover/halo2Prover").Halo2Prover>(worker);
 
-          await workerApi.generateProof();
+          await workerApi.generateProof(15);
         }}
       >
         Generate proof
       </button>
-    </div>
+      <br />
+      <br />
+      <button
+        onClick={async () => {
+          const worker = new Worker(
+            new URL("../lib/halo2Prover/halo2Prover", import.meta.url),
+            {
+              name: "halo-worker",
+              type: "module",
+            }
+          );
+
+          const workerApi =
+            wrap<import("../lib/halo2Prover/halo2Prover").Halo2Prover>(worker);
+
+          await workerApi.generateProofPreloadedVK(15);
+        }}
+      >
+        Generate proof with VK
+      </button>
+    </main>
   );
 }

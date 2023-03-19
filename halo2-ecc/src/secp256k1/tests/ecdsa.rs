@@ -66,17 +66,18 @@ fn test_secp256k1_ecdsa() {
 #[cfg(test)]
 #[test]
 fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
-    use halo2_base::utils::fs::gen_srs;
-
     use crate::halo2_proofs::{
+        poly::commitment::{Params, ParamsProver},
         poly::kzg::{
-            commitment::KZGCommitmentScheme,
+            commitment::{KZGCommitmentScheme, ParamsKZG},
             multiopen::{ProverSHPLONK, VerifierSHPLONK},
             strategy::SingleStrategy,
         },
         transcript::{TranscriptReadBuffer, TranscriptWriterBuffer},
     };
-    use std::{env::set_var, fs, io::BufRead};
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+    use std::{env::set_var, fs};
 
     let _rng = OsRng;
 
@@ -101,10 +102,8 @@ fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
     let bench_params_reader = std::io::BufReader::new(bench_params_file);
     for line in bench_params_reader.lines() {
         let bench_params: CircuitParams = serde_json::from_str(line.unwrap().as_str()).unwrap();
-        println!(
-            "---------------------- degree = {} ------------------------------",
-            bench_params.degree
-        );
+        let k = bench_params.degree;
+        println!("---------------------- degree = {} ------------------------------", k);
 
         {
             folder.pop();
@@ -117,7 +116,12 @@ fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
             folder.push("keys")
         }
         let params_time = start_timer!(|| "Time elapsed in circuit & params construction");
-        let params = gen_srs(bench_params.degree);
+        let dir = "./params".to_string();
+        let params = ParamsKZG::<Bn256>::read(&mut BufReader::new(
+            File::open(format!("{dir}/kzg_bn254_{k}.srs").as_str())
+                .expect("Params file does not exist"),
+        ))
+        .unwrap();
         let circuit = ECDSACircuit::<Fr>::default();
         end_timer!(params_time);
 
@@ -142,14 +146,14 @@ fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
         end_timer!(pk_time);
 
         // write the proving key to a file
-        {
-            folder.push(format!("ecdsa_{}.pk", bench_params.degree));
-            let f = std::fs::File::create(folder.as_path()).unwrap();
-            let mut writer = BufWriter::new(f);
-            pk.write(&mut writer, SerdeFormat::RawBytes).unwrap();
-            writer.flush().unwrap();
-            folder.pop();
-        }
+        // {
+        //     folder.push(format!("ecdsa_{}.pk", bench_params.degree));
+        //     let f = std::fs::File::create(folder.as_path()).unwrap();
+        //     let mut writer = BufWriter::new(f);
+        //     pk.write(&mut writer, SerdeFormat::RawBytes).unwrap();
+        //     writer.flush().unwrap();
+        //     folder.pop();
+        // }
 
         // generate random pub key and sign random message
         let G = Secp256k1Affine::generator();

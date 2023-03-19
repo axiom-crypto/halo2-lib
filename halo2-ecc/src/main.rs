@@ -24,6 +24,7 @@ fn write_params(k: u32) {
 }
 
 fn main() {
-    let k = 16;
-    write_params(k);
+    for k in 11..=19 {
+        write_params(k);
+    }
 }

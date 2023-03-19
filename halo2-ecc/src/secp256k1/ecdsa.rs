@@ -62,23 +62,23 @@ impl<F: PrimeField> Circuit<F> for ECDSACircuit<F> {
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        // let path = var("ECDSA_CONFIG")
-        //     .unwrap_or_else(|_| "./src/secp256k1/configs/ecdsa_circuit.config".to_string());
-        // let params: CircuitParams = serde_json::from_reader(
-        //     File::open(&path).unwrap_or_else(|_| panic!("{path:?} file should exist")),
-        // )
-        // .unwrap();
+        let path = var("ECDSA_CONFIG")
+            .unwrap_or_else(|_| "./src/secp256k1/configs/ecdsa_circuit.tmp.config".to_string());
+        let params: CircuitParams = serde_json::from_reader(
+            File::open(&path).unwrap_or_else(|_| panic!("{path:?} file should exist")),
+        )
+        .unwrap();
 
-        let params = CircuitParams {
-            strategy: FpStrategy::Simple,
-            degree: 15,
-            num_advice: 17,
-            num_lookup_advice: 3,
-            num_fixed: 1,
-            lookup_bits: 14,
-            limb_bits: 90,
-            num_limbs: 3,
-        };
+        // let params = CircuitParams {
+        //     strategy: FpStrategy::Simple,
+        //     degree: 15,
+        //     num_advice: 17,
+        //     num_lookup_advice: 3,
+        //     num_fixed: 1,
+        //     lookup_bits: 14,
+        //     limb_bits: 90,
+        //     num_limbs: 3,
+        // };
 
         FpChip::<F>::configure(
             meta,
