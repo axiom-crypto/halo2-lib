@@ -1,34 +1,25 @@
 use crate::halo2_proofs::{
     poly::kzg::{
         commitment::{KZGCommitmentScheme, ParamsKZG},
-        multiopen::{ProverSHPLONK, VerifierSHPLONK},
-        strategy::SingleStrategy,
+        multiopen::ProverSHPLONK,
     },
-    transcript::{TranscriptReadBuffer, TranscriptWriterBuffer},
+    transcript::TranscriptWriterBuffer,
 };
-use crate::secp256k1::ecdsa::{CircuitParams, ECDSACircuit};
+use crate::secp256k1::ecdsa::ECDSACircuit;
 use crate::{
     halo2_proofs::{
-        arithmetic::CurveAffine,
-        dev::MockProver,
         halo2curves::bn256::{Bn256, Fr, G1Affine},
-        halo2curves::secp256k1::{Fq, Secp256k1Affine},
         plonk::*,
-        poly::commitment::ParamsProver,
-        transcript::{Blake2bRead, Blake2bWrite, Challenge255},
+        transcript::{Blake2bWrite, Challenge255},
         SerdeFormat,
     },
     secp256k1::ecdsa::generate_ecdsa_input,
 };
-use halo2_base::utils::{biguint_to_fe, fe_to_biguint, modulus};
 use halo2_base::{halo2_proofs::poly::commitment::Params, utils::PrimeField};
 
 use js_sys::Uint8Array;
-use rand_core::OsRng;
 use std::io::BufReader;
 use std::marker::PhantomData;
-use std::{env::set_var, fs, io::BufRead};
-use std::{env::var, io::Write};
 use wasm_bindgen::prelude::*;
 use web_sys;
 
@@ -125,13 +116,13 @@ pub fn prove_vk(params_ser: JsValue, vk_ser: JsValue) -> JsValue {
     web_sys::console::time_end_with_label("Generating proving key");
 
     // inputs
-    let (r, s, msg_hash, pubkey, G) = generate_ecdsa_input();
+    let (r, s, msg_hash, pubkey, g) = generate_ecdsa_input();
     let circuit = ECDSACircuit::<Fr> {
         r: Some(r),
         s: Some(s),
         msghash: Some(msg_hash),
         pk: Some(pubkey),
-        G,
+        G: g,
         _marker: PhantomData,
     };
 

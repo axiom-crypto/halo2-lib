@@ -3,7 +3,6 @@ use crate::fields::fp::FpConfig;
 use crate::halo2_proofs::{
     arithmetic::CurveAffine,
     circuit::*,
-    halo2curves::bn256::Fr,
     halo2curves::secp256k1::{Fp, Fq, Secp256k1Affine},
     plonk::*,
 };
@@ -68,17 +67,6 @@ impl<F: PrimeField> Circuit<F> for ECDSACircuit<F> {
             File::open(&path).unwrap_or_else(|_| panic!("{path:?} file should exist")),
         )
         .unwrap();
-
-        // let params = CircuitParams {
-        //     strategy: FpStrategy::Simple,
-        //     degree: 15,
-        //     num_advice: 17,
-        //     num_lookup_advice: 3,
-        //     num_fixed: 1,
-        //     lookup_bits: 14,
-        //     limb_bits: 90,
-        //     num_limbs: 3,
-        // };
 
         FpChip::<F>::configure(
             meta,
