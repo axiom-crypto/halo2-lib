@@ -71,12 +71,12 @@ impl<F: PrimeField> Circuit<F> for ECDSACircuit<F> {
 
         let params = CircuitParams {
             strategy: FpStrategy::Simple,
-            degree: 11,
-            num_advice: 291,
-            num_lookup_advice: 53,
-            num_fixed: 4,
-            lookup_bits: 10,
-            limb_bits: 88,
+            degree: 15,
+            num_advice: 17,
+            num_lookup_advice: 3,
+            num_fixed: 1,
+            lookup_bits: 14,
+            limb_bits: 90,
             num_limbs: 3,
         };
 

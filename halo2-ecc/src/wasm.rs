@@ -52,20 +52,71 @@ pub fn init_panic_hook() {
 }
 
 #[wasm_bindgen]
-pub fn prove_pk(params_ser: JsValue, proving_key_ser: JsValue) -> JsValue {
+pub fn prove(params_ser: JsValue) -> JsValue {
     // parse params
+    web_sys::console::time_with_label("Loading params");
     let params_vec = Uint8Array::new(&params_ser).to_vec();
     let params = ParamsKZG::<Bn256>::read(&mut BufReader::new(&params_vec[..])).unwrap();
+    web_sys::console::time_end_with_label("Loading params");
+
+    // generate proving key and verification key
+    let circuit = ECDSACircuit::<Fr>::default();
+
+    web_sys::console::time_with_label("Generating verifying key");
+    let vk = keygen_vk(&params, &circuit).expect("keygen_vk should not fail");
+    web_sys::console::time_end_with_label("Generating verifying key");
+
+    web_sys::console::time_with_label("Generating proving key");
+    let pk = keygen_pk(&params, vk, &circuit).expect("keygen_pk should not fail");
+    web_sys::console::time_end_with_label("Generating proving key");
+
+    // inputs
+    let (r, s, msg_hash, pubkey, G) = generate_ecdsa_input();
+    let circuit = ECDSACircuit::<Fr> {
+        r: Some(r),
+        s: Some(s),
+        msghash: Some(msg_hash),
+        pk: Some(pubkey),
+        G,
+        _marker: PhantomData,
+    };
+
+    // generating a proof
+    web_sys::console::time_with_label("Generating proof");
+    let rng = rand::thread_rng();
+    let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+    create_proof::<
+        KZGCommitmentScheme<Bn256>,
+        ProverSHPLONK<'_, Bn256>,
+        Challenge255<G1Affine>,
+        _,
+        Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
+        ECDSACircuit<Fr>,
+    >(&params, &pk, &[circuit], &[&[]], rng, &mut transcript)
+    .unwrap();
+    let proof = transcript.finalize();
+    web_sys::console::time_end_with_label("Generating proof");
+
+    serde_wasm_bindgen::to_value(&proof).unwrap()
+}
+
+#[wasm_bindgen]
+pub fn prove_pk(params_ser: JsValue, proving_key_ser: JsValue) -> JsValue {
+    // parse params
+    web_sys::console::time_with_label("Loading params");
+    let params_vec = Uint8Array::new(&params_ser).to_vec();
+    let params = ParamsKZG::<Bn256>::read(&mut BufReader::new(&params_vec[..])).unwrap();
+    web_sys::console::time_end_with_label("Loading params");
 
     // parse proving key
-    log!("Reading in proving key");
+    web_sys::console::time_with_label("Reading in proving key");
     let proving_key_vec = Uint8Array::new(&proving_key_ser).to_vec();
-    log!("Proving key length {:?}", proving_key_vec.len());
     let pk = ProvingKey::<G1Affine>::read::<_, ECDSACircuit<Fr>>(
         &mut BufReader::new(&proving_key_vec[..]),
         SerdeFormat::RawBytes,
     )
     .unwrap();
+    web_sys::console::time_end_with_label("Reading in proving key");
 
     // inputs
     let (r, s, msg_hash, pubkey, G) = generate_ecdsa_input();
@@ -94,3 +145,26 @@ pub fn prove_pk(params_ser: JsValue, proving_key_ser: JsValue) -> JsValue {
 
     serde_wasm_bindgen::to_value(&proof).unwrap()
 }
+
+// #[wasm_bindgen]
+// pub fn verify(params_ser: JsValue, proof: JsValue) {
+//   // parse params
+//   let params_vec = Uint8Array::new(&params_ser).to_vec();
+//   let params = ParamsKZG::<Bn256>::read(&mut BufReader::new(&params_vec[..])).unwrap();
+
+//   // parse proof
+//   let proof = proof_js.into_serde::<Vec<u8>>().unwrap();
+
+//   // generate vk
+//   let circuit = ECDSACircuit::<Fr>::default();
+//   let vk = keygen_vk(&params, &circuit)?;
+
+//   // verify the entire proof
+//   let strategy = SingleStrategy::new(&params);
+//   let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+// }
+
+// #[wasm_bindgen]
+// pub fn verify(params_ser: JsValue, vk_ser: JsValue, proof: JsValue) {
+
+// }
