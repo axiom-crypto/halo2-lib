@@ -18,4 +18,3 @@ Cargo.lock
 /halo2-ecc/src/secp256k1/data/
 /halo2-ecc/**/secp256k1/keys/
 **/params*.bin
-/browser/public/*.vk

@@ -15,8 +15,6 @@ use halo2_base::utils::{biguint_to_fe, fe_to_biguint, modulus};
 use halo2_base::{utils::PrimeField, SKIP_FIRST_PASS};
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
-use std::env::var;
-use std::fs::File;
 use std::marker::PhantomData;
 
 #[derive(Serialize, Deserialize)]
@@ -61,25 +59,29 @@ impl<F: PrimeField> Circuit<F> for ECDSACircuit<F> {
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        let path = var("ECDSA_CONFIG")
-            .unwrap_or_else(|_| "./src/secp256k1/configs/ecdsa_circuit.tmp.config".to_string());
-        let params: CircuitParams = serde_json::from_reader(
-            File::open(&path).unwrap_or_else(|_| panic!("{path:?} file should exist")),
-        )
-        .unwrap();
+        // use std::env::var;
+        // use std::fs::File;
+        // let path = var("ECDSA_CONFIG")
+        //     .unwrap_or_else(|_| "./src/secp256k1/configs/ecdsa_circuit.tmp.config".to_string());
+        // let PARAMS: CircuitParams = serde_json::from_reader(
+        //     File::open(&path).unwrap_or_else(|_| panic!("{path:?} file should exist")),
+        // )
+        // .unwrap();
+
+        use super::params::PARAMS;
 
         FpChip::<F>::configure(
             meta,
-            params.strategy,
-            &[params.num_advice],
-            &[params.num_lookup_advice],
-            params.num_fixed,
-            params.lookup_bits,
-            params.limb_bits,
-            params.num_limbs,
+            PARAMS.strategy,
+            &[PARAMS.num_advice],
+            &[PARAMS.num_lookup_advice],
+            PARAMS.num_fixed,
+            PARAMS.lookup_bits,
+            PARAMS.limb_bits,
+            PARAMS.num_limbs,
             modulus::<Fp>(),
             0,
-            params.degree as usize,
+            PARAMS.degree as usize,
         )
     }
 

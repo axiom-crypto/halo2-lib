@@ -16,16 +16,15 @@ const fetch_circuit_vkey = async (k: number) => {
 };
 
 export const generateProof = async (k: number) => {
-  console.log("Scalar mult proof");
+  console.log("ECDSA signature verification, rows = 2^" + k);
   const params = await fetch_kzg_params(k);
-  console.log("params", params);
 
   const {
     default: init,
     initThreadPool,
     prove,
     init_panic_hook,
-  } = await import("./wasm/halo2_ecc.js");
+  } = await import(`./wasm${k}/halo2_ecc.js`);
 
   console.log("number of threads", navigator.hardwareConcurrency);
 
@@ -39,17 +38,16 @@ export const generateProof = async (k: number) => {
 };
 
 export const generateProofPreloadedVK = async (k: number) => {
-  console.log("Scalar mult proof");
+  console.log("ECDSA signature verification with loaded VK, rows = 2^" + k);
   const params = await fetch_kzg_params(k);
   const vk = await fetch_circuit_vkey(k);
-  console.log("params", params);
 
   const {
     default: init,
     initThreadPool,
     prove_vk,
     init_panic_hook,
-  } = await import("./wasm/halo2_ecc.js");
+  } = await import(`./wasm${k}/halo2_ecc.js`);
 
   console.log("number of threads", navigator.hardwareConcurrency);
 
@@ -57,9 +55,8 @@ export const generateProofPreloadedVK = async (k: number) => {
   await init_panic_hook();
   await initThreadPool(navigator.hardwareConcurrency);
   console.time("Full proving time");
-  const proof = await prove_vk(params, vk);
+  await prove_vk(params, vk);
   console.timeEnd("Full proving time");
-  console.log("proof", proof);
 };
 
 const exports = {

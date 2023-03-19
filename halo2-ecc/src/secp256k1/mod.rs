@@ -4,6 +4,7 @@ use crate::ecc;
 use crate::fields::fp;
 
 pub(crate) mod ecdsa;
+mod params;
 
 #[allow(dead_code)]
 type FpChip<F> = fp::FpConfig<F, Fp>;

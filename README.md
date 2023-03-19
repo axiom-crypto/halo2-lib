@@ -6,13 +6,9 @@ This forked version of axiom's halo2-lib is meant to benchmark their performance
 
 To fully benchmark ECDSA, there are a number of different configs to be tried, which change the number of rows used in the circuit in powers of 2 from 2^11 to 2^19. As a result, there's some additional setup to be done to fully benchmark the entire suite.
 
-### Generating params and vkeys
+### Generating params
 
-To test this repo locally, you will need to generate the KZG bn254 SRS params and proof vkeys for the configurations of the circuits you are interested in.
-
-You'll need first need to download the KZG params from Hermez's trusted setup. I remember Axiom posting them somewhere at some point, but I actually can't find them anymore; message me and I can send you a copy. Then, place them into the `halo2-ecc/params` directory. You'll then need to convert them into a form that's easily readible on the TypeScript side of things. To do that, run `cargo run` in the halo2-ecc repo. To generate the proof vkeys run `cargo test --release -- --nocapture bench_secp256k1_ecdsa` in the halo2-ecc repo.
-
-Finally, you'll need to move them to the `browser/public` directory so they can be accessed by the web page.
+You'll need first need to download the KZG params from Hermez's trusted setup. I remember Axiom posting them somewhere at some point, but I actually can't find them anymore; message me and I can send you a copy. Then, place them into the `halo2-ecc/params` directory. You'll then need to convert them into a form that's easily readible on the TypeScript side of things. To do that, run `cargo run` in the halo2-ecc repo. Finally, you'll need to move these files to the `browser/public` directory so they can be accessed by the web page.
 
 ### Generating WASM
 

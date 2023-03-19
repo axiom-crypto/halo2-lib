@@ -16,7 +16,9 @@ export default function Home() {
           const workerApi =
             wrap<import("../lib/halo2Prover/halo2Prover").Halo2Prover>(worker);
 
-          await workerApi.generateProof(15);
+          for (let k = 11; k <= 19; k++) {
+            await workerApi.generateProof(k);
+          }
         }}
       >
         Generate proof
@@ -36,7 +38,9 @@ export default function Home() {
           const workerApi =
             wrap<import("../lib/halo2Prover/halo2Prover").Halo2Prover>(worker);
 
-          await workerApi.generateProofPreloadedVK(15);
+          for (let k = 11; k <= 19; k++) {
+            await workerApi.generateProofPreloadedVK(k);
+          }
         }}
       >
         Generate proof with VK
