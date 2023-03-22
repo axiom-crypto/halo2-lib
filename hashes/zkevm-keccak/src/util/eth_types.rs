@@ -1,7 +1,6 @@
 //! Ethereum and Evm types used to deserialize responses from web3 / geth.
 
-use crate::halo2_proofs::halo2curves::group::ff::PrimeField;
-use halo2_base::utils::BigPrimeField;
+use halo2_base::utils::PrimeField;
 
 use ethers_core::types;
 pub use ethers_core::types::{
@@ -11,10 +10,10 @@ pub use ethers_core::types::{
 
 /// Trait used to reduce verbosity with the declaration of the [`FieldExt`]
 /// trait and its repr.
-pub trait Field: BigPrimeField + PrimeField<Repr = [u8; 32]> {}
+pub trait Field: PrimeField {}
 
 // Impl custom `Field` trait
-impl<F> Field for F where F: BigPrimeField + PrimeField<Repr = [u8; 32]> {}
+impl<F> Field for F where F: PrimeField {}
 
 /// Trait used to define types that can be converted to a 256 bit scalar value.
 pub trait ToScalar<F> {
