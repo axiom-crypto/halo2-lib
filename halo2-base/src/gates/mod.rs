@@ -78,10 +78,10 @@ pub trait GateInstructions<F: ScalarField> {
         let assignments =
             self.assign_region(ctx, inputs, gate_offsets.into_iter().map(|i| (i as isize, None)));
         for (offset1, offset2) in equality_offsets.into_iter() {
-            ctx.region.constrain_equal(assignments[offset1].cell(), assignments[offset2].cell());
+            ctx.region.constrain_equal(assignments[offset1].cell(), assignments[offset2].cell()).unwrap();
         }
         for (assigned, eq_offset) in external_equality.into_iter() {
-            ctx.region.constrain_equal(assigned.cell(), assignments[eq_offset].cell());
+            ctx.region.constrain_equal(assigned.cell(), assignments[eq_offset].cell()).unwrap();
         }
         assignments
     }
@@ -198,7 +198,7 @@ pub trait GateInstructions<F: ScalarField> {
         let out_val = a.value().zip(b.value()).map(|(a, b)| (F::one() - a) * b);
         let assignments =
             self.assign_region(ctx, vec![Witness(out_val), a, b.clone(), b], vec![(0, None)]);
-        ctx.region.constrain_equal(assignments[2].cell(), assignments[3].cell());
+        ctx.region.constrain_equal(assignments[2].cell(), assignments[3].cell()).unwrap();
         assignments.into_iter().next().unwrap()
     }
 
@@ -227,7 +227,7 @@ pub trait GateInstructions<F: ScalarField> {
 
     fn assert_equal(&self, ctx: &mut Context<'_, F>, a: QuantumCell<F>, b: QuantumCell<F>) {
         if let (Existing(a), Existing(b)) = (&a, &b) {
-            ctx.region.constrain_equal(a.cell(), b.cell());
+            ctx.region.constrain_equal(a.cell(), b.cell()).unwrap();
         } else {
             self.assign_region_smart(
                 ctx,

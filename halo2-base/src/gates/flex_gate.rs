@@ -750,7 +750,7 @@ impl<F: ScalarField> GateInstructions<F> for FlexGateConfig<F> {
                     ],
                     vec![(0, Some([F::zero(), F::one(), -F::one()])), (3, None)],
                 );
-                ctx.region.constrain_equal(assignments[2].cell(), assignments[5].cell());
+                ctx.region.constrain_equal(assignments[2].cell(), assignments[5].cell()).unwrap();
                 assignments.pop().unwrap()
             }
         }
@@ -815,7 +815,7 @@ impl<F: ScalarField> GateInstructions<F> for FlexGateConfig<F> {
             self.pow_of_two[..range_bits].iter().map(|c| Constant(*c)),
             &mut bit_cells,
         );
-        ctx.region.constrain_equal(a.cell(), acc.cell());
+        ctx.region.constrain_equal(a.cell(), acc.cell()).unwrap();
 
         for bit_cell in &bit_cells {
             self.assign_region(

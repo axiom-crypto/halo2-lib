@@ -15,3 +15,6 @@ Cargo.lock
 
 /halo2_ecc/src/bn254/data/
 /halo2_ecc/src/secp256k1/data/
+
+*.csv
+*.srs

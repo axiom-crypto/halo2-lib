@@ -220,7 +220,7 @@ impl<F: ScalarField> RangeConfig<F> {
                 ),
             };
             // the inner product above must equal `a`
-            ctx.region.constrain_equal(a.cell(), acc.cell());
+            ctx.region.constrain_equal(a.cell(), acc.cell()).unwrap();
         };
         assert_eq!(limbs_assigned.len(), k);
 
