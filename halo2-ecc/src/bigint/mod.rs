@@ -29,8 +29,7 @@ pub mod select_by_indicator;
 pub mod sub;
 pub mod sub_no_carry;
 
-#[derive(Clone, Debug, PartialEq)]
-#[derive(Default)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub enum BigIntStrategy {
     // use existing gates
     #[default]
@@ -40,19 +39,17 @@ pub enum BigIntStrategy {
     // CustomVerticalShort,
 }
 
-
-
 #[derive(Clone, Debug)]
-pub struct OverflowInteger<'v, F: PrimeField> {
-    pub limbs: Vec<AssignedValue<'v, F>>,
+pub struct OverflowInteger<F: PrimeField> {
+    pub limbs: Vec<AssignedValue<F>>,
     // max bits of a limb, ignoring sign
     pub max_limb_bits: usize,
     // the standard limb bit that we use for pow of two limb base - to reduce overhead we just assume this is inferred from context (e.g., the chip stores it), so we stop storing it here
     // pub limb_bits: usize,
 }
 
-impl<'v, F: PrimeField> OverflowInteger<'v, F> {
-    pub fn construct(limbs: Vec<AssignedValue<'v, F>>, max_limb_bits: usize) -> Self {
+impl<'v, F: PrimeField> OverflowInteger<F> {
+    pub fn construct(limbs: Vec<AssignedValue<F>>, max_limb_bits: usize) -> Self {
         Self { limbs, max_limb_bits }
     }
 
@@ -69,10 +66,10 @@ impl<'v, F: PrimeField> OverflowInteger<'v, F> {
     pub fn evaluate(
         gate: &impl GateInstructions<F>,
         // chip: &BigIntConfig<F>,
-        ctx: &mut Context<'_, F>,
-        limbs: &[AssignedValue<'v, F>],
+        ctx: &mut Context<F>,
+        limbs: &[AssignedValue<F>],
         limb_bases: impl IntoIterator<Item = F>,
-    ) -> AssignedValue<'v, F> {
+    ) -> AssignedValue<F> {
         // Constrain `out_native = sum_i out_assigned[i] * 2^{n*i}` in `F`
         gate.inner_product(
             ctx,
@@ -107,24 +104,24 @@ impl<F: PrimeField> FixedOverflowInteger<F> {
             .fold(BigUint::zero(), |acc, x| (acc << limb_bits) + fe_to_biguint(x))
     }
 
-    pub fn assign<'v>(
+    pub fn assign(
         self,
         gate: &impl GateInstructions<F>,
-        ctx: &mut Context<'_, F>,
+        ctx: &mut Context<F>,
         limb_bits: usize,
-    ) -> OverflowInteger<'v, F> {
+    ) -> OverflowInteger<F> {
         let assigned_limbs = gate.assign_region(ctx, self.limbs.into_iter().map(Constant), vec![]);
         OverflowInteger::construct(assigned_limbs, limb_bits)
     }
 
     /// only use case is when coeffs has only a single 1, rest are 0
-    pub fn select_by_indicator<'v>(
+    pub fn select_by_indicator(
         gate: &impl GateInstructions<F>,
-        ctx: &mut Context<'_, F>,
+        ctx: &mut Context<F>,
         a: &[Self],
-        coeffs: &[AssignedValue<'v, F>],
+        coeffs: &[AssignedValue<F>],
         limb_bits: usize,
-    ) -> OverflowInteger<'v, F> {
+    ) -> OverflowInteger<F> {
         let k = a[0].limbs.len();
 
         let out_limbs = (0..k)
@@ -139,7 +136,7 @@ impl<F: PrimeField> FixedOverflowInteger<F> {
 }
 
 #[derive(Clone, Debug)]
-pub struct CRTInteger<'v, F: PrimeField> {
+pub struct CRTInteger<F: PrimeField> {
     // keep track of an integer `a` using CRT as `a mod 2^t` and `a mod n`
     // where `t = truncation.limbs.len() * truncation.limb_bits`
     //       `n = modulus::<Fn>`
@@ -151,25 +148,25 @@ pub struct CRTInteger<'v, F: PrimeField> {
 
     // the IMPLICIT ASSUMPTION: `value (mod 2^t) = truncation` && `value (mod n) = native`
     // this struct should only be used if the implicit assumption above is satisfied
-    pub truncation: OverflowInteger<'v, F>,
-    pub native: AssignedValue<'v, F>,
+    pub truncation: OverflowInteger<F>,
+    pub native: AssignedValue<F>,
     pub value: Value<BigInt>,
 }
 
-impl<'v, F: PrimeField> CRTInteger<'v, F> {
+impl<F: PrimeField> CRTInteger<F> {
     pub fn construct(
-        truncation: OverflowInteger<'v, F>,
-        native: AssignedValue<'v, F>,
+        truncation: OverflowInteger<F>,
+        native: AssignedValue<F>,
         value: Value<BigInt>,
     ) -> Self {
         Self { truncation, native, value }
     }
 
-    pub fn native(&self) -> &AssignedValue<'v, F> {
+    pub fn native(&self) -> &AssignedValue<F> {
         &self.native
     }
 
-    pub fn limbs(&self) -> &[AssignedValue<'v, F>] {
+    pub fn limbs(&self) -> &[AssignedValue<F>] {
         self.truncation.limbs.as_slice()
     }
 }
@@ -210,13 +207,13 @@ impl<F: PrimeField> FixedCRTInteger<F> {
         Self { truncation, value }
     }
 
-    pub fn assign<'a>(
+    pub fn assign(
         self,
         gate: &impl GateInstructions<F>,
-        ctx: &mut Context<'_, F>,
+        ctx: &mut Context<F>,
         limb_bits: usize,
         native_modulus: &BigUint,
-    ) -> CRTInteger<'a, F> {
+    ) -> CRTInteger<F> {
         let assigned_truncation = self.truncation.assign(gate, ctx, limb_bits);
         let assigned_native = {
             let native_cells = vec![Constant(biguint_to_fe(&(&self.value % native_modulus)))];
@@ -225,13 +222,13 @@ impl<F: PrimeField> FixedCRTInteger<F> {
         CRTInteger::construct(assigned_truncation, assigned_native, Value::known(self.value.into()))
     }
 
-    pub fn assign_without_caching<'a>(
+    pub fn assign_without_caching(
         self,
         gate: &impl GateInstructions<F>,
-        ctx: &mut Context<'_, F>,
+        ctx: &mut Context<F>,
         limb_bits: usize,
         native_modulus: &BigUint,
-    ) -> CRTInteger<'a, F> {
+    ) -> CRTInteger<F> {
         let fixed_cells = self
             .truncation
             .limbs

@@ -1,14 +1,14 @@
 use super::{CRTInteger, OverflowInteger};
 use halo2_base::{gates::GateInstructions, utils::PrimeField, Context, QuantumCell::Existing};
 
-pub fn truncate<'v, F: PrimeField>(
+pub fn truncate<F: PrimeField>(
     gate: &impl GateInstructions<F>,
     // _chip: &BigIntConfig<F>,
-    ctx: &mut Context<'_, F>,
-    a: &OverflowInteger<'v, F>,
-    b: &OverflowInteger<'v, F>,
+    ctx: &mut Context<F>,
+    a: &OverflowInteger<F>,
+    b: &OverflowInteger<F>,
     num_limbs_log2_ceil: usize,
-) -> OverflowInteger<'v, F> {
+) -> OverflowInteger<F> {
     let k = a.limbs.len();
     assert!(k > 0);
     assert_eq!(k, b.limbs.len());
@@ -37,14 +37,14 @@ pub fn truncate<'v, F: PrimeField>(
     OverflowInteger::construct(out_limbs, num_limbs_log2_ceil + a.max_limb_bits + b.max_limb_bits)
 }
 
-pub fn crt<'v, F: PrimeField>(
+pub fn crt<F: PrimeField>(
     gate: &impl GateInstructions<F>,
     // chip: &BigIntConfig<F>,
-    ctx: &mut Context<'_, F>,
-    a: &CRTInteger<'v, F>,
-    b: &CRTInteger<'v, F>,
+    ctx: &mut Context<F>,
+    a: &CRTInteger<F>,
+    b: &CRTInteger<F>,
     num_limbs_log2_ceil: usize,
-) -> CRTInteger<'v, F> {
+) -> CRTInteger<F> {
     let out_trunc = truncate::<F>(gate, ctx, &a.truncation, &b.truncation, num_limbs_log2_ceil);
     let out_native = gate.mul(ctx, Existing(&a.native), Existing(&b.native));
     let out_val = a.value.as_ref() * b.value.as_ref();

@@ -5,12 +5,12 @@ use halo2_base::{
 
 // given OverflowInteger<F>'s `a` and `b` of the same shape,
 // returns whether `a == b`
-pub fn assign<'v, F: PrimeField>(
+pub fn assign<F: PrimeField>(
     gate: &impl GateInstructions<F>,
-    ctx: &mut Context<'_, F>,
-    a: &OverflowInteger<'v, F>,
-    b: &OverflowInteger<'v, F>,
-) -> AssignedValue<'v, F> {
+    ctx: &mut Context<F>,
+    a: &OverflowInteger<F>,
+    b: &OverflowInteger<F>,
+) -> AssignedValue<F> {
     let k = a.limbs.len();
     assert_eq!(k, b.limbs.len());
     assert_ne!(k, 0);
@@ -26,21 +26,21 @@ pub fn assign<'v, F: PrimeField>(
     partial
 }
 
-pub fn wrapper<'v, F: PrimeField>(
+pub fn wrapper<F: PrimeField>(
     gate: &impl GateInstructions<F>,
-    ctx: &mut Context<'_, F>,
-    a: &CRTInteger<'v, F>,
-    b: &CRTInteger<'v, F>,
-) -> AssignedValue<'v, F> {
+    ctx: &mut Context<F>,
+    a: &CRTInteger<F>,
+    b: &CRTInteger<F>,
+) -> AssignedValue<F> {
     assign(gate, ctx, &a.truncation, &b.truncation)
 }
 
-pub fn crt<'v, F: PrimeField>(
+pub fn crt<F: PrimeField>(
     gate: &impl GateInstructions<F>,
-    ctx: &mut Context<'_, F>,
-    a: &CRTInteger<'v, F>,
-    b: &CRTInteger<'v, F>,
-) -> AssignedValue<'v, F> {
+    ctx: &mut Context<F>,
+    a: &CRTInteger<F>,
+    b: &CRTInteger<F>,
+) -> AssignedValue<F> {
     let out_trunc = assign::<F>(gate, ctx, &a.truncation, &b.truncation);
     let out_native = gate.is_equal(ctx, Existing(&a.native), Existing(&b.native));
     gate.and(ctx, Existing(&out_trunc), Existing(&out_native))

@@ -20,14 +20,14 @@ use rand_chacha::ChaCha20Rng;
 // Output:
 // * new_points: length `points.len() * radix`
 // * new_bool_scalars: 2d array `ceil(scalar_bits / radix)` by `points.len() * radix`
-pub fn decompose<'v, F, C>(
+pub fn decompose<F, C>(
     gate: &impl GateInstructions<F>,
-    ctx: &mut Context<'v, F>,
+    ctx: &mut Context< F>,
     points: &[C],
-    scalars: &Vec<Vec<AssignedValue<'v, F>>>,
+    scalars: &Vec<Vec<AssignedValue<F>>>,
     max_scalar_bits_per_cell: usize,
     radix: usize,
-) -> (Vec<C::Curve>, Vec<Vec<AssignedValue<'v, F>>>)
+) -> (Vec<C::Curve>, Vec<Vec<AssignedValue<F>>>)
 where
     F: PrimeField,
     C: CurveAffine,
@@ -66,15 +66,15 @@ where
 // Given points[i] and bool_scalars[j][i],
 // compute G'[j] = sum_{i=0..points.len()} points[i] * bool_scalars[j][i]
 // output is [ G'[j] + rand_point ]_{j=0..bool_scalars.len()}, rand_point
-pub fn multi_product<'v, F: PrimeField, FC, C>(
+pub fn multi_product<F: PrimeField, FC, C>(
     chip: &FC,
-    ctx: &mut Context<'v, F>,
+    ctx: &mut Context< F>,
     points: Vec<C::CurveExt>,
-    bool_scalars: Vec<Vec<AssignedValue<'v, F>>>,
+    bool_scalars: Vec<Vec<AssignedValue<F>>>,
     clumping_factor: usize,
-) -> (Vec<EcPoint<F, FC::FieldPoint<'v>>>, EcPoint<F, FC::FieldPoint<'v>>)
+) -> (Vec<EcPoint<F, FC::FieldPoint>>, EcPoint<F, FC::FieldPoint>)
 where
-    FC: PrimeFieldChip<F, FieldPoint<'v> = CRTInteger<'v, F>>,
+    FC: PrimeFieldChip<F, FieldPoint = CRTInteger<F>>,
     FC::FieldType: PrimeField,
     C: CurveAffine<Base = FC::FieldType>,
 {
@@ -187,17 +187,17 @@ where
     (acc, rand_point)
 }
 
-pub fn multi_exp<'v, F: PrimeField, FC, C>(
+pub fn multi_exp<F: PrimeField, FC, C>(
     chip: &FC,
-    ctx: &mut Context<'v, F>,
+    ctx: &mut Context< F>,
     points: &[C],
-    scalars: &Vec<Vec<AssignedValue<'v, F>>>,
+    scalars: &Vec<Vec<AssignedValue<F>>>,
     max_scalar_bits_per_cell: usize,
     radix: usize,
     clump_factor: usize,
-) -> EcPoint<F, FC::FieldPoint<'v>>
+) -> EcPoint<F, FC::FieldPoint>
 where
-    FC: PrimeFieldChip<F, FieldPoint<'v> = CRTInteger<'v, F>>,
+    FC: PrimeFieldChip<F, FieldPoint = CRTInteger<F>>,
     FC::FieldType: PrimeField,
     C: CurveAffine<Base = FC::FieldType>,
 {

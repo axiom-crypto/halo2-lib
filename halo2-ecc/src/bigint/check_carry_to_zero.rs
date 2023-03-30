@@ -26,10 +26,10 @@ use num_traits::One;
 // a_i * 2^{n*w} + a_{i - 1} * 2^{n*(w-1)} + ... + a_{i - w} + c_{i - w - 1} = c_i * 2^{n*(w+1)}
 // which is valid as long as `(m - n + EPSILON) + n * (w+1) < native_modulus::<F>().bits() - 1`
 // so we only need to range check `c_i` every `w + 1` steps, starting with `i = w`
-pub fn truncate<'a, F: PrimeField>(
+pub fn truncate<F: PrimeField>(
     range: &impl RangeInstructions<F>,
-    ctx: &mut Context<'a, F>,
-    a: &OverflowInteger<'a, F>,
+    ctx: &mut Context<F>,
+    a: &OverflowInteger<F>,
     limb_bits: usize,
     limb_base: F,
     limb_base_big: &BigInt,

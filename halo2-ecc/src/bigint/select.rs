@@ -4,13 +4,13 @@ use halo2_base::{
 };
 use std::cmp::max;
 
-pub fn assign<'v, F: PrimeField>(
+pub fn assign<F: PrimeField>(
     gate: &impl GateInstructions<F>,
-    ctx: &mut Context<'_, F>,
-    a: &OverflowInteger<'v, F>,
-    b: &OverflowInteger<'v, F>,
-    sel: &AssignedValue<'v, F>,
-) -> OverflowInteger<'v, F> {
+    ctx: &mut Context<F>,
+    a: &OverflowInteger<F>,
+    b: &OverflowInteger<F>,
+    sel: &AssignedValue<F>,
+) -> OverflowInteger<F> {
     assert_eq!(a.limbs.len(), b.limbs.len());
     let out_limbs = a
         .limbs
@@ -22,13 +22,13 @@ pub fn assign<'v, F: PrimeField>(
     OverflowInteger::construct(out_limbs, max(a.max_limb_bits, b.max_limb_bits))
 }
 
-pub fn crt<'v, F: PrimeField>(
+pub fn crt<F: PrimeField>(
     gate: &impl GateInstructions<F>,
-    ctx: &mut Context<'_, F>,
-    a: &CRTInteger<'v, F>,
-    b: &CRTInteger<'v, F>,
-    sel: &AssignedValue<'v, F>,
-) -> CRTInteger<'v, F> {
+    ctx: &mut Context<F>,
+    a: &CRTInteger<F>,
+    b: &CRTInteger<F>,
+    sel: &AssignedValue<F>,
+) -> CRTInteger<F> {
     assert_eq!(a.truncation.limbs.len(), b.truncation.limbs.len());
     let out_limbs = a
         .truncation

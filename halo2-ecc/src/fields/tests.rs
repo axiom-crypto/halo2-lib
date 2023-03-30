@@ -89,9 +89,7 @@ mod fp {
 
                     #[cfg(feature = "display")]
                     {
-                        println!(
-                            "Using {NUM_ADVICE} advice columns and {NUM_FIXED} fixed columns"
-                        );
+                        println!("Using {NUM_ADVICE} advice columns and {NUM_FIXED} fixed columns");
                         println!("total cells: {}", ctx.total_advice);
 
                         let (const_rows, _) = ctx.fixed_stats();
@@ -187,7 +185,7 @@ mod fp12 {
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             config.load_lookup_table(&mut layouter)?;
-            let chip = Fp12Chip::<F, FpConfig<F, Fq>, Fq12, XI_0>::construct(&config);
+            let chip = Fp12Chip::<F, FpConfig<F, Fq>, Fq12, XI_0>::construct(config.clone());
 
             let mut first_pass = SKIP_FIRST_PASS;
 
@@ -222,9 +220,7 @@ mod fp12 {
 
                     #[cfg(feature = "display")]
                     {
-                        println!(
-                            "Using {NUM_ADVICE} advice columns and {NUM_FIXED} fixed columns"
-                        );
+                        println!("Using {NUM_ADVICE} advice columns and {NUM_FIXED} fixed columns");
                         println!("total advice cells: {}", ctx.total_advice);
 
                         let (const_rows, _) = ctx.fixed_stats();

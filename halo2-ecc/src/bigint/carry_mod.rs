@@ -20,11 +20,11 @@ use std::{cmp::max, iter};
 // We constrain `a = out + modulus * quotient` and range check `out` and `quotient`
 //
 // Assumption: the leading two bits (in big endian) are 1, and `abs(a) <= 2^{n * k - 1 + F::NUM_BITS - 2}` (A weaker assumption is also enough, but this is good enough for forseeable use cases)
-pub fn crt<'a, F: PrimeField>(
+pub fn crt<F: PrimeField>(
     range: &impl RangeInstructions<F>,
     // chip: &BigIntConfig<F>,
-    ctx: &mut Context<'a, F>,
-    a: &CRTInteger<'a, F>,
+    ctx: &mut Context<F>,
+    a: &CRTInteger<F>,
     k_bits: usize, // = a.len().bits()
     modulus: &BigInt,
     mod_vec: &[F],
@@ -32,7 +32,7 @@ pub fn crt<'a, F: PrimeField>(
     limb_bits: usize,
     limb_bases: &[F],
     limb_base_big: &BigInt,
-) -> CRTInteger<'a, F> {
+) -> CRTInteger<F> {
     let n = limb_bits;
     let k = a.truncation.limbs.len();
     let trunc_len = n * k;

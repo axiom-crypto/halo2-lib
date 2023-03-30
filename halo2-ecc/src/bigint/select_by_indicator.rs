@@ -8,12 +8,12 @@ use num_traits::Zero;
 use std::cmp::max;
 
 /// only use case is when coeffs has only a single 1, rest are 0
-pub fn assign<'v, F: PrimeField>(
+pub fn assign<F: PrimeField>(
     gate: &impl GateInstructions<F>,
-    ctx: &mut Context<'_, F>,
-    a: &[OverflowInteger<'v, F>],
-    coeffs: &[AssignedValue<'v, F>],
-) -> OverflowInteger<'v, F> {
+    ctx: &mut Context<F>,
+    a: &[OverflowInteger<F>],
+    coeffs: &[AssignedValue<F>],
+) -> OverflowInteger<F> {
     let k = a[0].limbs.len();
 
     let out_limbs = (0..k)
@@ -29,13 +29,13 @@ pub fn assign<'v, F: PrimeField>(
 }
 
 /// only use case is when coeffs has only a single 1, rest are 0
-pub fn crt<'v, F: PrimeField>(
+pub fn crt<F: PrimeField>(
     gate: &impl GateInstructions<F>,
-    ctx: &mut Context<'_, F>,
-    a: &[CRTInteger<'v, F>],
-    coeffs: &[AssignedValue<'v, F>],
+    ctx: &mut Context<F>,
+    a: &[CRTInteger<F>],
+    coeffs: &[AssignedValue<F>],
     limb_bases: &[F],
-) -> CRTInteger<'v, F> {
+) -> CRTInteger<F> {
     assert_eq!(a.len(), coeffs.len());
     let k = a[0].truncation.limbs.len();
 

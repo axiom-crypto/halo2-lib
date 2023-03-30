@@ -17,22 +17,22 @@ use num_bigint::BigUint;
 
 const XI_0: i64 = 9;
 
-impl<'a, F: PrimeField> Fp12Chip<'a, F> {
+impl<F: PrimeField> Fp12Chip<F> {
     // computes a ** (p ** power)
     // only works for p = 3 (mod 4) and p = 1 (mod 6)
-    pub fn frobenius_map<'v>(
+    pub fn frobenius_map(
         &self,
-        ctx: &mut Context<'v, F>,
-        a: &<Self as FieldChip<F>>::FieldPoint<'v>,
+        ctx: &mut Context<F>,
+        a: &<Self as FieldChip<F>>::FieldPoint,
         power: usize,
-    ) -> <Self as FieldChip<F>>::FieldPoint<'v> {
+    ) -> <Self as FieldChip<F>>::FieldPoint {
         assert_eq!(modulus::<Fq>() % 4u64, BigUint::from(3u64));
         assert_eq!(modulus::<Fq>() % 6u64, BigUint::from(1u64));
         assert_eq!(a.coeffs.len(), 12);
         let pow = power % 12;
         let mut out_fp2 = Vec::with_capacity(6);
 
-        let fp2_chip = Fp2Chip::<F>::construct(self.fp_chip);
+        let fp2_chip = Fp2Chip::<F>::construct(self.fp_chip.clone());
         for i in 0..6 {
             let frob_coeff = FROBENIUS_COEFF_FQ12_C1[pow].pow_vartime([i as u64]);
             // possible optimization (not implemented): load `frob_coeff` as we multiply instead of loading first
@@ -68,13 +68,13 @@ impl<'a, F: PrimeField> Fp12Chip<'a, F> {
     }
 
     // exp is in little-endian
-    pub fn pow<'v>(
+    pub fn pow(
         &self,
-        ctx: &mut Context<'v, F>,
-        a: &<Self as FieldChip<F>>::FieldPoint<'v>,
+        ctx: &mut Context<F>,
+        a: &<Self as FieldChip<F>>::FieldPoint,
         exp: Vec<u64>,
-    ) -> <Self as FieldChip<F>>::FieldPoint<'v> {
-        let mut res = a.clone();
+    ) -> <Self as FieldChip<F>>::FieldPoint {
+        let mut res = (*a).clone();
         let mut is_started = false;
         let naf = get_naf(exp);
 
@@ -106,10 +106,10 @@ impl<'a, F: PrimeField> Fp12Chip<'a, F> {
 
     /// in = g0 + g2 w + g4 w^2 + g1 w^3 + g3 w^4 + g5 w^5 where g_i = g_i0 + g_i1 * u are elements of Fp2
     /// out = Compress(in) = [ g2, g3, g4, g5 ]
-    pub fn cyclotomic_compress<'v>(
+    pub fn cyclotomic_compress(
         &self,
-        a: &FieldExtPoint<FpPoint<'v, F>>,
-    ) -> Vec<FieldExtPoint<FpPoint<'v, F>>> {
+        a: &FieldExtPoint<FpPoint<F>>,
+    ) -> Vec<FieldExtPoint<FpPoint<F>>> {
         let g2 = FieldExtPoint::construct(vec![a.coeffs[1].clone(), a.coeffs[1 + 6].clone()]);
         let g3 = FieldExtPoint::construct(vec![a.coeffs[4].clone(), a.coeffs[4 + 6].clone()]);
         let g4 = FieldExtPoint::construct(vec![a.coeffs[2].clone(), a.coeffs[2 + 6].clone()]);
@@ -129,16 +129,16 @@ impl<'a, F: PrimeField> Fp12Chip<'a, F> {
     ///     if g2 = 0:
     ///         g1 = (2 g4 * g5)/g3
     ///         g0 = (2 g1^2 - 3 g3 * g4) * c + 1    
-    pub fn cyclotomic_decompress<'v>(
+    pub fn cyclotomic_decompress(
         &self,
-        ctx: &mut Context<'v, F>,
-        compression: Vec<FieldExtPoint<FpPoint<'v, F>>>,
-    ) -> FieldExtPoint<FpPoint<'v, F>> {
-        let [g2, g3, g4, g5]: [FieldExtPoint<FpPoint<'v, F>>; 4] = compression.try_into().unwrap();
+        ctx: &mut Context<F>,
+        compression: Vec<FieldExtPoint<FpPoint<F>>>,
+    ) -> FieldExtPoint<FpPoint<F>> {
+        let [g2, g3, g4, g5]: [FieldExtPoint<FpPoint<F>>; 4] = compression.try_into().unwrap();
 
-        let fp2_chip = Fp2Chip::<F>::construct(self.fp_chip);
+        let fp2_chip = Fp2Chip::<F>::construct(self.fp_chip.clone());
         let g5_sq = fp2_chip.mul_no_carry(ctx, &g5, &g5);
-        let g5_sq_c = mul_no_carry_w6::<F, FpChip<F>, XI_0>(fp2_chip.fp_chip, ctx, &g5_sq);
+        let g5_sq_c = mul_no_carry_w6::<F, FpChip<F>, XI_0>(&fp2_chip.fp_chip, ctx, &g5_sq);
 
         let g4_sq = fp2_chip.mul_no_carry(ctx, &g4, &g4);
         let g4_sq_3 = fp2_chip.scalar_mul_no_carry(ctx, &g4_sq, 3);
@@ -168,7 +168,7 @@ impl<'a, F: PrimeField> Fp12Chip<'a, F> {
         let temp = fp2_chip.add_no_carry(ctx, &g1_sq_2, &g2_g5);
         let temp = fp2_chip.select(ctx, &g1_sq_2, &temp, &g2_is_zero);
         let temp = fp2_chip.sub_no_carry(ctx, &temp, &g3_g4_3);
-        let mut g0 = mul_no_carry_w6::<F, FpChip<F>, XI_0>(fp2_chip.fp_chip, ctx, &temp);
+        let mut g0 = mul_no_carry_w6::<F, FpChip<F>, XI_0>(&fp2_chip.fp_chip, ctx, &temp);
 
         // compute `g0 + 1`
         g0.coeffs[0].truncation.limbs[0] = fp2_chip.range().gate.add(
@@ -217,32 +217,32 @@ impl<'a, F: PrimeField> Fp12Chip<'a, F> {
     //  A_ij = (g_i + g_j)(g_i + c g_j)
     //  B_ij = g_i g_j
 
-    pub fn cyclotomic_square<'v>(
+    pub fn cyclotomic_square(
         &self,
-        ctx: &mut Context<'v, F>,
-        compression: &[FieldExtPoint<FpPoint<'v, F>>],
-    ) -> Vec<FieldExtPoint<FpPoint<'v, F>>> {
+        ctx: &mut Context<F>,
+        compression: &[FieldExtPoint<FpPoint<F>>],
+    ) -> Vec<FieldExtPoint<FpPoint<F>>> {
         assert_eq!(compression.len(), 4);
         let g2 = &compression[0];
         let g3 = &compression[1];
         let g4 = &compression[2];
         let g5 = &compression[3];
 
-        let fp2_chip = Fp2Chip::<F>::construct(self.fp_chip);
+        let fp2_chip = Fp2Chip::<F>::construct(self.fp_chip.clone());
 
         let g2_plus_g3 = fp2_chip.add_no_carry(ctx, g2, g3);
-        let cg3 = mul_no_carry_w6::<F, FpChip<F>, XI_0>(fp2_chip.fp_chip, ctx, g3);
+        let cg3 = mul_no_carry_w6::<F, FpChip<F>, XI_0>(&fp2_chip.fp_chip, ctx, g3);
         let g2_plus_cg3 = fp2_chip.add_no_carry(ctx, g2, &cg3);
         let a23 = fp2_chip.mul_no_carry(ctx, &g2_plus_g3, &g2_plus_cg3);
 
         let g4_plus_g5 = fp2_chip.add_no_carry(ctx, g4, g5);
-        let cg5 = mul_no_carry_w6::<F, FpChip<F>, XI_0>(fp2_chip.fp_chip, ctx, g5);
+        let cg5 = mul_no_carry_w6::<F, FpChip<F>, XI_0>(&fp2_chip.fp_chip, ctx, g5);
         let g4_plus_cg5 = fp2_chip.add_no_carry(ctx, g4, &cg5);
         let a45 = fp2_chip.mul_no_carry(ctx, &g4_plus_g5, &g4_plus_cg5);
 
         let b23 = fp2_chip.mul_no_carry(ctx, g2, g3);
         let b45 = fp2_chip.mul_no_carry(ctx, g4, g5);
-        let b45_c = mul_no_carry_w6::<F, FpChip<F>, XI_0>(fp2_chip.fp_chip, ctx, &b45);
+        let b45_c = mul_no_carry_w6::<F, FpChip<F>, XI_0>(&fp2_chip.fp_chip, ctx, &b45);
 
         let mut temp = fp2_chip.scalar_mul_and_add_no_carry(ctx, &b45_c, g2, 3);
         let h2 = fp2_chip.scalar_mul_no_carry(ctx, &temp, 2);
@@ -254,7 +254,7 @@ impl<'a, F: PrimeField> Fp12Chip<'a, F> {
 
         const XI0_PLUS_1: i64 = XI_0 + 1;
         // (c + 1) = (XI_0 + 1) + u
-        temp = mul_no_carry_w6::<F, FpChip<F>, XI0_PLUS_1>(fp2_chip.fp_chip, ctx, &b23);
+        temp = mul_no_carry_w6::<F, FpChip<F>, XI0_PLUS_1>(&fp2_chip.fp_chip, ctx, &b23);
         temp = fp2_chip.sub_no_carry(ctx, &a23, &temp);
         temp = fp2_chip.scalar_mul_no_carry(ctx, &temp, 3);
         let h4 = fp2_chip.scalar_mul_and_add_no_carry(ctx, g4, &temp, -2);
@@ -266,12 +266,12 @@ impl<'a, F: PrimeField> Fp12Chip<'a, F> {
     }
 
     // exp is in little-endian
-    pub fn cyclotomic_pow<'v>(
+    pub fn cyclotomic_pow(
         &self,
-        ctx: &mut Context<'v, F>,
-        a: FieldExtPoint<FpPoint<'v, F>>,
+        ctx: &mut Context<F>,
+        a: FieldExtPoint<FpPoint<F>>,
         exp: Vec<u64>,
-    ) -> FieldExtPoint<FpPoint<'v, F>> {
+    ) -> FieldExtPoint<FpPoint<F>> {
         let mut compression = self.cyclotomic_compress(&a);
         let mut out = None;
         let mut is_started = false;
@@ -304,11 +304,11 @@ impl<'a, F: PrimeField> Fp12Chip<'a, F> {
 
     #[allow(non_snake_case)]
     // use equation for (p^4 - p^2 + 1)/r in Section 5 of https://eprint.iacr.org/2008/490.pdf for BN curves
-    pub fn hard_part_BN<'v>(
+    pub fn hard_part_BN(
         &self,
-        ctx: &mut Context<'v, F>,
-        m: <Self as FieldChip<F>>::FieldPoint<'v>,
-    ) -> <Self as FieldChip<F>>::FieldPoint<'v> {
+        ctx: &mut Context<F>,
+        m: <Self as FieldChip<F>>::FieldPoint,
+    ) -> <Self as FieldChip<F>>::FieldPoint {
         // x = BN_X
 
         // m^p
@@ -372,11 +372,11 @@ impl<'a, F: PrimeField> Fp12Chip<'a, F> {
     }
 
     // out = in^{ (q^6 - 1)*(q^2 + 1) }
-    pub fn easy_part<'v>(
+    pub fn easy_part(
         &self,
-        ctx: &mut Context<'v, F>,
-        a: &<Self as FieldChip<F>>::FieldPoint<'v>,
-    ) -> <Self as FieldChip<F>>::FieldPoint<'v> {
+        ctx: &mut Context<F>,
+        a: &<Self as FieldChip<F>>::FieldPoint,
+    ) -> <Self as FieldChip<F>>::FieldPoint {
         // a^{q^6} = conjugate of a
         let f1 = self.conjugate(ctx, a);
         let f2 = self.divide(ctx, &f1, a);
@@ -386,11 +386,11 @@ impl<'a, F: PrimeField> Fp12Chip<'a, F> {
     }
 
     // out = in^{(q^12 - 1)/r}
-    pub fn final_exp<'v>(
+    pub fn final_exp(
         &self,
-        ctx: &mut Context<'v, F>,
-        a: &<Self as FieldChip<F>>::FieldPoint<'v>,
-    ) -> <Self as FieldChip<F>>::FieldPoint<'v> {
+        ctx: &mut Context<F>,
+        a: &<Self as FieldChip<F>>::FieldPoint,
+    ) -> <Self as FieldChip<F>>::FieldPoint {
         let f0 = self.easy_part(ctx, a);
         let f = self.hard_part_BN(ctx, f0);
         f

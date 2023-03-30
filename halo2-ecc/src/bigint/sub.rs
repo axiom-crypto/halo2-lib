@@ -7,14 +7,14 @@ use halo2_base::{
 };
 
 /// Should only be called on integers a, b in proper representation with all limbs having at most `limb_bits` number of bits
-pub fn assign<'a, F: PrimeField>(
+pub fn assign<F: PrimeField>(
     range: &impl RangeInstructions<F>,
-    ctx: &mut Context<'a, F>,
-    a: &OverflowInteger<'a, F>,
-    b: &OverflowInteger<'a, F>,
+    ctx: &mut Context<F>,
+    a: &OverflowInteger<F>,
+    b: &OverflowInteger<F>,
     limb_bits: usize,
     limb_base: F,
-) -> (OverflowInteger<'a, F>, AssignedValue<'a, F>) {
+) -> (OverflowInteger<F>, AssignedValue<F>) {
     assert!(a.max_limb_bits <= limb_bits);
     assert!(b.max_limb_bits <= limb_bits);
     assert_eq!(a.limbs.len(), b.limbs.len());
@@ -65,14 +65,14 @@ pub fn assign<'a, F: PrimeField>(
 }
 
 // returns (a-b, underflow), where underflow is nonzero iff a < b
-pub fn crt<'a, F: PrimeField>(
+pub fn crt<F: PrimeField>(
     range: &impl RangeInstructions<F>,
-    ctx: &mut Context<'a, F>,
-    a: &CRTInteger<'a, F>,
-    b: &CRTInteger<'a, F>,
+    ctx: &mut Context<F>,
+    a: &CRTInteger<F>,
+    b: &CRTInteger<F>,
     limb_bits: usize,
     limb_base: F,
-) -> (CRTInteger<'a, F>, AssignedValue<'a, F>) {
+) -> (CRTInteger<F>, AssignedValue<F>) {
     let (out_trunc, underflow) =
         assign::<F>(range, ctx, &a.truncation, &b.truncation, limb_bits, limb_base);
     let out_native = range.gate().sub(ctx, Existing(&a.native), Existing(&b.native));

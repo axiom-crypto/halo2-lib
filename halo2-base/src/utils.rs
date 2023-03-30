@@ -288,7 +288,10 @@ pub mod fs {
             bn256::{Bn256, G1Affine},
             CurveAffine,
         },
-        poly::{commitment::{Params, ParamsProver}, kzg::commitment::ParamsKZG},
+        poly::{
+            commitment::{Params, ParamsProver},
+            kzg::commitment::ParamsKZG,
+        },
     };
     use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 

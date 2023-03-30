@@ -4,11 +4,11 @@ use halo2_base::{
 };
 
 /// assume you know that the limbs of `a` are all in [0, 2^{a.max_limb_bits})
-pub fn positive<'v, F: PrimeField>(
+pub fn positive<F: PrimeField>(
     gate: &impl GateInstructions<F>,
-    ctx: &mut Context<'v, F>,
-    a: &OverflowInteger<'v, F>,
-) -> AssignedValue<'v, F> {
+    ctx: &mut Context<F>,
+    a: &OverflowInteger<F>,
+) -> AssignedValue<F> {
     let k = a.limbs.len();
     assert_ne!(k, 0);
     debug_assert!(a.max_limb_bits as u32 + k.ilog2() < F::CAPACITY);
@@ -18,11 +18,11 @@ pub fn positive<'v, F: PrimeField>(
 }
 
 // given OverflowInteger<F> `a`, returns whether `a == 0`
-pub fn assign<'v, F: PrimeField>(
+pub fn assign<F: PrimeField>(
     gate: &impl GateInstructions<F>,
-    ctx: &mut Context<'_, F>,
-    a: &OverflowInteger<'v, F>,
-) -> AssignedValue<'v, F> {
+    ctx: &mut Context<F>,
+    a: &OverflowInteger<F>,
+) -> AssignedValue<F> {
     let k = a.limbs.len();
     assert_ne!(k, 0);
 
@@ -35,11 +35,11 @@ pub fn assign<'v, F: PrimeField>(
     partial
 }
 
-pub fn crt<'v, F: PrimeField>(
+pub fn crt<F: PrimeField>(
     gate: &impl GateInstructions<F>,
-    ctx: &mut Context<'_, F>,
-    a: &CRTInteger<'v, F>,
-) -> AssignedValue<'v, F> {
+    ctx: &mut Context<F>,
+    a: &CRTInteger<F>,
+) -> AssignedValue<F> {
     let out_trunc = assign::<F>(gate, ctx, &a.truncation);
     let out_native = gate.is_zero(ctx, &a.native);
     gate.and(ctx, Existing(&out_trunc), Existing(&out_native))
