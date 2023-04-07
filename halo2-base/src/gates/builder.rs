@@ -409,6 +409,69 @@ impl<F: ScalarField> GateCircuitBuilder<F> {
     ) -> Self {
         Self { builder: RefCell::new(builder), break_points: RefCell::new(break_points) }
     }
+
+    pub fn sub_synthesize(
+        &self,
+        gate: &FlexGateConfig<F>,
+        lookup_advice: &[Vec<Column<Advice>>],
+        q_lookup: &[Option<Selector>],
+        layouter: &mut impl Layouter<F>,
+    ) -> HashMap<(usize, usize), (circuit::Cell, usize)> {
+        let mut first_pass = SKIP_FIRST_PASS;
+        let mut assigned_advices = HashMap::new();
+        layouter
+            .assign_region(
+                || "GateCircuitBuilder generated circuit",
+                |mut region| {
+                    if first_pass {
+                        first_pass = false;
+                        return Ok(());
+                    }
+                    // only support FirstPhase in this Builder because getting challenge value requires more specialized witness generation during synthesize
+                    if !self.builder.borrow().witness_gen_only {
+                        // clone the builder so we can re-use the circuit for both vk and pk gen
+                        let builder = self.builder.borrow().clone();
+                        for threads in builder.threads.iter().skip(1) {
+                            assert!(
+                                threads.is_empty(),
+                                "GateCircuitBuilder only supports FirstPhase for now"
+                            );
+                        }
+                        let assignments = builder.assign_all(
+                            gate,
+                            lookup_advice,
+                            q_lookup,
+                            &mut region,
+                            Default::default(),
+                        );
+                        *self.break_points.borrow_mut() = assignments.break_points;
+                        assigned_advices = assignments.assigned_advices;
+                    } else {
+                        let builder = self.builder.take();
+                        let break_points = self.break_points.take();
+                        for (phase, (threads, break_points)) in builder
+                            .threads
+                            .into_iter()
+                            .zip(break_points.into_iter())
+                            .enumerate()
+                            .take(1)
+                        {
+                            assign_threads_in(
+                                phase,
+                                threads,
+                                gate,
+                                lookup_advice.get(phase).unwrap_or(&vec![]),
+                                &mut region,
+                                break_points,
+                            );
+                        }
+                    }
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assigned_advices
+    }
 }
 
 impl<F: ScalarField> Circuit<F> for GateCircuitBuilder<F> {
@@ -435,43 +498,8 @@ impl<F: ScalarField> Circuit<F> for GateCircuitBuilder<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let mut first_pass = SKIP_FIRST_PASS;
-        layouter.assign_region(
-            || "GateCircuitBuilder generated circuit",
-            |mut region| {
-                if first_pass {
-                    first_pass = false;
-                    return Ok(());
-                }
-                // only support FirstPhase in this Builder because getting challenge value requires more specialized witness generation during synthesize
-                if !self.builder.borrow().witness_gen_only {
-                    // clone the builder so we can re-use the circuit for both vk and pk gen
-                    let builder = self.builder.borrow().clone();
-                    for threads in builder.threads.iter().skip(1) {
-                        assert!(
-                            threads.is_empty(),
-                            "GateCircuitBuilder only supports FirstPhase for now"
-                        );
-                    }
-                    *self.break_points.borrow_mut() = builder
-                        .assign_all(&config, &[], &[], &mut region, Default::default())
-                        .break_points;
-                } else {
-                    let builder = self.builder.take();
-                    let break_points = self.break_points.take();
-                    for (phase, (threads, break_points)) in builder
-                        .threads
-                        .into_iter()
-                        .zip(break_points.into_iter())
-                        .enumerate()
-                        .take(1)
-                    {
-                        assign_threads_in(phase, threads, &config, &[], &mut region, break_points);
-                    }
-                }
-                Ok(())
-            },
-        )
+        self.sub_synthesize(&config, &[], &[], &mut layouter);
+        Ok(())
     }
 }
 
@@ -533,61 +561,8 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         config.load_lookup_table(&mut layouter).expect("load lookup table should not fail");
-
-        let mut first_pass = SKIP_FIRST_PASS;
-        layouter.assign_region(
-            || "RangeCircuitBuilder generated circuit",
-            |mut region| {
-                if first_pass {
-                    first_pass = false;
-                    return Ok(());
-                }
-                // only support FirstPhase in this Builder because getting challenge value requires more specialized witness generation during synthesize
-                if !self.0.builder.borrow().witness_gen_only {
-                    // clone the builder so we can re-use the circuit for both vk and pk gen
-                    let builder = self.0.builder.borrow().clone();
-                    for threads in builder.threads.iter().skip(1) {
-                        assert!(
-                            threads.is_empty(),
-                            "GateCircuitBuilder only supports FirstPhase for now"
-                        );
-                    }
-                    *self.0.break_points.borrow_mut() = builder
-                        .assign_all(
-                            &config.gate,
-                            &config.lookup_advice,
-                            &config.q_lookup,
-                            &mut region,
-                            Default::default(),
-                        )
-                        .break_points;
-                } else {
-                    #[cfg(feature = "display")]
-                    let start0 = std::time::Instant::now();
-                    let builder = self.0.builder.take();
-                    let break_points = self.0.break_points.take();
-                    for (phase, (threads, break_points)) in builder
-                        .threads
-                        .into_iter()
-                        .zip(break_points.into_iter())
-                        .enumerate()
-                        .take(1)
-                    {
-                        assign_threads_in(
-                            phase,
-                            threads,
-                            &config.gate,
-                            &config.lookup_advice[phase],
-                            &mut region,
-                            break_points,
-                        );
-                    }
-                    #[cfg(feature = "display")]
-                    println!("assign threads in {:?}", start0.elapsed());
-                }
-                Ok(())
-            },
-        )
+        self.0.sub_synthesize(&config.gate, &config.lookup_advice, &config.q_lookup, &mut layouter);
+        Ok(())
     }
 }
 
