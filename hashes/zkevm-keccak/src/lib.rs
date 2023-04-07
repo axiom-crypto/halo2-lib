@@ -3,9 +3,11 @@
 
 use halo2_base::halo2_proofs;
 
-/// Keccak packed multi
-pub mod keccak_packed_multi;
 /// Util
 pub mod util;
 
-pub use keccak_packed_multi::KeccakCircuitConfig as KeccakConfig;
+pub use keccak_circuit::KeccakCircuitConfig as KeccakConfig;
+
+// ---- refactored
+mod keccak_circuit;
+pub mod keccak_table;

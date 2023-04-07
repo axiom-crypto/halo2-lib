@@ -19,6 +19,7 @@ use crate::halo2_proofs::{
     },
 };
 use rand_core::OsRng;
+use std::env::var;
 
 /// KeccakCircuit
 #[derive(Default, Clone, Debug)]
