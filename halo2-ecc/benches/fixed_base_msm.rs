@@ -17,7 +17,6 @@ use halo2_base::halo2_proofs::{
 };
 use halo2_ecc::{bn254::FpChip, ecc::EccChip, fields::PrimeField};
 use rand::rngs::OsRng;
-use std::sync::Mutex;
 
 use criterion::{criterion_group, criterion_main};
 use criterion::{BenchmarkId, Criterion};
@@ -41,7 +40,7 @@ const BEST_100_CONFIG: MSMCircuitParams =
 const TEST_CONFIG: MSMCircuitParams = BEST_100_CONFIG;
 
 fn fixed_base_msm_bench(
-    thread_pool: &Mutex<GateThreadBuilder<Fr>>,
+    builder: &mut GateThreadBuilder<Fr>,
     params: MSMCircuitParams,
     bases: Vec<G1Affine>,
     scalars: Vec<Fr>,
@@ -51,14 +50,12 @@ fn fixed_base_msm_bench(
     let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
     let ecc_chip = EccChip::new(&fp_chip);
 
-    let mut builder = thread_pool.lock().unwrap();
     let scalars_assigned = scalars
         .iter()
         .map(|scalar| vec![builder.main(0).load_witness(*scalar)])
         .collect::<Vec<_>>();
-    drop(builder);
 
-    ecc_chip.fixed_base_msm(thread_pool, &bases, scalars_assigned, Fr::NUM_BITS as usize);
+    ecc_chip.fixed_base_msm(builder, &bases, scalars_assigned, Fr::NUM_BITS as usize);
 }
 
 fn fixed_base_msm_circuit(
@@ -69,17 +66,15 @@ fn fixed_base_msm_circuit(
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
     let k = params.degree as usize;
-    let builder = match stage {
+    let mut builder = match stage {
         CircuitBuilderStage::Mock => GateThreadBuilder::mock(),
         CircuitBuilderStage::Prover => GateThreadBuilder::prover(),
         CircuitBuilderStage::Keygen => GateThreadBuilder::keygen(),
     };
-    let builder = Mutex::new(builder);
 
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
-    fixed_base_msm_bench(&builder, params, bases, scalars);
+    fixed_base_msm_bench(&mut builder, params, bases, scalars);
 
-    let builder = builder.into_inner().unwrap();
     let circuit = match stage {
         CircuitBuilderStage::Mock => {
             builder.config(k, Some(20));

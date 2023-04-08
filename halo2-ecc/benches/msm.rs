@@ -17,7 +17,6 @@ use halo2_base::halo2_proofs::{
 };
 use halo2_ecc::{bn254::FpChip, ecc::EccChip, fields::PrimeField};
 use rand::rngs::OsRng;
-use std::sync::Mutex;
 
 use criterion::{criterion_group, criterion_main};
 use criterion::{BenchmarkId, Criterion};
@@ -47,7 +46,7 @@ const BEST_100_CONFIG: MSMCircuitParams = MSMCircuitParams {
 const TEST_CONFIG: MSMCircuitParams = BEST_100_CONFIG;
 
 fn msm_bench(
-    thread_pool: &Mutex<GateThreadBuilder<Fr>>,
+    builder: &mut GateThreadBuilder<Fr>,
     params: MSMCircuitParams,
     bases: Vec<G1Affine>,
     scalars: Vec<Fr>,
@@ -57,16 +56,14 @@ fn msm_bench(
     let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
     let ecc_chip = EccChip::new(&fp_chip);
 
-    let mut builder = thread_pool.lock().unwrap();
     let ctx = builder.main(0);
     let scalars_assigned =
         scalars.iter().map(|scalar| vec![ctx.load_witness(*scalar)]).collect::<Vec<_>>();
     let bases_assigned =
         bases.iter().map(|base| ecc_chip.load_private(ctx, (base.x, base.y))).collect::<Vec<_>>();
-    drop(builder);
 
     ecc_chip.variable_base_msm_in::<G1Affine>(
-        thread_pool,
+        builder,
         &bases_assigned,
         scalars_assigned,
         Fr::NUM_BITS as usize,
@@ -84,16 +81,14 @@ fn msm_circuit(
 ) -> RangeCircuitBuilder<Fr> {
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
     let k = params.degree as usize;
-    let builder = match stage {
+    let mut builder = match stage {
         CircuitBuilderStage::Mock => GateThreadBuilder::mock(),
         CircuitBuilderStage::Prover => GateThreadBuilder::prover(),
         CircuitBuilderStage::Keygen => GateThreadBuilder::keygen(),
     };
-    let builder = Mutex::new(builder);
 
-    msm_bench(&builder, params, bases, scalars);
+    msm_bench(&mut builder, params, bases, scalars);
 
-    let builder = builder.into_inner().unwrap();
     let circuit = match stage {
         CircuitBuilderStage::Mock => {
             builder.config(k, Some(20));
