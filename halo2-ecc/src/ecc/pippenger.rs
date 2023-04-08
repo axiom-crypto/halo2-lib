@@ -9,7 +9,6 @@ use halo2_base::{
     AssignedValue, Context,
 };
 use rayon::prelude::*;
-use std::sync::Mutex;
 
 // Reference: https://jbootle.github.io/Misc/pippenger.pdf
 
@@ -206,9 +205,8 @@ where
 /// Currently does not support if the final answer is actually the point at infinity
 pub fn multi_exp_par<F: PrimeField, FC, C>(
     chip: &FC,
-    // we use a Mutex guard for synchronous adding threads to the thread pool
-    // these are the threads within a single Phase
-    thread_pool: &Mutex<GateThreadBuilder<F>>,
+    // these are the "threads" within a single Phase
+    builder: &mut GateThreadBuilder<F>,
     points: &[EcPoint<F, FC::FieldPoint>],
     scalars: Vec<Vec<AssignedValue<F>>>,
     max_scalar_bits_per_cell: usize,
@@ -228,7 +226,6 @@ where
     let mut bool_scalars = vec![Vec::with_capacity(points.len()); scalar_bits];
 
     // get a main thread
-    let mut builder = thread_pool.lock().unwrap();
     let ctx = builder.main(phase);
     let witness_gen_only = ctx.witness_gen_only();
     // single-threaded computation:
@@ -255,7 +252,6 @@ where
     // we will use a different thread per round
     // to prevent concurrency issues with context id, we generate all the ids first
     let thread_ids = (0..num_rounds).map(|_| builder.get_new_thread_id()).collect::<Vec<_>>();
-    drop(builder);
     // now begins multi-threading
 
     // multi_prods is 2d vector of size `num_rounds` by `scalar_bits`
@@ -303,13 +299,10 @@ where
         })
         .unzip();
     // we collect the new threads to ensure they are a FIXED order, otherwise later `assign_threads_in` will get confused
-    thread_pool.lock().unwrap().threads[phase].extend(new_threads);
+    builder.threads[phase].extend(new_threads);
 
     // agg[j] = sum_{i=0..num_rounds} multi_prods[i][j] for j = 0..scalar_bits
-    // get a main thread
-    let mut builder = thread_pool.lock().unwrap();
     let thread_ids = (0..scalar_bits).map(|_| builder.get_new_thread_id()).collect::<Vec<_>>();
-    drop(builder);
     let (new_threads, mut agg): (Vec<_>, Vec<_>) = thread_ids
         .into_par_iter()
         .enumerate()
@@ -329,11 +322,10 @@ where
             (thread, acc)
         })
         .unzip();
-    thread_pool.lock().unwrap().threads[phase].extend(new_threads);
+    builder.threads[phase].extend(new_threads);
 
     // gets the LAST thread for single threaded work
     // warning: don't get any earlier threads, because currently we assume equality constraints in thread i only involves threads <= i
-    let mut builder = thread_pool.lock().unwrap();
     let ctx = builder.main(phase);
     // we have agg[j] = G'[j] + (2^num_rounds - 1) * rand_base
     // let rand_point = (2^num_rounds - 1) * rand_base

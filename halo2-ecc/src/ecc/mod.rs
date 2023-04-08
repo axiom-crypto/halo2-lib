@@ -13,7 +13,6 @@ use itertools::Itertools;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use std::marker::PhantomData;
-use std::sync::Mutex;
 
 pub mod ecdsa;
 pub mod fixed_base;
@@ -524,9 +523,8 @@ where
         for _ in 0..window_bits {
             curr_point = ec_double(chip, ctx, &curr_point);
         }
-        for (cached_points, rounded_bits) in cached_points
-            .chunks(cache_size)
-            .zip(rounded_bits.chunks(rounded_bitlen))
+        for (cached_points, rounded_bits) in
+            cached_points.chunks(cache_size).zip(rounded_bits.chunks(rounded_bitlen))
         {
             let add_point = ec_select_from_bits::<F, FC>(
                 chip,
@@ -795,7 +793,7 @@ where
     // default for most purposes
     pub fn variable_base_msm<C>(
         &self,
-        thread_pool: &Mutex<GateThreadBuilder<F>>,
+        thread_pool: &mut GateThreadBuilder<F>,
         P: &[EcPoint<F, FC::FieldPoint>],
         scalars: Vec<Vec<AssignedValue<F>>>,
         max_bits: usize,
@@ -811,7 +809,7 @@ where
     // TODO: put a check in place that scalar is < modulus of C::Scalar
     pub fn variable_base_msm_in<C>(
         &self,
-        thread_pool: &Mutex<GateThreadBuilder<F>>,
+        builder: &mut GateThreadBuilder<F>,
         P: &[EcPoint<F, FC::FieldPoint>],
         scalars: Vec<Vec<AssignedValue<F>>>,
         max_bits: usize,
@@ -826,11 +824,9 @@ where
         println!("computing length {} MSM", P.len());
 
         if P.len() <= 25 {
-            let mut builder = thread_pool.lock().unwrap();
-            let ctx = builder.main(phase);
             multi_scalar_multiply::<F, FC, C>(
                 self.field_chip,
-                ctx,
+                builder.main(phase),
                 P,
                 scalars,
                 max_bits,
@@ -847,7 +843,7 @@ where
             // guessing that is is always better to use parallelism for >25 points
             pippenger::multi_exp_par::<F, FC, C>(
                 self.field_chip,
-                thread_pool,
+                builder,
                 P,
                 scalars,
                 max_bits,
@@ -889,7 +885,7 @@ where
     // default for most purposes
     pub fn fixed_base_msm<C>(
         &self,
-        thread_pool: &Mutex<GateThreadBuilder<F>>,
+        builder: &mut GateThreadBuilder<F>,
         points: &[C],
         scalars: Vec<Vec<AssignedValue<F>>>,
         max_scalar_bits_per_cell: usize,
@@ -899,7 +895,7 @@ where
         FC: PrimeFieldChip<F, FieldType = C::Base, FieldPoint = CRTInteger<F>>
             + Selectable<F, Point = FC::FieldPoint>,
     {
-        self.fixed_base_msm_in::<C>(thread_pool, points, scalars, max_scalar_bits_per_cell, 4, 0)
+        self.fixed_base_msm_in::<C>(builder, points, scalars, max_scalar_bits_per_cell, 4, 0)
     }
 
     // `radix = 0` means auto-calculate
@@ -909,7 +905,7 @@ where
     /// The user should filter out base points that are identity beforehand; we do not separately do this here
     pub fn fixed_base_msm_in<C>(
         &self,
-        thread_pool: &Mutex<GateThreadBuilder<F>>,
+        builder: &mut GateThreadBuilder<F>,
         points: &[C],
         scalars: Vec<Vec<AssignedValue<F>>>,
         max_scalar_bits_per_cell: usize,
@@ -926,14 +922,13 @@ where
         println!("computing length {} fixed base msm", points.len());
 
         // heuristic to decide when to use parallelism
-        if points.len() < rayon::current_num_threads() {
-            let mut builder = thread_pool.lock().unwrap();
+        if points.len() < 25 {
             let ctx = builder.main(phase);
             fixed_base::msm(self, ctx, points, scalars, max_scalar_bits_per_cell, clump_factor)
         } else {
             fixed_base::msm_par(
                 self,
-                thread_pool,
+                builder,
                 points,
                 scalars,
                 max_scalar_bits_per_cell,
