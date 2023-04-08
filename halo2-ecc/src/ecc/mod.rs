@@ -922,7 +922,7 @@ where
         println!("computing length {} fixed base msm", points.len());
 
         // heuristic to decide when to use parallelism
-        if points.len() < rayon::current_num_threads() {
+        if points.len() < 25 {
             let ctx = builder.main(phase);
             fixed_base::msm(self, ctx, points, scalars, max_scalar_bits_per_cell, clump_factor)
         } else {

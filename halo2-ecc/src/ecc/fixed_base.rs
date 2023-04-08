@@ -318,10 +318,11 @@ where
     let field_chip = chip.field_chip();
     let witness_gen_only = builder.witness_gen_only();
 
+    let zero = builder.main(phase).load_zero();
     let thread_ids = (0..scalars.len()).map(|_| builder.get_new_thread_id()).collect::<Vec<_>>();
     let (new_threads, scalar_mults): (Vec<_>, Vec<_>) = cached_points_affine
         .par_chunks(cached_points_affine.len() / points.len())
-        .zip(scalars.into_par_iter())
+        .zip_eq(scalars.into_par_iter())
         .zip(thread_ids.into_par_iter())
         .map(|((cached_points, scalar), thread_id)| {
             let mut thread = Context::new(witness_gen_only, thread_id);
@@ -338,8 +339,7 @@ where
                     point.assign(field_chip, ctx)
                 })
                 .collect_vec();
-            let cached_point_window_rev =
-                cached_points.chunks(1usize << window_bits).into_iter().rev();
+            let cached_point_window_rev = cached_points.chunks(1usize << window_bits).rev();
 
             debug_assert_eq!(scalar.len(), scalar_len);
             let bits = scalar
@@ -348,10 +348,10 @@ where
                     field_chip.gate().num_to_bits(ctx, scalar_chunk, max_scalar_bits_per_cell)
                 })
                 .collect::<Vec<_>>();
-            let bit_window_rev = bits.chunks(window_bits).into_iter().rev();
+            let bit_window_rev = bits.chunks(window_bits).rev();
             let mut curr_point = None;
             // `is_started` is just a way to deal with if `curr_point` is actually identity
-            let mut is_started = ctx.load_zero();
+            let mut is_started = zero;
             for (cached_point_window, bit_window) in cached_point_window_rev.zip(bit_window_rev) {
                 let is_zero_window = {
                     let sum = field_chip.gate().sum(ctx, bit_window.iter().copied());
