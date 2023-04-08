@@ -1,8 +1,8 @@
+use super::keccak_table::KeccakTable;
 use super::{assign_advice_custom, KeccakAssignedValue};
 use super::{cell_manager::*, param::*};
-use crate::keccak_table::KeccakTable;
 
-use super::super::util::{
+use super::util::{
     constraint_builder::BaseConstraintBuilder, eth_types::Field, expression::Expr, field_xor,
     get_absorb_positions, get_num_bits_per_lookup, into_bits, pack, pack_u64, pack_with_base,
     rotate, target_part_sizes, to_bytes, unpack, CHI_BASE_LOOKUP_TABLE, NUM_BYTES_PER_WORD,
@@ -149,9 +149,9 @@ impl<F: FieldExt> KeccakRegion<F> {
 
 /// Recombines parts back together
 pub(crate) mod decode {
+    use super::super::util::BIT_COUNT;
     use super::{Expr, FieldExt, Part, PartValue};
     use crate::halo2_proofs::plonk::Expression;
-    use crate::util::BIT_COUNT;
 
     pub(crate) fn expr<F: FieldExt>(parts: Vec<Part<F>>) -> Expression<F> {
         parts.iter().rev().fold(0.expr(), |acc, part| {
@@ -168,12 +168,12 @@ pub(crate) mod decode {
 
 /// Splits a word into parts
 pub(crate) mod split {
+    use super::super::util::{pack, pack_part, unpack, WordParts};
     use super::{
         decode, BaseConstraintBuilder, CellManager, Expr, Field, FieldExt, KeccakRegion, Part,
         PartValue,
     };
     use crate::halo2_proofs::plonk::{ConstraintSystem, Expression};
-    use crate::util::{pack, pack_part, unpack, WordParts};
 
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn expr<F: FieldExt>(
@@ -240,14 +240,14 @@ pub(crate) mod split {
 // Split into parts, but storing the parts in a specific way to have the same
 // table layout in `output_cells` regardless of rotation.
 pub(crate) mod split_uniform {
+    use super::super::util::{
+        eth_types::Field, pack, pack_part, rotate, rotate_rev, unpack, WordParts, BIT_SIZE,
+    };
     use super::{
         decode, target_part_sizes, BaseConstraintBuilder, Cell, CellManager, Expr, FieldExt,
         KeccakRegion, Part, PartValue,
     };
     use crate::halo2_proofs::plonk::{ConstraintSystem, Expression};
-    use crate::util::{
-        eth_types::Field, pack, pack_part, rotate, rotate_rev, unpack, WordParts, BIT_SIZE,
-    };
 
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn expr<F: FieldExt>(
@@ -469,9 +469,9 @@ pub(crate) mod transform {
 
 // Transfroms values to cells
 pub(crate) mod transform_to {
+    use super::super::util::{pack, to_bytes, unpack};
     use super::{Cell, Expr, Field, FieldExt, KeccakRegion, Part, PartValue};
     use crate::halo2_proofs::plonk::{ConstraintSystem, TableColumn};
-    use crate::util::{pack, to_bytes, unpack};
 
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn expr<F: FieldExt>(

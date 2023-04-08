@@ -1,10 +1,10 @@
+use super::util::expression::Expr;
 use crate::halo2_proofs::{
     arithmetic::FieldExt,
     plonk::{Advice, Column, ConstraintSystem, Expression, VirtualCells},
     poly::Rotation,
 };
 use crate::keccak_circuit::KeccakRegion;
-use crate::util::expression::Expr;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Cell<F> {

@@ -1,21 +1,22 @@
 mod cell_manager;
 pub mod keccak_packed_multi;
+mod keccak_table;
 mod param;
 mod table;
-mod util;
+pub mod util;
 
 #[cfg(test)]
 mod test;
 
-use crate::keccak_table::KeccakTable;
+use keccak_table::KeccakTable;
 
-use super::util::{
+use util::{
     constraint_builder::BaseConstraintBuilder,
     eth_types::Field,
     expression::{and, not, select, Expr},
-    get_absorb_positions, get_num_bits_per_lookup, load_lookup_table, load_normalize_table,
-    load_pack_table, rotate, scatter, target_part_sizes, CHI_BASE_LOOKUP_TABLE, NUM_BYTES_PER_WORD,
-    NUM_ROUNDS, NUM_WORDS_TO_ABSORB, NUM_WORDS_TO_SQUEEZE, RHO_MATRIX,
+    get_absorb_positions, get_num_bits_per_lookup, rotate, scatter, target_part_sizes,
+    CHI_BASE_LOOKUP_TABLE, NUM_BYTES_PER_WORD, NUM_ROUNDS, NUM_WORDS_TO_ABSORB,
+    NUM_WORDS_TO_SQUEEZE, RHO_MATRIX,
 };
 
 use crate::halo2_proofs::{
@@ -31,7 +32,7 @@ use itertools::Itertools;
 use log::info;
 use std::marker::PhantomData;
 
-use self::{cell_manager::*, keccak_packed_multi::*, param::*};
+use self::{cell_manager::*, keccak_packed_multi::*, param::*, table::*};
 
 #[cfg(feature = "halo2-axiom")]
 type KeccakAssignedValue<'v, F> = AssignedCell<&'v Assigned<F>, F>;
