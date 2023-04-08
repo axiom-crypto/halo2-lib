@@ -1,7 +1,6 @@
 use std::{
     fs::{self, File},
     io::{BufRead, BufReader},
-    sync::Mutex,
 };
 
 #[allow(unused_imports)]
@@ -40,7 +39,7 @@ struct MSMCircuitParams {
 }
 
 fn fixed_base_msm_test(
-    thread_pool: &Mutex<GateThreadBuilder<Fr>>,
+    builder: &mut GateThreadBuilder<Fr>,
     params: MSMCircuitParams,
     bases: Vec<G1Affine>,
     scalars: Vec<Fr>,
@@ -50,14 +49,12 @@ fn fixed_base_msm_test(
     let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
     let ecc_chip = EccChip::new(&fp_chip);
 
-    let mut builder = thread_pool.lock().unwrap();
     let scalars_assigned = scalars
         .iter()
         .map(|scalar| vec![builder.main(0).load_witness(*scalar)])
         .collect::<Vec<_>>();
-    drop(builder);
 
-    let msm = ecc_chip.fixed_base_msm(thread_pool, &bases, scalars_assigned, Fr::NUM_BITS as usize);
+    let msm = ecc_chip.fixed_base_msm(builder, &bases, scalars_assigned, Fr::NUM_BITS as usize);
 
     let mut elts: Vec<G1> = Vec::new();
     for (base, scalar) in bases.iter().zip(scalars.iter()) {
@@ -77,19 +74,17 @@ fn random_fixed_base_msm_circuit(
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
     let k = params.degree as usize;
-    let builder = match stage {
+    let mut builder = match stage {
         CircuitBuilderStage::Mock => GateThreadBuilder::mock(),
         CircuitBuilderStage::Prover => GateThreadBuilder::prover(),
         CircuitBuilderStage::Keygen => GateThreadBuilder::keygen(),
     };
-    let builder = Mutex::new(builder);
 
     let (bases, scalars): (Vec<_>, Vec<_>) =
         (0..params.batch_size).map(|_| (G1Affine::random(OsRng), Fr::random(OsRng))).unzip();
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
-    fixed_base_msm_test(&builder, params, bases, scalars);
+    fixed_base_msm_test(&mut builder, params, bases, scalars);
 
-    let builder = builder.into_inner().unwrap();
     let circuit = match stage {
         CircuitBuilderStage::Mock => {
             builder.config(k, Some(20));
