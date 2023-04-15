@@ -7,7 +7,7 @@ use crate::{
         poly::Rotation,
     },
     utils::ScalarField,
-    AssignedValue, Context, ContextCell,
+    AssignedValue, Context,
     QuantumCell::{self, Constant, Existing, Witness, WitnessFraction},
 };
 use serde::{Deserialize, Serialize};
@@ -238,11 +238,7 @@ pub trait GateInstructions<F: ScalarField> {
 
     fn assert_is_const(&self, ctx: &mut Context<F>, a: &AssignedValue<F>, constant: &F) {
         if !ctx.witness_gen_only {
-            let c_index = ctx.assign_fixed(*constant);
-            ctx.constant_equality_constraints.push((
-                ContextCell { context_id: ctx.context_id, offset: c_index },
-                a.cell.unwrap(),
-            ));
+            ctx.constant_equality_constraints.push((*constant, a.cell.unwrap()));
         }
     }
 
