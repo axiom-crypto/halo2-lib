@@ -54,7 +54,7 @@ fn test_multithread_gates() {
     let mut builder = GateThreadBuilder::mock();
     gate_tests(builder.main(0), inputs);
 
-    let thread_ids = (0..4).map(|_| builder.get_new_thread_id()).collect::<Vec<_>>();
+    let thread_ids = (0..4usize).map(|_| builder.get_new_thread_id()).collect::<Vec<_>>();
     let new_threads = thread_ids
         .into_par_iter()
         .map(|id| {

@@ -896,7 +896,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
         let bits = a_bytes
             .as_ref()
             .iter()
-            .flat_map(|byte| (0..8).map(|i| (*byte as u64 >> i) & 1))
+            .flat_map(|byte| (0..8u32).map(|i| (*byte as u64 >> i) & 1))
             .map(|x| Witness(F::from(x)))
             .take(range_bits);
 
