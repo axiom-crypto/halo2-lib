@@ -473,8 +473,11 @@ pub trait GateInstructions<F: ScalarField> {
         indicator.split_off((1 << k) - 2)
     }
 
-    // returns vec with vec.len() == len such that:
-    //     vec[i] == 1{i == idx}
+    /// Returns a vector `indicator` of length `len` where
+    /// ```
+    /// indicator[i] == i == idx ? 1 : 0
+    /// ```
+    /// If `idx >= len` then `indicator` is all zeros.
     fn idx_to_indicator(
         &self,
         ctx: &mut Context<F>,
@@ -513,8 +516,7 @@ pub trait GateInstructions<F: ScalarField> {
             .collect()
     }
 
-    // performs inner product on a, indicator
-    // `indicator` values are all boolean
+    /// Performs inner product on `<a, indicator>`. Assumes that `a` and `indicator` are of the same length.
     /// Assumes for witness generation that only one element of `indicator` has non-zero value and that value is `F::one()`.
     fn select_by_indicator<Q>(
         &self,
@@ -540,6 +542,8 @@ pub trait GateInstructions<F: ScalarField> {
         ctx.assign_region_last(cells, (0..len).map(|i| 3 * i as isize))
     }
 
+    /// Given `cells` and `idx`, returns `cells[idx]` if `idx < cells.len()`.
+    /// If `idx >= cells.len()` then returns `F::zero()`.
     fn select_from_idx<Q>(
         &self,
         ctx: &mut Context<F>,
