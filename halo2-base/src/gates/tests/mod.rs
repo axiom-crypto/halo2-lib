@@ -1,12 +1,27 @@
 use super::builder::{GateCircuitBuilder, GateThreadBuilder, RangeCircuitBuilder};
 use super::flex_gate::{GateChip, GateInstructions};
 use super::range::{RangeChip, RangeInstructions};
-use crate::halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
+use crate::halo2_proofs::{
+    dev::MockProver,
+    halo2curves::bn256::{Bn256, Fr, G1Affine},
+    plonk::{create_proof, ProvingKey},
+    plonk::{verify_proof, VerifyingKey},
+    poly::commitment::ParamsProver,
+    poly::kzg::{
+        commitment::KZGCommitmentScheme, commitment::ParamsKZG, multiopen::ProverSHPLONK,
+        multiopen::VerifierSHPLONK, strategy::SingleStrategy,
+    },
+    transcript::{
+        Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
+    },
+};
 use crate::utils::{BigPrimeField, ScalarField};
 use crate::{Context, QuantumCell::Constant};
 use ff::Field;
 use rand::rngs::OsRng;
 use rayon::prelude::*;
+
+mod idx_to_indicator;
 
 fn gate_tests<F: ScalarField>(ctx: &mut Context<F>, inputs: [F; 3]) {
     let [a, b, c]: [_; 3] = ctx.assign_witnesses(inputs).try_into().unwrap();
@@ -165,4 +180,48 @@ fn plot_range() {
     // create circuit
     let circuit = RangeCircuitBuilder::keygen(builder);
     halo2_proofs::dev::CircuitLayout::default().render(7, &circuit, &root).unwrap();
+}
+
+// helper functions
+
+pub fn gen_proof(
+    params: &ParamsKZG<Bn256>,
+    pk: &ProvingKey<G1Affine>,
+    circuit: GateCircuitBuilder<Fr>,
+) -> Vec<u8> {
+    let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+    create_proof::<
+        KZGCommitmentScheme<Bn256>,
+        ProverSHPLONK<'_, Bn256>,
+        Challenge255<_>,
+        _,
+        Blake2bWrite<Vec<u8>, G1Affine, _>,
+        _,
+    >(params, pk, &[circuit], &[&[]], OsRng, &mut transcript)
+    .expect("prover should not fail");
+    transcript.finalize()
+}
+
+pub fn check_proof(
+    params: &ParamsKZG<Bn256>,
+    vk: &VerifyingKey<G1Affine>,
+    proof: &[u8],
+    expect_satisfied: bool,
+) {
+    let verifier_params = params.verifier_params();
+    let strategy = SingleStrategy::new(params);
+    let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(proof);
+    let res = verify_proof::<
+        KZGCommitmentScheme<Bn256>,
+        VerifierSHPLONK<'_, Bn256>,
+        Challenge255<G1Affine>,
+        Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
+        SingleStrategy<'_, Bn256>,
+    >(verifier_params, vk, strategy, &[&[]], &mut transcript);
+
+    if expect_satisfied {
+        assert!(res.is_ok());
+    } else {
+        assert!(res.is_err());
+    }
 }
