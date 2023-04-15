@@ -1,14 +1,22 @@
+#![allow(unused_assignments, unused_imports, unused_variables)]
 use super::*;
+use crate::fields::fp2::Fp2Chip;
 use crate::halo2_proofs::{
+    circuit::*,
     dev::MockProver,
-    halo2curves::bn256::{Fq, Fr, G1Affine},
+    halo2curves::bn256::{Fq, Fr, G1Affine, G2Affine, G1, G2},
+    plonk::*,
 };
+use group::Group;
 use halo2_base::gates::builder::RangeCircuitBuilder;
 use halo2_base::gates::RangeChip;
 use halo2_base::utils::bigint_to_fe;
+use halo2_base::SKIP_FIRST_PASS;
+use halo2_base::{gates::range::RangeStrategy, utils::value_to_option};
+use num_bigint::{BigInt, RandBigInt};
 use rand_core::OsRng;
-
-const ZK: bool = true;
+use std::marker::PhantomData;
+use std::ops::Neg;
 
 fn basic_g1_tests<F: PrimeField>(
     ctx: &mut Context<F>,
@@ -61,9 +69,9 @@ fn test_ecc() {
     basic_g1_tests(builder.main(0), k - 1, 88, 3, P, Q);
 
     builder.config(k, Some(20));
-    let circuit = RangeCircuitBuilder::<_, ZK>::mock(builder);
+    let circuit = RangeCircuitBuilder::mock(builder);
 
-    MockProver::run::<_, ZK>(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
+    MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
 #[cfg(feature = "dev-graph")]
@@ -83,7 +91,7 @@ fn plot_ecc() {
     basic_g1_tests(builder.main(0), 22, 88, 3, P, Q);
 
     builder.config(k, Some(10));
-    let circuit = RangeCircuitBuilder::<_, ZK>::mock(builder);
+    let circuit = RangeCircuitBuilder::mock(builder);
 
     halo2_proofs::dev::CircuitLayout::default().render(k, &circuit, &root).unwrap();
 }

@@ -13,7 +13,6 @@ mod fp {
     use rand::rngs::OsRng;
 
     const K: usize = 10;
-    const ZK: bool = true;
 
     fn fp_mul_test<F: PrimeField>(
         ctx: &mut Context<F>,
@@ -48,9 +47,9 @@ mod fp {
         fp_mul_test(builder.main(0), k - 1, 88, 3, a, b);
 
         builder.config(k, Some(10));
-        let circuit = RangeCircuitBuilder::<_, ZK>::mock(builder);
+        let circuit = RangeCircuitBuilder::mock(builder);
 
-        MockProver::run::<_, ZK>(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
+        MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
     }
 
     #[cfg(feature = "dev-graph")]
@@ -70,7 +69,7 @@ mod fp {
         fp_mul_test(builder.main(0), k - 1, 88, 3, a, b);
 
         builder.config(k, Some(10));
-        let circuit = RangeCircuitBuilder::keygen::<_, ZK>(builder);
+        let circuit = RangeCircuitBuilder::keygen(builder);
         halo2_proofs::dev::CircuitLayout::default().render(k as u32, &circuit, &root).unwrap();
     }
 }
@@ -88,7 +87,6 @@ mod fp12 {
     use halo2_base::Context;
     use rand_core::OsRng;
 
-    const ZK: bool = true;
     const XI_0: i64 = 9;
 
     fn fp12_mul_test<F: PrimeField>(
@@ -125,9 +123,9 @@ mod fp12 {
         fp12_mul_test(builder.main(0), k - 1, 88, 3, a, b);
 
         builder.config(k, Some(20));
-        let circuit = RangeCircuitBuilder::<_, ZK>::mock(builder);
+        let circuit = RangeCircuitBuilder::mock(builder);
 
-        MockProver::run::<_, ZK>(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
+        MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
     }
 
     #[cfg(feature = "dev-graph")]
@@ -148,7 +146,7 @@ mod fp12 {
         fp12_mul_test(builder.main(0), k - 1, 88, 3, a, b);
 
         builder.config(k, Some(20));
-        let circuit = RangeCircuitBuilder::<_, ZK>::mock(builder);
+        let circuit = RangeCircuitBuilder::mock(builder);
 
         halo2_proofs::dev::CircuitLayout::default().render(k, &circuit, &root).unwrap();
     }

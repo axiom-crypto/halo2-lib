@@ -44,8 +44,6 @@ fn g2_add_test<F: PrimeField>(ctx: &mut Context<F>, params: CircuitParams, _poin
     assert_eq!(answer.y, y);
 }
 
-const ZK: bool = true;
-
 #[test]
 fn test_ec_add() {
     let path = "configs/bn254/ec_add_circuit.config";
@@ -61,8 +59,8 @@ fn test_ec_add() {
     g2_add_test(builder.main(0), params, points);
 
     builder.config(k as usize, Some(20));
-    let circuit = RangeCircuitBuilder::<_, ZK>::mock(builder);
-    MockProver::run::<_, ZK>(k, &circuit, vec![]).unwrap().assert_satisfied();
+    let circuit = RangeCircuitBuilder::mock(builder);
+    MockProver::run(k, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
 #[test]
@@ -94,15 +92,15 @@ fn bench_ec_add() -> Result<(), Box<dyn std::error::Error>> {
             let mut builder = GateThreadBuilder::<Fr>::keygen();
             g2_add_test(builder.main(0), bench_params, points);
             builder.config(k as usize, Some(20));
-            RangeCircuitBuilder::<_, ZK>::keygen(builder)
+            RangeCircuitBuilder::keygen(builder)
         };
         end_timer!(start0);
 
         let vk_time = start_timer!(|| "Generating vkey");
-        let vk = keygen_vk::<_, _, _, ZK>(&params, &circuit)?;
+        let vk = keygen_vk(&params, &circuit)?;
         end_timer!(vk_time);
         let pk_time = start_timer!(|| "Generating pkey");
-        let pk = keygen_pk::<_, _, _, ZK>(&params, vk, &circuit)?;
+        let pk = keygen_pk(&params, vk, &circuit)?;
         end_timer!(pk_time);
 
         let break_points = circuit.0.break_points.take();
@@ -115,7 +113,7 @@ fn bench_ec_add() -> Result<(), Box<dyn std::error::Error>> {
             let mut builder = GateThreadBuilder::<Fr>::prover();
             g2_add_test(builder.main(0), bench_params, points);
             builder.config(k as usize, Some(20));
-            RangeCircuitBuilder::<_, ZK>::prover(builder, break_points)
+            RangeCircuitBuilder::prover(builder, break_points)
         };
         let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
         create_proof::<
@@ -125,7 +123,6 @@ fn bench_ec_add() -> Result<(), Box<dyn std::error::Error>> {
             _,
             Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
             _,
-            ZK,
         >(&params, &pk, &[proof_circuit], &[&[]], rng, &mut transcript)?;
         let proof = transcript.finalize();
         end_timer!(proof_time);
@@ -159,7 +156,6 @@ fn bench_ec_add() -> Result<(), Box<dyn std::error::Error>> {
             Challenge255<G1Affine>,
             Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
             SingleStrategy<'_, Bn256>,
-            ZK,
         >(verifier_params, pk.get_vk(), strategy, &[&[]], &mut transcript)
         .unwrap();
         end_timer!(verify_time);

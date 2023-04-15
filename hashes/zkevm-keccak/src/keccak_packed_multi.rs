@@ -1496,9 +1496,8 @@ impl<F: Field> KeccakCircuitConfig<F> {
             cb.gate(1.expr())
         });
 
-        info!("Degree ZK: {}", meta.degree::<true>());
-        info!("Degree no-ZK: {}", meta.degree::<false>());
-        info!("Minimum rows: {}", meta.minimum_rows::<true>());
+        info!("Degree: {}", meta.degree());
+        info!("Minimum rows: {}", meta.minimum_rows());
         info!("Total Lookups: {}", total_lookup_counter);
         #[cfg(feature = "display")]
         {

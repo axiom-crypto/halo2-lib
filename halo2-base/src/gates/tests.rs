@@ -42,10 +42,9 @@ fn test_gates() {
     // auto-tune circuit
     builder.config(k, Some(9));
     // create circuit
-    const ZK: bool = true;
-    let circuit = GateCircuitBuilder::<_, ZK>::mock(builder);
+    let circuit = GateCircuitBuilder::mock(builder);
 
-    MockProver::run::<_, ZK>(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
+    MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
 #[test]
@@ -69,10 +68,9 @@ fn test_multithread_gates() {
     // auto-tune circuit
     builder.config(k, Some(9));
     // create circuit
-    const ZK: bool = true;
-    let circuit = GateCircuitBuilder::<_, ZK>::mock(builder);
+    let circuit = GateCircuitBuilder::mock(builder);
 
-    MockProver::run::<_, ZK>(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
+    MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
 #[cfg(feature = "dev-graph")]
@@ -125,11 +123,12 @@ fn test_range_single() {
     let mut builder = GateThreadBuilder::mock();
     range_tests(builder.main(0), 3, inputs, 8, 8);
 
-    const ZK: bool = true;
     // auto-tune circuit
-    builder.config(k, ZK.then_some(9));
-    let circuit = RangeCircuitBuilder::<_, ZK>::mock(builder);
-    MockProver::run::<_, ZK>(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
+    builder.config(k, Some(9));
+    // create circuit
+    let circuit = RangeCircuitBuilder::mock(builder);
+
+    MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
 #[test]
@@ -139,11 +138,12 @@ fn test_range_multicolumn() {
     let mut builder = GateThreadBuilder::mock();
     range_tests(builder.main(0), 3, inputs, 8, 8);
 
-    const ZK: bool = false;
     // auto-tune circuit
-    builder.config(k, ZK.then_some(9));
-    let circuit = RangeCircuitBuilder::<_, ZK>::mock(builder);
-    MockProver::run::<_, ZK>(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
+    builder.config(k, Some(9));
+    // create circuit
+    let circuit = RangeCircuitBuilder::mock(builder);
+
+    MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
 #[cfg(feature = "dev-graph")]

@@ -40,8 +40,6 @@ const BEST_100_CONFIG: MSMCircuitParams =
 
 const TEST_CONFIG: MSMCircuitParams = BEST_100_CONFIG;
 
-const ZK: bool = false;
-
 fn fixed_base_msm_bench(
     thread_pool: &Mutex<GateThreadBuilder<Fr>>,
     params: MSMCircuitParams,
@@ -69,7 +67,7 @@ fn fixed_base_msm_circuit(
     bases: Vec<G1Affine>,
     scalars: Vec<Fr>,
     break_points: Option<MultiPhaseThreadBreakPoints>,
-) -> RangeCircuitBuilder<Fr, ZK> {
+) -> RangeCircuitBuilder<Fr> {
     let k = params.degree as usize;
     let builder = match stage {
         CircuitBuilderStage::Mock => GateThreadBuilder::mock(),
@@ -111,8 +109,8 @@ fn bench(c: &mut Criterion) {
     );
 
     let params = ParamsKZG::<Bn256>::setup(k, &mut rng);
-    let vk = keygen_vk::<_, _, _, ZK>(&params, &circuit).expect("vk should not fail");
-    let pk = keygen_pk::<_, _, _, ZK>(&params, vk, &circuit).expect("pk should not fail");
+    let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
+    let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
     let break_points = circuit.0.break_points.take();
     drop(circuit);
 
@@ -141,7 +139,6 @@ fn bench(c: &mut Criterion) {
                     _,
                     Blake2bWrite<Vec<u8>, G1Affine, Challenge255<_>>,
                     _,
-                    ZK,
                 >(params, pk, &[circuit], &[&[]], &mut rng, &mut transcript)
                 .expect("prover should not fail");
             })

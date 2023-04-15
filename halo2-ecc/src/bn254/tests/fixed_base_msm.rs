@@ -24,8 +24,6 @@ use halo2_base::{
 };
 use rand_core::OsRng;
 
-const ZK: bool = false;
-
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 struct MSMCircuitParams {
     strategy: FpStrategy,
@@ -77,7 +75,7 @@ fn random_fixed_base_msm_circuit(
     params: MSMCircuitParams,
     stage: CircuitBuilderStage,
     break_points: Option<MultiPhaseThreadBreakPoints>,
-) -> RangeCircuitBuilder<Fr, ZK> {
+) -> RangeCircuitBuilder<Fr> {
     let k = params.degree as usize;
     let builder = match stage {
         CircuitBuilderStage::Mock => GateThreadBuilder::mock(),
@@ -116,7 +114,7 @@ fn test_fixed_base_msm() {
     .unwrap();
 
     let circuit = random_fixed_base_msm_circuit(params, CircuitBuilderStage::Mock, None);
-    MockProver::run::<_, ZK>(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
+    MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
 #[test]
@@ -145,11 +143,11 @@ fn bench_fixed_base_msm() -> Result<(), Box<dyn std::error::Error>> {
             random_fixed_base_msm_circuit(bench_params, CircuitBuilderStage::Keygen, None);
 
         let vk_time = start_timer!(|| "Generating vkey");
-        let vk = keygen_vk::<_, _, _, ZK>(&params, &circuit)?;
+        let vk = keygen_vk(&params, &circuit)?;
         end_timer!(vk_time);
 
         let pk_time = start_timer!(|| "Generating pkey");
-        let pk = keygen_pk::<_, _, _, ZK>(&params, vk, &circuit)?;
+        let pk = keygen_pk(&params, vk, &circuit)?;
         end_timer!(pk_time);
 
         let break_points = circuit.0.break_points.take();
@@ -169,7 +167,6 @@ fn bench_fixed_base_msm() -> Result<(), Box<dyn std::error::Error>> {
             _,
             Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
             _,
-            ZK,
         >(&params, &pk, &[circuit], &[&[]], rng, &mut transcript)?;
         let proof = transcript.finalize();
         end_timer!(proof_time);
@@ -204,7 +201,6 @@ fn bench_fixed_base_msm() -> Result<(), Box<dyn std::error::Error>> {
             Challenge255<G1Affine>,
             Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
             SingleStrategy<'_, Bn256>,
-            ZK,
         >(verifier_params, pk.get_vk(), strategy, &[&[]], &mut transcript)
         .unwrap();
         end_timer!(verify_time);
