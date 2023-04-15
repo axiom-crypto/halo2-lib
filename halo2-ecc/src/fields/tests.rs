@@ -1,120 +1,55 @@
 mod fp {
-    use crate::fields::{
-        fp::{FpConfig, FpStrategy},
-        FieldChip,
-    };
+    use crate::fields::fp::FpChip;
+    use crate::fields::{FieldChip, PrimeField};
     use crate::halo2_proofs::{
-        circuit::*,
         dev::MockProver,
         halo2curves::bn256::{Fq, Fr},
-        plonk::*,
     };
-    use group::ff::Field;
-    use halo2_base::{
-        utils::{fe_to_biguint, modulus, PrimeField},
-        SKIP_FIRST_PASS,
-    };
-    use num_bigint::BigInt;
+    use halo2_base::gates::builder::{GateThreadBuilder, RangeCircuitBuilder};
+    use halo2_base::gates::RangeChip;
+    use halo2_base::utils::biguint_to_fe;
+    use halo2_base::utils::{fe_to_biguint, modulus};
+    use halo2_base::Context;
     use rand::rngs::OsRng;
-    use std::marker::PhantomData;
 
-    #[derive(Default)]
-    struct MyCircuit<F> {
-        a: Value<Fq>,
-        b: Value<Fq>,
-        _marker: PhantomData<F>,
-    }
-
-    const NUM_ADVICE: usize = 1;
-    const NUM_FIXED: usize = 1;
     const K: usize = 10;
 
-    impl<F: PrimeField> Circuit<F> for MyCircuit<F> {
-        type Config = FpConfig<F, Fq>;
-        type FloorPlanner = SimpleFloorPlanner;
+    fn fp_mul_test<F: PrimeField>(
+        ctx: &mut Context<F>,
+        lookup_bits: usize,
+        limb_bits: usize,
+        num_limbs: usize,
+        _a: Fq,
+        _b: Fq,
+    ) {
+        std::env::set_var("LOOKUP_BITS", lookup_bits.to_string());
+        let range = RangeChip::<F>::default(lookup_bits);
+        let chip = FpChip::<F, Fq>::new(&range, limb_bits, num_limbs);
 
-        fn without_witnesses(&self) -> Self {
-            Self::default()
-        }
+        let [a, b] = [_a, _b].map(|x| chip.load_private(ctx, FpChip::<F, Fq>::fe_to_witness(&x)));
+        let c = chip.mul(ctx, &a, &b);
 
-        fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-            FpConfig::<F, _>::configure(
-                meta,
-                FpStrategy::Simple,
-                &[NUM_ADVICE],
-                &[1],
-                NUM_FIXED,
-                9,
-                88,
-                3,
-                modulus::<Fq>(),
-                0,
-                K,
-            )
-        }
-
-        fn synthesize(
-            &self,
-            chip: Self::Config,
-            mut layouter: impl Layouter<F>,
-        ) -> Result<(), Error> {
-            chip.load_lookup_table(&mut layouter)?;
-
-            let mut first_pass = SKIP_FIRST_PASS;
-
-            layouter.assign_region(
-                || "fp",
-                |region| {
-                    if first_pass {
-                        first_pass = false;
-                        return Ok(());
-                    }
-
-                    let mut aux = chip.new_context(region);
-                    let ctx = &mut aux;
-
-                    let a_assigned =
-                        chip.load_private(ctx, self.a.map(|a| BigInt::from(fe_to_biguint(&a))));
-                    let b_assigned =
-                        chip.load_private(ctx, self.b.map(|b| BigInt::from(fe_to_biguint(&b))));
-
-                    // test fp_multiply
-                    {
-                        chip.mul(ctx, &a_assigned, &b_assigned);
-                    }
-
-                    // IMPORTANT: this copies advice cells to enable lookup
-                    // This is not optional.
-                    chip.finalize(ctx);
-
-                    #[cfg(feature = "display")]
-                    {
-                        println!(
-                            "Using {} advice columns and {} fixed columns",
-                            NUM_ADVICE, NUM_FIXED
-                        );
-                        println!("total cells: {}", ctx.total_advice);
-
-                        let (const_rows, _) = ctx.fixed_stats();
-                        println!("maximum rows used by a fixed column: {const_rows}");
-                    }
-                    Ok(())
-                },
-            )
-        }
+        assert_eq!(c.truncation.to_bigint(limb_bits), c.value);
+        assert_eq!(
+            c.native.value(),
+            &biguint_to_fe(&(&c.value.to_biguint().unwrap() % modulus::<F>()))
+        );
+        assert_eq!(c.value, fe_to_biguint(&(_a * _b)).into())
     }
 
     #[test]
     fn test_fp() {
+        let k = K;
         let a = Fq::random(OsRng);
         let b = Fq::random(OsRng);
 
-        let circuit =
-            MyCircuit::<Fr> { a: Value::known(a), b: Value::known(b), _marker: PhantomData };
+        let mut builder = GateThreadBuilder::<Fr>::mock();
+        fp_mul_test(builder.main(0), k - 1, 88, 3, a, b);
 
-        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
-        //assert_eq!(prover.verify(), Ok(()));
+        builder.config(k, Some(10));
+        let circuit = RangeCircuitBuilder::mock(builder);
+
+        MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
     }
 
     #[cfg(feature = "dev-graph")]
@@ -126,144 +61,93 @@ mod fp {
         root.fill(&WHITE).unwrap();
         let root = root.titled("Fp Layout", ("sans-serif", 60)).unwrap();
 
-        let circuit = MyCircuit::<Fr>::default();
-        halo2_proofs::dev::CircuitLayout::default().render(K as u32, &circuit, &root).unwrap();
+        let k = K;
+        let a = Fq::zero();
+        let b = Fq::zero();
+
+        let mut builder = GateThreadBuilder::keygen();
+        fp_mul_test(builder.main(0), k - 1, 88, 3, a, b);
+
+        builder.config(k, Some(10));
+        let circuit = RangeCircuitBuilder::keygen(builder);
+        halo2_proofs::dev::CircuitLayout::default().render(k as u32, &circuit, &root).unwrap();
     }
 }
 
 mod fp12 {
-    use crate::fields::{
-        fp::{FpConfig, FpStrategy},
-        fp12::*,
-        FieldChip,
-    };
+    use crate::fields::fp::FpChip;
+    use crate::fields::fp12::Fp12Chip;
+    use crate::fields::{FieldChip, PrimeField};
     use crate::halo2_proofs::{
-        circuit::*,
         dev::MockProver,
         halo2curves::bn256::{Fq, Fq12, Fr},
-        plonk::*,
     };
-    use halo2_base::utils::modulus;
-    use halo2_base::{utils::PrimeField, SKIP_FIRST_PASS};
-    use std::marker::PhantomData;
+    use halo2_base::gates::builder::{GateThreadBuilder, RangeCircuitBuilder};
+    use halo2_base::gates::RangeChip;
+    use halo2_base::Context;
+    use rand_core::OsRng;
 
-    #[derive(Default)]
-    struct MyCircuit<F> {
-        a: Value<Fq12>,
-        b: Value<Fq12>,
-        _marker: PhantomData<F>,
-    }
-
-    const NUM_ADVICE: usize = 1;
-    const NUM_FIXED: usize = 1;
     const XI_0: i64 = 9;
 
-    impl<F: PrimeField> Circuit<F> for MyCircuit<F> {
-        type Config = FpConfig<F, Fq>;
-        type FloorPlanner = SimpleFloorPlanner;
+    fn fp12_mul_test<F: PrimeField>(
+        ctx: &mut Context<F>,
+        lookup_bits: usize,
+        limb_bits: usize,
+        num_limbs: usize,
+        _a: Fq12,
+        _b: Fq12,
+    ) {
+        std::env::set_var("LOOKUP_BITS", lookup_bits.to_string());
+        let range = RangeChip::<F>::default(lookup_bits);
+        let fp_chip = FpChip::<F, Fq>::new(&range, limb_bits, num_limbs);
+        let chip = Fp12Chip::<F, _, Fq12, XI_0>::new(&fp_chip);
 
-        fn without_witnesses(&self) -> Self {
-            Self::default()
-        }
+        let [a, b] = [_a, _b].map(|x| {
+            chip.load_private(ctx, Fp12Chip::<F, FpChip<F, Fq>, Fq12, XI_0>::fe_to_witness(&x))
+        });
+        let c = chip.mul(ctx, &a, &b);
 
-        fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-            FpConfig::<F, _>::configure(
-                meta,
-                FpStrategy::Simple,
-                &[NUM_ADVICE],
-                &[1],
-                NUM_FIXED,
-                22,
-                88,
-                3,
-                modulus::<Fq>(),
-                0,
-                23,
-            )
-        }
-
-        fn synthesize(
-            &self,
-            config: Self::Config,
-            mut layouter: impl Layouter<F>,
-        ) -> Result<(), Error> {
-            config.load_lookup_table(&mut layouter)?;
-            let chip = Fp12Chip::<F, FpConfig<F, Fq>, Fq12, XI_0>::construct(&config);
-
-            let mut first_pass = SKIP_FIRST_PASS;
-
-            layouter.assign_region(
-                || "fp12",
-                |region| {
-                    if first_pass {
-                        first_pass = false;
-                        return Ok(());
-                    }
-
-                    let mut aux = config.new_context(region);
-                    let ctx = &mut aux;
-
-                    let a_assigned = chip.load_private(
-                        ctx,
-                        Fp12Chip::<F, FpConfig<F, Fq>, Fq12, XI_0>::fe_to_witness(&self.a),
-                    );
-                    let b_assigned = chip.load_private(
-                        ctx,
-                        Fp12Chip::<F, FpConfig<F, Fq>, Fq12, XI_0>::fe_to_witness(&self.b),
-                    );
-
-                    // test fp_multiply
-                    {
-                        chip.mul(ctx, &a_assigned, &b_assigned);
-                    }
-
-                    // IMPORTANT: this copies advice cells to enable lookup
-                    // This is not optional.
-                    chip.fp_chip.finalize(ctx);
-
-                    #[cfg(feature = "display")]
-                    {
-                        println!(
-                            "Using {} advice columns and {} fixed columns",
-                            NUM_ADVICE, NUM_FIXED
-                        );
-                        println!("total advice cells: {}", ctx.total_advice);
-
-                        let (const_rows, _) = ctx.fixed_stats();
-                        println!("maximum rows used by a fixed column: {const_rows}");
-                    }
-                    Ok(())
-                },
-            )
+        assert_eq!(chip.get_assigned_value(&c), _a * _b);
+        for c in c.coeffs {
+            assert_eq!(c.truncation.to_bigint(limb_bits), c.value);
         }
     }
 
     #[test]
     fn test_fp12() {
-        let k = 23;
-        let mut rng = rand::thread_rng();
-        let a = Fq12::random(&mut rng);
-        let b = Fq12::random(&mut rng);
+        let k = 12;
+        let a = Fq12::random(OsRng);
+        let b = Fq12::random(OsRng);
 
-        let circuit =
-            MyCircuit::<Fr> { a: Value::known(a), b: Value::known(b), _marker: PhantomData };
+        let mut builder = GateThreadBuilder::<Fr>::mock();
+        fp12_mul_test(builder.main(0), k - 1, 88, 3, a, b);
 
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
-        // assert_eq!(prover.verify(), Ok(()));
+        builder.config(k, Some(20));
+        let circuit = RangeCircuitBuilder::mock(builder);
+
+        MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
     }
 
     #[cfg(feature = "dev-graph")]
     #[test]
     fn plot_fp12() {
-        let k = 9;
+        use ff::Field;
         use plotters::prelude::*;
 
         let root = BitMapBackend::new("layout.png", (1024, 1024)).into_drawing_area();
         root.fill(&WHITE).unwrap();
         let root = root.titled("Fp Layout", ("sans-serif", 60)).unwrap();
 
-        let circuit = MyCircuit::<Fr>::default();
+        let k = 23;
+        let a = Fq12::zero();
+        let b = Fq12::zero();
+
+        let mut builder = GateThreadBuilder::<Fr>::mock();
+        fp12_mul_test(builder.main(0), k - 1, 88, 3, a, b);
+
+        builder.config(k, Some(20));
+        let circuit = RangeCircuitBuilder::mock(builder);
+
         halo2_proofs::dev::CircuitLayout::default().render(k, &circuit, &root).unwrap();
     }
 }

@@ -1,35 +1,27 @@
 use super::{CRTInteger, OverflowInteger};
-use halo2_base::{gates::GateInstructions, utils::PrimeField, Context, QuantumCell::Existing};
+use halo2_base::{gates::GateInstructions, utils::ScalarField, Context, QuantumCell::Existing};
 
-pub fn truncate<'v, F: PrimeField>(
+pub fn truncate<F: ScalarField>(
     gate: &impl GateInstructions<F>,
-    // _chip: &BigIntConfig<F>,
-    ctx: &mut Context<'_, F>,
-    a: &OverflowInteger<'v, F>,
-    b: &OverflowInteger<'v, F>,
+    ctx: &mut Context<F>,
+    a: &OverflowInteger<F>,
+    b: &OverflowInteger<F>,
     num_limbs_log2_ceil: usize,
-) -> OverflowInteger<'v, F> {
+) -> OverflowInteger<F> {
     let k = a.limbs.len();
-    assert!(k > 0);
     assert_eq!(k, b.limbs.len());
+    debug_assert!(k > 0);
 
-    #[cfg(feature = "display")]
-    {
-        let key = format!("mul_no_carry(truncate) length {k}");
-        let count = ctx.op_count.entry(key).or_insert(0);
-        *count += 1;
-
-        assert!(
-            num_limbs_log2_ceil + a.max_limb_bits + b.max_limb_bits <= F::NUM_BITS as usize - 2
-        );
-    }
+    debug_assert!(
+        num_limbs_log2_ceil + a.max_limb_bits + b.max_limb_bits <= F::NUM_BITS as usize - 2
+    );
 
     let out_limbs = (0..k)
         .map(|i| {
             gate.inner_product(
                 ctx,
-                a.limbs[..=i].iter().map(Existing),
-                b.limbs[..=i].iter().rev().map(Existing),
+                a.limbs[..=i].iter().copied(),
+                b.limbs[..=i].iter().rev().map(|x| Existing(*x)),
             )
         })
         .collect();
@@ -37,17 +29,16 @@ pub fn truncate<'v, F: PrimeField>(
     OverflowInteger::construct(out_limbs, num_limbs_log2_ceil + a.max_limb_bits + b.max_limb_bits)
 }
 
-pub fn crt<'v, F: PrimeField>(
+pub fn crt<F: ScalarField>(
     gate: &impl GateInstructions<F>,
-    // chip: &BigIntConfig<F>,
-    ctx: &mut Context<'_, F>,
-    a: &CRTInteger<'v, F>,
-    b: &CRTInteger<'v, F>,
+    ctx: &mut Context<F>,
+    a: &CRTInteger<F>,
+    b: &CRTInteger<F>,
     num_limbs_log2_ceil: usize,
-) -> CRTInteger<'v, F> {
+) -> CRTInteger<F> {
     let out_trunc = truncate::<F>(gate, ctx, &a.truncation, &b.truncation, num_limbs_log2_ceil);
-    let out_native = gate.mul(ctx, Existing(&a.native), Existing(&b.native));
-    let out_val = a.value.as_ref() * b.value.as_ref();
+    let out_native = gate.mul(ctx, a.native, b.native);
+    let out_val = &a.value * &b.value;
 
     CRTInteger::construct(out_trunc, out_native, out_val)
 }

@@ -1,13 +1,11 @@
 use super::OverflowInteger;
-use crate::halo2_proofs::circuit::Value;
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
-    utils::{bigint_to_fe, biguint_to_fe, fe_to_bigint, value_to_option, PrimeField},
+    utils::{bigint_to_fe, fe_to_bigint, BigPrimeField},
     Context,
     QuantumCell::{Constant, Existing, Witness},
 };
-use num_bigint::{BigInt, BigUint};
-use num_traits::One;
+use num_bigint::BigInt;
 
 // check that `a` carries to `0 mod 2^{a.limb_bits * a.limbs.len()}`
 // same as `assign` above except we need to provide `c_{k - 1}` witness as well
@@ -26,10 +24,10 @@ use num_traits::One;
 // a_i * 2^{n*w} + a_{i - 1} * 2^{n*(w-1)} + ... + a_{i - w} + c_{i - w - 1} = c_i * 2^{n*(w+1)}
 // which is valid as long as `(m - n + EPSILON) + n * (w+1) < native_modulus::<F>().bits() - 1`
 // so we only need to range check `c_i` every `w + 1` steps, starting with `i = w`
-pub fn truncate<'a, F: PrimeField>(
+pub fn truncate<F: BigPrimeField>(
     range: &impl RangeInstructions<F>,
-    ctx: &mut Context<'a, F>,
-    a: &OverflowInteger<'a, F>,
+    ctx: &mut Context<F>,
+    a: OverflowInteger<F>,
     limb_bits: usize,
     limb_base: F,
     limb_base_big: &BigInt,
@@ -37,27 +35,16 @@ pub fn truncate<'a, F: PrimeField>(
     let k = a.limbs.len();
     let max_limb_bits = a.max_limb_bits;
 
-    #[cfg(feature = "display")]
-    {
-        let key = format!("check_carry_to_zero(trunc) length {k}");
-        let count = ctx.op_count.entry(key).or_insert(0);
-        *count += 1;
-    }
-
-    let mut carries: Vec<Value<BigInt>> = Vec::with_capacity(k);
+    let mut carries = Vec::with_capacity(k);
 
     for a_limb in a.limbs.iter() {
-        let a_val = a_limb.value();
-        let carry = a_val.map(|a_fe| {
-            let a_val_big = fe_to_bigint(a_fe);
-            if carries.is_empty() {
-                // warning: using >> on negative integer produces undesired effect
-                a_val_big / limb_base_big
-            } else {
-                let carry_val = value_to_option(carries.last().unwrap().as_ref()).unwrap();
-                (a_val_big + carry_val) / limb_base_big
-            }
-        });
+        let a_val_big = fe_to_bigint(a_limb.value());
+        let carry = if let Some(carry_val) = carries.last() {
+            (a_val_big + carry_val) / limb_base_big
+        } else {
+            // warning: using >> on negative integer produces undesired effect
+            a_val_big / limb_base_big
+        };
         carries.push(carry);
     }
 
@@ -69,44 +56,30 @@ pub fn truncate<'a, F: PrimeField>(
     // `window = w + 1` valid as long as `range_bits + n * (w+1) < native_modulus::<F>().bits() - 1`
     // let window = (F::NUM_BITS as usize - 2 - range_bits) / limb_bits;
     // assert!(window > 0);
+    // In practice, we are currently always using window = 1 so the above is commented out
 
-    // TODO: maybe we can also cache these bigints
-    let shift_val = biguint_to_fe::<F>(&(BigUint::one() << range_bits));
+    let shift_val = range.gate().pow_of_two()[range_bits];
     // let num_windows = (k - 1) / window + 1; // = ((k - 1) - (window - 1) + window - 1) / window + 1;
 
     let mut previous = None;
-    for (a_limb, carry) in a.limbs.iter().zip(carries.iter()) {
-        let neg_carry_val = carry.as_ref().map(|c| bigint_to_fe::<F>(&-c));
-        let neg_carry = range
-            .gate()
-            .assign_region(
-                ctx,
-                vec![
-                    Existing(a_limb),
-                    Witness(neg_carry_val),
-                    Constant(limb_base),
-                    previous.as_ref().map(Existing).unwrap_or_else(|| Constant(F::zero())),
-                ],
-                vec![(0, None)],
-            )
-            .into_iter()
-            .nth(1)
-            .unwrap();
+    for (a_limb, carry) in a.limbs.into_iter().zip(carries.into_iter()) {
+        let neg_carry_val = bigint_to_fe(&-carry);
+        ctx.assign_region(
+            [
+                Existing(a_limb),
+                Witness(neg_carry_val),
+                Constant(limb_base),
+                previous.map(Existing).unwrap_or_else(|| Constant(F::zero())),
+            ],
+            [0],
+        );
+        let neg_carry = ctx.get(-3);
 
         // i in 0..num_windows {
         // let idx = std::cmp::min(window * i + window - 1, k - 1);
         // let carry_cell = &neg_carry_assignments[idx];
-        let shifted_carry = {
-            let shift_carry_val = Value::known(shift_val) + neg_carry.value();
-            let cells = vec![
-                Existing(&neg_carry),
-                Constant(F::one()),
-                Constant(shift_val),
-                Witness(shift_carry_val),
-            ];
-            range.gate().assign_region_last(ctx, cells, vec![(0, None)])
-        };
-        range.range_check(ctx, &shifted_carry, range_bits + 1);
+        let shifted_carry = range.gate().add(ctx, neg_carry, Constant(shift_val));
+        range.range_check(ctx, shifted_carry, range_bits + 1);
 
         previous = Some(neg_carry);
     }
