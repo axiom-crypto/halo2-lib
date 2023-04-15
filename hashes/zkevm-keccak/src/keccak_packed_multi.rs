@@ -395,7 +395,7 @@ pub fn assign_advice_custom<'v, F: Field>(
 ) -> KeccakAssignedValue<'v, F> {
     #[cfg(feature = "halo2-axiom")]
     {
-        region.assign_advice(column, offset, value).unwrap()
+        region.assign_advice(column, offset, value)
     }
     #[cfg(feature = "halo2-pse")]
     {

@@ -91,7 +91,7 @@ where
 
     let mut bucket = Vec::with_capacity(1 << c);
     let mut rand_point = rand_base.clone();
-    for (round, points_clump) in points.chunks(c).into_iter().enumerate() {
+    for (round, points_clump) in points.chunks(c).enumerate() {
         // compute all possible multi-products of elements in points[round * c .. round * (c+1)]
 
         // for later addition collision-prevension, we need a different random point per round
