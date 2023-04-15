@@ -129,7 +129,7 @@ fn test_secp256k1_ecdsa() {
 
 #[test]
 fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
-    let rng = OsRng;
+    let mut rng = OsRng;
     let config_path = "configs/secp256k1/bench_ecdsa.config";
     let bench_params_file =
         File::open(config_path).unwrap_or_else(|e| panic!("{config_path} does not exist: {e:?}"));
@@ -172,7 +172,7 @@ fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
             _,
             Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
             _,
-        >(&params, &pk, &[circuit], &[&[]], rng, &mut transcript)?;
+        >(&params, &pk, &[circuit], &[&[]], &mut rng, &mut transcript)?;
         let proof = transcript.finalize();
         end_timer!(proof_time);
 
