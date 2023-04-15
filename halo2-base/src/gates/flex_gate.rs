@@ -473,8 +473,11 @@ pub trait GateInstructions<F: ScalarField> {
         indicator.split_off((1 << k) - 2)
     }
 
-    // returns vec with vec.len() == len such that:
-    //     vec[i] == 1{i == idx}
+    /// Returns a vector `indicator` of length `len` where
+    /// ```
+    /// indicator[i] == i == idx ? 1 : 0
+    /// ```
+    /// If `idx >= len` then `indicator` is all zeros.
     fn idx_to_indicator(
         &self,
         ctx: &mut Context<F>,
@@ -482,39 +485,38 @@ pub trait GateInstructions<F: ScalarField> {
         len: usize,
     ) -> Vec<AssignedValue<F>> {
         let mut idx = idx.into();
-        let mut ind = Vec::with_capacity(len);
-        let idx_val = idx.value().get_lower_32() as usize;
-        for i in 0..len {
-            // check ind[i] * (i - idx) == 0
-            let ind_val = F::from(idx_val == i);
-            let val = if idx_val == i { *idx.value() } else { F::zero() };
-            ctx.assign_region_smart(
-                [
-                    Constant(F::zero()),
-                    Witness(ind_val),
-                    idx,
-                    Witness(val),
-                    Constant(-F::from(i as u64)),
-                    Witness(ind_val),
-                    Constant(F::zero()),
-                ],
-                [0, 3],
-                [(1, 5)],
-                [],
-            );
-            // need to use assigned idx after i > 0 so equality constraint holds
-            if i == 0 {
-                idx = Existing(ctx.get(-5));
-            }
-            let ind_cell = ctx.get(-2);
-            self.assert_bit(ctx, ind_cell);
-            ind.push(ind_cell);
-        }
-        ind
+        (0..len)
+            .map(|i| {
+                // need to use assigned idx after i > 0 so equality constraint holds
+                if i == 0 {
+                    // unroll `is_zero` to make sure if `idx == Witness(_)` it is replaced by `Existing(_)` in later iterations
+                    let x = idx.value();
+                    let (is_zero, inv) = if x.is_zero_vartime() {
+                        (F::one(), Assigned::Trivial(F::one()))
+                    } else {
+                        (F::zero(), Assigned::Rational(F::one(), *x))
+                    };
+                    let cells = [
+                        Witness(is_zero),
+                        idx,
+                        WitnessFraction(inv),
+                        Constant(F::one()),
+                        Constant(F::zero()),
+                        idx,
+                        Witness(is_zero),
+                        Constant(F::zero()),
+                    ];
+                    ctx.assign_region_smart(cells, [0, 4], [(0, 6), (1, 5)], []); // note the two `idx` need to be constrained equal: (1, 5)
+                    idx = Existing(ctx.get(-3)); // replacing `idx` with Existing cell so future loop iterations constrain equality of all `idx`s
+                    ctx.get(-2)
+                } else {
+                    self.is_equal(ctx, idx, Constant(self.get_field_element(i as u64)))
+                }
+            })
+            .collect()
     }
 
-    // performs inner product on a, indicator
-    // `indicator` values are all boolean
+    /// Performs inner product on `<a, indicator>`. Assumes that `a` and `indicator` are of the same length.
     /// Assumes for witness generation that only one element of `indicator` has non-zero value and that value is `F::one()`.
     fn select_by_indicator<Q>(
         &self,
@@ -540,6 +542,8 @@ pub trait GateInstructions<F: ScalarField> {
         ctx.assign_region_last(cells, (0..len).map(|i| 3 * i as isize))
     }
 
+    /// Given `cells` and `idx`, returns `cells[idx]` if `idx < cells.len()`.
+    /// If `idx >= cells.len()` then returns `F::zero()`.
     fn select_from_idx<Q>(
         &self,
         ctx: &mut Context<F>,
