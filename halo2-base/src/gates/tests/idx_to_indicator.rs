@@ -1,9 +1,16 @@
-use crate::halo2_proofs::{
-    plonk::keygen_pk,
-    plonk::{keygen_vk, Assigned},
-    poly::kzg::commitment::ParamsKZG,
+use crate::{
+    gates::{
+        builder::{GateCircuitBuilder, GateThreadBuilder},
+        GateChip, GateInstructions,
+    },
+    halo2_proofs::{
+        plonk::keygen_pk,
+        plonk::{keygen_vk, Assigned},
+        poly::kzg::commitment::ParamsKZG,
+    },
 };
 
+use ff::Field;
 use itertools::Itertools;
 use rand::{thread_rng, Rng};
 
