@@ -14,7 +14,6 @@ use halo2_base::{
 };
 use itertools::Itertools;
 use rayon::prelude::*;
-use std::sync::Mutex;
 use std::{cmp::min, marker::PhantomData};
 
 // this only works for curves GA with base field of prime order
@@ -230,8 +229,7 @@ where
         .chunks(cached_points.len() / points.len())
         .zip(bits.chunks(total_bits))
         .map(|(cached_points, bits)| {
-            let cached_point_window_rev =
-                cached_points.chunks(1usize << window_bits).rev();
+            let cached_point_window_rev = cached_points.chunks(1usize << window_bits).rev();
             let bit_window_rev = bits.chunks(window_bits).rev();
             let mut curr_point = None;
             // `is_started` is just a way to deal with if `curr_point` is actually identity
@@ -265,7 +263,7 @@ where
 
 pub fn msm_par<F, FC, C>(
     chip: &EccChip<F, FC>,
-    thread_pool: &Mutex<GateThreadBuilder<F>>,
+    builder: &mut GateThreadBuilder<F>,
     points: &[C],
     scalars: Vec<Vec<AssignedValue<F>>>,
     max_scalar_bits_per_cell: usize,
@@ -280,6 +278,8 @@ where
         + Selectable<F, Point = FC::FieldPoint>,
 {
     assert!((max_scalar_bits_per_cell as u32) <= F::NUM_BITS);
+    assert_eq!(points.len(), scalars.len());
+    assert!(!points.is_empty(), "fixed_base::msm_par requires at least one point");
     let scalar_len = scalars[0].len();
     let total_bits = max_scalar_bits_per_cell * scalar_len;
     let num_windows = (total_bits + window_bits - 1) / window_bits;
@@ -288,7 +288,7 @@ where
     // first we compute all cached points in Jacobian coordinates since it's fastest
     let cached_points_jacobian = points
         .par_iter()
-        .flat_map(|point| {
+        .flat_map(|point| -> Vec<_> {
             let base_pt = point.to_curve();
             // cached_points[idx][i * 2^w + j] holds `[j * 2^(i * w)] * points[idx]` for j in {0, ..., 2^w - 1}
             let mut increment = base_pt;
@@ -303,11 +303,11 @@ where
                                 prev
                             },
                         ))
-                        .collect_vec();
+                        .collect::<Vec<_>>();
                     increment = curr;
                     cache_vec
                 })
-                .collect_vec()
+                .collect()
         })
         .collect::<Vec<_>>();
     // for use in circuits we need affine coordinates, so we do a batch normalize: this is much more efficient than calling `to_affine` one by one since field inversion is very expensive
@@ -316,14 +316,15 @@ where
     C::Curve::batch_normalize(&cached_points_jacobian, &mut cached_points_affine);
 
     let field_chip = chip.field_chip();
-    let witness_gen_only = thread_pool.lock().unwrap().witness_gen_only();
+    let witness_gen_only = builder.witness_gen_only();
 
+    let zero = builder.main(phase).load_zero();
+    let thread_ids = (0..scalars.len()).map(|_| builder.get_new_thread_id()).collect::<Vec<_>>();
     let (new_threads, scalar_mults): (Vec<_>, Vec<_>) = cached_points_affine
         .par_chunks(cached_points_affine.len() / points.len())
-        .zip(scalars.into_par_iter())
-        .map(|(cached_points, scalar)| {
-            let thread_id = thread_pool.lock().unwrap().get_new_thread_id();
-            // thread_pool should be unlocked now
+        .zip_eq(scalars.into_par_iter())
+        .zip(thread_ids.into_par_iter())
+        .map(|((cached_points, scalar), thread_id)| {
             let mut thread = Context::new(witness_gen_only, thread_id);
             let ctx = &mut thread;
 
@@ -338,8 +339,7 @@ where
                     point.assign(field_chip, ctx)
                 })
                 .collect_vec();
-            let cached_point_window_rev =
-                cached_points.chunks(1usize << window_bits).into_iter().rev();
+            let cached_point_window_rev = cached_points.chunks(1usize << window_bits).rev();
 
             debug_assert_eq!(scalar.len(), scalar_len);
             let bits = scalar
@@ -347,11 +347,11 @@ where
                 .flat_map(|scalar_chunk| {
                     field_chip.gate().num_to_bits(ctx, scalar_chunk, max_scalar_bits_per_cell)
                 })
-                .collect_vec();
-            let bit_window_rev = bits.chunks(window_bits).into_iter().rev();
+                .collect::<Vec<_>>();
+            let bit_window_rev = bits.chunks(window_bits).rev();
             let mut curr_point = None;
             // `is_started` is just a way to deal with if `curr_point` is actually identity
-            let mut is_started = ctx.load_zero();
+            let mut is_started = zero;
             for (cached_point_window, bit_window) in cached_point_window_rev.zip(bit_window_rev) {
                 let is_zero_window = {
                     let sum = field_chip.gate().sum(ctx, bit_window.iter().copied());
@@ -376,8 +376,6 @@ where
             (thread, curr_point.unwrap())
         })
         .unzip();
-    let mut builder = thread_pool.lock().unwrap();
     builder.threads[phase].extend(new_threads);
-    let ctx = builder.main(phase);
-    chip.sum::<C>(ctx, scalar_mults.iter())
+    chip.sum::<C>(builder.main(phase), scalar_mults.iter())
 }
