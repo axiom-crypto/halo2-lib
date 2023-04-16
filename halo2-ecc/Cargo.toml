@@ -1,6 +1,6 @@
 [package]
 name = "halo2-ecc"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2021"
 
 [dependencies]
@@ -26,6 +26,7 @@ ark-std = { version = "0.3.0", features = ["print-trace"] }
 pprof = { version = "0.11", features = ["criterion", "flamegraph"] }
 criterion = "0.4"
 criterion-macro = "0.4"
+halo2-base = { path = "../halo2-base", default-features = false, features = ["test-utils"] }
 
 [features]
 default = ["jemallocator", "halo2-axiom", "display"]
