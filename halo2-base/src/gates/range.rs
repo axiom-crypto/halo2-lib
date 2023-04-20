@@ -21,28 +21,51 @@ use std::{cmp::Ordering, ops::Shl};
 
 use super::flex_gate::GateChip;
 
+/// Specifies the gate strategy for the range chip
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RangeStrategy {
+    /// # Vertical Gate Strategy:
+    /// `q_0 * (a + b * c - d) = 0`
+    /// where
+    /// * a = value[0], b = value[1], c = value[2], d = value[3]
+    /// * q = q_enable[0]
+    /// * q_i is either 0 or 1 so this is just a simple selector
+    /// We chose `a + b * c` instead of `a * b + c` to allow "chaining" of gates, i.e., the output of one gate because `a` in the next gate
     Vertical, // vanilla implementation with vertical basic gate(s)
 }
 
+/// Configuration for Range Chip
 #[derive(Clone, Debug)]
 pub struct RangeConfig<F: ScalarField> {
+    /// Underlying Gate Configuration
     pub gate: FlexGateConfig<F>,
-    /// `lookup_advice` are special advice columns only used for lookups
+    /// Special advice (witness) Columns used only for LookUp Table 
+    /// Each phase of a halo2 circuit has a distinct lookup_advice column
     ///
-    /// If `strategy` is `Vertical`:
     /// * If `gate` has only 1 advice column, enable lookups for that column, in which case `lookup_advice` is empty
     /// * Otherwise, add some user-specified number of `lookup_advice` columns
-    ///   * In this case, we don't even need a selector so `q_lookup` is empty
+    /// * In this case, we don't even need a selector so `q_lookup` is empty
     pub lookup_advice: [Vec<Column<Advice>>; MAX_PHASE],
+    /// Selector values for the LookUp Table
     pub q_lookup: Vec<Option<Selector>>,
+    /// Column for LookUp Table values
     pub lookup: TableColumn,
+    /// Defines the number of bits represented in the LookUp Table [0,2^lookup_bits)
     lookup_bits: usize,
+    /// Gate Strategy used for specifying advice values
     _strategy: RangeStrategy,
 }
 
 impl<F: ScalarField> RangeConfig<F> {
+
+    /// Generates a new RangeConfig
+    /// * `meta`: ConstraintSystem
+    /// * `range_strategy`: GateStrategy
+    /// * `num_advice`: Number of advice columns in each phase
+    /// * `num_lookup_advice`: Number of lookup_advice columns in each phase
+    /// * `num_fixed`: Number of fixed columns
+    /// * `lookup_bits`: Number of bits represented in the LookUp Table [0,2^lookup_bits)
+    /// * `circuit_degree`: Size of circuit (i.e., number of rows in circuit)
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         range_strategy: RangeStrategy,
@@ -101,10 +124,12 @@ impl<F: ScalarField> RangeConfig<F> {
         config
     }
 
+    /// Returns the number of bits represented in the LookUp Table [0,2^lookup_bits)
     pub fn lookup_bits(&self) -> usize {
         self.lookup_bits
     }
 
+    /// Instantiates the LookUp Table 
     fn create_lookup(&self, meta: &mut ConstraintSystem<F>) {
         for (phase, q_l) in self.q_lookup.iter().enumerate() {
             if let Some(q) = q_l {
@@ -125,6 +150,8 @@ impl<F: ScalarField> RangeConfig<F> {
         }
     }
 
+    /// Loads the LookUp Table into the circuit using the provided layouter
+    /// * `layouter`: layouter for the circuit
     pub fn load_lookup_table(&self, layouter: &mut impl Layouter<F>) -> Result<(), Error> {
         layouter.assign_table(
             || format!("{} bit lookup", self.lookup_bits),
@@ -144,17 +171,30 @@ impl<F: ScalarField> RangeConfig<F> {
     }
 }
 
+/// Trait that implements methods to constrain a field element number `x` is within a certain number of bits.
 pub trait RangeInstructions<F: ScalarField> {
+
+    /// The type of Gate used within the instructions
     type Gate: GateInstructions<F>;
 
+    /// Returns the gate configuration for this range.
     fn gate(&self) -> &Self::Gate;
+
+    /// Returns the gate strategy for this range.
     fn strategy(&self) -> RangeStrategy;
 
+    /// Returns the number of bits the lookup table represents
     fn lookup_bits(&self) -> usize;
 
-    /// Constrain that `a` lies in the range [0, 2<sup>range_bits</sup>).
+    /// Checks that `a` lies in the range [0, 2<sup>range_bits</sup>).
+    /// * a: value to be range checked
+    /// * range_bits: number of bits to represent the range
     fn range_check(&self, ctx: &mut Context<F>, a: AssignedValue<F>, range_bits: usize);
 
+    /// Check that 'a' is less than 'b' 
+    /// * a: value to check
+    /// * b: upper bound
+    /// * num_bits: number of bits to represent the range
     fn check_less_than(
         &self,
         ctx: &mut Context<F>,
@@ -164,6 +204,8 @@ pub trait RangeInstructions<F: ScalarField> {
     );
 
     /// Checks that `a` is in `[0, b)`.
+    /// * a: value to check
+    /// * b: upper bound
     ///
     /// Does not require bit assumptions on `a, b` because we range check that `a` has at most `bit_length(b)` bits.
     fn check_less_than_safe(&self, ctx: &mut Context<F>, a: AssignedValue<F>, b: u64) {
@@ -175,6 +217,8 @@ pub trait RangeInstructions<F: ScalarField> {
     }
 
     /// Checks that `a` is in `[0, b)`.
+    /// * a: value to check
+    /// * b: upper bound
     ///
     /// Does not require bit assumptions on `a, b` because we range check that `a` has at most `bit_length(b)` bits.
     fn check_big_less_than_safe(&self, ctx: &mut Context<F>, a: AssignedValue<F>, b: BigUint)
@@ -189,6 +233,9 @@ pub trait RangeInstructions<F: ScalarField> {
     }
 
     /// Returns whether `a` is in `[0, b)`.
+    /// * a: value to check
+    /// * b: upper bound
+    /// * num_bits: number of bits to represent the range
     ///
     /// Warning: This may fail silently if `a` or `b` have more than `num_bits` bits
     fn is_less_than(
@@ -200,6 +247,8 @@ pub trait RangeInstructions<F: ScalarField> {
     ) -> AssignedValue<F>;
 
     /// Returns whether `a` is in `[0, b)`.
+    /// * a: value to check
+    /// * b: upper bound
     ///
     /// Does not require bit assumptions on `a, b` because we range check that `a` has at most `range_bits` bits.
     fn is_less_than_safe(
@@ -216,6 +265,8 @@ pub trait RangeInstructions<F: ScalarField> {
     }
 
     /// Returns whether `a` is in `[0, b)`.
+    /// * a: value to check
+    /// * b: upper bound
     ///
     /// Does not require bit assumptions on `a, b` because we range check that `a` has at most `range_bits` bits.
     fn is_big_less_than_safe(
@@ -235,6 +286,9 @@ pub trait RangeInstructions<F: ScalarField> {
     }
 
     /// Returns `(c, r)` such that `a = b * c + r`.
+    /// * a: value to divide
+    /// * b: value to divide by
+    /// * a_num_bits: number of bits in `a`
     ///
     /// Assumes that `b != 0`.
     fn div_mod(
@@ -265,7 +319,11 @@ pub trait RangeInstructions<F: ScalarField> {
     }
 
     /// Returns `(c, r)` such that `a = b * c + r`.
-    ///
+    /// * a: value to divide
+    /// * b: value to divide by
+    /// * a_num_bits: number of bits in `a`
+    /// * b_num_bits: number of bits in `b`
+    /// 
     /// Assumes that `b != 0`.
     ///
     /// Let `X = 2 ** b_num_bits`.
@@ -316,6 +374,10 @@ pub trait RangeInstructions<F: ScalarField> {
         (div, rem)
     }
 
+    /// Returns the last bit of the [a] of a 2^64 bit number
+    /// * a: value to get the last bit of
+    /// * limb_bits: number of bits in a limb
+    /// 
     /// Assume `a` has been range checked already to `limb_bits` bits
     fn get_last_bit(
         &self,
@@ -340,15 +402,38 @@ pub trait RangeInstructions<F: ScalarField> {
     }
 }
 
+/// Represents a chip that can be used to constrain a field element number `x` is within a certain number of bits.
 #[derive(Clone, Debug)]
 pub struct RangeChip<F: ScalarField> {
+    /// # RangeChip
+    /// Provides methods to constrain a field element number `x` is within a certain number of bits.
+    /// Declares a LookUp table of [0, 2**lookup_bits) and constrains whether a field element appears in this table
+    /// 
+    /// # LookUp bits:
+    /// The environment variable DEGREE specifies that the circuit will have 2**DEGREE rows. 
+    /// LOOKUP_BITS can be any (nonzero) number less than DEGREE. 
+    /// The value of LOOKUP_BITS doesn't affect the functionality of range_check. However, the choice of LOOKUP_BITS will affect circuit performance. 
+    /// 
+    /// # Guidelines:
+    /// If you know you will only do lookups on a fixed number of bits, then set LOOKUP_BITS to that number.
+    /// If you will be doing variable length range checks, generally you should set LOOKUP_BITS = DEGREE - 1.
+
+    /// Gate Strategy for advice values in this chip
     strategy: RangeStrategy,
+    /// Underlying GateChip 
     pub gate: GateChip<F>,
+    /// Defines the number of bits represented in the LookUp Table [0,2^lookup_bits)
     pub lookup_bits: usize,
+    /// Vector of 'Limbs' that divide the underlying scalar field element into smaller smaller than lookup_bits
+    /// * This allows us to perform range checks on field elements that are larger than the lookup table
     pub limb_bases: Vec<QuantumCell<F>>,
 }
 
 impl<F: ScalarField> RangeChip<F> {
+
+    /// Creates a new RangeChip with the given strategy and lookup_bits
+    /// * strategy: GateStrategy for advice values in this chip
+    /// * lookup_bits: number of bits represented in the LookUp Table [0,2^lookup_bits)
     pub fn new(strategy: RangeStrategy, lookup_bits: usize) -> Self {
         let limb_base = F::from(1u64 << lookup_bits);
         let mut running_base = limb_base;
@@ -366,6 +451,8 @@ impl<F: ScalarField> RangeChip<F> {
         Self { strategy, gate, lookup_bits, limb_bases }
     }
 
+    /// Creates a new RangeChip with the default strategy and provided lookup_bits
+    /// * lookup_bits: number of bits represented in the LookUp Table [0,2^lookup_bits)
     pub fn default(lookup_bits: usize) -> Self {
         Self::new(RangeStrategy::Vertical, lookup_bits)
     }
@@ -374,17 +461,30 @@ impl<F: ScalarField> RangeChip<F> {
 impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
     type Gate = GateChip<F>;
 
+    /// The type of Gate used within the instructions
     fn gate(&self) -> &Self::Gate {
         &self.gate
     }
+
+    /// Returns the gate strategy for this range.
     fn strategy(&self) -> RangeStrategy {
         self.strategy
     }
 
+    /// Defines the number of bits represented in the LookUp Table [0,2^lookup_bits)
     fn lookup_bits(&self) -> usize {
         self.lookup_bits
     }
 
+    /// Checks that `a` lies in the range [0, 2<sup>range_bits</sup>).
+    ///
+    /// This is done by decomposing `a` into `k` limbs, where `k = (range_bits + lookup_bits - 1) / lookup_bits`.
+    /// Each limb is constrained to be within the range [0, 2<sup>lookup_bits</sup>).
+    /// The limbs are then combined to form `a` again with the last limb having `rem_bits` number of bits.
+    /// 
+    /// * `a`: value to be range checked
+    /// * `range_bits`: number of bits in the range
+    /// * `lookup_bits`: number of bits in the lookup table
     fn range_check(&self, ctx: &mut Context<F>, a: AssignedValue<F>, range_bits: usize) {
         // the number of limbs
         let k = (range_bits + self.lookup_bits - 1) / self.lookup_bits;
@@ -428,6 +528,11 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         }
     }
 
+    /// Constrain that 'a' is less than 'b' 
+    /// * `a`  - the first cell to compare
+    /// * `b`  - the second cell to compare
+    /// * `num_bits` - max number of bits to compare
+    /// 
     /// Warning: This may fail silently if a or b have more than num_bits
     fn check_less_than(
         &self,
@@ -460,6 +565,11 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         self.range_check(ctx, check_cell, num_bits);
     }
 
+    /// Returns whether `a` is in `[0, b)`.
+    /// * `a`  - the first cell to compare
+    /// * `b`  - the second cell to compare
+    /// * `num_bits` - max number of bits to compare
+    /// 
     /// Warning: This may fail silently if a or b have more than num_bits
     fn is_less_than(
         &self,
