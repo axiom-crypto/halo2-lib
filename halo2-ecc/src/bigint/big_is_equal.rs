@@ -18,10 +18,10 @@ pub fn assign<F: PrimeField>(
     let mut a_limbs = a.limbs.iter();
     let mut b_limbs = b.limbs.iter();
     let mut partial =
-        gate.is_equal(ctx, Existing(a_limbs.next().unwrap()), Existing(b_limbs.next().unwrap()));
+        gate.is_equal(ctx, Existing(*a_limbs.next().unwrap()), Existing(*b_limbs.next().unwrap()));
     for (a_limb, b_limb) in a_limbs.zip(b_limbs) {
-        let eq_limb = gate.is_equal(ctx, Existing(a_limb), Existing(b_limb));
-        partial = gate.and(ctx, Existing(&eq_limb), Existing(&partial));
+        let eq_limb = gate.is_equal(ctx, Existing(*a_limb), Existing(*b_limb));
+        partial = gate.and(ctx, Existing(eq_limb), Existing(partial));
     }
     partial
 }
@@ -42,6 +42,6 @@ pub fn crt<F: PrimeField>(
     b: &CRTInteger<F>,
 ) -> AssignedValue<F> {
     let out_trunc = assign::<F>(gate, ctx, &a.truncation, &b.truncation);
-    let out_native = gate.is_equal(ctx, Existing(&a.native), Existing(&b.native));
-    gate.and(ctx, Existing(&out_trunc), Existing(&out_native))
+    let out_native = gate.is_equal(ctx, Existing(a.native), Existing(b.native));
+    gate.and(ctx, Existing(out_trunc), Existing(out_native))
 }

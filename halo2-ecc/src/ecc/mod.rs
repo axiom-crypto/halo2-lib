@@ -266,8 +266,8 @@ where
     for idx in 1..total_bits {
         let or = chip.gate().or(
             ctx,
-            Existing(&is_started[rounded_bitlen - total_bits + idx - 1]),
-            Existing(&rounded_bits[total_bits - idx]),
+            Existing(is_started[rounded_bitlen - total_bits + idx - 1]),
+            Existing(rounded_bits[total_bits - idx]),
         );
         is_started.push(or.clone());
     }
@@ -278,7 +278,7 @@ where
         let temp_bits = rounded_bits
             [rounded_bitlen - window_bits * (idx + 1)..rounded_bitlen - window_bits * idx]
             .iter()
-            .map(|x| Existing(x));
+            .map(|x| Existing(*x));
         let bit_sum = chip.gate().sum(ctx, temp_bits);
         let is_zero = chip.gate().is_zero(ctx, &bit_sum);
         is_zero_window.push(is_zero.clone());
@@ -626,9 +626,9 @@ impl<F: PrimeField, FC: FieldChip<F>> EccChip<F, FC> {
 
         self.field_chip.range().gate().or_and(
             ctx,
-            Existing(&is_on_curve),
-            Existing(&x_is_zero),
-            Existing(&y_is_zero),
+            Existing(is_on_curve),
+            Existing(x_is_zero),
+            Existing(y_is_zero),
         )
     }
 
@@ -681,7 +681,7 @@ impl<F: PrimeField, FC: FieldChip<F>> EccChip<F, FC> {
         // TODO: optimize
         let x_is_equal = self.field_chip.is_equal(ctx, &P.x, &Q.x);
         let y_is_equal = self.field_chip.is_equal(ctx, &P.y, &Q.y);
-        self.field_chip.range().gate().and(ctx, Existing(&x_is_equal), Existing(&y_is_equal))
+        self.field_chip.range().gate().and(ctx, Existing(x_is_equal), Existing(y_is_equal))
     }
 
     pub fn assert_equal(

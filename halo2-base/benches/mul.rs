@@ -85,7 +85,7 @@ impl Circuit<Fr> for MyCircuit<Fr> {
                 };
 
                 for _ in 0..120 {
-                    config.mul(ctx, Existing(&c_cell), Existing(&b_cell));
+                    config.mul(ctx, Existing(c_cell), Existing(b_cell));
                 }
 
                 Ok(())

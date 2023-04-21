@@ -118,7 +118,7 @@ pub fn crt<F: PrimeField>(
         let (quot_cell, out_cell, check_cell) = {
             let prod = range.gate().inner_product_left(
                 ctx,
-                quot_assigned.iter().map(|a| Existing(a)).chain(iter::once(Witness(quot_v))),
+                quot_assigned.iter().map(|a| Existing(*a)).chain(iter::once(Witness(quot_v))),
                 mod_vec[..=i].iter().rev().map(|c| Constant(*c)),
                 &mut tmp_assigned,
             );
@@ -138,7 +138,7 @@ pub fn crt<F: PrimeField>(
                 // dbg!(*alloc);
                 alloc.1 = 0;
                 alloc.0 += 1;
-                range.gate().assign_region_last(ctx, [Existing(&prod)], []);
+                range.gate().assign_region_last(ctx, [Existing(prod)], []);
             }
             match range.strategy() {
                 RangeStrategy::Vertical => {
@@ -149,7 +149,7 @@ pub fn crt<F: PrimeField>(
                         ctx,
                         [
                             Constant(-F::one()),
-                            Existing(a_limb),
+                            Existing(*a_limb),
                             Witness(temp1),
                             Constant(F::one()),
                             Witness(out_v),
@@ -167,7 +167,7 @@ pub fn crt<F: PrimeField>(
                     // | 0    | -1| 1   |
                     let mut assignments = range.gate().assign_region(
                         ctx,
-                        [Existing(a_limb), Witness(out_v), Witness(check_val)],
+                        [Existing(*a_limb), Witness(out_v), Witness(check_val)],
                         [(-1, Some([F::zero(), -F::one(), F::one()]))],
                     );
                     check_cell = assignments.pop().unwrap();
@@ -204,7 +204,7 @@ pub fn crt<F: PrimeField>(
             // | quot_cell | 2^n | 1 | quot_cell + 2^n |
             range.gate().assign_region_last(
                 ctx,
-                [Existing(quot_cell), Constant(limb_base), Constant(F::one()), Witness(out_val)],
+                [Existing(*quot_cell), Constant(limb_base), Constant(F::one()), Witness(out_val)],
                 [(0, None)],
             )
         };
@@ -249,10 +249,10 @@ pub fn crt<F: PrimeField>(
     let _native_computation = range.gate().assign_region_last(
         ctx,
         [
-            Existing(&out_native_assigned),
+            Existing(out_native_assigned),
             Constant(mod_native),
-            Existing(&quot_native_assigned),
-            Existing(&a.native),
+            Existing(quot_native_assigned),
+            Existing(a.native),
         ],
         [(0, None)],
     );

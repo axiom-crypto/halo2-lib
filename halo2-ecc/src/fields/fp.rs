@@ -145,17 +145,16 @@ impl<F: PrimeField, Fp: PrimeField> FpConfig<F, Fp> {
             let lt = match borrow {
                 None => self.range.is_less_than(
                     ctx,
-                    Existing(a_limb),
+                    Existing(*a_limb),
                     Constant(*p_limb),
                     self.limb_bits,
                 ),
                 Some(borrow) => {
-                    let plus_borrow =
-                        self.range.gate.add(ctx, Constant(*p_limb), Existing(&borrow));
+                    let plus_borrow = self.range.gate.add(ctx, Constant(*p_limb), Existing(borrow));
                     self.range.is_less_than(
                         ctx,
-                        Existing(a_limb),
-                        Existing(&plus_borrow),
+                        Existing(*a_limb),
+                        Existing(plus_borrow),
                         self.limb_bits,
                     )
                 }
@@ -271,10 +270,10 @@ impl<F: PrimeField, Fp: PrimeField> FieldChip<F> for FpConfig<F, Fp> {
         let c_native = biguint_to_fe::<F>(&(&c.value % modulus::<F>()));
         let mut limbs = Vec::with_capacity(a.truncation.limbs.len());
         for (a_limb, c_limb) in a.truncation.limbs.iter().zip(c.truncation.limbs.into_iter()) {
-            let limb = self.range.gate.add(ctx, Existing(a_limb), Constant(c_limb));
+            let limb = self.range.gate.add(ctx, Existing(*a_limb), Constant(c_limb));
             limbs.push(limb);
         }
-        let native = self.range.gate.add(ctx, Existing(&a.native), Constant(c_native));
+        let native = self.range.gate.add(ctx, Existing(a.native), Constant(c_native));
         let trunc =
             OverflowInteger::construct(limbs, max(a.truncation.max_limb_bits, self.limb_bits) + 1);
         let value = a.value.as_ref().map(|a| a + BigInt::from(c.value));
@@ -402,23 +401,23 @@ impl<F: PrimeField, Fp: PrimeField> FieldChip<F> for FpConfig<F, Fp> {
         let (_, underflow) =
             sub::crt::<F>(self.range(), ctx, a, &p, self.limb_bits, self.limb_bases[1]);
         let is_underflow_zero = self.gate().is_zero(ctx, &underflow);
-        let range_check = self.gate().not(ctx, Existing(&is_underflow_zero));
+        let range_check = self.gate().not(ctx, Existing(is_underflow_zero));
 
-        self.gate().and(ctx, Existing(&is_zero), Existing(&range_check))
+        self.gate().and(ctx, Existing(is_zero), Existing(range_check))
     }
 
     fn is_soft_nonzero(&self, ctx: &mut Context<F>, a: &CRTInteger<F>) -> AssignedValue<F> {
         let is_zero = big_is_zero::crt::<F>(self.gate(), ctx, a);
-        let is_nonzero = self.gate().not(ctx, Existing(&is_zero));
+        let is_nonzero = self.gate().not(ctx, Existing(is_zero));
 
         // underflow != 0 iff carry < p
         let p = self.load_constant(ctx, self.p.to_biguint().unwrap());
         let (_, underflow) =
             sub::crt::<F>(self.range(), ctx, a, &p, self.limb_bits, self.limb_bases[1]);
         let is_underflow_zero = self.gate().is_zero(ctx, &underflow);
-        let range_check = self.gate().not(ctx, Existing(&is_underflow_zero));
+        let range_check = self.gate().not(ctx, Existing(is_underflow_zero));
 
-        self.gate().and(ctx, Existing(&is_nonzero), Existing(&range_check))
+        self.gate().and(ctx, Existing(is_nonzero), Existing(range_check))
     }
 
     // assuming `a` has been range checked to be a proper BigInt
@@ -447,7 +446,7 @@ impl<F: PrimeField, Fp: PrimeField> FieldChip<F> for FpConfig<F, Fp> {
         self.enforce_less_than_p(ctx, b);
         // a.native and b.native are derived from `a.truncation, b.truncation`, so no need to check if they're equal
         for (limb_a, limb_b) in a.truncation.limbs.iter().zip(a.truncation.limbs.iter()) {
-            self.range.gate.assert_equal(ctx, Existing(limb_a), Existing(limb_b));
+            self.range.gate.assert_equal(ctx, Existing(*limb_a), Existing(*limb_b));
         }
     }
 }

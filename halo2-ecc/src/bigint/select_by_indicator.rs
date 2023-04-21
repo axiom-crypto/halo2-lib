@@ -18,8 +18,8 @@ pub fn assign<F: PrimeField>(
 
     let out_limbs = (0..k)
         .map(|idx| {
-            let int_limbs = a.iter().map(|a| Existing(&a.limbs[idx]));
-            gate.select_by_indicator(ctx, int_limbs, coeffs.iter())
+            let int_limbs = a.iter().map(|a| Existing(a.limbs[idx]));
+            gate.select_by_indicator(ctx, int_limbs, coeffs.iter().copied())
         })
         .collect();
 
@@ -41,8 +41,8 @@ pub fn crt<F: PrimeField>(
 
     let out_limbs = (0..k)
         .map(|idx| {
-            let int_limbs = a.iter().map(|a| Existing(&a.truncation.limbs[idx]));
-            gate.select_by_indicator(ctx, int_limbs, coeffs.iter())
+            let int_limbs = a.iter().map(|a| Existing(a.truncation.limbs[idx]));
+            gate.select_by_indicator(ctx, int_limbs, coeffs.iter().copied())
         })
         .collect();
 
@@ -52,8 +52,8 @@ pub fn crt<F: PrimeField>(
     let out_native = if a.len() > k {
         OverflowInteger::<F>::evaluate(gate, ctx, &out_trunc.limbs, limb_bases[..k].iter().cloned())
     } else {
-        let a_native = a.iter().map(|x| Existing(&x.native));
-        gate.select_by_indicator(ctx, a_native, coeffs.iter())
+        let a_native = a.iter().map(|x| Existing(x.native));
+        gate.select_by_indicator(ctx, a_native, coeffs.iter().copied())
     };
     let out_val = a.iter().zip(coeffs.iter()).fold(Value::known(BigInt::zero()), |acc, (x, y)| {
         acc.zip(x.value.as_ref()).zip(y.value()).map(|((a, x), y)| {

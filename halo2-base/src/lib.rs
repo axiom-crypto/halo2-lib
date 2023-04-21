@@ -50,19 +50,17 @@ pub const SKIP_FIRST_PASS: bool = false;
 pub const SKIP_FIRST_PASS: bool = true;
 
 #[derive(Clone, Debug)]
-pub enum QuantumCell<'a, F: ScalarField> {
-    Existing(&'a AssignedValue<F>),
-    ExistingOwned(AssignedValue<F>), // this is similar to the Cow enum
+pub enum QuantumCell<F: ScalarField> {
+    Existing(AssignedValue<F>),
     Witness(Value<F>),
     WitnessFraction(Value<Assigned<F>>),
     Constant(F),
 }
 
-impl<F: ScalarField> QuantumCell<'_, F> {
+impl<F: ScalarField> QuantumCell<F> {
     pub fn value(&self) -> Value<&F> {
         match self {
             Self::Existing(a) => a.value(),
-            Self::ExistingOwned(a) => a.value(),
             Self::Witness(a) => a.as_ref(),
             Self::WitnessFraction(_) => {
                 panic!("Trying to get value of a fraction before batch inversion")
@@ -72,7 +70,7 @@ impl<F: ScalarField> QuantumCell<'_, F> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub struct AssignedValue<F: ScalarField> {
     #[cfg(feature = "halo2-axiom")]
     pub cell: AssignedCell<&'a Assigned<F>, F>,
@@ -423,9 +421,9 @@ impl<'a, F: ScalarField> Context<'a, F> {
     }
 
     #[cfg(feature = "halo2-pse")]
-    pub fn assign_cell<'v>(
+    pub fn assign_cell(
         &mut self,
-        input: QuantumCell<'_, F>,
+        input: QuantumCell<F>,
         column: Column<Advice>,
         #[cfg(feature = "display")] context_id: usize,
         row_offset: usize,
@@ -433,20 +431,6 @@ impl<'a, F: ScalarField> Context<'a, F> {
     ) -> AssignedValue<F> {
         match input {
             QuantumCell::Existing(acell) => {
-                AssignedValue {
-                    cell: acell.copy_advice(
-                        // || "gate: copy advice",
-                        &mut self.region,
-                        column,
-                        row_offset,
-                    ),
-                    value: acell.value,
-                    row_offset,
-                    #[cfg(feature = "display")]
-                    context_id,
-                }
-            }
-            QuantumCell::ExistingOwned(acell) => {
                 AssignedValue {
                     cell: acell.copy_advice(
                         // || "gate: copy advice",

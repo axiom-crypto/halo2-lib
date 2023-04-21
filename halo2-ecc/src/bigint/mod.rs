@@ -73,7 +73,7 @@ impl<'v, F: PrimeField> OverflowInteger<F> {
         // Constrain `out_native = sum_i out_assigned[i] * 2^{n*i}` in `F`
         gate.inner_product(
             ctx,
-            limbs.iter().map(|a| Existing(a)),
+            limbs.iter().map(|a| Existing(*a)),
             limb_bases.into_iter().map(|c| Constant(c)),
         )
     }
@@ -127,7 +127,7 @@ impl<F: PrimeField> FixedOverflowInteger<F> {
         let out_limbs = (0..k)
             .map(|idx| {
                 let int_limbs = a.iter().map(|a| Constant(a.limbs[idx]));
-                gate.select_by_indicator(ctx, int_limbs, coeffs.iter())
+                gate.select_by_indicator(ctx, int_limbs, coeffs.iter().copied())
             })
             .collect();
 

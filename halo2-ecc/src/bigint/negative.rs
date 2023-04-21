@@ -6,6 +6,6 @@ pub fn assign<F: PrimeField>(
     ctx: &mut Context<F>,
     a: &OverflowInteger<F>,
 ) -> OverflowInteger<F> {
-    let out_limbs = a.limbs.iter().map(|limb| gate.neg(ctx, Existing(limb))).collect();
+    let out_limbs = a.limbs.iter().map(|limb| gate.neg(ctx, Existing(*limb))).collect();
     OverflowInteger::construct(out_limbs, a.max_limb_bits)
 }

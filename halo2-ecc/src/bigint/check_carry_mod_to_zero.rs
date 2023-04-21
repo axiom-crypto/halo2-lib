@@ -89,7 +89,7 @@ pub fn crt<F: PrimeField>(
         let (quot_cell, check_cell) = {
             let prod = range.gate().inner_product_left(
                 ctx,
-                quot_assigned.iter().map(Existing).chain(iter::once(Witness(quot_v))),
+                quot_assigned.iter().copied().map(Existing).chain(iter::once(Witness(quot_v))),
                 mod_vec[0..=i].iter().rev().map(|c| Constant(*c)),
                 &mut tmp_assigned,
             );
@@ -105,13 +105,13 @@ pub fn crt<F: PrimeField>(
                 // edge case, we need to copy the last `prod` cell
                 alloc.1 = 0;
                 alloc.0 += 1;
-                range.gate().assign_region_last(ctx, vec![Existing(&prod)], vec![]);
+                range.gate().assign_region_last(ctx, vec![Existing(prod)], vec![]);
             }
 
             let check_val = prod.value().zip(a_limb.value()).map(|(prod, a)| *prod - a);
             let check_cell = range.gate().assign_region_last(
                 ctx,
-                vec![Constant(-F::one()), Existing(a_limb), Witness(check_val)],
+                vec![Constant(-F::one()), Existing(*a_limb), Witness(check_val)],
                 vec![(-1, None)],
             );
 
@@ -140,7 +140,7 @@ pub fn crt<F: PrimeField>(
             range.gate().assign_region_last(
                 ctx,
                 vec![
-                    Existing(quot_cell),
+                    Existing(*quot_cell),
                     Constant(limb_base),
                     Constant(F::one()),
                     Witness(out_val),
@@ -181,8 +181,8 @@ pub fn crt<F: PrimeField>(
         vec![
             Constant(F::zero()),
             Constant(mod_native),
-            Existing(&quot_native_assigned),
-            Existing(&a.native),
+            Existing(quot_native_assigned),
+            Existing(a.native),
         ],
         vec![(0, None)],
     );

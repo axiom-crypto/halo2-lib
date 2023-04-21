@@ -82,10 +82,10 @@ pub fn truncate<F: PrimeField>(
             .assign_region(
                 ctx,
                 vec![
-                    Existing(a_limb),
+                    Existing(*a_limb),
                     Witness(neg_carry_val),
                     Constant(limb_base),
-                    previous.as_ref().map(Existing).unwrap_or_else(|| Constant(F::zero())),
+                    previous.as_ref().copied().map(Existing).unwrap_or_else(|| Constant(F::zero())),
                 ],
                 vec![(0, None)],
             )
@@ -99,7 +99,7 @@ pub fn truncate<F: PrimeField>(
         let shifted_carry = {
             let shift_carry_val = Value::known(shift_val) + neg_carry.value();
             let cells = vec![
-                Existing(&neg_carry),
+                Existing(neg_carry),
                 Constant(F::one()),
                 Constant(shift_val),
                 Witness(shift_carry_val),

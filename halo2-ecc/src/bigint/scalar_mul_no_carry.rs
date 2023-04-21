@@ -14,7 +14,7 @@ pub fn assign<F: PrimeField>(
     c_log2_ceil: usize,
 ) -> OverflowInteger<F> {
     let out_limbs =
-        a.limbs.iter().map(|limb| gate.mul(ctx, Existing(limb), Constant(c_f))).collect();
+        a.limbs.iter().map(|limb| gate.mul(ctx, Existing(*limb), Constant(c_f))).collect();
     OverflowInteger::construct(out_limbs, a.max_limb_bits + c_log2_ceil)
 }
 
@@ -36,10 +36,10 @@ pub fn crt<F: PrimeField>(
         .truncation
         .limbs
         .iter()
-        .map(|limb| gate.mul(ctx, Existing(limb), Constant(c_f)))
+        .map(|limb| gate.mul(ctx, Existing(*limb), Constant(c_f)))
         .collect();
 
-    let out_native = gate.mul(ctx, Existing(&a.native), Constant(c_f));
+    let out_native = gate.mul(ctx, Existing(a.native), Constant(c_f));
     let out_val = a.value.as_ref().map(|a| a * c);
 
     CRTInteger::construct(

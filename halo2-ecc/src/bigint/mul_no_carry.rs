@@ -28,8 +28,8 @@ pub fn truncate<F: PrimeField>(
         .map(|i| {
             gate.inner_product(
                 ctx,
-                a.limbs[..=i].iter().map(Existing),
-                b.limbs[..=i].iter().rev().map(Existing),
+                a.limbs[..=i].iter().copied().map(Existing),
+                b.limbs[..=i].iter().copied().rev().map(Existing),
             )
         })
         .collect();
@@ -46,7 +46,7 @@ pub fn crt<F: PrimeField>(
     num_limbs_log2_ceil: usize,
 ) -> CRTInteger<F> {
     let out_trunc = truncate::<F>(gate, ctx, &a.truncation, &b.truncation, num_limbs_log2_ceil);
-    let out_native = gate.mul(ctx, Existing(&a.native), Existing(&b.native));
+    let out_native = gate.mul(ctx, Existing(a.native), Existing(b.native));
     let out_val = a.value.as_ref() * b.value.as_ref();
 
     CRTInteger::construct(out_trunc, out_native, out_val)

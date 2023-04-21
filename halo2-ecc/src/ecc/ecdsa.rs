@@ -69,7 +69,7 @@ where
     // coordinates of u1_mul and u2_mul are in proper bigint form, and lie in but are not constrained to [0, n)
     // we therefore need hard inequality here
     let u1_u2_x_eq = base_chip.is_equal(ctx, &u1_mul.x, &u2_mul.x);
-    let u1_u2_not_neg = base_chip.range.gate().not(ctx, Existing(&u1_u2_x_eq));
+    let u1_u2_not_neg = base_chip.range.gate().not(ctx, Existing(u1_u2_x_eq));
 
     // compute (x1, y1) = u1 * G + u2 * pubkey and check (r mod n) == x1 as integers
     // WARNING: For optimization reasons, does not reduce x1 mod n, which is
@@ -98,10 +98,10 @@ where
     );
 
     // check (r in [1, n - 1]) and (s in [1, n - 1]) and (u1_mul != - u2_mul) and (r == x1 mod n)
-    let res1 = base_chip.range.gate().and(ctx, Existing(&r_valid), Existing(&s_valid));
-    let res2 = base_chip.range.gate().and(ctx, Existing(&res1), Existing(&u1_small));
-    let res3 = base_chip.range.gate().and(ctx, Existing(&res2), Existing(&u2_small));
-    let res4 = base_chip.range.gate().and(ctx, Existing(&res3), Existing(&u1_u2_not_neg));
-    let res5 = base_chip.range.gate().and(ctx, Existing(&res4), Existing(&equal_check));
+    let res1 = base_chip.range.gate().and(ctx, Existing(r_valid), Existing(s_valid));
+    let res2 = base_chip.range.gate().and(ctx, Existing(res1), Existing(u1_small));
+    let res3 = base_chip.range.gate().and(ctx, Existing(res2), Existing(u2_small));
+    let res4 = base_chip.range.gate().and(ctx, Existing(res3), Existing(u1_u2_not_neg));
+    let res5 = base_chip.range.gate().and(ctx, Existing(res4), Existing(equal_check));
     res5
 }

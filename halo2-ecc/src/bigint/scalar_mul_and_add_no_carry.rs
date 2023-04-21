@@ -27,7 +27,7 @@ pub fn assign<F: PrimeField>(
             let out_val = a_limb.value().zip(b_limb.value()).map(|(a, b)| c_f * a + b);
             gate.assign_region_last(
                 ctx,
-                vec![Existing(b_limb), Existing(a_limb), Constant(c_f), Witness(out_val)],
+                vec![Existing(*b_limb), Existing(*a_limb), Constant(c_f), Witness(out_val)],
                 vec![(0, None)],
             )
         })
@@ -58,7 +58,7 @@ pub fn crt<F: PrimeField>(
         let out_val = b.native.value().zip(a.native.value()).map(|(b, a)| c_f * a + b);
         gate.assign_region_last(
             ctx,
-            vec![Existing(&b.native), Existing(&a.native), Constant(c_f), Witness(out_val)],
+            vec![Existing(b.native), Existing(a.native), Constant(c_f), Witness(out_val)],
             vec![(0, None)],
         )
     };

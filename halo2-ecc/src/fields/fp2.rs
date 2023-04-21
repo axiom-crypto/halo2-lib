@@ -306,7 +306,7 @@ where
         for a_coeff in &a.coeffs {
             let coeff = self.fp_chip.is_soft_zero(ctx, a_coeff);
             if let Some(p) = prev {
-                let new = self.fp_chip.range().gate().and(ctx, Existing(&coeff), Existing(&p));
+                let new = self.fp_chip.range().gate().and(ctx, Existing(coeff), Existing(p));
                 prev = Some(new);
             } else {
                 prev = Some(coeff);
@@ -320,7 +320,7 @@ where
         for a_coeff in &a.coeffs {
             let coeff = self.fp_chip.is_soft_nonzero(ctx, a_coeff);
             if let Some(p) = prev {
-                let new = self.fp_chip.range().gate().or(ctx, Existing(&coeff), Existing(&p));
+                let new = self.fp_chip.range().gate().or(ctx, Existing(coeff), Existing(p));
                 prev = Some(new);
             } else {
                 prev = Some(coeff);
@@ -334,7 +334,7 @@ where
         for a_coeff in &a.coeffs {
             let coeff = self.fp_chip.is_zero(ctx, a_coeff);
             if let Some(p) = prev {
-                let new = self.fp_chip.range().gate().and(ctx, Existing(&coeff), Existing(&p));
+                let new = self.fp_chip.range().gate().and(ctx, Existing(coeff), Existing(p));
                 prev = Some(new);
             } else {
                 prev = Some(coeff);
@@ -353,7 +353,7 @@ where
         for (a_coeff, b_coeff) in a.coeffs.iter().zip(b.coeffs.iter()) {
             let coeff = self.fp_chip.is_equal_unenforced(ctx, a_coeff, b_coeff);
             if let Some(c) = acc {
-                acc = Some(self.fp_chip.range().gate().and(ctx, Existing(&coeff), Existing(&c)));
+                acc = Some(self.fp_chip.range().gate().and(ctx, Existing(coeff), Existing(c)));
             } else {
                 acc = Some(coeff);
             }

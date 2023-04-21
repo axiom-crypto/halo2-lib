@@ -157,7 +157,7 @@ where
     // `is_started` is just a way to deal with if `curr_point` is actually identity
     let mut is_started = chip.gate().load_zero(ctx);
     for (cached_point_window, bit_window) in cached_point_window_rev.zip(bit_window_rev) {
-        let bit_sum = chip.gate().sum(ctx, bit_window.iter().map(Existing));
+        let bit_sum = chip.gate().sum(ctx, bit_window.iter().copied().map(Existing));
         // are we just adding a window of all 0s? if so, skip
         let is_zero_window = chip.gate().is_zero(ctx, &bit_sum);
         let add_point = ec_select_from_bits::<F, _>(chip, ctx, cached_point_window, bit_window);
@@ -171,12 +171,12 @@ where
         is_started = {
             // is_started || !is_zero_window
             // (a || !b) = (1-b) + a*b
-            let not_zero_window = chip.gate().not(ctx, Existing(&is_zero_window));
+            let not_zero_window = chip.gate().not(ctx, Existing(is_zero_window));
             chip.gate().mul_add(
                 ctx,
-                Existing(&is_started),
-                Existing(&is_zero_window),
-                Existing(&not_zero_window),
+                Existing(is_started),
+                Existing(is_zero_window),
+                Existing(not_zero_window),
             )
         };
     }
@@ -270,7 +270,7 @@ where
             let mut is_started = field_chip.gate().load_zero(ctx);
             for (cached_point_window, bit_window) in cached_point_window_rev.zip(bit_window_rev) {
                 let is_zero_window = {
-                    let sum = field_chip.gate().sum(ctx, bit_window.iter().map(Existing));
+                    let sum = field_chip.gate().sum(ctx, bit_window.iter().copied().map(Existing));
                     field_chip.gate().is_zero(ctx, &sum)
                 };
                 let add_point =
@@ -286,12 +286,12 @@ where
                     // is_started || !is_zero_window
                     // (a || !b) = (1-b) + a*b
                     let not_zero_window =
-                        field_chip.range().gate().not(ctx, Existing(&is_zero_window));
+                        field_chip.range().gate().not(ctx, Existing(is_zero_window));
                     field_chip.range().gate().mul_add(
                         ctx,
-                        Existing(&is_started),
-                        Existing(&is_zero_window),
-                        Existing(&not_zero_window),
+                        Existing(is_started),
+                        Existing(is_zero_window),
+                        Existing(not_zero_window),
                     )
                 };
             }
