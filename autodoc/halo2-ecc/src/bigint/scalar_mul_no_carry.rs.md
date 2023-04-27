@@ -1,0 +1,7 @@
+The given code is an implementation of scalar multiplication without carry for integers represented in the residue number system (RNS). The RNS is a modular representation of integers that is used in some applications for its advantages in parallelism and carry-free arithmetic. The two main functions in the code are `assign` and `crt`. 
+
+1. `assign` function:
+This function takes an `OverflowInteger` (an integer represented with limbs where each limb can potentially overflow), a scalar `c_f`, and the ceil of the log base 2 of the scalar `c_log2_ceil`. It performs a scalar multiplication of the `OverflowInteger` by the scalar `c_f`. The function iterates through the limbs of the input `OverflowInteger`, multiplies each limb by the constant scalar `c_f`, and constructs a new `OverflowInteger` from the result. The function returns the resulting `OverflowInteger`. 
+
+2. `crt` function:
+This function takes a `CRTInteger` (an integer represented in the Chinese Remainder Theorem (CRT) form) and a scalar `c`. It performs a scalar multiplication of the `CRTInteger` by the scalar `c`. The scalar `c` is first converted to a field element `c_f` and an absolute value `c_abs`. The function then multiplies the limbs of the `CRTInteger` truncation by the constant scalar `c_f`, and multiplies the native representation of the `CRTInteger` by the constant scalar `c_f`. Finally, it constructs a new `CRTInteger` from the results and returns it.

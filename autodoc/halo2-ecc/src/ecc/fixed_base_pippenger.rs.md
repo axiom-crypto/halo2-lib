@@ -1,0 +1,7 @@
+This is Rust code for implementing multi-exponentiation with the Pippenger's algorithm. The code uses the `halo2_base` and `halo2_proofs` libraries to construct circuits for the multi-exponentiation and to perform the necessary arithmetic operations.
+
+The `decompose` function takes a list of points and their corresponding scalar values and decomposes them into a new list of points and boolean scalars using Pippenger's algorithm. The algorithm splits the scalar values into groups of size `max_scalar_bits_per_cell` and applies a radix decomposition to each group. The function returns two lists: the new list of points and the boolean scalars.
+
+The `multi_product` function takes the list of new points and boolean scalars from `decompose` and computes the multi-product of these values. The algorithm uses a clumping factor `clump_factor` to group the points together and to compute the multi-products of each group. The function returns a list of points representing the multi-product and a random point.
+
+The `multi_exp` function uses the `decompose` and `multi_product` functions to compute the multi-exponentiation of a list of points and their corresponding scalar values. The function takes the list of points, their scalar values, and some additional parameters (such as `max_scalar_bits_per_cell`, `radix`, and `clump_factor`) as inputs and returns a single point representing the result of the multi-exponentiation.
