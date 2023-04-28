@@ -220,3 +220,12 @@ fn test_is_zero<F: ScalarField>(x: F) -> F {
     let a = chip.is_zero(ctx, a);
     *a.value()
 }
+
+#[test_case([1, 1].map(Fr::from).map(Witness) => Fr::one() ; "is_equal(): 1 == 1")]
+fn test_is_equal<F: ScalarField>(inputs: [QuantumCell<F>; 2]) -> F {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = chip.is_equal(ctx, inputs[0], inputs[1]);
+    *a.value()
+}
