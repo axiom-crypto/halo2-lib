@@ -50,9 +50,9 @@ pub struct RangeConfig<F: ScalarField> {
     pub lookup_advice: [Vec<Column<Advice>>; MAX_PHASE],
     /// Selector values for the lookup table.
     pub q_lookup: Vec<Option<Selector>>,
-    /// Column for LookUp Table values.
+    /// Column for lookup table values.
     pub lookup: TableColumn,
-    /// Defines the number of bits represented in the LookUp Table [0,2^<sup>lookup_bits</sup>).
+    /// Defines the number of bits represented in the lookup table [0,2^<sup>lookup_bits</sup>).
     lookup_bits: usize,
     /// Gate Strategy used for specifying advice values.
     _strategy: RangeStrategy,
