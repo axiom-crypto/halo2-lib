@@ -239,3 +239,13 @@ fn test_num_to_bits<F: ScalarField>(input: (F, usize)) -> Vec<F> {
     let a = chip.num_to_bits(ctx, a, input.1);
     a.iter().map(|x| *x.value()).collect()
 }
+
+#[test_case([0, 1, 2].map(Fr::from) => (Fr::one(), Fr::from(2)) ; "lagrange_eval(): [0, 1, 2] -> (1, 2)")]
+fn test_lagrange_eval<F: ScalarField>(input: [F; 3]) -> (F, F){
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    ctx.assign_witnesses([input[0], input[1], input[2]])[0]; 
+    let a = chip.lagrange_and_eval(ctx, &[(ctx.get(-3), ctx.get(-2))], ctx.get(-1));
+    (*a.0.value(), *a.1.value())
+}
