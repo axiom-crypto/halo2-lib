@@ -40,13 +40,12 @@ pub struct GateThreadBuilder<F: ScalarField> {
     /// Max number of threads
     thread_count: usize,
     /// Flag for witness generation. If true, the gate thread builder is used for witness generation only.
-    witness_gen_only: bool,
+    pub witness_gen_only: bool,
     /// The `unknown` flag is used during key generation. If true, during key generation witness [Value]s are replaced with Value::unknown() for safety.
     use_unknown: bool,
 }
 
 impl<F: ScalarField> GateThreadBuilder<F> {
-
     /// Creates a new [GateThreadBuilder] and spawns a main thread in phase 0.
     /// * `witness_gen_only`: If true, the [GateThreadBuilder] is used for witness generation only.
     ///     * If true, the gate thread builder is used for keygen and the mock prover.
@@ -60,22 +59,22 @@ impl<F: ScalarField> GateThreadBuilder<F> {
     }
 
     /// Creates a new [GateThreadBuilder] with `witness_gen_only` set to false.
-    /// 
-    /// Performs the witness assignment computations and then checks using normal programming logic whether the gate constraints are all satisfied. 
+    ///
+    /// Performs the witness assignment computations and then checks using normal programming logic whether the gate constraints are all satisfied.
     pub fn mock() -> Self {
         Self::new(false)
     }
 
     /// Creates a new [GateThreadBuilder] with `witness_gen_only` set to false.
-    /// 
-    /// Performs the witness assignment computations and generates prover and verifier keys. 
+    ///
+    /// Performs the witness assignment computations and generates prover and verifier keys.
     pub fn keygen() -> Self {
         Self::new(false)
     }
 
     /// Creates a new [GateThreadBuilder] with `witness_gen_only` set to true.
-    /// 
-    /// Performs the witness assignment computations and then runs the proving system. 
+    ///
+    /// Performs the witness assignment computations and then runs the proving system.
     pub fn prover() -> Self {
         Self::new(true)
     }
@@ -127,7 +126,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
         self.threads[phase].last_mut().unwrap()
     }
 
-    /// Auto-calculates configuration parameters for the circuit 
+    /// Auto-calculates configuration parameters for the circuit
     ///
     /// * `k`: The number of in the circuit (i.e. numeber of rows = 2<sup>k</sup>)
     /// * `minimum_rows`: The minimum number of rows in the circuit that cannot be used for witness assignments and contain random `blinding factors` to ensure zk property, defaults to 0.
@@ -179,7 +178,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
                 }
             }
             println!("Total {total_fixed} fixed cells");
-            println!("Auto-calculated config params:\n {params:#?}");
+            log::info!("Auto-calculated config params:\n {params:#?}");
         }
         std::env::set_var("FLEX_GATE_CONFIG_PARAMS", serde_json::to_string(&params).unwrap());
         params
@@ -190,7 +189,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
     /// Returns the assigned advices, and constants in the form of [KeygenAssignments].
     ///
     /// Assumes selector and advice columns are already allocated and of the same length.
-    /// 
+    ///
     /// Note:`assign_all()` should only be called during keygen.
     /// * `config`: The [FlexGateConfig] of the circuit.
     /// * `lookup_advice`: The lookup advice columns.
@@ -211,7 +210,6 @@ impl<F: ScalarField> GateThreadBuilder<F> {
             mut break_points
         }: KeygenAssignments<F>,
     ) -> KeygenAssignments<F> {
-        assert!(!self.witness_gen_only);
         let use_unknown = self.use_unknown;
         let max_rows = config.max_rows;
         let mut fixed_col = 0;
@@ -237,7 +235,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
                         .unwrap()
                         .cell();
                     assigned_advices.insert((ctx.context_id, i), (cell, row_offset));
-                    
+
                     // If selector enabled and row_offset is valid add break point to Keygen Assignments, account for break point overlap, and enforce equality constraint for gate outputs.
                     if (q && row_offset + 4 > max_rows) || row_offset >= max_rows - 1 {
                         break_point.push(row_offset);
@@ -362,12 +360,12 @@ impl<F: ScalarField> GateThreadBuilder<F> {
     }
 }
 
-/// Assigns threads to regions of advice column. 
-/// 
+/// Assigns threads to regions of advice column.
+///
 /// Uses preprocessed `break_points` to assign where to divide the advice column into a new column for each thread.
-/// 
+///
 /// Performs only witness generation, so should only be evoked during proving not keygen.
-/// 
+///
 /// Assumes that the advice columns are already assigned.
 /// * `phase` - the phase of the circuit
 /// * `threads` - [Vec] threads to assign
@@ -486,7 +484,7 @@ impl<F: ScalarField> GateCircuitBuilder<F> {
         Self { builder: RefCell::new(builder), break_points: RefCell::new(break_points) }
     }
 
-    /// Synthesizes from the [GateCircuitBuilder] by populating the advice column and assigning new threads if witness generation is performed. 
+    /// Synthesizes from the [GateCircuitBuilder] by populating the advice column and assigning new threads if witness generation is performed.
     pub fn sub_synthesize(
         &self,
         gate: &FlexGateConfig<F>,
@@ -556,7 +554,7 @@ impl<F: ScalarField> GateCircuitBuilder<F> {
 impl<F: ScalarField> Circuit<F> for GateCircuitBuilder<F> {
     type Config = FlexGateConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
-    
+
     /// Creates a new instance of the circuit without withnesses filled in.
     fn without_witnesses(&self) -> Self {
         unimplemented!()
@@ -590,7 +588,6 @@ impl<F: ScalarField> Circuit<F> for GateCircuitBuilder<F> {
 pub struct RangeCircuitBuilder<F: ScalarField>(pub GateCircuitBuilder<F>);
 
 impl<F: ScalarField> RangeCircuitBuilder<F> {
-
     /// Creates an instance of the [RangeCircuitBuilder] and executes the keygen phase.
     pub fn keygen(builder: GateThreadBuilder<F>) -> Self {
         Self(GateCircuitBuilder::keygen(builder))
