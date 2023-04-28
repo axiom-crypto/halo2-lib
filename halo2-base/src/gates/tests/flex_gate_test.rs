@@ -162,3 +162,12 @@ fn test_select<F: ScalarField>(inputs: [QuantumCell<F>; 3]) -> F {
     let a = chip.select(ctx, inputs[0], inputs[1], inputs[2]);
     *a.value()
 }
+
+#[test_case([1, 1, 1].map(Fr::from).map(Witness) => Fr::from(1) ; "or_and(): 1 || 1 && 1 == 1")]
+fn test_or_and<F: ScalarField>(inputs: [QuantumCell<F>; 3]) -> F {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = chip.or_and(ctx, inputs[0], inputs[1], inputs[2]);
+    *a.value()
+}
