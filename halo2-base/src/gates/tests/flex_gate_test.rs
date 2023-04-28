@@ -210,3 +210,13 @@ fn test_select_from_idx<F: ScalarField>(input: (Vec<QuantumCell<F>>, QuantumCell
     let a = chip.select_by_indicator(ctx, input.0, a);
     *a.value()
 }
+
+#[test_case(Fr::zero() => Fr::from(1) ; "is_zero(): 0 -> 1")]
+fn test_is_zero<F: ScalarField>(x: F) -> F {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = ctx.assign_witnesses([x])[0]; 
+    let a = chip.is_zero(ctx, a);
+    *a.value()
+}
