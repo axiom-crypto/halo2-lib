@@ -75,3 +75,12 @@ fn test_assert_bit<F: ScalarField>(input: F) {
     let circuit = GateCircuitBuilder::mock(builder);
     MockProver::run(6, &circuit, vec![]).unwrap().assert_satisfied()
 }
+
+#[test_case([1, 1].map(Fr::from).map(Witness) => Fr::from(1) ; "div_unsafe(): 1 / 1 == 1")]
+fn test_div_unsafe<F: ScalarField>(inputs: [QuantumCell<F>; 2]) -> F {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = chip.div_unsafe(ctx, inputs[0], inputs[1]);
+    *a.value()
+}
