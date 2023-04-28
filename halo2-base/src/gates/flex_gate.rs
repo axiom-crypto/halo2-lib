@@ -759,7 +759,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     {
         let a = a.into_iter();
         let (len, hi) = a.size_hint();
-        debug_assert_eq!(Some(len), hi);
+        assert_eq!(Some(len), hi);
         let row_offset = ctx.advice.len();
         let b_starts_with_one = self.inner_product_simple(ctx, a, b);
         let a_last = if b_starts_with_one {
