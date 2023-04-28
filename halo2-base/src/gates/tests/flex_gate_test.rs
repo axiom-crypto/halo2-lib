@@ -171,3 +171,13 @@ fn test_or_and<F: ScalarField>(inputs: [QuantumCell<F>; 3]) -> F {
     let a = chip.or_and(ctx, inputs[0], inputs[1], inputs[2]);
     *a.value()
 }
+
+#[test_case(Fr::zero() => vec![Fr::one(), Fr::zero()]; "bits_to_indicator(): 0 -> [1, 0]")]
+fn test_bits_to_indicator<F: ScalarField>(bits: F) -> Vec<F> {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = ctx.assign_witnesses([bits])[0]; 
+    let a = chip.bits_to_indicator(ctx, &[a]);
+    a.iter().map(|x| *x.value()).collect()
+}
