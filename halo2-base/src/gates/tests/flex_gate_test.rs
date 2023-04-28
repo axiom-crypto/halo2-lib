@@ -125,3 +125,12 @@ fn test_inner_product_with_sums<F: ScalarField>(input: (Vec<QuantumCell<F>>, Vec
     let a = chip.inner_product_with_sums(ctx, input.0, input.1);
     a.into_iter().map(|x| *x.value()).collect()
 }
+
+#[test_case((vec![(Fr::from(1), Witness(Fr::from(1)), Witness(Fr::from(1)))], Witness(Fr::from(1))) => Fr::from(2) ; "sum_product_with_coeff_and_var(): 1 * 1 + 1 == 2")]
+fn test_sum_products_with_coeff_and_var<F: ScalarField>(input: (Vec<(F, QuantumCell<F>, QuantumCell<F>)>, QuantumCell<F>)) -> F {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = chip.sum_products_with_coeff_and_var(ctx, input.0, input.1);
+    *a.value()
+}
