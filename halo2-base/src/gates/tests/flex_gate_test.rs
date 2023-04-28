@@ -26,7 +26,7 @@ fn test_sub<F: ScalarField>(inputs: [QuantumCell<F>; 2]) -> F {
     *a.value()
 }
 
-#[test_case(Witness(Fr::from(1)) => -Fr::from(1) ; "neg() 1 -> -1")]
+#[test_case(Witness(Fr::from(1)) => -Fr::from(1) ; "neg(): 1 -> -1")]
 fn test_neg<F: ScalarField>(a: QuantumCell<F>) -> F {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
@@ -35,11 +35,20 @@ fn test_neg<F: ScalarField>(a: QuantumCell<F>) -> F {
     *a.value()
 }
 
-#[test_case([1, 1].map(Fr::from).map(Witness) => Fr::from(1) ; "mul() 1 * 1 == 1")]
+#[test_case([1, 1].map(Fr::from).map(Witness) => Fr::from(1) ; "mul(): 1 * 1 == 1")]
 fn test_mul<F: ScalarField>(inputs: [QuantumCell<F>; 2]) -> F {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = GateChip::default();
     let a = chip.mul(ctx, inputs[0], inputs[1]);
+    *a.value()
+}
+
+#[test_case([1, 1, 1].map(Fr::from).map(Witness) => Fr::from(2) ; "mul_add(): 1 * 1 + 1 == 2")]
+fn test_mul_add<F: ScalarField>(inputs: [QuantumCell<F>; 3]) -> F {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = chip.mul_add(ctx, inputs[0], inputs[1], inputs[2]);
     *a.value()
 }
