@@ -249,3 +249,9 @@ fn test_lagrange_eval<F: ScalarField>(input: [F; 3]) -> (F, F){
     let a = chip.lagrange_and_eval(ctx, &[(ctx.get(-3), ctx.get(-2))], ctx.get(-1));
     (*a.0.value(), *a.1.value())
 }
+
+#[test_case(1 => Fr::one(); "inner_product_simple(): 1 -> 1")]
+fn test_get_field_element<F: ScalarField>(n: u64) -> F {
+    let chip = GateChip::default();
+    chip.get_field_element(n)
+}
