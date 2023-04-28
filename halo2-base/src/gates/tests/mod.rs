@@ -16,6 +16,8 @@ use rand::rngs::OsRng;
 mod general;
 #[cfg(test)]
 mod idx_to_indicator;
+#[cfg(test)]
+mod flex_gate_test;
 
 // helper functions
 pub fn gen_proof(
