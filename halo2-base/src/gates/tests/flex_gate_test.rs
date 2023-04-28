@@ -181,3 +181,12 @@ fn test_bits_to_indicator<F: ScalarField>(bits: F) -> Vec<F> {
     let a = chip.bits_to_indicator(ctx, &[a]);
     a.iter().map(|x| *x.value()).collect()
 }
+
+#[test_case((Witness(Fr::zero()), 3) => vec![Fr::one(), Fr::zero(), Fr::zero()] ; "idx_to_indicator(): 0 -> [1, 0, 0]")]
+fn test_idx_to_indicator<F: ScalarField>(input: (QuantumCell<F>, usize)) -> Vec<F> {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = chip.idx_to_indicator(ctx, input.0, input.1);
+    a.iter().map(|x| *x.value()).collect()
+}
