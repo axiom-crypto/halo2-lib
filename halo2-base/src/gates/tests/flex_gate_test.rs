@@ -134,3 +134,12 @@ fn test_sum_products_with_coeff_and_var<F: ScalarField>(input: (Vec<(F, QuantumC
     let a = chip.sum_products_with_coeff_and_var(ctx, input.0, input.1);
     *a.value()
 }
+
+#[test_case([1, 1].map(Fr::from).map(Witness) => Fr::from(1) ; "and(): 1 && 1 == 1")]
+fn test_and<F: ScalarField>(inputs: [QuantumCell<F>; 2]) -> F {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = chip.and(ctx, inputs[0], inputs[1]);
+    *a.value()
+}
