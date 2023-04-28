@@ -84,3 +84,17 @@ fn test_div_unsafe<F: ScalarField>(inputs: [QuantumCell<F>; 2]) -> F {
     let a = chip.div_unsafe(ctx, inputs[0], inputs[1]);
     *a.value()
 }
+
+#[test_case([1, 1].map(Fr::from); "assert_is_const()")]
+fn test_assert_is_const<F: ScalarField>(inputs: [F; 2]) {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = ctx.assign_witnesses([inputs[0]])[0]; 
+    chip.assert_is_const(ctx, &a, &inputs[1]);
+    // auto-tune circuit
+    builder.config(6, Some(9));
+    // create circuit
+    let circuit = GateCircuitBuilder::mock(builder);
+    MockProver::run(6, &circuit, vec![]).unwrap().assert_satisfied()
+}
