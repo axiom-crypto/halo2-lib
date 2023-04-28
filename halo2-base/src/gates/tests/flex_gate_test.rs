@@ -116,3 +116,12 @@ fn test_inner_product_left_last<F: ScalarField>(input: (Vec<QuantumCell<F>>, Vec
     let a = chip.inner_product_left_last(ctx, input.0, input.1);
     (*a.0.value(), *a.1.value())
 }
+
+#[test_case((vec![Witness(Fr::one()); 5], vec![Witness(Fr::one()); 5]) => vec![Fr::one(), Fr::from(2), Fr::from(3), Fr::from(4), Fr::from(5)]; "inner_product_with_sums(): 1 * 1 + ... + 1 * 1 == [1, 2, 3, 4, 5]")]
+fn test_inner_product_with_sums<F: ScalarField>(input: (Vec<QuantumCell<F>>, Vec<QuantumCell<F>>)) -> Vec<F> {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = chip.inner_product_with_sums(ctx, input.0, input.1);
+    a.into_iter().map(|x| *x.value()).collect()
+}
