@@ -61,3 +61,17 @@ fn test_mul_not<F: ScalarField>(inputs: [QuantumCell<F>; 2]) -> F {
     let a = chip.mul_not(ctx, inputs[0], inputs[1]);
     *a.value()
 }
+
+#[test_case(Fr::from(1); "assert_bit(): 1 == bit")]
+fn test_assert_bit<F: ScalarField>(input: F) {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = ctx.assign_witnesses([input])[0]; 
+    chip.assert_bit(ctx, a);
+    // auto-tune circuit
+    builder.config(6, Some(9));
+    // create circuit
+    let circuit = GateCircuitBuilder::mock(builder);
+    MockProver::run(6, &circuit, vec![]).unwrap().assert_satisfied()
+}
