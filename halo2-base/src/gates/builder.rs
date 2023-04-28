@@ -31,7 +31,7 @@ pub struct GateThreadBuilder<F: ScalarField> {
     /// Threads for each challenge phase
     pub threads: [Vec<Context<F>>; MAX_PHASE],
     thread_count: usize,
-    witness_gen_only: bool,
+    pub witness_gen_only: bool,
     use_unknown: bool,
 }
 
@@ -141,7 +141,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
                 }
             }
             println!("Total {total_fixed} fixed cells");
-            println!("Auto-calculated config params:\n {params:#?}");
+            log::info!("Auto-calculated config params:\n {params:#?}");
         }
         std::env::set_var("FLEX_GATE_CONFIG_PARAMS", serde_json::to_string(&params).unwrap());
         params
@@ -161,7 +161,6 @@ impl<F: ScalarField> GateThreadBuilder<F> {
             mut break_points
         }: KeygenAssignments<F>,
     ) -> KeygenAssignments<F> {
-        assert!(!self.witness_gen_only);
         let use_unknown = self.use_unknown;
         let max_rows = config.max_rows;
         let mut fixed_col = 0;
