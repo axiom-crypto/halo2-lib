@@ -143,3 +143,12 @@ fn test_and<F: ScalarField>(inputs: [QuantumCell<F>; 2]) -> F {
     let a = chip.and(ctx, inputs[0], inputs[1]);
     *a.value()
 }
+
+#[test_case(Witness(Fr::from(1)) => Fr::zero() ; "not(): !1 == 0")]
+fn test_not<F: ScalarField>(a: QuantumCell<F>) -> F {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = chip.not(ctx, a);
+    *a.value()
+}
