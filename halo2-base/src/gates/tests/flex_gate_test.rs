@@ -52,3 +52,12 @@ fn test_mul_add<F: ScalarField>(inputs: [QuantumCell<F>; 3]) -> F {
     let a = chip.mul_add(ctx, inputs[0], inputs[1], inputs[2]);
     *a.value()
 }
+
+#[test_case([1, 1].map(Fr::from).map(Witness) => Fr::from(0) ; "mul_not(): 1 * 1 == 0")]
+fn test_mul_not<F: ScalarField>(inputs: [QuantumCell<F>; 2]) -> F {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = chip.mul_not(ctx, inputs[0], inputs[1]);
+    *a.value()
+}
