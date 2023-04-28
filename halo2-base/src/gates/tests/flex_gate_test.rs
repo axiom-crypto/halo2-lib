@@ -34,3 +34,12 @@ fn test_neg<F: ScalarField>(a: QuantumCell<F>) -> F {
     let a = chip.neg(ctx, a);
     *a.value()
 }
+
+#[test_case([1, 1].map(Fr::from).map(Witness) => Fr::from(1) ; "mul() 1 * 1 == 1")]
+fn test_mul<F: ScalarField>(inputs: [QuantumCell<F>; 2]) -> F {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = chip.mul(ctx, inputs[0], inputs[1]);
+    *a.value()
+}
