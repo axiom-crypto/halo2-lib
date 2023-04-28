@@ -107,3 +107,12 @@ fn test_inner_product<F: ScalarField>(input: (Vec<QuantumCell<F>>, Vec<QuantumCe
     let a = chip.inner_product(ctx, input.0, input.1);
     *a.value()
 }
+
+#[test_case((vec![Witness(Fr::one()); 5], vec![Witness(Fr::one()); 5]) => (Fr::from(5), Fr::from(1)); "inner_product_left_last(): 1 * 1 + ... + 1 * 1 == (5, 1)")]
+fn test_inner_product_left_last<F: ScalarField>(input: (Vec<QuantumCell<F>>, Vec<QuantumCell<F>>)) -> (F, F) {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = chip.inner_product_left_last(ctx, input.0, input.1);
+    (*a.0.value(), *a.1.value())
+}
