@@ -98,3 +98,12 @@ fn test_assert_is_const<F: ScalarField>(inputs: [F; 2]) {
     let circuit = GateCircuitBuilder::mock(builder);
     MockProver::run(6, &circuit, vec![]).unwrap().assert_satisfied()
 }
+
+#[test_case((vec![Witness(Fr::one()); 5], vec![Witness(Fr::one()); 5]) => Fr::from(5) ; "inner_product(): 1 * 1 + ... + 1 * 1 == 5")]
+fn test_inner_product<F: ScalarField>(input: (Vec<QuantumCell<F>>, Vec<QuantumCell<F>>)) -> F {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = chip.inner_product(ctx, input.0, input.1);
+    *a.value()
+}
