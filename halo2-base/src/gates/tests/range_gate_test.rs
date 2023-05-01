@@ -36,3 +36,17 @@ fn test_check_less_than<F: ScalarField>(inputs: ([QuantumCell<F>; 2], usize)) {
     let circuit = RangeCircuitBuilder::mock(builder);
     MockProver::run(11 as u32, &circuit, vec![]).unwrap().assert_satisfied()
 }
+
+#[test_case((Fr::zero(), 1); "check_less_than_safe() pos")]
+fn test_check_less_than_safe<F: ScalarField>(inputs: (F, u64)) {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = RangeChip::default(3);
+    let a = ctx.assign_witnesses([inputs.0])[0]; 
+    chip.check_less_than_safe(ctx, a, inputs.1);
+    // auto-tune circuit
+    builder.config(11, Some(9));
+    // create circuit
+    let circuit = RangeCircuitBuilder::mock(builder);
+    MockProver::run(11 as u32, &circuit, vec![]).unwrap().assert_satisfied()
+}
