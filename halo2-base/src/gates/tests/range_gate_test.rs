@@ -112,3 +112,13 @@ fn test_get_last_bit<F: ScalarField>(inputs: (F, usize)) -> F {
     let b = chip.get_last_bit(ctx, a, inputs.1);
     *b.value()
 }
+
+// TODO: fix test currently fails during final range check due to `attempt to subtract with oveflow` w/ k = 0;
+#[test_case((Witness(Fr::one()), Witness(Fr::from(2)), 3, 3) => (Fr::one(), Fr::zero()) ; "div_mod_var() pos")]
+fn test_div_mod_var<F: ScalarField + BigPrimeField>(inputs: (QuantumCell<F>, QuantumCell<F>, usize, usize)) -> (F, F) {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = RangeChip::default(3);
+    let a = chip.div_mod_var(ctx, inputs.0, inputs.1, inputs.2, inputs.3);
+    (*a.0.value(), *a.1.value())
+}
