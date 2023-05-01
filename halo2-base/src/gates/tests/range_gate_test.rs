@@ -102,3 +102,13 @@ fn test_div_mod<F: ScalarField + BigPrimeField>(inputs: (QuantumCell<F>, u64, us
     let a = chip.div_mod(ctx, inputs.0, BigUint::from(inputs.1), inputs.2);
     (*a.0.value(), *a.1.value())
 }
+
+#[test_case((Fr::one(), 2) => Fr::from(0) ; "get_last_bit() pos")]
+fn test_get_last_bit<F: ScalarField>(inputs: (F, usize)) -> F {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = RangeChip::default(3);
+    let a = ctx.assign_witnesses([inputs.0])[0]; 
+    let b = chip.get_last_bit(ctx, a, inputs.1);
+    *b.value()
+}
