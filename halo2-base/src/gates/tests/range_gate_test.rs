@@ -83,3 +83,13 @@ fn test_is_less_than_safe<F: ScalarField>(inputs: (F, u64)) -> F {
     let b = chip.is_less_than_safe(ctx, a, inputs.1);
     *b.value()
 }
+
+#[test_case((Fr::zero(), 3) => Fr::from(1) ; "is_big_less_than_safe() pos")]
+fn test_is_big_less_than_safe<F: ScalarField + BigPrimeField>(inputs: (F, u64)) -> F {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip= RangeChip::default(3);
+    let a = ctx.assign_witnesses([inputs.0])[0]; 
+    let b = chip.is_big_less_than_safe(ctx, a, BigUint::from(inputs.1));
+    *b.value()
+}
