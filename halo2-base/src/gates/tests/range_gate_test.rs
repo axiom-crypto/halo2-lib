@@ -50,3 +50,18 @@ fn test_check_less_than_safe<F: ScalarField>(inputs: (F, u64)) {
     let circuit = RangeCircuitBuilder::mock(builder);
     MockProver::run(11 as u32, &circuit, vec![]).unwrap().assert_satisfied()
 }
+
+#[test_case((Fr::zero(), 1); "check_big_less_than_safe() pos")]
+fn test_check_big_less_than_safe<F: ScalarField + BigPrimeField>(inputs: (F, u64)) {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = RangeChip::default(3);
+    let a = ctx.assign_witnesses([inputs.0])[0]; 
+    chip.check_big_less_than_safe(ctx, a, BigUint::from(inputs.1));
+    // auto-tune circuit
+    builder.config(11, Some(9));
+    // create circuit
+    let circuit = RangeCircuitBuilder::mock(builder);
+    MockProver::run(11 as u32, &circuit, vec![]).unwrap().assert_satisfied()
+}
+
