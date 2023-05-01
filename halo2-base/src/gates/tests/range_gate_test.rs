@@ -93,3 +93,12 @@ fn test_is_big_less_than_safe<F: ScalarField + BigPrimeField>(inputs: (F, u64)) 
     let b = chip.is_big_less_than_safe(ctx, a, BigUint::from(inputs.1));
     *b.value()
 }
+
+#[test_case((Witness(Fr::one()), 1, 2) => (Fr::one(), Fr::zero()) ; "div_mod() pos")]
+fn test_div_mod<F: ScalarField + BigPrimeField>(inputs: (QuantumCell<F>, u64, usize)) -> (F, F) {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = RangeChip::default(3);
+    let a = chip.div_mod(ctx, inputs.0, BigUint::from(inputs.1), inputs.2);
+    (*a.0.value(), *a.1.value())
+}
