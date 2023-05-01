@@ -73,3 +73,13 @@ fn test_is_less_than<F: ScalarField>(inputs: ([QuantumCell<F>; 2], usize)) -> F 
     let a = chip.is_less_than(ctx, inputs.0[0], inputs.0[1], inputs.1);
     *a.value()
 }
+
+#[test_case((Fr::zero(), 3) => Fr::from(1) ; "is_less_than_safe() pos")]
+fn test_is_less_than_safe<F: ScalarField>(inputs: (F, u64)) -> F {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = RangeChip::default(3);
+    let a = ctx.assign_witnesses([inputs.0])[0]; 
+    let b = chip.is_less_than_safe(ctx, a, inputs.1);
+    *b.value()
+}
