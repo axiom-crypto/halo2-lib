@@ -65,3 +65,11 @@ fn test_check_big_less_than_safe<F: ScalarField + BigPrimeField>(inputs: (F, u64
     MockProver::run(11 as u32, &circuit, vec![]).unwrap().assert_satisfied()
 }
 
+#[test_case(([0, 1].map(Fr::from).map(Witness), 3) => Fr::from(1) ; "is_less_than() pos")]
+fn test_is_less_than<F: ScalarField>(inputs: ([QuantumCell<F>; 2], usize)) -> F {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = RangeChip::default(3);
+    let a = chip.is_less_than(ctx, inputs.0[0], inputs.0[1], inputs.1);
+    *a.value()
+}
