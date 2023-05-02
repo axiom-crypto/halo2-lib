@@ -330,7 +330,7 @@ pub trait GateInstructions<F: ScalarField> {
     where
         QA: Into<QuantumCell<F>>;
 
-    /// Returns the inner product of `<a, b>` and returns a tuple of the last item of `a` after it is assigned and the item to its left `(left_a, last_a)`.
+    /// Returns the inner product of `<a, b>` and returns a tuple of the inner product of a and the last element of `a` now assigned i.e. `(inner_product_<a, b>, last_element_a)`.
     /// 
     /// Assumes 'a' and 'b' are the same length.
     /// * `ctx`: [Context] of the circuit
@@ -362,7 +362,7 @@ pub trait GateInstructions<F: ScalarField> {
     where
         QA: Into<QuantumCell<F>>;
 
-    /// Constrains and returns the sum of [QuantumCell]'s in iterator `a` to the last element or [None] yielded by the iterator.
+    /// Constrains and returns the sum of [QuantumCell]'s in iterator `a`.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: Iterator of [QuantumCell] values to sum
     fn sum<Q>(&self, ctx: &mut Context<F>, a: impl IntoIterator<Item = Q>) -> AssignedValue<F>
@@ -556,7 +556,7 @@ pub trait GateInstructions<F: ScalarField> {
         c: impl Into<QuantumCell<F>>,
     ) -> AssignedValue<F>;
 
-    /// Constrains and returns and indicator vector, where `vec[idx] = 1` iff `idx` equals the binary number represented by `bits` otherwise returns a [Vec] of zeros.
+    /// Constrains and returns an indicator vector from a slice of boolean values, where `vec[idx] = 1 iff idx = bits, (the binary number represented by `bits`) otherwise vec[idx] = 0`.
     /// * `ctx`: [Context] to add the constraints to
     /// * `bits`: slice of [QuantumCell]'s that contains boolean values
     fn bits_to_indicator(
@@ -607,7 +607,7 @@ pub trait GateInstructions<F: ScalarField> {
         indicator.split_off((1 << k) - 2)
     }
 
-    /// Constrains and returns a [Vec] `indicator` of `len`, where `indicator[i] == 1 if i == idx otherwise 0`, if `idx >= len` then `indicator` is all zeros.
+    /// Constrains and returns a [Vec] `indicator` of length `len`, where `indicator[i] == 1 if i == idx otherwise 0`, if `idx >= len` then `indicator` is all zeros.
     ///
     /// Assumes `len` is greater than 0.
     /// * `ctx`: [Context] to add the constraints to
@@ -653,7 +653,8 @@ pub trait GateInstructions<F: ScalarField> {
 
     /// Constrains the inner product of `a` and `indicator` and returns `a[idx]` (e.g. the value of `a` at `idx`).
     /// 
-    /// Assumes that `a` and `indicator` are non-empty iterators of the same length, and that the values of `indicator` are boolean.
+    /// Assumes that `a` and `indicator` are non-empty iterators of the same length, the values of `indicator` are boolean,
+    /// and that `indicator` has at most one `1` bit.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: Iterator of [QuantumCell]'s that contains field elements
     /// * `indicator`: Iterator of [AssignedValue]'s where indicator[i] == 1 if i == `idx`, otherwise 0
@@ -683,7 +684,7 @@ pub trait GateInstructions<F: ScalarField> {
 
     /// Constrains and returns `cells[idx]` if `idx < cells.len()`, otherwise return 0.
     /// 
-    /// Assumes that `cells` and `idx` are non-empty iterators of the same length, and the values of `idx` are boolean.
+    /// Assumes that `cells` and `idx` are non-empty iterators of the same length.
     /// * `ctx`: [Context] to add the constraints to
     /// * `cells`: Iterator of [QuantumCell]s to select from
     /// * `idx`: [QuantumCell] with value `idx` where `idx` is the index of the cell to be selected
@@ -840,7 +841,7 @@ impl<F: ScalarField> GateChip<F> {
 
     /// Calculates and constrains the inner product of `<a, b>`.
     /// 
-    /// Returns `true` if `b` start with `F::one()`, and `false` otherwise.
+    /// Returns `true` if `b` start with `Constant(F::one())`, and `false` otherwise.
     /// 
     /// Assumes `a` and `b` are the same length.
     /// * `ctx`: [Context] of the circuit
@@ -1098,7 +1099,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
 
     /// Constrains and returns little-endian bit vector representation of `a`.
     /// 
-    /// Assumes `range_bits <= number of bits in a`.
+    /// Assumes `range_bits >= number of bits in a`.
     /// * `a`: [QuantumCell] of the value to convert
     /// * `range_bits`: range of bits needed to represent `a`
     fn num_to_bits(
