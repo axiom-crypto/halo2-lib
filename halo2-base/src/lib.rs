@@ -124,7 +124,7 @@ impl<F: ScalarField> AssignedValue<F> {
 #[derive(Clone, Debug)]
 pub struct Context<F: ScalarField> {
 
-    /// Flag to determine whether only witness generation or public key generation is being performed.
+    /// Flag to determine whether only witness generation or proving and verification key generation is being performed.
     /// * If witness gen is performed many operations can be skipped for optimization.
     witness_gen_only: bool,
 
@@ -260,11 +260,9 @@ impl<F: ScalarField> Context<F> {
 
     /// Pushes multiple advice cells to the `advice` column of [Context] and enables them by enabling the corresponding selector specified in `gate_offset`.
     /// 
-    /// Assumes `inputs` and `gate_offsets` are the same length.
-    ///
     /// * `inputs`: Iterator that specifies the cells to be assigned
-    /// * `gate_offsets`: specifies relative offset from current position to enable selector for the gate (e.g., `0` is the current cell).
-    ///     * `offset` may be negative indexing from the end of the column (e.g., `-1` is the last cell)
+    /// * `gate_offsets`: specifies relative offset from current position to enable selector for the gate (e.g., `0` is inputs[0]).
+    ///     * `offset` may be negative indexing from the end of the column (e.g., `-1` is the last previously assigned cell)
     pub fn assign_region<Q>(
         &mut self,
         inputs: impl IntoIterator<Item = Q>,
@@ -313,10 +311,8 @@ impl<F: ScalarField> Context<F> {
     }
 
     /// Pushes multiple advice cells to the `advice` column of [Context] and enables them by enabling the corresponding selector specified in `gate_offset`.
-    /// Allows for the specification of equality constraints between cells at `equality_offsets` within the `advice` column and external advice cells specified in `external_equality` (e.g, Fixed column).
     /// 
-    /// Assumes `gate_offsets` is the same length as `inputs`.
-    /// 
+    /// Allows for the specification of equality constraints between cells at `equality_offsets` within the `advice` column and external advice cells specified in `external_equality` (e.g, Fixed column). 
     /// * `gate_offsets`: specifies indices to enable selector for the gate; 
     ///     * `offset` may be negative indexing from the end of the column (e.g., `-1` is the last cell)
     /// * `equality_offsets`: specifies pairs of indices to constrain equality
@@ -363,8 +359,6 @@ impl<F: ScalarField> Context<F> {
     }
 
     /// Assigns a region of witness cells in an iterator and returns a [Vec] of assigned cells.
-    ///
-    /// Assumes `witnesses` the same length as `advice`
     /// * `witnesses`: Iterator that specifies the cells to be assigned
     pub fn assign_witnesses(
         &mut self,
@@ -383,7 +377,7 @@ impl<F: ScalarField> Context<F> {
             .collect()
     }
 
-    /// Assigns a witness value and returns the last assigned cell of the `advice` column.
+    /// Assigns a witness value and returns the corresponding assigned cell.
     /// * `witness`: the witness value to be assigned
     pub fn load_witness(&mut self, witness: F) -> AssignedValue<F> {
         self.assign_cell(QuantumCell::Witness(witness));
@@ -393,7 +387,7 @@ impl<F: ScalarField> Context<F> {
         self.last().unwrap()
     }
 
-    /// Assigns a constant value and returns the last assigned cell of the `advice` column.
+    /// Assigns a constant value and returns the corresponding assigned cell.
     /// * `c`: the constant value to be assigned
     pub fn load_constant(&mut self, c: F) -> AssignedValue<F> {
         self.assign_cell(QuantumCell::Constant(c));
@@ -403,7 +397,7 @@ impl<F: ScalarField> Context<F> {
         self.last().unwrap()
     }
 
-    /// Assigns the 0 value from `zero_cell` and returns the last assigned cell of the `advice` column.
+    /// Assigns the 0 value to a new cell or returns a previously assigned zero cell from `zero_cell`.
     pub fn load_zero(&mut self) -> AssignedValue<F> {
         if let Some(zcell) = &self.zero_cell {
             return *zcell;

@@ -202,6 +202,8 @@ pub fn fe_to_bigint<F: BigPrimeField>(fe: &F) -> BigInt {
 }
 
 /// Decomposes an immutable reference to a [BigPrimeField] element into `number_of_limbs` limbs of `bit_len` bits each and returns a [Vec] of [BigPrimeField] represented by those limbs.
+/// 
+/// Assumes `bit_len < 128`.
 /// * `e`: immutable reference to [BigPrimeField] element to decompose
 /// * `number_of_limbs`: number of limbs to decompose `e` into
 /// * `bit_len`: number of bits in each limb
@@ -280,6 +282,8 @@ pub fn decompose_biguint<F: BigPrimeField>(
 }
 
 /// Decomposes an immutable reference to a [BigInt] into `num_limbs` limbs of `bit_len` bits each and returns a [Vec] of [BigPrimeField] represented by those limbs.
+/// 
+/// Assumes `bit_len < 128`.
 /// * `e`: immutable reference to `BigInt` to decompose
 /// * `num_limbs`: number of limbs to decompose `e` into
 /// * `bit_len`: number of bits in each limb
@@ -397,7 +401,7 @@ pub mod fs {
         }
     }
 
-    /// Generates the SRS for the KZG scheme and writes it to a file found in "./params/{dir}/kzg_bn254_{k}.srs" 
+    /// Generates the SRS for the KZG scheme and writes it to a file found in "./params/kzg_bn2_{k}.srs` or `{dir}/kzg_bn254_{k}.srs` if `PARAMS_DIR` env var is specified, creates a file it if it does not exist" 
     /// * `k`: degree that expresses the size of circuit (i.e., 2^<sup>k</sup> is the number of rows in the circuit)
     pub fn gen_srs(k: u32) -> ParamsKZG<Bn256> {
         read_or_create_srs::<G1Affine, _>(k, |k| {
