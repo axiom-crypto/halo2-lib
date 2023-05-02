@@ -41,7 +41,7 @@ pub struct GateThreadBuilder<F: ScalarField> {
     thread_count: usize,
     /// Flag for witness generation. If true, the gate thread builder is used for witness generation only.
     witness_gen_only: bool,
-    /// Flag for unknowns. If true, the gate thread builder is used for an unknown phase unknowns.
+    /// The `unknown` flag is used during key generation. If true, during key generation witness [Value]s are replaced with Value::unknown() for safety.
     use_unknown: bool,
 }
 
@@ -49,8 +49,9 @@ impl<F: ScalarField> GateThreadBuilder<F> {
 
     /// Creates a new [GateThreadBuilder] and spawns a main thread in phase 0.
     /// * `witness_gen_only`: If true, the [GateThreadBuilder] is used for witness generation only.
-    ///     * If true, the gate thread builder is used for proving.
-    ///     * If false, the gate thread builder is used for keygen.
+    ///     * If true, the gate thread builder is used for keygen and the mock prover.
+    ///     * If false, the gate thread builder is used for keygen and the builder stores circuit information (e.g. copy constraints, fixed columns, enabled selectors).
+    ///         * These values are fixed for the circuit at key generation time, and they do not need to be re-computed by the prover in the actual proving phase.
     pub fn new(witness_gen_only: bool) -> Self {
         let mut threads = [(); MAX_PHASE].map(|_| vec![]);
         // start with a main thread in phase 0
@@ -80,7 +81,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
     }
 
     /// Creates a new [GateThreadBuilder] with `use_unknown` flag set.
-    /// * `use_unknown`: If true, the gate thread builder is flagged for use_unknown.
+    /// * `use_unknown`: If true, during key generation witness [Value]s are replaced with Value::unknown() for safety.
     pub fn unknown(self, use_unknown: bool) -> Self {
         Self { use_unknown, ..self }
     }
@@ -128,14 +129,8 @@ impl<F: ScalarField> GateThreadBuilder<F> {
 
     /// Auto-calculates configuration parameters for the circuit 
     ///
-    /// Assumes:  
-    /// 
-    /// The number of rows per thread is a power of 2. 
-    /// 
-    /// The number of rows per thread is the same for all threads in a phase.
-    /// 
-    /// * `k`: The number of rows per thread
-    /// * `minimum_rows`: The minimum number of rows per thread if not provided, defaults to 0.
+    /// * `k`: The number of in the circuit (i.e. numeber of rows = 2<sup>k</sup>)
+    /// * `minimum_rows`: The minimum number of rows in the circuit that cannot be used for witness assignments and contain random `blinding factors` to ensure zk property, defaults to 0.
     pub fn config(&self, k: usize, minimum_rows: Option<usize>) -> FlexGateConfigParams {
         let max_rows = (1 << k) - minimum_rows.unwrap_or(0);
         let total_advice_per_phase = self
@@ -371,6 +366,8 @@ impl<F: ScalarField> GateThreadBuilder<F> {
 /// 
 /// Uses preprocessed `break_points` to assign where to divide the advice column into a new column for each thread.
 /// 
+/// Performs only witness generation, so should only be evoked during proving not keygen.
+/// 
 /// Assumes that the advice columns are already assigned.
 /// * `phase` - the phase of the circuit
 /// * `threads` - [Vec] threads to assign
@@ -455,7 +452,7 @@ pub struct FlexGateConfigParams {
     pub k: usize,
     /// The number of advice columns per phase
     pub num_advice_per_phase: Vec<usize>,
-    /// The number of lookup advice columns per phase
+    /// The number of advice columns that do not have lookup enabled per phase
     pub num_lookup_advice_per_phase: Vec<usize>,
     /// The number of fixed columns per phase
     pub num_fixed: usize,
