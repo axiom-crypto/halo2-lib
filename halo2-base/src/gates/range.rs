@@ -217,7 +217,7 @@ pub trait RangeInstructions<F: ScalarField> {
         num_bits: usize,
     );
 
-    /// Performs a range check that `a` has at most `bit_length(b)` and then constrains that `a` is less than `b`.
+    /// Performs a range check that `a` has at most `bit_length(b)` bits and then constrains that `a` is less than `b`.
     /// 
     /// * a: [AssignedValue] value to check 
     /// * b: upper bound expressed as a [u64] value
@@ -229,7 +229,7 @@ pub trait RangeInstructions<F: ScalarField> {
         self.check_less_than(ctx, a, Constant(self.gate().get_field_element(b)), range_bits)
     }
 
-    /// Performs a range check that `a` has at most `bit_length(b)` and then constrains that `a` is less than `b`.
+    /// Performs a range check that `a` has at most `bit_length(b)` bits and then constrains that `a` is less than `b`.
     ///
     /// * a: [AssignedValue] value to check
     /// * b: upper bound expressed as a [BigUint] value
@@ -323,7 +323,7 @@ pub trait RangeInstructions<F: ScalarField> {
         ctx.assign_region([Witness(rem), Constant(biguint_to_fe(&b)), Witness(div), a], [0]);
         let rem = ctx.get(-4);
         let div = ctx.get(-2);
-        // Constrain that a_num_bits is enough to represent the divisor.
+        // Constrain that a_num_bits fulfills `div < 2 ** a_num_bits / b`.
         self.check_big_less_than_safe(
             ctx,
             div,
