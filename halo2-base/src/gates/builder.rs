@@ -48,8 +48,8 @@ pub struct GateThreadBuilder<F: ScalarField> {
 impl<F: ScalarField> GateThreadBuilder<F> {
     /// Creates a new [GateThreadBuilder] and spawns a main thread in phase 0.
     /// * `witness_gen_only`: If true, the [GateThreadBuilder] is used for witness generation only.
-    ///     * If true, the gate thread builder is used for keygen and the mock prover.
-    ///     * If false, the gate thread builder is used for keygen and the builder stores circuit information (e.g. copy constraints, fixed columns, enabled selectors).
+    ///     * If true, the gate thread builder only does witness asignments and does not store constraint information -- this should only be used for the real prover.
+    ///     * If false, the gate thread builder is used for keygen and mock prover (it can also be used for real prover) and the builder stores circuit information (e.g. copy constraints, fixed columns, enabled selectors).
     ///         * These values are fixed for the circuit at key generation time, and they do not need to be re-computed by the prover in the actual proving phase.
     pub fn new(witness_gen_only: bool) -> Self {
         let mut threads = [(); MAX_PHASE].map(|_| vec![]);
@@ -86,7 +86,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
     }
 
     /// Returns a mutable reference to the [Context] of a gate thread. Spawns a new thread for the given phase, if none exists.
-    /// * `phase`: The phase (index) of the gate thread.
+    /// * `phase`: The challenge phase (as an index) of the gate thread.
     pub fn main(&mut self, phase: usize) -> &mut Context<F> {
         if self.threads[phase].is_empty() {
             self.new_thread(phase)
@@ -105,7 +105,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
         self.use_unknown
     }
 
-    /// Returns the max number of threads in the [GateThreadBuilder].
+    /// Returns the current number of threads in the [GateThreadBuilder].
     pub fn thread_count(&self) -> usize {
         self.thread_count
     }
@@ -190,7 +190,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
     ///
     /// Assumes selector and advice columns are already allocated and of the same length.
     ///
-    /// Note:`assign_all()` should only be called during keygen.
+    /// Note: `assign_all()` **should** be called during keygen or if using mock prover. It also works for the real prover, but there it is more optimal to use [`assign_threads_in`] instead.
     /// * `config`: The [FlexGateConfig] of the circuit.
     /// * `lookup_advice`: The lookup advice columns.
     /// * `q_lookup`: The lookup advice selectors.

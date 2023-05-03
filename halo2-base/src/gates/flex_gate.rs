@@ -46,7 +46,7 @@ pub struct BasicGateConfig<F: ScalarField> {
 
 impl<F: ScalarField> BasicGateConfig<F> {
     /// Instantiates a new [BasicGateConfig].
-    /// 
+    ///
     /// Assumes `phase` is in the range [0, MAX_PHASE).
     /// * `meta`: [ConstraintSystem] used for the gate
     /// * `strategy`: The [GateStrategy] to use for the gate
@@ -104,7 +104,7 @@ pub struct FlexGateConfig<F: ScalarField> {
 
 impl<F: ScalarField> FlexGateConfig<F> {
     /// Generates a new [FlexGateConfig]
-    /// 
+    ///
     /// Assumes `num_advice` is a [Vec] of length [MAX_PHASE]
     /// * `meta`: [ConstraintSystem] of the circuit
     /// * `strategy`: [GateStrategy] of the flex gate
@@ -155,7 +155,6 @@ impl<F: ScalarField> FlexGateConfig<F> {
 
 /// Trait that defines basic arithmetic operations for a gate.
 pub trait GateInstructions<F: ScalarField> {
-
     /// Returns the [GateStrategy] for the gate.
     fn strategy(&self) -> GateStrategy;
 
@@ -184,7 +183,7 @@ pub trait GateInstructions<F: ScalarField> {
     }
 
     /// Constrains and returns `a + b * (-1) = out`.
-    /// 
+    ///
     /// Defines a vertical gate of form | a - b | b | 1 | a |, where (a - b) = out.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: [QuantumCell] value
@@ -216,7 +215,7 @@ pub trait GateInstructions<F: ScalarField> {
     }
 
     /// Constrains and returns  `0 + a * b = out`.
-    /// 
+    ///
     /// Defines a vertical gate of form | 0 | a | b | a * b |, where (a * b) = out.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: [QuantumCell] value
@@ -274,7 +273,7 @@ pub trait GateInstructions<F: ScalarField> {
     }
 
     /// Constrains that x is boolean (e.g. 0 or 1).
-    /// 
+    ///
     /// Defines a vertical gate of form | 0 | x | x | x |.
     /// * `ctx`: [Context] to add the constraints to
     /// * `x`: [QuantumCell] value to constrain
@@ -283,9 +282,9 @@ pub trait GateInstructions<F: ScalarField> {
     }
 
     /// Constrains and returns a / b = 0.
-    /// 
+    ///
     /// Defines a vertical gate of form | 0 | b^1 * a | b | a |, where b^1 * a = out.
-    /// 
+    ///
     /// Assumes `b != 0`.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: [QuantumCell] value
@@ -304,7 +303,7 @@ pub trait GateInstructions<F: ScalarField> {
         ctx.assign_region([Constant(F::zero()), Witness(c), b, a], [0]);
         ctx.get(-3)
     }
-    
+
     /// Constrains that `a` is equal to `constant` value.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: [QuantumCell] value
@@ -330,8 +329,8 @@ pub trait GateInstructions<F: ScalarField> {
     where
         QA: Into<QuantumCell<F>>;
 
-    /// Returns the inner product of `<a, b>` and returns a tuple of the inner product of a and the last element of `a` now assigned i.e. `(inner_product_<a, b>, last_element_a)`.
-    /// 
+    /// Returns the inner product of `<a, b>` and the last element of `a` now assigned, i.e. `(inner_product_<a, b>, last_element_a)`.
+    ///
     /// Assumes 'a' and 'b' are the same length.
     /// * `ctx`: [Context] of the circuit
     /// * `a`: Iterator of [QuantumCell]s
@@ -348,7 +347,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// Calculates and constrains the inner product.
     ///
     /// Returns the assignment trace where `output[i]` has the running sum `sum_{j=0..=i} a[j] * b[j]`.
-    /// 
+    ///
     /// Assumes 'a' and 'b' are the same length.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: Iterator of [QuantumCell] values
@@ -429,9 +428,9 @@ pub trait GateInstructions<F: ScalarField> {
     ///     + b_2 * (a_2...a_{i - 1})
     ///     + ...
     ///     + b_i`
-    /// 
+    ///
     /// Returns the assignment trace where `output[i]` is the running accumulated product x_i.
-    /// 
+    ///
     /// Assumes 'a' and 'b' are the same length.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: Iterator of [QuantumCell] values
@@ -473,7 +472,7 @@ pub trait GateInstructions<F: ScalarField> {
     ) -> AssignedValue<F>;
 
     /// Constrains and returns `a || b`, assuming `a` and `b` are boolean.
-    /// 
+    ///
     /// Defines a vertical gate of form `| 1 - b | 1 | b | 1 | b | a | 1 - b | out |`, where `out = a + b - a * b`.
     /// * `ctx`: [Context] to add the constraints to.
     /// * `a`: [QuantumCell] that contains a boolean value.
@@ -503,7 +502,7 @@ pub trait GateInstructions<F: ScalarField> {
     }
 
     /// Constrains and returns `a & b`, assumeing `a` and `b` are boolean.
-    /// 
+    ///
     /// Defines a vertical gate of form | 0 | a | b | out |, where out = a * b.
     /// * `ctx`: [Context] to add the constraints to.
     /// * `a`: [QuantumCell] that contains a boolean value.
@@ -518,7 +517,7 @@ pub trait GateInstructions<F: ScalarField> {
     }
 
     /// Constrains and returns `!a` assumeing `a` is boolean.
-    /// 
+    ///
     /// Defines a vertical gate of form | 1 - a | a | 1 | 1 |, where 1 - a = out.
     /// * `ctx`: [Context] to add the constraints to.
     /// * `a`: [QuantumCell] that contains a boolean value.
@@ -527,7 +526,7 @@ pub trait GateInstructions<F: ScalarField> {
     }
 
     /// Constrains and returns `sel ? a : b` assuming `sel` is boolean.
-    /// 
+    ///
     /// Defines a vertical gate of form `| 1 - sel | sel | 1 | a | 1 - sel | sel | 1 | b | out |`, where out = sel * a + (1 - sel) * b.
     /// * `ctx`: [Context] to add the constraints to.
     /// * `a`: [QuantumCell] that contains a boolean value.
@@ -542,7 +541,7 @@ pub trait GateInstructions<F: ScalarField> {
     ) -> AssignedValue<F>;
 
     /// Constains and returns `a || (b && c)`, assuming `a`, `b` and `c` are boolean.
-    /// 
+    ///
     /// Defines a vertical gate of form `| 1 - b c | b | c | 1 | a - 1 | 1 - b c | out | a - 1 | 1 | 1 | a |`, where out = a + b * c - a * b * c.
     /// * `ctx`: [Context] to add the constraints to.
     /// * `a`: [QuantumCell] that contains a boolean value.
@@ -556,7 +555,7 @@ pub trait GateInstructions<F: ScalarField> {
         c: impl Into<QuantumCell<F>>,
     ) -> AssignedValue<F>;
 
-    /// Constrains and returns an indicator vector from a slice of boolean values, where `vec[idx] = 1 iff idx = bits, (the binary number represented by `bits`) otherwise vec[idx] = 0`.
+    /// Constrains and returns an indicator vector from a slice of boolean values, where `output[idx] = 1` iff idx = (the number represented by `bits` in binary little endian), otherwise `output[idx] = 0`.
     /// * `ctx`: [Context] to add the constraints to
     /// * `bits`: slice of [QuantumCell]'s that contains boolean values
     fn bits_to_indicator(
@@ -597,7 +596,7 @@ pub trait GateInstructions<F: ScalarField> {
                     [0],
                 );
                 indicator.push(ctx.get(-4));
-                
+
                 // prod = bit * indicator[offset + old_idx]
                 let prod = self.mul(ctx, Existing(indicator[offset + old_idx]), Existing(*bit));
                 indicator.push(prod);
@@ -652,7 +651,7 @@ pub trait GateInstructions<F: ScalarField> {
     }
 
     /// Constrains the inner product of `a` and `indicator` and returns `a[idx]` (e.g. the value of `a` at `idx`).
-    /// 
+    ///
     /// Assumes that `a` and `indicator` are non-empty iterators of the same length, the values of `indicator` are boolean,
     /// and that `indicator` has at most one `1` bit.
     /// * `ctx`: [Context] to add the constraints to
@@ -683,7 +682,7 @@ pub trait GateInstructions<F: ScalarField> {
     }
 
     /// Constrains and returns `cells[idx]` if `idx < cells.len()`, otherwise return 0.
-    /// 
+    ///
     /// Assumes that `cells` and `idx` are non-empty iterators of the same length.
     /// * `ctx`: [Context] to add the constraints to
     /// * `cells`: Iterator of [QuantumCell]s to select from
@@ -706,7 +705,7 @@ pub trait GateInstructions<F: ScalarField> {
     }
 
     /// Constrains that a cell is equal to 0 and returns `1` if `a = 0`, otherwise `0`.
-    /// 
+    ///
     /// Defines a vertical gate of form `| out | a | inv | 1 | 0 | a | out | 0 |`, where out = 1 if a = 0, otherwise out = 0.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: [QuantumCell] value to be constrained
@@ -747,7 +746,7 @@ pub trait GateInstructions<F: ScalarField> {
     }
 
     /// Constrains and returns little-endian bit vector representation of `a`.
-    /// 
+    ///
     /// Assumes `range_bits <= number of bits in a`.
     /// * `a`: [QuantumCell] of the value to convert
     /// * `range_bits`: range of bits needed to represent `a`
@@ -762,7 +761,7 @@ pub trait GateInstructions<F: ScalarField> {
     ///
     /// Given pairs `coords[i] = (x_i, y_i)`, let `f` be the unique degree `len(coords)` polynomial such that `f(x_i) = y_i` for all `i`.
     ///
-    /// Returns: 
+    /// Returns:
     /// (f(x), Prod_i(x - x_i))
     /// * `ctx`: [Context] to add the constraints to
     /// * `coords`: immutable reference to a slice of tuples of [AssignedValue]s representing the points to interpolate over such that `coords[i] = (x_i, y_i)`
@@ -840,9 +839,9 @@ impl<F: ScalarField> GateChip<F> {
     }
 
     /// Calculates and constrains the inner product of `<a, b>`.
-    /// 
+    ///
     /// Returns `true` if `b` start with `Constant(F::one())`, and `false` otherwise.
-    /// 
+    ///
     /// Assumes `a` and `b` are the same length.
     /// * `ctx`: [Context] of the circuit
     /// * `a`: Iterator of [QuantumCell] values
@@ -930,7 +929,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     }
 
     /// Returns the inner product of `<a, b>` and returns a tuple of the last item of `a` after it is assigned and the item to its left `(left_a, last_a)`.
-    /// 
+    ///
     /// Assumes 'a' and 'b' are the same length.
     /// * `ctx`: [Context] of the circuit
     /// * `a`: Iterator of [QuantumCell]s
@@ -964,7 +963,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     /// Calculates and constrains the inner product.
     ///
     /// Returns the assignment trace where `output[i]` has the running sum `sum_{j=0..=i} a[j] * b[j]`.
-    /// 
+    ///
     /// Assumes 'a' and 'b' are the same length.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: Iterator of [QuantumCell] values
@@ -1002,7 +1001,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
         // TODO: optimizer
         match self.strategy {
             GateStrategy::Vertical => {
-                // Create an iterator starting with `var` and 
+                // Create an iterator starting with `var` and
                 let (a, b): (Vec<_>, Vec<_>) = std::iter::once((var, Constant(F::one())))
                     .chain(values.into_iter().filter_map(|(c, va, vb)| {
                         if c == F::one() {
@@ -1021,7 +1020,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     }
 
     /// Constrains and returns `sel ? a : b` assuming `sel` is boolean.
-    /// 
+    ///
     /// Defines a vertical gate of form `| 1 - sel | sel | 1 | a | 1 - sel | sel | 1 | b | out |`, where out = sel * a + (1 - sel) * b.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: [QuantumCell] that contains a boolean value
@@ -1060,7 +1059,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     }
 
     /// Constains and returns `a || (b && c)`, assuming `a`, `b` and `c` are boolean.
-    /// 
+    ///
     /// Defines a vertical gate of form `| 1 - b c | b | c | 1 | a - 1 | 1 - b c | out | a - 1 | 1 | 1 | a |`, where out = a + b * c - a * b * c.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: [QuantumCell] that contains a boolean value
@@ -1098,7 +1097,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     }
 
     /// Constrains and returns little-endian bit vector representation of `a`.
-    /// 
+    ///
     /// Assumes `range_bits >= number of bits in a`.
     /// * `a`: [QuantumCell] of the value to convert
     /// * `range_bits`: range of bits needed to represent `a`
