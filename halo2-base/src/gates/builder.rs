@@ -5,10 +5,10 @@ use super::{
 use crate::{
     halo2_proofs::{
         circuit::{self, Layouter, Region, SimpleFloorPlanner, Value},
-        plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Selector},
+        plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance, Selector},
     },
     utils::ScalarField,
-    Context, SKIP_FIRST_PASS,
+    AssignedValue, Context, SKIP_FIRST_PASS,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -588,7 +588,7 @@ impl<F: ScalarField> Circuit<F> for GateCircuitBuilder<F> {
 pub struct RangeCircuitBuilder<F: ScalarField>(pub GateCircuitBuilder<F>);
 
 impl<F: ScalarField> RangeCircuitBuilder<F> {
-    /// Creates an instance of the [RangeCircuitBuilder] and executes the keygen phase.
+    /// Creates an instance of the [RangeCircuitBuilder] and executes in keygen mode.
     pub fn keygen(builder: GateThreadBuilder<F>) -> Self {
         Self(GateCircuitBuilder::keygen(builder))
     }
@@ -598,7 +598,7 @@ impl<F: ScalarField> RangeCircuitBuilder<F> {
         Self(GateCircuitBuilder::mock(builder))
     }
 
-    /// Creates an instance of the [RangeCircuitBuilder] and executes the prover phase.
+    /// Creates an instance of the [RangeCircuitBuilder] and executes in prover mode.
     pub fn prover(
         builder: GateThreadBuilder<F>,
         break_points: MultiPhaseThreadBreakPoints,
@@ -653,6 +653,129 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
             config.load_lookup_table(&mut layouter).expect("load lookup table should not fail");
         }
         self.0.sub_synthesize(&config.gate, &config.lookup_advice, &config.q_lookup, &mut layouter);
+        Ok(())
+    }
+}
+
+/// Configuration with [`RangeConfig`] and a single public instance column.
+#[derive(Clone, Debug)]
+pub struct RangeWithInstanceConfig<F: ScalarField> {
+    /// The underlying range configuration
+    pub range: RangeConfig<F>,
+    /// The public instance column
+    pub instance: Column<Instance>,
+}
+
+/// This is an extension of [`RangeCircuitBuilder`] that adds support for public instances (aka public inputs+outputs)
+///
+/// The intended design is that a [`GateThreadBuilder`] is populated and then produces some assigned instances, which are supplied as `assigned_instances` to this struct.
+/// The [`Circuit`] implementation for this struct will then expose these instances and constrain them using the Halo2 API.
+#[derive(Clone, Debug)]
+pub struct RangeWithInstanceCircuitBuilder<F: ScalarField> {
+    /// The underlying circuit builder
+    pub circuit: RangeCircuitBuilder<F>,
+    /// The assigned instances to expose publicly at the end of circuit synthesis
+    pub assigned_instances: Vec<AssignedValue<F>>,
+}
+
+impl<F: ScalarField> RangeWithInstanceCircuitBuilder<F> {
+    /// See [`RangeCircuitBuilder::keygen`]
+    pub fn keygen(
+        builder: GateThreadBuilder<F>,
+        assigned_instances: Vec<AssignedValue<F>>,
+    ) -> Self {
+        Self { circuit: RangeCircuitBuilder::keygen(builder), assigned_instances }
+    }
+
+    /// See [`RangeCircuitBuilder::mock`]
+    pub fn mock(builder: GateThreadBuilder<F>, assigned_instances: Vec<AssignedValue<F>>) -> Self {
+        Self { circuit: RangeCircuitBuilder::mock(builder), assigned_instances }
+    }
+
+    /// See [`RangeCircuitBuilder::prover`]
+    pub fn prover(
+        builder: GateThreadBuilder<F>,
+        assigned_instances: Vec<AssignedValue<F>>,
+        break_points: MultiPhaseThreadBreakPoints,
+    ) -> Self {
+        Self { circuit: RangeCircuitBuilder::prover(builder, break_points), assigned_instances }
+    }
+
+    /// Creates a new instance of the [RangeWithInstanceCircuitBuilder].
+    pub fn new(circuit: RangeCircuitBuilder<F>, assigned_instances: Vec<AssignedValue<F>>) -> Self {
+        Self { circuit, assigned_instances }
+    }
+
+    /// Calls [`GateThreadBuilder::config`]
+    pub fn config(&self, k: u32, minimum_rows: Option<usize>) -> FlexGateConfigParams {
+        self.circuit.0.builder.borrow().config(k as usize, minimum_rows)
+    }
+
+    /// Gets the break points of the circuit.
+    pub fn break_points(&self) -> MultiPhaseThreadBreakPoints {
+        self.circuit.0.break_points.borrow().clone()
+    }
+
+    /// Gets the number of instances.
+    pub fn instance_count(&self) -> usize {
+        self.assigned_instances.len()
+    }
+
+    /// Gets the instances.
+    pub fn instance(&self) -> Vec<F> {
+        self.assigned_instances.iter().map(|v| *v.value()).collect()
+    }
+}
+
+impl<F: ScalarField> Circuit<F> for RangeWithInstanceCircuitBuilder<F> {
+    type Config = RangeWithInstanceConfig<F>;
+    type FloorPlanner = SimpleFloorPlanner;
+
+    fn without_witnesses(&self) -> Self {
+        unimplemented!()
+    }
+
+    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+        let range = RangeCircuitBuilder::configure(meta);
+        let instance = meta.instance_column();
+        meta.enable_equality(instance);
+        RangeWithInstanceConfig { range, instance }
+    }
+
+    fn synthesize(
+        &self,
+        config: Self::Config,
+        mut layouter: impl Layouter<F>,
+    ) -> Result<(), Error> {
+        // copied from RangeCircuitBuilder::synthesize but with extra logic to expose public instances
+        let range = config.range;
+        let circuit = &self.circuit.0;
+        // only load lookup table if we are actually doing lookups
+        if range.lookup_advice.iter().map(|a| a.len()).sum::<usize>() != 0
+            || !range.q_lookup.iter().all(|q| q.is_none())
+        {
+            range.load_lookup_table(&mut layouter).expect("load lookup table should not fail");
+        }
+        // we later `take` the builder, so we need to save this value
+        let witness_gen_only = circuit.builder.borrow().witness_gen_only();
+        let assigned_advices = circuit.sub_synthesize(
+            &range.gate,
+            &range.lookup_advice,
+            &range.q_lookup,
+            &mut layouter,
+        );
+
+        if !witness_gen_only {
+            // expose public instances
+            let mut layouter = layouter.namespace(|| "expose");
+            for (i, instance) in self.assigned_instances.iter().enumerate() {
+                let cell = instance.cell.unwrap();
+                let (cell, _) = assigned_advices
+                    .get(&(cell.context_id, cell.offset))
+                    .expect("instance not assigned");
+                layouter.constrain_instance(*cell, config.instance, i);
+            }
+        }
         Ok(())
     }
 }
