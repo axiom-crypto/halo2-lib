@@ -646,7 +646,12 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        config.load_lookup_table(&mut layouter).expect("load lookup table should not fail");
+        // only load lookup table if we are actually doing lookups
+        if config.lookup_advice.iter().map(|a| a.len()).sum::<usize>() != 0
+            || !config.q_lookup.iter().all(|q| q.is_none())
+        {
+            config.load_lookup_table(&mut layouter).expect("load lookup table should not fail");
+        }
         self.0.sub_synthesize(&config.gate, &config.lookup_advice, &config.q_lookup, &mut layouter);
         Ok(())
     }

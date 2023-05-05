@@ -1,3 +1,4 @@
+//! Base library to build Halo2 circuits.
 #![feature(stmt_expr_attributes)]
 #![feature(trait_alias)]
 #![deny(clippy::perf)]
@@ -40,6 +41,7 @@ pub mod gates;
 /// Utility functions for converting between different types of field elements.
 pub mod utils;
 
+/// Constant representing whether the Layouter calls `synthesize` once just to get region shape.
 #[cfg(feature = "halo2-axiom")]
 pub const SKIP_FIRST_PASS: bool = false;
 #[cfg(feature = "halo2-pse")]
@@ -72,7 +74,7 @@ impl<F: ScalarField> From<AssignedValue<F>> for QuantumCell<F> {
 
 impl<F: ScalarField> QuantumCell<F> {
     /// Returns an immutable reference to the underlying [ScalarField] value of a QuantumCell<F>.
-    /// 
+    ///
     /// Panics if the QuantumCell<F> is of type WitnessFraction.
     pub fn value(&self) -> &F {
         match self {
@@ -96,7 +98,7 @@ pub struct ContextCell {
 }
 
 /// Pointer containing cell value and location within [Context].
-/// 
+///
 /// Note: Performs a copy of the value, should only be used when you are about to assign the value again elsewhere.
 #[derive(Clone, Copy, Debug)]
 pub struct AssignedValue<F: ScalarField> {
@@ -109,7 +111,7 @@ pub struct AssignedValue<F: ScalarField> {
 
 impl<F: ScalarField> AssignedValue<F> {
     /// Returns an immutable reference to the underlying value of an AssignedValue<F>.
-    /// 
+    ///
     /// Panics if the AssignedValue<F> is of type WitnessFraction.
     pub fn value(&self) -> &F {
         match &self.value {
@@ -123,7 +125,6 @@ impl<F: ScalarField> AssignedValue<F> {
 /// * We keep the naming [Context] for historical reasons.
 #[derive(Clone, Debug)]
 pub struct Context<F: ScalarField> {
-
     /// Flag to determine whether only witness generation or proving and verification key generation is being performed.
     /// * If witness gen is performed many operations can be skipped for optimization.
     witness_gen_only: bool,
@@ -134,7 +135,7 @@ pub struct Context<F: ScalarField> {
     /// Single column of advice cells.
     pub advice: Vec<Assigned<F>>,
 
-    /// [Vec] tracking all cells that lookup is enabled for. 
+    /// [Vec] tracking all cells that lookup is enabled for.
     /// * When there is more than 1 advice column all `advice` cells will be copied to a single lookup enabled column to perform lookups.
     pub cells_to_lookup: Vec<AssignedValue<F>>,
 
@@ -156,12 +157,12 @@ pub struct Context<F: ScalarField> {
 
     // TODO: gates that use fixed columns as selectors?
     /// A [Vec] tracking equality constraints between pairs of [Context] `advice` cells.
-    /// 
+    ///
     /// Assumes both `advice` cells are in the same [Context].
     pub advice_equality_constraints: Vec<(ContextCell, ContextCell)>,
 
     /// A [Vec] tracking pairs equality constraints between Fixed values and [Context] `advice` cells.
-    /// 
+    ///
     /// Assumes the constant and `advice` cell are in the same [Context].
     pub constant_equality_constraints: Vec<(F, ContextCell)>,
 }
@@ -234,7 +235,7 @@ impl<F: ScalarField> Context<F> {
     /// Returns the [AssignedValue] of the cell at the given `offset` in the `advice` column of [Context]
     /// * `offset`: the offset of the cell to be fetched
     ///     * `offset` may be negative indexing from the end of the column (e.g., `-1` is the last cell)
-    /// * Assumes `offset` is a valid index in `advice`; 
+    /// * Assumes `offset` is a valid index in `advice`;
     ///     * `0` <= `offset` < `advice.len()` (or `advice.len() + offset >= 0` if `offset` is negative)
     pub fn get(&self, offset: isize) -> AssignedValue<F> {
         let offset = if offset < 0 {
@@ -259,7 +260,7 @@ impl<F: ScalarField> Context<F> {
     }
 
     /// Pushes multiple advice cells to the `advice` column of [Context] and enables them by enabling the corresponding selector specified in `gate_offset`.
-    /// 
+    ///
     /// * `inputs`: Iterator that specifies the cells to be assigned
     /// * `gate_offsets`: specifies relative offset from current position to enable selector for the gate (e.g., `0` is inputs[0]).
     ///     * `offset` may be negative indexing from the end of the column (e.g., `-1` is the last previously assigned cell)
@@ -293,7 +294,7 @@ impl<F: ScalarField> Context<F> {
     /// Pushes multiple advice cells to the `advice` column of [Context] and enables them by enabling the corresponding selector specified in `gate_offset` and returns the last assigned cell.
     ///
     /// Assumes `gate_offsets` is the same length as `inputs`
-    /// 
+    ///
     /// Returns the last assigned cell
     /// * `inputs`: Iterator that specifies the cells to be assigned
     /// * `gate_offsets`: specifies indices to enable selector for the gate; assume `gate_offsets` is sorted in increasing order
@@ -311,9 +312,9 @@ impl<F: ScalarField> Context<F> {
     }
 
     /// Pushes multiple advice cells to the `advice` column of [Context] and enables them by enabling the corresponding selector specified in `gate_offset`.
-    /// 
-    /// Allows for the specification of equality constraints between cells at `equality_offsets` within the `advice` column and external advice cells specified in `external_equality` (e.g, Fixed column). 
-    /// * `gate_offsets`: specifies indices to enable selector for the gate; 
+    ///
+    /// Allows for the specification of equality constraints between cells at `equality_offsets` within the `advice` column and external advice cells specified in `external_equality` (e.g, Fixed column).
+    /// * `gate_offsets`: specifies indices to enable selector for the gate;
     ///     * `offset` may be negative indexing from the end of the column (e.g., `-1` is the last cell)
     /// * `equality_offsets`: specifies pairs of indices to constrain equality
     /// * `external_equality`: specifies an existing cell to constrain equality with the cell at a certain index

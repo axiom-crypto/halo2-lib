@@ -17,7 +17,7 @@ mod general;
 #[cfg(test)]
 mod idx_to_indicator;
 
-// helper functions
+/// helper function to generate a proof with real prover
 pub fn gen_proof(
     params: &ParamsKZG<Bn256>,
     pk: &ProvingKey<G1Affine>,
@@ -36,6 +36,7 @@ pub fn gen_proof(
     transcript.finalize()
 }
 
+/// helper function to verify a proof
 pub fn check_proof(
     params: &ParamsKZG<Bn256>,
     vk: &VerifyingKey<G1Affine>,
