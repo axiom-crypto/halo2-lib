@@ -781,7 +781,7 @@ impl<F: ScalarField> Circuit<F> for RangeWithInstanceCircuitBuilder<F> {
 }
 
 /// Defines stage of the circuit builder.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CircuitBuilderStage {
     /// Keygen phase
     Keygen,
