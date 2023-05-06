@@ -59,11 +59,10 @@ pub struct RangeConfig<F: ScalarField> {
 }
 
 impl<F: ScalarField> RangeConfig<F> {
-
     /// Generates a new [RangeConfig] with the specified parameters.
     ///
     /// If `num_columns` is 0, then we assume you do not want to perform any lookups in that phase.
-    /// 
+    ///
     /// Panics if `lookup_bits` > 28.
     /// * `meta`: [ConstraintSystem] of the circuit
     /// * `range_strategy`: [GateStrategy] of the range chip
@@ -120,7 +119,10 @@ impl<F: ScalarField> RangeConfig<F> {
         let mut config =
             Self { lookup_advice, q_lookup, lookup, lookup_bits, gate, _strategy: range_strategy };
 
-        config.create_lookup(meta);
+        // sanity check: only create lookup table if there are lookup_advice columns
+        if !num_lookup_advice.is_empty() {
+            config.create_lookup(meta);
+        }
         config.gate.max_rows = (1 << circuit_degree) - meta.minimum_rows();
         assert!(
             (1 << lookup_bits) <= config.gate.max_rows,
@@ -181,7 +183,6 @@ impl<F: ScalarField> RangeConfig<F> {
 
 /// Trait that implements methods to constrain a field element number `x` is within a range of bits.
 pub trait RangeInstructions<F: ScalarField> {
-
     /// The type of Gate used within the instructions.
     type Gate: GateInstructions<F>;
 
@@ -195,7 +196,7 @@ pub trait RangeInstructions<F: ScalarField> {
     fn lookup_bits(&self) -> usize;
 
     /// Checks and constrains that `a` lies in the range [0, 2<sup>range_bits</sup>).
-    /// 
+    ///
     /// Assumes that both `a`<= `range_bits` bits.
     /// * a: [AssignedValue] value to be range checked
     /// * range_bits: number of bits to represent the range
@@ -204,7 +205,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// Constrains that 'a' is less than 'b'.
     ///
     /// Assumes that `a` and `b` have bit length <= num_bits bits.
-    /// 
+    ///
     /// Note: This may fail silently if a or b have more than num_bits.
     /// * a: [QuantumCell] value to check
     /// * b: upper bound expressed as a [QuantumCell]
@@ -218,8 +219,8 @@ pub trait RangeInstructions<F: ScalarField> {
     );
 
     /// Performs a range check that `a` has at most `bit_length(b)` bits and then constrains that `a` is less than `b`.
-    /// 
-    /// * a: [AssignedValue] value to check 
+    ///
+    /// * a: [AssignedValue] value to check
     /// * b: upper bound expressed as a [u64] value
     fn check_less_than_safe(&self, ctx: &mut Context<F>, a: AssignedValue<F>, b: u64) {
         let range_bits =
@@ -259,7 +260,7 @@ pub trait RangeInstructions<F: ScalarField> {
     ) -> AssignedValue<F>;
 
     /// Performs a range check that `a` has at most `bit_length(b)` and then constrains that `a` is in `[0,b)`.
-    /// 
+    ///
     /// Returns 1 if `a` < `b`, otherwise 0.
     ///
     /// * a: [AssignedValue] value to check
@@ -278,7 +279,7 @@ pub trait RangeInstructions<F: ScalarField> {
     }
 
     /// Performs a range check that `a` has at most `bit_length(b)` and then constrains that `a` is in `[0,b)`.
-    /// 
+    ///
     /// Returns 1 if `a` < `b`, otherwise 0.
     ///
     /// * a: [AssignedValue] value to check
@@ -329,7 +330,7 @@ pub trait RangeInstructions<F: ScalarField> {
             div,
             BigUint::one().shl(a_num_bits as u32) / &b + BigUint::one(),
         );
-        // Constrain that remainder is less than divisor (i.e. `r < b`). 
+        // Constrain that remainder is less than divisor (i.e. `r < b`).
         self.check_big_less_than_safe(ctx, rem, b);
         (div, rem)
     }
@@ -341,7 +342,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// that `a` has <= `a_num_bits` bits.
     /// that `b` has <= `b_num_bits` bits.
     ///
-    /// Note: 
+    /// Note:
     /// Let `X = 2 ** b_num_bits`
     /// Write `a = a1 * X + a0` and `c = c1 * X + c0`
     /// If we write `b * c0 + r = d1 * X + d0` then
@@ -442,7 +443,6 @@ pub struct RangeChip<F: ScalarField> {
 }
 
 impl<F: ScalarField> RangeChip<F> {
-
     /// Creates a new [RangeChip] with the given strategy and lookup_bits.
     /// * strategy: [GateStrategy] for advice values in this chip
     /// * lookup_bits: number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>)
@@ -489,11 +489,11 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
     }
 
     /// Checks and constrains that `a` lies in the range [0, 2<sup>range_bits</sup>).
-    /// 
+    ///
     /// This is done by decomposing `a` into `k` limbs, where `k = (range_bits + lookup_bits - 1) / lookup_bits`.
     /// Each limb is constrained to be within the range [0, 2<sup>lookup_bits</sup>).
     /// The limbs are then combined to form `a` again with the last limb having `rem_bits` number of bits.
-    /// 
+    ///
     /// * `a`: [AssignedValue] value to be range checked
     /// * `range_bits`: number of bits in the range
     /// * `lookup_bits`: number of bits in the lookup table
@@ -543,7 +543,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
     /// Constrains that 'a' is less than 'b'.
     ///
     /// Assumes that`a` and `b` are known to have <= num_bits bits.
-    /// 
+    ///
     /// Note: This may fail silently if a or b have more than num_bits
     /// * a: [QuantumCell] value to check
     /// * b: upper bound expressed as a [QuantumCell]
