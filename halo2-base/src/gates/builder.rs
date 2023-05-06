@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    env::{set_var, var},
 };
 
 /// Vector of thread advice column break points
@@ -180,7 +181,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
             println!("Total {total_fixed} fixed cells");
             log::info!("Auto-calculated config params:\n {params:#?}");
         }
-        std::env::set_var("FLEX_GATE_CONFIG_PARAMS", serde_json::to_string(&params).unwrap());
+        set_var("FLEX_GATE_CONFIG_PARAMS", serde_json::to_string(&params).unwrap());
         params
     }
 
@@ -568,7 +569,7 @@ impl<F: ScalarField> Circuit<F> for GateCircuitBuilder<F> {
             num_lookup_advice_per_phase: _,
             num_fixed,
             k,
-        } = serde_json::from_str(&std::env::var("FLEX_GATE_CONFIG_PARAMS").unwrap()).unwrap();
+        } = serde_json::from_str(&var("FLEX_GATE_CONFIG_PARAMS").unwrap()).unwrap();
         FlexGateConfig::configure(meta, strategy, &num_advice_per_phase, num_fixed, k)
     }
 
@@ -624,11 +625,11 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
             num_lookup_advice_per_phase,
             num_fixed,
             k,
-        } = serde_json::from_str(&std::env::var("FLEX_GATE_CONFIG_PARAMS").unwrap()).unwrap();
+        } = serde_json::from_str(&var("FLEX_GATE_CONFIG_PARAMS").unwrap()).unwrap();
         let strategy = match strategy {
             GateStrategy::Vertical => RangeStrategy::Vertical,
         };
-        let lookup_bits = std::env::var("LOOKUP_BITS").unwrap().parse().unwrap();
+        let lookup_bits = var("LOOKUP_BITS").unwrap_or_else(|_| "0".to_string()).parse().unwrap();
         RangeConfig::configure(
             meta,
             strategy,
