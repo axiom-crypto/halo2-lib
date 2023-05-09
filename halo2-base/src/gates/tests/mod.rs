@@ -18,6 +18,8 @@ mod general;
 mod idx_to_indicator;
 #[cfg(test)]
 mod flex_gate_test;
+#[cfg(test)]
+mod prop_test;
 
 // helper functions
 pub fn gen_proof(
