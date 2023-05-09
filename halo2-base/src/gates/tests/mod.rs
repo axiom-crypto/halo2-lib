@@ -19,6 +19,8 @@ mod idx_to_indicator;
 #[cfg(test)]
 mod flex_gate_test;
 #[cfg(test)]
+mod range_gate_test;
+#[cfg(test)]
 mod prop_test;
 
 /// helper function to generate a proof with real prover

@@ -1,5 +1,5 @@
 use proptest::{prelude::*, collection::vec};
-use crate::{gates::{tests::{Fr, flex_gate_test}}, utils::ScalarField};
+use crate::{gates::tests::{Fr, flex_gate_test, range_gate_test}, utils::ScalarField};
 use crate::{QuantumCell, QuantumCell::Witness};
 
 prop_compose! {
@@ -18,7 +18,9 @@ prop_compose! {
     }
 }
 
-// Ground truth functions for Property Testing
+// Ground truth functions
+
+//  Flex Gate Ground Truths
 
 fn add_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
     *inputs[0].value() + *inputs[1].value()
@@ -99,7 +101,7 @@ fn idx_to_indicator_ground_truth<F: ScalarField>(inputs: (QuantumCell<F>, usize)
     let (idx, size) = inputs;
     let mut indicator = vec![F::zero(); size];
     let mut idx_value = size + 1;
-    for i in 0..u64::MAX {
+    for i in 0..size as u64 {
         if F::from(i) == *idx.value() {
             idx_value = i as usize;
             break;
@@ -112,8 +114,8 @@ fn idx_to_indicator_ground_truth<F: ScalarField>(inputs: (QuantumCell<F>, usize)
 }
 
 fn select_by_indicator_ground_truth<F: ScalarField>(inputs: &(Vec<QuantumCell<F>>, QuantumCell<F>)) -> F {
-    let mut indicator = vec![F::zero(); inputs.0.len()];
     let mut idx_value = inputs.0.len() + 1;
+    let mut indicator = vec![F::zero(); inputs.0.len()];
     for i in 0..inputs.0.len() as u64{
         if F::from(i) == *inputs.1.value() {
             idx_value = i as usize;
@@ -161,6 +163,37 @@ fn lagrange_eval_ground_truth<F: ScalarField>(inputs: &[F]) -> (F, F) {
 
 fn get_field_element_ground_truth<F: ScalarField>(n: u64) -> F {
     F::from(n)
+}
+
+// Range Chip Ground Truths
+
+fn is_less_than_ground_truth<F: ScalarField>(inputs: (F, F)) -> F {
+    if inputs.0 < inputs.1 {
+        F::one()
+    } else {
+        F::zero()
+    }
+}
+
+fn is_less_than_safe_ground_truth<F: ScalarField>(inputs: (F, u64)) -> F {
+    if inputs.0 < F::from(inputs.1) {
+        F::one()
+    } else {
+        F::zero()
+    }
+}
+
+fn div_mod_ground_truth<F: ScalarField>(inputs: (F, u64)) -> (F, F) {
+    let dividend = inputs.0;
+    let divisor = F::from(inputs.1);
+    let quotient = dividend.invert().unwrap() * divisor;
+    let remainder = dividend - (quotient * divisor);
+    (quotient, remainder)
+}
+
+fn get_last_bit_ground_truth<F: ScalarField>(inputs: (F, usize)) -> F {
+    let bits = inputs.0.to_repr().as_ref()[0] >> (inputs.1 - 1);
+    F::from(u64::from(bits & 1))
 }
 
 proptest! {
@@ -329,5 +362,61 @@ proptest! {
         let ground_truth = get_field_element_ground_truth(n);
         let result = flex_gate_test::test_get_field_element::<Fr>(n);
         prop_assert_eq!(result, ground_truth);
+    }
+
+    // Range Check Property Tests
+    #[test]
+    fn prop_test_is_less_than(inputs in (rand_witness(), rand_witness(), 1..=16_usize)) {
+        let ground_truth = is_less_than_ground_truth((*inputs.0.value(), *inputs.1.value()));
+        let result = range_gate_test::test_is_less_than(([inputs.0, inputs.1], inputs.2));
+        prop_assert_eq!(result, ground_truth);
+    }
+
+    #[test]
+    fn prop_test_is_less_than_safe(input in (rand_fr(), 0u64..(1 << 16))) {
+        let ground_truth = is_less_than_safe_ground_truth((input.0, input.1));
+        let result = range_gate_test::test_is_less_than_safe((input.0, input.1));
+        prop_assert_eq!(result, ground_truth);
+    }
+
+    #[test]
+    fn prop_test_div_mod(inputs in (rand_witness(), any::<u64>().prop_filter("Non-zero divisor", |x| *x != 0u64), 1..=16_usize)) {
+        let ground_truth = div_mod_ground_truth((*inputs.0.value(), inputs.1));
+        let result = range_gate_test::test_div_mod((inputs.0, inputs.1, inputs.2));
+        prop_assert_eq!(result, ground_truth);
+    }
+
+    #[test]
+    fn prop_test_get_last_bit(inputs in (rand_fr(), 1..=16_usize)) {
+        let ground_truth = get_last_bit_ground_truth((inputs.0, inputs.1));
+        let result = range_gate_test::test_get_last_bit((inputs.0, inputs.1));
+        prop_assert_eq!(result, ground_truth);
+    }
+
+    #[test]
+    fn prop_test_div_mod_var(inputs in (rand_witness(), any::<u64>(), 1..=16_usize, 1..=16_usize)) {
+        let ground_truth = div_mod_ground_truth((*inputs.0.value(), inputs.1));
+        let result = range_gate_test::test_div_mod_var((inputs.0, Witness(Fr::from(inputs.1)), inputs.2, inputs.3));
+        prop_assert_eq!(result, ground_truth);
+    }
+
+    #[test]
+    fn prop_test_range_check(inputs in (rand_fr(), 1..=16_usize)) {
+        range_gate_test::test_range_check((inputs.0, inputs.1));
+    }
+
+    #[test]
+    fn prop_test_check_less_than(inputs in (rand_witness(), rand_witness(), 1..=16_usize)) {
+        range_gate_test::test_check_less_than(([inputs.0, inputs.1], inputs.2));
+    }
+
+    #[test]
+    fn prop_test_check_less_than_safe(inputs in (rand_fr(), any::<u64>().prop_filter("Non-zero upper bound", |x| *x != 0u64))) {
+        range_gate_test::test_check_less_than_safe((inputs.0, inputs.1));
+    }
+
+    #[test]
+    fn prop_test_check_big_less_than_safe(inputs in (rand_fr(), any::<u64>().prop_filter("Non-zero upper bound", |x| *x != 0u64))) {
+        range_gate_test::test_check_big_less_than_safe((inputs.0, inputs.1));
     }
 }
