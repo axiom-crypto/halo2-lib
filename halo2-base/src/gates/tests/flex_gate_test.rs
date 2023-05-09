@@ -153,7 +153,6 @@ pub fn test_not<F: ScalarField>(a: QuantumCell<F>) -> F {
     *a.value()
 }
 
-//todo: add neg test
 #[test_case(&[2, 3, 1].map(Fr::from).map(Witness) => Fr::from(2) ; "select(): 2 ? 3 : 1 == 2")]
 pub fn test_select<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
     let mut builder = GateThreadBuilder::mock();
