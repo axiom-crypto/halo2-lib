@@ -130,7 +130,7 @@ The test config file locations are (relative to `halo2-ecc` directory):
 | `test_msm` | `src/bn254/configs/msm_circuit.config` |
 | `test_pairing` | `src/bn254/configs/pairing_circuit.config` |
 
-### Benchmarks
+## Benchmarks
 
 We have tests that are actually benchmarks using the production Halo2 prover.
 As mentioned [above](#Configurable-Circuits), there are different configurations for each circuit that lead to _very_ different proving times. The following benchmarks will take a list of possible configurations and benchmark each one. The results are saved in a file in the `results` directory. We currently supply the configuration lists, which should provide optimal configurations for a given circuit degree `k` (however you can check versus the stdout suggestions to see if they really are optimal!).
@@ -172,7 +172,7 @@ cargo bench --bench fp_mul
 
 This run the same proof generation over 10 runs and collect the average. Each circuit has a fixed configuration chosen for optimal speed. These benchmarks are mostly for use in performance optimization.
 
-## Secp256k1 ECDSA
+### Secp256k1 ECDSA
 
 We provide benchmarks for ECDSA signature verification for the Secp256k1 curve on several different machines. All machines only use CPUs.
 
@@ -215,7 +215,7 @@ The other columns provide information about the [PLONKish arithmetization](https
 
 The r6a has a higher clock speed than the r6g.
 
-## BN254 Pairing
+### BN254 Pairing
 
 We provide benchmarks of the optimal Ate pairing for BN254 on several different machines. All machines only use CPUs.
 
@@ -258,7 +258,7 @@ The other columns provide information about the [PLONKish arithmetization](https
 
 The r6a has a higher clock speed than the r6g. We hypothesize that the Apple Silicon integrated memory leads to the faster performance on the M2 Max.
 
-## BN254 MSM
+### BN254 MSM
 
 We provide benchmarks of multi-scalar multiplication (MSM, multi-exp) with a batch size of `100` for BN254.
 
@@ -275,3 +275,15 @@ cargo test --release --no-default-features --features "halo2-axiom, mimalloc" --
 | 19  | 20         | 3                 | 1         | 32.6s               |
 | 20  | 11         | 2                 | 1         | 41.3s               |
 | 21  | 6          | 1                 | 1         | 51.9s               |
+
+## Projects built with `halo2-lib`
+
+* [Axiom](https://github.com/axiom-crypto/axiom-eth) -- Prove facts about Ethereum on-chain data via aggregate block header, account, and storage proofs.
+* [Proof of Email](https://github.com/zkemail/) -- Prove facts about emails with the same trust assumption as the email domain.
+  * [halo2-regex](https://github.com/zkemail/halo2-regex)
+  * [halo2-zk-email](https://github.com/zkemail/halo2-zk-email)
+  * [halo2-base64](https://github.com/zkemail/halo2-base64)
+  * [halo2-rsa](https://github.com/zkemail/halo2-rsa/tree/feat/new_bigint)
+* [halo2-fri-gadget](https://github.com/maxgillett/halo2-fri-gadget) -- FRI verifier in halo2.
+* [webauthn-halo2](https://github.com/zkwebauthn/webauthn-halo2) -- Proving and verifying WebAuthn with halo2.
+* [Fixed Point Arithmetic](https://github.com/DCMMC/halo2-scaffold/tree/main/src/gadget) -- Fixed point arithmetic library in halo2.
