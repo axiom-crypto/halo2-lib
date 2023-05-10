@@ -379,7 +379,11 @@ pub trait RangeInstructions<F: ScalarField> {
         );
         let [div_lo, div_hi, div, rem] = [-5, -4, -2, -1].map(|i| ctx.get(i));
         self.range_check(ctx, div_lo, b_num_bits);
-        self.range_check(ctx, div_hi, a_num_bits.saturating_sub(b_num_bits));
+        if a_num_bits <= b_num_bits {
+            self.gate().assert_is_const(ctx, &div_hi, &F::zero());
+        } else {
+            self.range_check(ctx, div_hi, a_num_bits - b_num_bits);
+        }
 
         let (bcr0_hi, bcr0_lo) = {
             let bcr0 = self.gate().mul_add(ctx, b, Existing(div_lo), Existing(rem));
