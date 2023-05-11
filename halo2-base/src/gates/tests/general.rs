@@ -1,11 +1,13 @@
-use super::builder::{GateCircuitBuilder, GateThreadBuilder, RangeCircuitBuilder};
-use super::flex_gate::{GateChip, GateInstructions};
-use super::range::{RangeChip, RangeInstructions};
-use crate::halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
+use super::*;
+use crate::gates::{
+    builder::{GateCircuitBuilder, GateThreadBuilder, RangeCircuitBuilder},
+    flex_gate::{GateChip, GateInstructions},
+    range::{RangeChip, RangeInstructions},
+};
+use crate::halo2_proofs::dev::MockProver;
 use crate::utils::{BigPrimeField, ScalarField};
 use crate::{Context, QuantumCell::Constant};
 use ff::Field;
-use rand::rngs::OsRng;
 use rayon::prelude::*;
 
 fn gate_tests<F: ScalarField>(ctx: &mut Context<F>, inputs: [F; 3]) {
