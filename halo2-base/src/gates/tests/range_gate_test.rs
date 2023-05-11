@@ -114,7 +114,7 @@ pub fn test_get_last_bit<F: ScalarField>(inputs: (F, usize)) -> F {
 }
 
 // TODO: fix test currently fails during final range check due to `attempt to subtract with oveflow` w/ k = 0;
-#[test_case((Witness(Fr::one()), Witness(Fr::from(2)), 3, 3) => (Fr::one(), Fr::zero()) ; "div_mod_var() pos")]
+#[test_case((Witness(Fr::one()), Witness(Fr::from(2)), 3, 3) => (Fr::zero(), Fr::one()) ; "div_mod_var() pos")]
 pub fn test_div_mod_var<F: ScalarField + BigPrimeField>(inputs: (QuantumCell<F>, QuantumCell<F>, usize, usize)) -> (F, F) {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
