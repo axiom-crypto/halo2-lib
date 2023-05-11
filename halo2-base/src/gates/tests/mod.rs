@@ -17,11 +17,15 @@ mod general;
 #[cfg(test)]
 mod idx_to_indicator;
 #[cfg(test)]
-mod flex_gate_test;
+mod flex_gate_tests;
 #[cfg(test)]
-mod range_gate_test;
+mod range_gate_tests;
 #[cfg(test)]
-mod prop_test;
+mod pos_prop_test;
+#[cfg(test)]
+mod neg_prop_tests;
+#[cfg(test)]
+mod test_ground_truths;
 
 /// helper function to generate a proof with real prover
 pub fn gen_proof(
