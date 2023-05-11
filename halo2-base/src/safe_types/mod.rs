@@ -50,16 +50,25 @@ where [(); (TOTAL_BITS + BYTES_PER_ELE * BITS_PER_BYTE - 1) / (BYTES_PER_ELE * B
     }
 }
 
-// (2^(F::NUM_BITS) - 1) might not be a valid value for F. e.g. max value of F is a prime in [2^(F::NUM_BITS-1), 2^(F::NUM_BITS) - 1]
+/// Represent TOTAL_BITS with the least number of AssignedValue<F>.
+/// (2^(F::NUM_BITS) - 1) might not be a valid value for F. e.g. max value of F is a prime in [2^(F::NUM_BITS-1), 2^(F::NUM_BITS) - 1]
 type CompactSafeType<F: ScalarField, const TOTAL_BITS: usize> = SafeType<F, { ((F::NUM_BITS - 1) / 8) as usize}, TOTAL_BITS>;
 
+/// SafeType for bool.
 pub type SafeBool<F> = CompactSafeType<F, 1>;
+/// SafeType for uint8.
 pub type SafeUint8<F> = CompactSafeType<F, 8>;
+/// SafeType for uint16.
 pub type SafeUint16<F> = CompactSafeType<F, 16>;
+/// SafeType for uint32.
 pub type SafeUint32<F> = CompactSafeType<F, 32>;
+/// SafeType for uint64.
 pub type SafeUint64<F> = CompactSafeType<F, 64>;
+/// SafeType for uint128.
 pub type SafeUint128<F> = CompactSafeType<F, 128>;
+/// SafeType for uint256.
 pub type SafeUint256<F> = CompactSafeType<F, 256>;
+/// SafeType for bytes32.
 pub type SafeBytes32<F> = SafeType<F, 1, 256>;
 
 pub struct SafeTypeChip<F: ScalarField> {
@@ -67,10 +76,13 @@ pub struct SafeTypeChip<F: ScalarField> {
 }
 
 impl<F: ScalarField> SafeTypeChip< F> {
+    /// Construct a SafeTypeChip.
     pub fn new(range_chip: Arc<RangeChip<F>>) -> Self {
         Self { range_chip: Arc::clone(&range_chip) }
     }
 
+    /// Convert a vector of AssignedValue to a SafeType. The number of bytes of inputs must equal to the number of bytes of outputs.
+    /// This function also add contraints that a AssignedValue in inputs must be in the range of a byte.
     pub fn raw_bytes_to<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
         &self,
         ctx: &mut Context<F>,
