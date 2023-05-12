@@ -56,7 +56,7 @@ pub trait FieldChip<F: PrimeField> {
 
     fn load_constant(&self, ctx: &mut Context<F>, coeffs: Self::ConstantType) -> Self::FieldPoint;
 
-    fn add_no_carry<'v>(
+    fn add_no_carry(
         &self,
         ctx: &mut Context<F>,
         a: &Self::FieldPoint,
@@ -64,24 +64,24 @@ pub trait FieldChip<F: PrimeField> {
     ) -> Self::FieldPoint;
 
     /// output: `a + c`
-    fn add_constant_no_carry<'v>(
+    fn add_constant_no_carry(
         &self,
         ctx: &mut Context<F>,
         a: &Self::FieldPoint,
         c: Self::ConstantType,
     ) -> Self::FieldPoint;
 
-    fn sub_no_carry<'v>(
+    fn sub_no_carry(
         &self,
         ctx: &mut Context<F>,
         a: &Self::FieldPoint,
         b: &Self::FieldPoint,
     ) -> Self::FieldPoint;
 
-    fn negate<'v>(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> Self::FieldPoint;
+    fn negate(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> Self::FieldPoint;
 
     /// a * c
-    fn scalar_mul_no_carry<'v>(
+    fn scalar_mul_no_carry(
         &self,
         ctx: &mut Context<F>,
         a: &Self::FieldPoint,
@@ -89,7 +89,7 @@ pub trait FieldChip<F: PrimeField> {
     ) -> Self::FieldPoint;
 
     /// a * c + b
-    fn scalar_mul_and_add_no_carry<'v>(
+    fn scalar_mul_and_add_no_carry(
         &self,
         ctx: &mut Context<F>,
         a: &Self::FieldPoint,
@@ -97,36 +97,36 @@ pub trait FieldChip<F: PrimeField> {
         c: i64,
     ) -> Self::FieldPoint;
 
-    fn mul_no_carry<'v>(
+    fn mul_no_carry(
         &self,
         ctx: &mut Context<F>,
         a: &Self::FieldPoint,
         b: &Self::FieldPoint,
     ) -> Self::FieldPoint;
 
-    fn check_carry_mod_to_zero<'v>(&self, ctx: &mut Context<F>, a: &Self::FieldPoint);
+    fn check_carry_mod_to_zero(&self, ctx: &mut Context<F>, a: &Self::FieldPoint);
 
-    fn carry_mod<'v>(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> Self::FieldPoint;
+    fn carry_mod(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> Self::FieldPoint;
 
-    fn range_check<'v>(&self, ctx: &mut Context<F>, a: &Self::FieldPoint, max_bits: usize);
+    fn range_check(&self, ctx: &mut Context<F>, a: &Self::FieldPoint, max_bits: usize);
 
-    fn enforce_less_than<'v>(&self, ctx: &mut Context<F>, a: &Self::FieldPoint);
+    fn enforce_less_than(&self, ctx: &mut Context<F>, a: &Self::FieldPoint);
 
     // Assumes the witness for a is 0
     // Constrains that the underlying big integer is 0 and < p.
     // For field extensions, checks coordinate-wise.
-    fn is_soft_zero<'v>(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> AssignedValue<F>;
+    fn is_soft_zero(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> AssignedValue<F>;
 
     // Constrains that the underlying big integer is in [1, p - 1].
     // For field extensions, checks coordinate-wise.
-    fn is_soft_nonzero<'v>(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> AssignedValue<F>;
+    fn is_soft_nonzero(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> AssignedValue<F>;
 
-    fn is_zero<'v>(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> AssignedValue<F>;
+    fn is_zero(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> AssignedValue<F>;
 
     // assuming `a, b` have been range checked to be a proper BigInt
     // constrain the witnesses `a, b` to be `< p`
     // then check `a == b` as BigInts
-    fn is_equal<'v>(
+    fn is_equal(
         &self,
         ctx: &mut Context<F>,
         a: &Self::FieldPoint,
@@ -138,16 +138,16 @@ pub trait FieldChip<F: PrimeField> {
         self.is_equal_unenforced(ctx, a, b)
     }
 
-    fn is_equal_unenforced<'v>(
+    fn is_equal_unenforced(
         &self,
         ctx: &mut Context<F>,
         a: &Self::FieldPoint,
         b: &Self::FieldPoint,
     ) -> AssignedValue<F>;
 
-    fn assert_equal<'v>(&self, ctx: &mut Context<F>, a: &Self::FieldPoint, b: &Self::FieldPoint);
+    fn assert_equal(&self, ctx: &mut Context<F>, a: &Self::FieldPoint, b: &Self::FieldPoint);
 
-    fn mul<'v>(
+    fn mul(
         &self,
         ctx: &mut Context<F>,
         a: &Self::FieldPoint,
@@ -157,7 +157,7 @@ pub trait FieldChip<F: PrimeField> {
         self.carry_mod(ctx, &no_carry)
     }
 
-    fn divide<'v>(
+    fn divide(
         &self,
         ctx: &mut Context<F>,
         a: &Self::FieldPoint,
@@ -180,7 +180,7 @@ pub trait FieldChip<F: PrimeField> {
 
     // constrain and output -a / b
     // this is usually cheaper constraint-wise than computing -a and then (-a) / b separately
-    fn neg_divide<'v>(
+    fn neg_divide(
         &self,
         ctx: &mut Context<F>,
         a: &Self::FieldPoint,

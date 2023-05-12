@@ -2,8 +2,8 @@ use super::{CRTInteger, OverflowInteger};
 use crate::fields::PrimeField;
 use halo2_base::{gates::GateInstructions, AssignedValue, Context, QuantumCell::Existing};
 
-// given OverflowInteger<F>'s `a` and `b` of the same shape,
-// returns whether `a == b`
+/// Given OverflowInteger<F>'s `a` and `b` of the same shape,
+/// returns whether `a == b`
 pub fn assign<F: PrimeField>(
     gate: &impl GateInstructions<F>,
     ctx: &mut Context<F>,
@@ -12,7 +12,7 @@ pub fn assign<F: PrimeField>(
 ) -> AssignedValue<F> {
     let k = a.limbs.len();
     assert_eq!(k, b.limbs.len());
-    assert_ne!(k, 0);
+    debug_assert_ne!(k, 0);
 
     let mut a_limbs = a.limbs.iter();
     let mut b_limbs = b.limbs.iter();

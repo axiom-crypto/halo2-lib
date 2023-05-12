@@ -386,7 +386,7 @@ where
 {
     let k = P.len();
     assert_eq!(k, scalars.len());
-    assert_ne!(k, 0);
+    debug_assert_ne!(k, 0);
     assert!(!scalars[0].is_empty());
     assert!((max_bits as u32) <= F::NUM_BITS);
 

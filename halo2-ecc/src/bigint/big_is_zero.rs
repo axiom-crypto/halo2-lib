@@ -9,7 +9,7 @@ pub fn positive<F: PrimeField>(
     a: &OverflowInteger<F>,
 ) -> AssignedValue<F> {
     let k = a.limbs.len();
-    assert_ne!(k, 0);
+    debug_assert_ne!(k, 0);
     debug_assert!(a.max_limb_bits as u32 + k.ilog2() < F::CAPACITY);
 
     let sum = gate.sum(ctx, a.limbs.iter().copied().map(Existing));
@@ -23,7 +23,7 @@ pub fn assign<F: PrimeField>(
     a: &OverflowInteger<F>,
 ) -> AssignedValue<F> {
     let k = a.limbs.len();
-    assert_ne!(k, 0);
+    debug_assert_ne!(k, 0);
 
     let mut a_limbs = a.limbs.iter();
     let mut partial = gate.is_zero(ctx, a_limbs.next().unwrap());

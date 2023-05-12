@@ -269,7 +269,7 @@ impl<F: ScalarField> RangeConfig<F> {
         range_bits: usize,
         limbs_assigned: &mut Vec<AssignedValue<F>>,
     ) {
-        assert_ne!(range_bits, 0);
+        debug_assert_ne!(range_bits, 0);
         #[cfg(feature = "display")]
         {
             let key = format!(
