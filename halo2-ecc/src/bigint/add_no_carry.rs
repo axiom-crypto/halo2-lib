@@ -1,5 +1,6 @@
 use super::{CRTInteger, OverflowInteger};
-use halo2_base::{gates::GateInstructions, utils::PrimeField, Context, QuantumCell::Existing};
+use crate::fields::PrimeField;
+use halo2_base::{gates::GateInstructions, Context, QuantumCell::Existing};
 use std::cmp::max;
 
 pub fn assign<F: PrimeField>(

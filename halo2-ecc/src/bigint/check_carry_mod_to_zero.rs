@@ -1,8 +1,9 @@
 use super::{check_carry_to_zero, CRTInteger, OverflowInteger};
+use crate::fields::PrimeField;
 use crate::halo2_proofs::circuit::Value;
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
-    utils::{biguint_to_fe, decompose_bigint_option, value_to_option, PrimeField},
+    utils::{biguint_to_fe, decompose_bigint_option, value_to_option},
     AssignedValue, Context,
     QuantumCell::{Constant, Existing, Witness},
 };

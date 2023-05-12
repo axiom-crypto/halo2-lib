@@ -1,7 +1,8 @@
 use super::{CRTInteger, OverflowInteger};
+use crate::fields::PrimeField;
 use halo2_base::{
     gates::GateInstructions,
-    utils::{log2_ceil, PrimeField},
+    utils::log2_ceil,
     Context,
     QuantumCell::{Constant, Existing, Witness},
 };

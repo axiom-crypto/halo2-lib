@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
+use crate::fields::PrimeField;
 use ark_std::{end_timer, start_timer};
-use halo2_base::{utils::PrimeField, SKIP_FIRST_PASS};
+use halo2_base::SKIP_FIRST_PASS;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::marker::PhantomData;

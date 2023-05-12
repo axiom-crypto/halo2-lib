@@ -1,5 +1,6 @@
 use super::{CRTInteger, OverflowInteger};
-use halo2_base::{gates::GateInstructions, utils::PrimeField, Context, QuantumCell::Existing};
+use crate::fields::PrimeField;
+use halo2_base::{gates::GateInstructions, Context, QuantumCell::Existing};
 
 pub fn truncate<F: PrimeField>(
     gate: &impl GateInstructions<F>,

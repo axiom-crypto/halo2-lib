@@ -1,5 +1,5 @@
 use crate::halo2_proofs::{arithmetic::Field, circuit::Value};
-use halo2_base::{gates::RangeInstructions, utils::PrimeField, AssignedValue, Context};
+use halo2_base::{gates::RangeInstructions, utils::BigPrimeField, AssignedValue, Context};
 use num_bigint::BigUint;
 use std::fmt::Debug;
 
@@ -9,6 +9,8 @@ pub mod fp2;
 
 #[cfg(test)]
 mod tests;
+
+pub trait PrimeField = BigPrimeField;
 
 #[derive(Clone, Debug)]
 pub struct FieldExtPoint<FieldPoint: Clone + Debug> {

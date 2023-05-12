@@ -1,11 +1,12 @@
 #![allow(non_snake_case)]
 use crate::bigint::CRTInteger;
+use crate::fields::PrimeField;
 use crate::fields::{fp::FpConfig, FieldChip, PrimeFieldChip, Selectable};
 use crate::halo2_proofs::{arithmetic::CurveAffine, circuit::Value};
 use group::{Curve, Group};
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
-    utils::{modulus, CurveAffineExt, PrimeField},
+    utils::{modulus, CurveAffineExt},
     AssignedValue, Context,
     QuantumCell::Existing,
 };

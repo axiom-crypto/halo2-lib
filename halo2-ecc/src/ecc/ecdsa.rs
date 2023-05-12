@@ -1,8 +1,9 @@
 use crate::bigint::{big_less_than, CRTInteger};
+use crate::fields::PrimeField;
 use crate::fields::{fp::FpConfig, FieldChip};
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
-    utils::{modulus, CurveAffineExt, PrimeField},
+    utils::{modulus, CurveAffineExt},
     AssignedValue, Context,
     QuantumCell::Existing,
 };

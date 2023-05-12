@@ -1,8 +1,9 @@
 use super::OverflowInteger;
+use crate::fields::PrimeField;
 use crate::halo2_proofs::circuit::Value;
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
-    utils::{bigint_to_fe, biguint_to_fe, fe_to_bigint, value_to_option, PrimeField},
+    utils::{bigint_to_fe, biguint_to_fe, fe_to_bigint, value_to_option},
     Context,
     QuantumCell::{Constant, Existing, Witness},
 };

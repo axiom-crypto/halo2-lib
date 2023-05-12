@@ -1,10 +1,11 @@
+use crate::fields::PrimeField;
 use crate::halo2_proofs::{
     circuit::{Cell, Value},
     plonk::ConstraintSystem,
 };
 use halo2_base::{
     gates::{flex_gate::FlexGateConfig, GateInstructions},
-    utils::{biguint_to_fe, decompose_biguint, fe_to_biguint, PrimeField},
+    utils::{biguint_to_fe, decompose_biguint, fe_to_biguint},
     AssignedValue, Context,
     QuantumCell::{Constant, Existing, Witness},
 };

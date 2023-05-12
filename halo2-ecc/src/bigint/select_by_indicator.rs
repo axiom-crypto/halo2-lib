@@ -1,8 +1,7 @@
 use super::{CRTInteger, OverflowInteger};
+use crate::fields::PrimeField;
 use crate::halo2_proofs::circuit::Value;
-use halo2_base::{
-    gates::GateInstructions, utils::PrimeField, AssignedValue, Context, QuantumCell::Existing,
-};
+use halo2_base::{gates::GateInstructions, AssignedValue, Context, QuantumCell::Existing};
 use num_bigint::BigInt;
 use num_traits::Zero;
 use std::cmp::max;

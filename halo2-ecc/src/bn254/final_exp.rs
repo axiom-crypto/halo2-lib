@@ -1,4 +1,5 @@
 use super::{Fp12Chip, Fp2Chip, FpChip, FpPoint};
+use crate::fields::PrimeField;
 use crate::halo2_proofs::{
     arithmetic::Field,
     halo2curves::bn256::{Fq, Fq2, BN_X, FROBENIUS_COEFF_FQ12_C1},
@@ -9,7 +10,7 @@ use crate::{
 };
 use halo2_base::{
     gates::GateInstructions,
-    utils::{fe_to_biguint, modulus, PrimeField},
+    utils::{fe_to_biguint, modulus},
     Context,
     QuantumCell::{Constant, Existing},
 };

@@ -1,8 +1,9 @@
 use super::{FieldChip, FieldExtConstructor, FieldExtPoint, PrimeFieldChip, Selectable};
+use crate::fields::PrimeField;
 use crate::halo2_proofs::{arithmetic::Field, circuit::Value};
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
-    utils::{fe_to_biguint, value_to_option, PrimeField},
+    utils::{fe_to_biguint, value_to_option},
     AssignedValue, Context,
     QuantumCell::Existing,
 };

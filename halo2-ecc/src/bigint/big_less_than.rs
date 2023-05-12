@@ -1,5 +1,6 @@
 use super::OverflowInteger;
-use halo2_base::{gates::RangeInstructions, utils::PrimeField, AssignedValue, Context};
+use crate::fields::PrimeField;
+use halo2_base::{gates::RangeInstructions, AssignedValue, Context};
 
 // given OverflowInteger<F>'s `a` and `b` of the same shape,
 // returns whether `a < b`

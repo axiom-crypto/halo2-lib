@@ -12,6 +12,7 @@ use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
+use halo2_base::gates::GateInstructions;
 use halo2_base::halo2_proofs::{
     arithmetic::Field,
     circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -24,7 +25,7 @@ use halo2_base::halo2_proofs::{
     transcript::TranscriptWriterBuffer,
     transcript::{Blake2bWrite, Challenge255},
 };
-use halo2_base::{gates::GateInstructions, utils::PrimeField};
+use halo2_ecc::fields::PrimeField;
 use halo2_ecc::{
     ecc::EccChip,
     fields::fp::{FpConfig, FpStrategy},

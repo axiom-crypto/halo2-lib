@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 use super::{Fp12Chip, Fp2Chip, FpChip, FpPoint, FqPoint};
+use crate::fields::PrimeField;
 use crate::halo2_proofs::{
     circuit::Value,
     halo2curves::bn256::{self, G1Affine, G2Affine, SIX_U_PLUS_2_NAF},
@@ -12,7 +13,7 @@ use crate::{
     fields::{FieldChip, FieldExtPoint},
 };
 use halo2_base::{
-    utils::{biguint_to_fe, fe_to_biguint, PrimeField},
+    utils::{biguint_to_fe, fe_to_biguint},
     Context,
 };
 use num_bigint::BigUint;

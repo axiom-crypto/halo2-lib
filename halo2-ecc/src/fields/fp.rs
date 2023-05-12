@@ -4,6 +4,7 @@ use crate::bigint::{
     scalar_mul_and_add_no_carry, scalar_mul_no_carry, select, select_by_indicator, sub,
     sub_no_carry, CRTInteger, FixedCRTInteger, OverflowInteger,
 };
+use crate::fields::PrimeField;
 use crate::halo2_proofs::{
     circuit::{Layouter, Region, Value},
     halo2curves::CurveAffine,
@@ -16,7 +17,7 @@ use halo2_base::{
     },
     utils::{
         bigint_to_fe, biguint_to_fe, bit_length, decompose_bigint_option, decompose_biguint,
-        fe_to_biguint, modulus, PrimeField,
+        fe_to_biguint, modulus,
     },
     AssignedValue, Context, ContextParams,
     QuantumCell::{Constant, Existing},

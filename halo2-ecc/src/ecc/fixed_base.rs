@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 use super::{ec_add_unequal, ec_select, ec_select_from_bits, EcPoint, EccChip};
+use crate::fields::PrimeField;
 use crate::halo2_proofs::arithmetic::CurveAffine;
 use crate::{
     bigint::{CRTInteger, FixedCRTInteger},
@@ -8,7 +9,7 @@ use crate::{
 use group::Curve;
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
-    utils::{fe_to_biguint, CurveAffineExt, PrimeField},
+    utils::{fe_to_biguint, CurveAffineExt},
     AssignedValue, Context,
     QuantumCell::Existing,
 };

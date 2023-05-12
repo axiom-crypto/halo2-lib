@@ -1,7 +1,6 @@
 use super::{CRTInteger, OverflowInteger};
-use halo2_base::{
-    gates::GateInstructions, utils::PrimeField, AssignedValue, Context, QuantumCell::Existing,
-};
+use crate::fields::PrimeField;
+use halo2_base::{gates::GateInstructions, AssignedValue, Context, QuantumCell::Existing};
 
 // given OverflowInteger<F>'s `a` and `b` of the same shape,
 // returns whether `a == b`

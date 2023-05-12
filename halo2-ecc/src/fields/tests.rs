@@ -1,4 +1,5 @@
 mod fp {
+    use crate::fields::PrimeField;
     use crate::fields::{
         fp::{FpConfig, FpStrategy},
         FieldChip,
@@ -11,7 +12,7 @@ mod fp {
     };
     use group::ff::Field;
     use halo2_base::{
-        utils::{fe_to_biguint, modulus, PrimeField},
+        utils::{fe_to_biguint, modulus},
         SKIP_FIRST_PASS,
     };
     use num_bigint::BigInt;
@@ -129,6 +130,7 @@ mod fp {
 }
 
 mod fp12 {
+    use crate::fields::PrimeField;
     use crate::fields::{
         fp::{FpConfig, FpStrategy},
         fp12::*,
@@ -141,7 +143,7 @@ mod fp12 {
         plonk::*,
     };
     use halo2_base::utils::modulus;
-    use halo2_base::{utils::PrimeField, SKIP_FIRST_PASS};
+    use halo2_base::SKIP_FIRST_PASS;
     use std::marker::PhantomData;
 
     #[derive(Default)]

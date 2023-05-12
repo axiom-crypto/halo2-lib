@@ -2,12 +2,9 @@ use super::{
     ec_add_unequal, ec_double, ec_select, ec_select_from_bits, ec_sub_unequal, load_random_point,
     EcPoint,
 };
+use crate::fields::PrimeField;
 use crate::fields::{FieldChip, Selectable};
-use halo2_base::{
-    gates::GateInstructions,
-    utils::{CurveAffineExt, PrimeField},
-    AssignedValue, Context,
-};
+use halo2_base::{gates::GateInstructions, utils::CurveAffineExt, AssignedValue, Context};
 
 // Reference: https://jbootle.github.io/Misc/pippenger.pdf
 

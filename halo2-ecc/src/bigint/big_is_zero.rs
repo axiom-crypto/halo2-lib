@@ -1,7 +1,6 @@
 use super::{CRTInteger, OverflowInteger};
-use halo2_base::{
-    gates::GateInstructions, utils::PrimeField, AssignedValue, Context, QuantumCell::Existing,
-};
+use crate::fields::PrimeField;
+use halo2_base::{gates::GateInstructions, AssignedValue, Context, QuantumCell::Existing};
 
 /// assume you know that the limbs of `a` are all in [0, 2^{a.max_limb_bits})
 pub fn positive<F: PrimeField>(

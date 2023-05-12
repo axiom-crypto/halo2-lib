@@ -11,14 +11,14 @@ use halo2_base::halo2_proofs::{
     },
     transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer},
 };
-use rand::rngs::OsRng;
-
 use halo2_base::{
-    utils::{fe_to_bigint, modulus, PrimeField},
+    utils::{fe_to_bigint, modulus},
     SKIP_FIRST_PASS,
 };
 use halo2_ecc::fields::fp::{FpConfig, FpStrategy};
 use halo2_ecc::fields::FieldChip;
+use halo2_ecc::fields::PrimeField;
+use rand::rngs::OsRng;
 
 use criterion::{criterion_group, criterion_main};
 use criterion::{BenchmarkId, Criterion};
