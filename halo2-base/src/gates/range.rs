@@ -17,7 +17,7 @@ use crate::{
         },
         poly::Rotation,
     },
-    utils::PrimeField,
+    utils::BigPrimeField,
 };
 use num_bigint::BigUint;
 use num_integer::Integer;
@@ -356,7 +356,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// Does not require bit assumptions on `a, b` because we range check that `a` has at most `bit_length(b)` bits.
     fn check_big_less_than_safe(&self, ctx: &mut Context<F>, a: &AssignedValue<F>, b: BigUint)
     where
-        F: PrimeField,
+        F: BigPrimeField,
     {
         let range_bits =
             (b.bits() as usize + self.lookup_bits() - 1) / self.lookup_bits() * self.lookup_bits();
@@ -368,9 +368,9 @@ pub trait RangeInstructions<F: ScalarField> {
     /// Returns whether `a` is in `[0, b)`.
     ///
     /// Warning: This may fail silently if `a` or `b` have more than `num_bits` bits
-    fn is_less_than<'a>(
+    fn is_less_than(
         &self,
-        ctx: &mut Context<'a, F>,
+        ctx: &mut Context<F>,
         a: QuantumCell<F>,
         b: QuantumCell<F>,
         num_bits: usize,
@@ -379,17 +379,17 @@ pub trait RangeInstructions<F: ScalarField> {
     /// Returns whether `a` is in `[0, b)`.
     ///
     /// Does not require bit assumptions on `a, b` because we range check that `a` has at most `range_bits` bits.
-    fn is_less_than_safe<'a>(
+    fn is_less_than_safe(
         &self,
-        ctx: &mut Context<'a, F>,
-        a: &AssignedValue<F>,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
         b: u64,
     ) -> AssignedValue<F> {
         let range_bits =
             (bit_length(b) + self.lookup_bits() - 1) / self.lookup_bits() * self.lookup_bits();
 
-        self.range_check(ctx, a, range_bits);
-        self.is_less_than(ctx, Existing(*a), Constant(F::from(b)), range_bits)
+        self.range_check(ctx, &a, range_bits);
+        self.is_less_than(ctx, Existing(a), Constant(F::from(b)), range_bits)
     }
 
     /// Returns whether `a` is in `[0, b)`.
@@ -402,7 +402,7 @@ pub trait RangeInstructions<F: ScalarField> {
         b: BigUint,
     ) -> AssignedValue<F>
     where
-        F: PrimeField,
+        F: BigPrimeField,
     {
         let range_bits =
             (b.bits() as usize + self.lookup_bits() - 1) / self.lookup_bits() * self.lookup_bits();
@@ -422,7 +422,7 @@ pub trait RangeInstructions<F: ScalarField> {
         a_num_bits: usize,
     ) -> (AssignedValue<F>, AssignedValue<F>)
     where
-        F: PrimeField,
+        F: BigPrimeField,
     {
         let b = b.into();
         let mut a_val = BigUint::zero();
@@ -465,7 +465,7 @@ pub trait RangeInstructions<F: ScalarField> {
         b_num_bits: usize,
     ) -> (AssignedValue<F>, AssignedValue<F>)
     where
-        F: PrimeField,
+        F: BigPrimeField,
     {
         let mut a_val = BigUint::zero();
         a.value().map(|v| a_val = fe_to_biguint(v));
