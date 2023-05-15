@@ -7,6 +7,7 @@ use crate::halo2_proofs::dev::MockProver;
 use crate::utils::ScalarField;
 use crate::QuantumCell::Witness;
 use test_case::test_case;
+use crate::halo2_proofs::dev::VerifyFailure;
 
 #[test_case(&[1, 1].map(Fr::from).map(Witness) => Fr::from(2) ; "add(): 1 + 1 == 2")]
 pub fn test_add<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
@@ -62,8 +63,8 @@ pub fn test_mul_not<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
     *a.value()
 }
 
-#[test_case(Fr::from(1); "assert_bit(): 1 == bit")]
-pub fn test_assert_bit<F: ScalarField>(input: F) {
+#[test_case(Fr::from(1) => Ok(()); "assert_bit(): 1 == bit")]
+pub fn test_assert_bit<F: ScalarField>(input: F) -> Result<(), Vec<VerifyFailure>> {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = GateChip::default();
@@ -73,7 +74,7 @@ pub fn test_assert_bit<F: ScalarField>(input: F) {
     builder.config(6, Some(9));
     // create circuit
     let circuit = GateCircuitBuilder::mock(builder);
-    MockProver::run(6, &circuit, vec![]).unwrap().assert_satisfied()
+    MockProver::run(6, &circuit, vec![]).unwrap().verify()
 }
 
 #[test_case(&[1, 1].map(Fr::from).map(Witness) => Fr::from(1) ; "div_unsafe(): 1 / 1 == 1")]

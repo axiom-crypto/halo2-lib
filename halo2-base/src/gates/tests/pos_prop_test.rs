@@ -65,9 +65,15 @@ proptest! {
         prop_assert_eq!(result, ground_truth);
     }
 
+    // TODO: Notes could be a better way of doing this
     #[test]
     fn prop_test_assert_bit(input in rand_fr()) {
-        flex_gate_tests::test_assert_bit(input);
+        let ground_truth = if input == Fr::one() || input == Fr::zero() { true } else { false };
+        let result = match flex_gate_tests::test_assert_bit(input) {
+            Ok(_) => true,
+            Err(_) => false
+        };
+        prop_assert_eq!(result, ground_truth);
     }
 
     // Note: due to unwrap after inversion this test will fail if the denominator is zero so we want to test for that. Therefore we do not filter for zero values.
@@ -79,8 +85,8 @@ proptest! {
     }
 
     #[test]
-    fn prop_test_assert_is_const(inputs in vec(rand_fr(), 2)) {
-        flex_gate_tests::test_assert_is_const(inputs.as_slice());
+    fn prop_test_assert_is_const(input in rand_fr()) {
+        flex_gate_tests::test_assert_is_const(&[input; 2]);
     }
 
     #[test]

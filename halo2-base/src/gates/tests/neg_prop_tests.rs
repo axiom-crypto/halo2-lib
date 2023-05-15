@@ -9,8 +9,9 @@ use ff::Field;
     
 prop_compose! {
     // length == 1 is just selecting [0] which should be covered in unit test
+    // TODO:  To select K values that never give problems. Check how many rows are assigned per cell length check that against 2^k - 9 to prevent out of bounds errors
     fn idx_to_indicator_strat(max_size: usize)
-        (k in 8..=20usize, idx_val in prop::sample::select(vec![Fr::zero(), Fr::one(), Fr::random(OsRng)]), len in 2usize..=max_size)
+        (k in 9..=20usize, idx_val in prop::sample::select(vec![Fr::zero(), Fr::one(), Fr::random(OsRng)]), len in 2usize..=max_size)
         (k in Just(k), idx in 0..len, idx_val in Just(idx_val), len in Just(len), mut witness_vals in arb_indicator::<Fr>(len)) -> (usize, usize, usize, Vec<Fr>) {
         witness_vals[idx] = idx_val;
         (k, len, idx, witness_vals)
@@ -39,6 +40,7 @@ fn check_instance(idx: Fr, len: usize, ind_witnesses: &[Fr]) -> bool {
             idx_val = i;
         }
     }
+    // TODO Delete
     if idx_val > len {
         return false;
     }
