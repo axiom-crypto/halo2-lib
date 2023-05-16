@@ -66,6 +66,15 @@ pub fn test_check_big_less_than_safe<F: ScalarField + BigPrimeField>(inputs: (F,
 }
 
 #[test_case(([0, 1].map(Fr::from).map(Witness), 3) => Fr::from(1) ; "is_less_than() pos")]
+// Failing case
+#[test_case(([5102093178976689982, 5102015491250118463].map(Fr::from).map(Witness), 1) => Fr::from(1) ; "failing_case_1_bit() pos")]
+#[test_case(([5102093178976689982, 5102015491250118463].map(Fr::from).map(Witness), 16) => Fr::from(0) ; "failing_case_16_bit() pos")]
+#[test_case(([5102093178976689982, 5102015491250118463].map(Fr::from).map(Witness), 61) => Fr::from(0) ; "failing_case_61_bits() pos")]
+#[test_case(([5102093178976689982, 5102015491250118463].map(Fr::from).map(Witness), 50) => Fr::from(0) ; "failing_case_50_bits() pos")]
+// Failing case
+#[test_case(([1300436882932358974, 1311097767942152000].map(Fr::from).map(Witness),25) => Fr::from(0) ; "failing_case_25_bits() pos")]
+#[test_case(([1300436882932358974, 1311097767942152000].map(Fr::from).map(Witness),32) => Fr::from(1) ; "failing_case_32_bits() pos")]
+#[test_case(([1300436882932358974, 1311097767942152000].map(Fr::from).map(Witness), 62) => Fr::from(1) ; "failing_case_62_bits() pos")]
 pub fn test_is_less_than<F: ScalarField>(inputs: ([QuantumCell<F>; 2], usize)) -> F {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
@@ -103,7 +112,7 @@ pub fn test_div_mod<F: ScalarField + BigPrimeField>(inputs: (QuantumCell<F>, u64
     (*a.0.value(), *a.1.value())
 }
 
-#[test_case((Fr::one(), 2) => Fr::from(0) ; "get_last_bit() pos")]
+#[test_case((Fr::from(6), 4) => Fr::one() ; "get_last_bit() pos")]
 pub fn test_get_last_bit<F: ScalarField>(inputs: (F, usize)) -> F {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);

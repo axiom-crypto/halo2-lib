@@ -1,6 +1,11 @@
 
+use num_integer::Integer;
+
+use crate::utils::BigPrimeField;
 use crate::utils::ScalarField;
 use crate::QuantumCell;
+use crate::utils::fe_to_biguint;
+use crate::utils::biguint_to_fe;
 
 // Ground truth functions
 
@@ -31,7 +36,7 @@ pub fn mul_not_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
 }
 
 pub fn div_unsafe_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
-    inputs[0].value().invert().unwrap() * *inputs[1].value()
+    inputs[1].value().invert().unwrap() * *inputs[0].value()
 }
 
 pub fn inner_product_ground_truth<F: ScalarField>(inputs: &(Vec<QuantumCell<F>>, Vec<QuantumCell<F>>)) -> F {
@@ -73,7 +78,7 @@ pub fn not_ground_truth<F: ScalarField>(a: &QuantumCell<F>) -> F {
 }
 
 pub fn select_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
-    (*inputs[0].value() *  *inputs[2].value()) +  (*inputs[1].value() *( *inputs[2].value() - F::one()))
+    (*inputs[0].value() - inputs[1].value()) * *inputs[2].value() + *inputs[1].value()
 }
 
 pub fn or_and_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
@@ -159,23 +164,19 @@ pub fn is_less_than_ground_truth<F: ScalarField>(inputs: (F, F)) -> F {
     }
 }
 
-pub fn is_less_than_safe_ground_truth<F: ScalarField>(inputs: (F, u64)) -> F {
-    if inputs.0 < F::from(inputs.1) {
-        F::one()
-    } else {
-        F::zero()
-    }
+pub fn div_mod_ground_truth<F: ScalarField + BigPrimeField>(inputs: (F, u64)) -> (F, F) {
+    let a = fe_to_biguint(&inputs.0);
+    let (div, rem) = a.div_mod_floor(&inputs.1.into());
+    (biguint_to_fe(&div), biguint_to_fe(&rem))
 }
 
-pub fn div_mod_ground_truth<F: ScalarField>(inputs: (F, u64)) -> (F, F) {
-    let dividend = inputs.0;
-    let divisor = F::from(inputs.1);
-    let quotient = dividend.invert().unwrap() * divisor;
-    let remainder = dividend - (quotient * divisor);
-    (quotient, remainder)
-}
-
-pub fn get_last_bit_ground_truth<F: ScalarField>(inputs: (F, usize)) -> F {
-    let bits = inputs.0.to_repr().as_ref()[0] >> (inputs.1 - 1);
-    F::from(u64::from(bits & 1))
+// Can't be 0?
+pub fn get_last_bit_ground_truth<F: ScalarField>(input: F) -> F {
+    let bit_v = {
+        let a = input.get_lower_32();
+        F::from(a ^ 1 != 0)
+    };
+    let two = F::from(2u64);
+    let h_v = (input - bit_v) * two.invert().unwrap();
+    bit_v + h_v * two - input
 }

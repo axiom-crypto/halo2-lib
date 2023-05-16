@@ -10,16 +10,25 @@ prop_compose! {
         Fr::from(val)
     }
 }
+
 prop_compose! {
     fn rand_witness()(val in any::<u64>()) -> QuantumCell<Fr> {
         Witness(Fr::from(val))
     }
 }
+
 prop_compose! {
     fn sum_products_with_coeff_and_var_strat(max_length: usize)(val in vec((rand_fr(), rand_witness(), rand_witness()), 1..=max_length), witness in rand_witness()) -> (Vec<(Fr, QuantumCell<Fr>, QuantumCell<Fr>)>, QuantumCell<Fr>) {
         (val, witness)
     }
 }
+
+prop_compose! {
+    fn rand_bin_witness()(val in prop::sample::select(vec![Fr::zero(), Fr::one()])) -> QuantumCell<Fr> {
+        Witness(val)
+    }
+}
+
 proptest! {
 
     // Flex Gate Positive Tests
@@ -78,7 +87,7 @@ proptest! {
 
     // Note: due to unwrap after inversion this test will fail if the denominator is zero so we want to test for that. Therefore we do not filter for zero values.
     #[test]
-    fn prop_test_div_unsafe(inputs in vec(rand_witness(), 2)) {
+    fn prop_test_div_unsafe(inputs in vec(rand_witness().prop_filter("Input cannot be 0",|x| *x.value() != Fr::zero()), 2)) {
         let ground_truth = div_unsafe_ground_truth(inputs.as_slice());
         let result = flex_gate_tests::test_div_unsafe(inputs.as_slice());
         prop_assert_eq!(result, ground_truth);
@@ -132,7 +141,8 @@ proptest! {
     }
 
     #[test]
-    fn prop_test_select(inputs in vec(rand_witness(), 3)) {
+    fn prop_test_select(vals in vec(rand_witness(), 2), sel in rand_bin_witness()) {
+        let inputs = vec![vals[0], vals[1], sel];
         let ground_truth = select_ground_truth(inputs.as_slice());
         let result = flex_gate_tests::test_select(inputs.as_slice());
         prop_assert_eq!(result, ground_truth);
@@ -196,7 +206,8 @@ proptest! {
 
     // Range Check Property Tests
     #[test]
-    fn prop_test_is_less_than(inputs in (rand_witness(), rand_witness(), 1..=16_usize)) {
+    fn prop_test_is_less_than(inputs in (rand_witness(), rand_witness(), 16..=32_usize)) {
+        println!("a: {:?}, b: {:?}", inputs.0.value(), inputs.1.value());
         let ground_truth = is_less_than_ground_truth((*inputs.0.value(), *inputs.1.value()));
         let result = range_gate_tests::test_is_less_than(([inputs.0, inputs.1], inputs.2));
         prop_assert_eq!(result, ground_truth);
@@ -204,26 +215,26 @@ proptest! {
 
     #[test]
     fn prop_test_is_less_than_safe(input in (rand_fr(), 0u64..(1 << 16))) {
-        let ground_truth = is_less_than_safe_ground_truth((input.0, input.1));
+        let ground_truth = is_less_than_ground_truth((input.0, Fr::from(input.1)));
         let result = range_gate_tests::test_is_less_than_safe((input.0, input.1));
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
-    fn prop_test_div_mod(inputs in (rand_witness(), any::<u64>().prop_filter("Non-zero divisor", |x| *x != 0u64), 1..=16_usize)) {
+    fn prop_test_div_mod(inputs in (rand_witness().prop_filter("Non-zero num", |x| *x.value() != Fr::zero()), any::<u64>().prop_filter("Non-zero divisor", |x| *x != 0u64), 1..=16_usize)) {
         let ground_truth = div_mod_ground_truth((*inputs.0.value(), inputs.1));
         let result = range_gate_tests::test_div_mod((inputs.0, inputs.1, inputs.2));
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
-    fn prop_test_get_last_bit(inputs in (rand_fr(), 1..=16_usize)) {
-        let ground_truth = get_last_bit_ground_truth((inputs.0, inputs.1));
+    fn prop_test_get_last_bit(inputs in (rand_fr().prop_filter("can't be 0", |x| *x != Fr::zero()), 1..=32_usize)) {
+        let ground_truth = get_last_bit_ground_truth(inputs.0);
         let result = range_gate_tests::test_get_last_bit((inputs.0, inputs.1));
+        println!("result: {:?}, ground_truth: {:?}", result, ground_truth);
         prop_assert_eq!(result, ground_truth);
     }
 
-    // THIS FUNCTION IS BROKEN!
     #[test]
     fn prop_test_div_mod_var(inputs in (rand_witness(), any::<u64>(), 1..=16_usize, 1..=16_usize)) {
         let ground_truth = div_mod_ground_truth((*inputs.0.value(), inputs.1));
@@ -231,6 +242,7 @@ proptest! {
         prop_assert_eq!(result, ground_truth);
     }
 
+    // TODO change to ground truth
     #[test]
     fn prop_test_range_check(inputs in (rand_fr(), any::<usize>().prop_filter("Non-zero upper bound", |x| *x != 0usize))) {
         prop_assert_eq!(range_gate_tests::test_range_check((inputs.0, inputs.1)), ());

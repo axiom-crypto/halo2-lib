@@ -9,9 +9,8 @@ use ff::Field;
     
 prop_compose! {
     // length == 1 is just selecting [0] which should be covered in unit test
-    // TODO:  To select K values that never give problems. Check how many rows are assigned per cell length check that against 2^k - 9 to prevent out of bounds errors
-    fn idx_to_indicator_strat(max_size: usize)
-        (k in 9..=20usize, idx_val in prop::sample::select(vec![Fr::zero(), Fr::one(), Fr::random(OsRng)]), len in 2usize..=max_size)
+    fn idx_to_indicator_strat(k_bounds: (usize, usize), max_size: usize)
+        (k in k_bounds.0..=k_bounds.1, idx_val in prop::sample::select(vec![Fr::zero(), Fr::one(), Fr::random(OsRng)]), len in 2usize..=max_size)
         (k in Just(k), idx in 0..len, idx_val in Just(idx_val), len in Just(len), mut witness_vals in arb_indicator::<Fr>(len)) -> (usize, usize, usize, Vec<Fr>) {
         witness_vals[idx] = idx_val;
         (k, len, idx, witness_vals)
@@ -81,13 +80,12 @@ fn prop_neg_test_idx_to_indicator(k: usize, len: usize, idx: usize, ind_witnesse
             // if the proof is invalid, ignore
             Err(_) =>  is_valid_witness == false,
     }
-
 }
-
-
 proptest! {
+    // Note setting the minimum value of k to 8 is intentional as it is the smallest value that will not cause an `out of columns` error. Should be noted that filtering by len * (number cells per iteration) < 2^k leads to the filtering of to many cases and the failure of the tests w/o any runs.
     #[test]
-    fn test_neg_idx_to_indicator_gen((k, len, idx, witness_vals) in idx_to_indicator_strat(100)) {
+    fn test_neg_idx_to_indicator((k, len, idx, witness_vals) in idx_to_indicator_strat((8,20),100)) {
         prop_assert!(prop_neg_test_idx_to_indicator(k, len, idx, witness_vals.as_slice()));
     }
+    
 }
