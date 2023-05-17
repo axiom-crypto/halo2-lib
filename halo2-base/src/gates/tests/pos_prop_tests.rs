@@ -6,25 +6,25 @@ use crate::{QuantumCell, QuantumCell::Witness};
 //  create vec and convert to array???
 //TODO: implement arbitrary for fr using looks like you'd probably need to implement your own TestFr struct to implement Arbitrary: https://docs.rs/quickcheck/latest/quickcheck/trait.Arbitrary.html , can probably just hack it from Fr = [u64; 4]
 prop_compose! {
-    fn rand_fr()(val in any::<u64>()) -> Fr {
+    pub fn rand_fr()(val in any::<u64>()) -> Fr {
         Fr::from(val)
     }
 }
 
 prop_compose! {
-    fn rand_witness()(val in any::<u64>()) -> QuantumCell<Fr> {
+    pub fn rand_witness()(val in any::<u64>()) -> QuantumCell<Fr> {
         Witness(Fr::from(val))
     }
 }
 
 prop_compose! {
-    fn sum_products_with_coeff_and_var_strat(max_length: usize)(val in vec((rand_fr(), rand_witness(), rand_witness()), 1..=max_length), witness in rand_witness()) -> (Vec<(Fr, QuantumCell<Fr>, QuantumCell<Fr>)>, QuantumCell<Fr>) {
+    pub fn sum_products_with_coeff_and_var_strat(max_length: usize)(val in vec((rand_fr(), rand_witness(), rand_witness()), 1..=max_length), witness in rand_witness()) -> (Vec<(Fr, QuantumCell<Fr>, QuantumCell<Fr>)>, QuantumCell<Fr>) {
         (val, witness)
     }
 }
 
 prop_compose! {
-    fn rand_bin_witness()(val in prop::sample::select(vec![Fr::zero(), Fr::one()])) -> QuantumCell<Fr> {
+    pub fn rand_bin_witness()(val in prop::sample::select(vec![Fr::zero(), Fr::one()])) -> QuantumCell<Fr> {
         Witness(val)
     }
 }

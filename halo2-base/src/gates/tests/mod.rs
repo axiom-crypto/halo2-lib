@@ -21,7 +21,7 @@ mod flex_gate_tests;
 #[cfg(test)]
 mod range_gate_tests;
 #[cfg(test)]
-mod pos_prop_test;
+mod pos_prop_tests;
 #[cfg(test)]
 mod neg_prop_tests;
 #[cfg(test)]
