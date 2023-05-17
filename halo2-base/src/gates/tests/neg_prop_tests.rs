@@ -327,7 +327,7 @@ proptest! {
     }
     
     #[test]
-    fn prop_test_neg_select((k, a, b, sel, rand_output) in select_strat((8,20))) {
+    fn prop_test_neg_select((k, a, b, sel, rand_output) in select_strat((10,20))) {
         prop_assert!(neg_test_select(k, a, b, sel, rand_output));
     }
     
@@ -342,17 +342,17 @@ proptest! {
     }
 
     #[test]
-    fn prop_test_neg_inner_product((k, a, b, rand_output) in inner_product_strat((8,20),100)) {
+    fn prop_test_neg_inner_product((k, a, b, rand_output) in inner_product_strat((10,20),100)) {
         prop_assert!(neg_test_inner_product(k, a, b, rand_output));
     }
 
     #[test]
-    fn prop_test_neg_inner_product_left_last((k, a, b, rand_output) in inner_product_left_last_strat((8,20),100)) {
+    fn prop_test_neg_inner_product_left_last((k, a, b, rand_output) in inner_product_left_last_strat((10,20),100)) {
         prop_assert!(neg_test_inner_product_left_last(k, a, b, rand_output));
     }
 
     #[test]
-    fn prop_test_neg_range_check((k, a, range_bits, lookup_bits, rand_a) in range_check_strat((8,20),32)) {
+    fn prop_test_neg_range_check((k, a, range_bits, lookup_bits, rand_a) in range_check_strat((10,20),32)) {
         prop_assert!(neg_test_range_check(k, a, range_bits, lookup_bits, rand_a));
     }
 
