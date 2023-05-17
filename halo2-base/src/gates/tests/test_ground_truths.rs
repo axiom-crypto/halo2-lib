@@ -32,7 +32,7 @@ pub fn mul_add_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
 }
 
 pub fn mul_not_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
-    *inputs[0].value() * (F::one() - *inputs[1].value())
+    (F::one() - *inputs[0].value()) * *inputs[1].value()
 }
 
 pub fn div_unsafe_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
