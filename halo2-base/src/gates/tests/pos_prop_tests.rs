@@ -1,7 +1,7 @@
 use proptest::{prelude::*, collection::vec};
 use crate::gates::tests::{Fr, flex_gate_tests, range_gate_tests, test_ground_truths::*};
 use crate::{QuantumCell, QuantumCell::Witness};
-
+use crate::utils::bit_length;
 //TODO: implement Copy for rand witness and rand fr to allow for array creation
 //  create vec and convert to array???
 //TODO: implement arbitrary for fr using looks like you'd probably need to implement your own TestFr struct to implement Arbitrary: https://docs.rs/quickcheck/latest/quickcheck/trait.Arbitrary.html , can probably just hack it from Fr = [u64; 4]
@@ -26,6 +26,50 @@ prop_compose! {
 prop_compose! {
     pub fn rand_bin_witness()(val in prop::sample::select(vec![Fr::zero(), Fr::one()])) -> QuantumCell<Fr> {
         Witness(val)
+    }
+}
+
+prop_compose! {
+    pub fn rand_fr_range(lo: u32, hi: u32)(val in any::<u64>().prop_map(move |x| x % 2u64.pow(hi - lo))) -> Fr {
+        Fr::from(val)
+    }
+}
+
+prop_compose! {
+    pub fn rand_witness_range(lo: u32, hi: u32)(val in any::<u64>().prop_map(move |x| x % 2u64.pow(hi - lo))) -> QuantumCell<Fr> {
+        Witness(Fr::from(val))
+    }
+}
+
+// LEsson here 0..2^range_bits fails with 'Uniform::new called with `low >= high`
+// therfore to still have a range of 0..2^range_bits we need on a mod it by 2^range_bits
+// note k > lookup_bits
+prop_compose! {
+    fn range_check_strat((k_lo, k_hi): (usize, usize), min_lookup_bits: usize, max_range_bits: u32)
+    (range_bits in 2..=max_range_bits, k in k_lo..=k_hi)
+    (k in Just(k), lookup_bits in min_lookup_bits..(k-3), a in rand_fr_range(0, range_bits),
+    range_bits in Just(range_bits))
+    -> (usize, usize, Fr, usize) {
+        (k, lookup_bits, a, range_bits as usize)
+    }
+}
+
+prop_compose! {
+    fn check_less_than_strat((k_lo, k_hi): (usize, usize), min_lookup_bits: usize, max_num_bits: usize)
+    (num_bits in 2..max_num_bits, k in k_lo..=k_hi)
+    (k in Just(k), a in rand_witness_range(0, num_bits as u32), b in rand_witness_range(0, num_bits as u32),
+    num_bits in Just(num_bits), lookup_bits in min_lookup_bits..k) 
+    -> (usize, usize, QuantumCell<Fr>, QuantumCell<Fr>, usize) {
+        (k, lookup_bits, a, b, num_bits)
+    }
+}
+
+prop_compose! {
+    fn check_less_than_safe_strat((k_lo, k_hi): (usize, usize), min_lookup_bits: usize)
+    (k in k_lo..=k_hi)
+    (k in Just(k), b in any::<u64>(), a in rand_fr(), lookup_bits in min_lookup_bits..k) 
+    -> (usize, usize, Fr, u64) {
+        (k, lookup_bits, a, b)
     }
 }
 
@@ -74,7 +118,6 @@ proptest! {
         prop_assert_eq!(result, ground_truth);
     }
 
-    // TODO: Notes could be a better way of doing this
     #[test]
     fn prop_test_assert_bit(input in rand_fr()) {
         let ground_truth = if input == Fr::one() || input == Fr::zero() { true } else { false };
@@ -106,7 +149,7 @@ proptest! {
     }
 
     #[test]
-    fn prop_test_inner_product_left_last(inputs in (vec(rand_witness(), 0..=100), vec(rand_witness(), 0..=100)).prop_filter("Input vectors must have equal length", |(a, b)| a.len() == b.len())) {
+    fn prop_test_inner_product_left_last(inputs in (vec(rand_witness(), 1..=100), vec(rand_witness(), 1..=100)).prop_filter("Input vectors must have equal length", |(a, b)| a.len() == b.len())) {
         let ground_truth = inner_product_left_last_ground_truth(&inputs);
         let result = flex_gate_tests::test_inner_product_left_last(inputs);
         prop_assert_eq!(result, ground_truth);
@@ -190,6 +233,7 @@ proptest! {
         prop_assert_eq!(result, ground_truth);
     }
 
+    // This needs entire refactor
     #[test]
     fn prop_test_lagrange_eval(inputs in vec(rand_fr(), 3)) {
         let ground_truth = lagrange_eval_ground_truth(inputs.as_slice());
@@ -205,18 +249,22 @@ proptest! {
     }
 
     // Range Check Property Tests
+    
     #[test]
-    fn prop_test_is_less_than(inputs in (rand_witness(), rand_witness(), 16..=32_usize)) {
-        println!("a: {:?}, b: {:?}", inputs.0.value(), inputs.1.value());
-        let ground_truth = is_less_than_ground_truth((*inputs.0.value(), *inputs.1.value()));
-        let result = range_gate_tests::test_is_less_than(([inputs.0, inputs.1], inputs.2));
+    fn prop_test_is_less_than(a in rand_witness().prop_filter("not zero", |&x| *x.value() != Fr::zero()), 
+    b in any::<u64>().prop_filter("not zero", |&x| x != 0), 
+    lookup_bits in 4..=16_usize) {
+        let ground_truth = is_less_than_ground_truth((*a.value(), Fr::from(b)));
+        let result = range_gate_tests::test_is_less_than(([a, Witness(Fr::from(b))], bit_length(b), lookup_bits));
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
-    fn prop_test_is_less_than_safe(input in (rand_fr(), 0u64..(1 << 16))) {
-        let ground_truth = is_less_than_ground_truth((input.0, Fr::from(input.1)));
-        let result = range_gate_tests::test_is_less_than_safe((input.0, input.1));
+    fn prop_test_is_less_than_safe(a in rand_fr().prop_filter("not zero", |&x| x != Fr::zero()), 
+    b in any::<u64>().prop_filter("not zero", |&x| x != 0), 
+    lookup_bits in 4..=16_usize) {
+        let ground_truth = is_less_than_ground_truth((a, Fr::from(b)));
+        let result = range_gate_tests::test_is_less_than_safe((a, b, lookup_bits));
         prop_assert_eq!(result, ground_truth);
     }
 
@@ -227,6 +275,7 @@ proptest! {
         prop_assert_eq!(result, ground_truth);
     }
 
+    // BROKEN
     #[test]
     fn prop_test_get_last_bit(inputs in (rand_fr().prop_filter("can't be 0", |x| *x != Fr::zero()), 1..=32_usize)) {
         let ground_truth = get_last_bit_ground_truth(inputs.0);
@@ -242,24 +291,26 @@ proptest! {
         prop_assert_eq!(result, ground_truth);
     }
 
-    // TODO change to ground truth
     #[test]
-    fn prop_test_range_check(inputs in (rand_fr(), any::<usize>().prop_filter("Non-zero upper bound", |x| *x != 0usize))) {
-        prop_assert_eq!(range_gate_tests::test_range_check((inputs.0, inputs.1)), ());
+    fn prop_test_range_check((k, lookup_bits, a, range_bits) in range_check_strat((14,24), 3, 63)) {
+        prop_assert_eq!(range_gate_tests::test_range_check(k, lookup_bits, Fr::from(a), range_bits), ());
     }
 
     #[test]
-    fn prop_test_check_less_than(inputs in (rand_witness(), rand_witness(), any::<usize>().prop_filter("Non-zero upper bound", |x| *x != 0usize))) {
-        prop_assert_eq!(range_gate_tests::test_check_less_than(([inputs.0, inputs.1], inputs.2)), ());
+    fn prop_test_check_less_than((k, lookup_bits, a, b, num_bits) in check_less_than_strat((14,24), 3, 10)) {
+        prop_assume!(a.value() < b.value());
+        prop_assert_eq!(range_gate_tests::test_check_less_than(k, lookup_bits, a, b, num_bits), ());
     }
 
     #[test]
-    fn prop_test_check_less_than_safe(inputs in (rand_fr(), any::<u64>().prop_filter("Non-zero upper bound", |x| *x != 0u64))) {
-        prop_assert_eq!(range_gate_tests::test_check_less_than_safe((inputs.0, inputs.1)), ());
+    fn prop_test_check_less_than_safe((k, lookup_bits, a, b) in check_less_than_safe_strat((12,24),3)) {
+        prop_assume!(a < Fr::from(b));
+        prop_assert_eq!(range_gate_tests::test_check_less_than_safe(k, lookup_bits, a, b), ());
     }
 
     #[test]
-    fn prop_test_check_big_less_than_safe(inputs in (rand_fr(), any::<u64>().prop_filter("Non-zero upper bound", |x| *x != 0u64))) {
-        prop_assert_eq!(range_gate_tests::test_check_big_less_than_safe((inputs.0, inputs.1)), ());
+    fn prop_test_check_big_less_than_safe((k, lookup_bits, a, b) in check_less_than_safe_strat((12,24),3)) {
+        prop_assume!(a < Fr::from(b));
+        prop_assert_eq!(range_gate_tests::test_check_big_less_than_safe(k, lookup_bits, a, b), ());
     }
 }

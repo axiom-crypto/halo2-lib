@@ -170,13 +170,7 @@ pub fn div_mod_ground_truth<F: ScalarField + BigPrimeField>(inputs: (F, u64)) ->
     (biguint_to_fe(&div), biguint_to_fe(&rem))
 }
 
-// Can't be 0?
+// BROKEN
 pub fn get_last_bit_ground_truth<F: ScalarField>(input: F) -> F {
-    let bit_v = {
-        let a = input.get_lower_32();
-        F::from(a ^ 1 != 0)
-    };
-    let two = F::from(2u64);
-    let h_v = (input - bit_v) * two.invert().unwrap();
-    bit_v + h_v * two - input
+    F::from((input.get_lower_128() & ((1 << 127) - 1)) as u64)
 }

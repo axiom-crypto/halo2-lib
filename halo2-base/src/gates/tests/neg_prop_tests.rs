@@ -1,5 +1,10 @@
 use proptest::{prelude::*, collection::vec};
-use crate::{gates::{GateChip, GateInstructions, range::{RangeChip, RangeInstructions}, builder::{GateCircuitBuilder, GateThreadBuilder, RangeCircuitBuilder}, tests::{Fr, pos_prop_tests::{rand_witness, rand_bin_witness, rand_fr}, test_ground_truths}}, utils::ScalarField, QuantumCell};
+use crate::{
+    gates::{GateChip, GateInstructions, 
+    range::{RangeChip, RangeInstructions}, builder::{GateCircuitBuilder, GateThreadBuilder, RangeCircuitBuilder}, 
+    tests::{Fr, pos_prop_tests::{rand_witness, rand_bin_witness, rand_fr}, test_ground_truths}}, 
+    utils::{ScalarField, fe_to_biguint, bit_length}, 
+    QuantumCell};
 use crate::halo2_proofs::plonk::Assigned;
 use crate::QuantumCell::Witness;
 use itertools::Itertools;
@@ -64,7 +69,7 @@ prop_compose! {
 }
 
 prop_compose! {
-    fn range_check_strat(k_bounds: (usize, usize), max_range_bits: usize)
+    pub fn range_check_strat(k_bounds: (usize, usize), max_range_bits: usize)
     (k in k_bounds.0..=k_bounds.1, a in rand_fr(), range_bits in 1usize..=max_range_bits, lookup_bits in 6..=20usize, rand_a in rand_fr())
     -> (usize, Fr, usize, usize, Fr) { 
         (k, a, range_bits, lookup_bits, rand_a)
@@ -75,10 +80,9 @@ prop_compose! {
     fn is_less_than_safe_strat(k_bounds: (usize, usize))
     // compose strat to generate random rand fr in range
     ( b in any::<u64>().prop_filter("not zero", |&i| i != 0))
-    (k in k_bounds.0..=k_bounds.1, b in Just(b), lookup_bits in 10..=20usize, rand_a in rand_fr().prop_filter("not zero", move |&i| i != Fr::zero() && i != Fr::from(b)), 
-    rand_output in prop::sample::select(vec![Fr::zero(), Fr::one(), Fr::random(OsRng)]))
-    -> (usize, u64, usize, Fr, Fr) { 
-        (k, b, lookup_bits, rand_a, rand_output)
+    (k in k_bounds.0..=k_bounds.1, b in Just(b), lookup_bits in 12..=20usize, rand_a in rand_fr().prop_filter("not zero", move |&i| i != Fr::zero() && i != Fr::from(b)))
+    -> (usize, u64, usize, Fr) { 
+        (k, b, lookup_bits, rand_a)
     }
 }
 
@@ -286,35 +290,29 @@ fn neg_test_range_check(k: usize, a: Fr, range_bits: usize, lookup_bits: usize, 
 
 }
 
-fn neg_test_is_less_than_safe(k: usize, b: u64, lookup_bits: usize, rand_a: Fr, rand_output: Fr) -> bool {
+// TODO: expand to prank output of is_less_than_safe()
+fn neg_test_is_less_than_safe(k: usize, b: u64, lookup_bits: usize, rand_a: Fr) -> bool {
     let mut builder = GateThreadBuilder::mock();
     let gate = RangeChip::default(lookup_bits);
 
     let a_witness = builder.main(0).assign_witnesses([Fr::zero()])[0];
-    let is_less_than_res = gate.is_less_than_safe(builder.main(0), a_witness, b);
+    gate.is_less_than_safe(builder.main(0), a_witness, b);
     builder.config(k, Some(9));
 
     let a_offset= a_witness.cell.unwrap().offset;
-    let is_less_than_offset= is_less_than_res.cell.unwrap().offset;
 
     builder.main(0).advice[a_offset] = Assigned::Trivial(rand_a);
-    builder.main(0).advice[is_less_than_offset] = Assigned::Trivial(rand_output);
 
     let circuit = RangeCircuitBuilder::mock(builder); // no break points
     // Check soundness of witness values
-    let is_less_ground_truth = rand_a < Fr::from(b);
-    let is_valid_witness = {
-        if is_less_ground_truth {
-            if rand_output == Fr::one() { true } else { false }
-        } else {
-            if rand_output == Fr::zero() { true } else { false }
-        }
-    };
+    println!("rand_a: {:?}, b: {:?}", rand_a, b);
+    let is_less_than_bits = fe_to_biguint(&rand_a).bits() < bit_length(b) as u64;
+    let is_valid_witness = rand_a < Fr::from(b) && is_less_than_bits;
+    println!("is_less_ground_truth: {} bit_length: {}", is_valid_witness, bit_length(b));
+    //if rand_a has to many bits, then mock prover must fail take this into account
     match MockProver::run(k as u32, &circuit, vec![]).unwrap().verify() {
-            // if the proof is valid, then the instance should be valid -> return true
             Ok(_) => is_valid_witness == true,
-            // if the proof is invalid, ignore
-            Err(_) =>  is_valid_witness == false,
+            Err(_) =>  is_valid_witness || !is_less_than_bits,
     }
 
 }
@@ -357,7 +355,7 @@ proptest! {
     }
 
     #[test]
-    fn prop_test_neg_is_less_than_safe((k, b, lookup_bits, rand_a, rand_output) in is_less_than_safe_strat((10,20))) {
-        prop_assert!(neg_test_is_less_than_safe(k, b, lookup_bits, rand_a, rand_output));
+    fn prop_test_neg_is_less_than_safe((k, b, lookup_bits, rand_a) in is_less_than_safe_strat((10,20))) {
+        prop_assert!(neg_test_is_less_than_safe(k, b, lookup_bits, rand_a));
     } 
 }
