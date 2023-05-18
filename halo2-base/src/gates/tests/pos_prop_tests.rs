@@ -120,7 +120,7 @@ proptest! {
 
     #[test]
     fn prop_test_assert_bit(input in rand_fr()) {
-        let ground_truth = if input == Fr::one() || input == Fr::zero() { true } else { false };
+        let ground_truth = input == Fr::one() || input == Fr::zero();
         let result = match flex_gate_tests::test_assert_bit(input) {
             Ok(_) => true,
             Err(_) => false
@@ -280,7 +280,7 @@ proptest! {
     fn prop_test_get_last_bit(inputs in (rand_fr().prop_filter("can't be 0", |x| *x != Fr::zero()), 1..=32_usize)) {
         let ground_truth = get_last_bit_ground_truth(inputs.0);
         let result = range_gate_tests::test_get_last_bit((inputs.0, inputs.1));
-        println!("result: {:?}, ground_truth: {:?}", result, ground_truth);
+        println!("result: {result:?}, ground_truth: {ground_truth:?}");
         prop_assert_eq!(result, ground_truth);
     }
 
@@ -293,7 +293,7 @@ proptest! {
 
     #[test]
     fn prop_test_range_check((k, lookup_bits, a, range_bits) in range_check_strat((14,24), 3, 63)) {
-        prop_assert_eq!(range_gate_tests::test_range_check(k, lookup_bits, Fr::from(a), range_bits), ());
+        prop_assert_eq!(range_gate_tests::test_range_check(k, lookup_bits, a, range_bits), ());
     }
 
     #[test]
