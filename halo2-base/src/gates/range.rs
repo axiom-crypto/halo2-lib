@@ -259,7 +259,7 @@ pub trait RangeInstructions<F: ScalarField> {
         num_bits: usize,
     ) -> AssignedValue<F>;
 
-    /// Performs a range check that `a` has at most `bit_length(b)` and then constrains that `a` is in `[0,b)`.
+    /// Performs a range check that `a` has at most `ceil(bit_length(b) / lookup_bits) * lookup_bits` and then constrains that `a` is in `[0,b)`.
     ///
     /// Returns 1 if `a` < `b`, otherwise 0.
     ///
@@ -278,12 +278,14 @@ pub trait RangeInstructions<F: ScalarField> {
         self.is_less_than(ctx, a, Constant(self.gate().get_field_element(b)), range_bits)
     }
 
-    /// Performs a range check that `a` has at most `bit_length(b)` and then constrains that `a` is in `[0,b)`.
+    /// Performs a range check that `a` has at most `ceil(b.bits() / lookup_bits) * lookup_bits` bits and then constrains that `a` is in `[0,b)`.
     ///
     /// Returns 1 if `a` < `b`, otherwise 0.
     ///
     /// * a: [AssignedValue] value to check
     /// * b: upper bound as [BigUint] value
+    ///
+    /// For the current implementation using [`is_less_than`], we require `ceil(b.bits() / lookup_bits) + 1 < F::NUM_BITS / lookup_bits`
     fn is_big_less_than_safe(
         &self,
         ctx: &mut Context<F>,
@@ -601,6 +603,10 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
 
         let k = (num_bits + self.lookup_bits - 1) / self.lookup_bits;
         let padded_bits = k * self.lookup_bits;
+        debug_assert!(
+            padded_bits + self.lookup_bits <= F::CAPACITY as usize,
+            "num_bits is too large for this is_less_than implementation"
+        );
         let pow_padded = self.gate.pow_of_two[padded_bits];
 
         let shift_a_val = pow_padded + a.value();
