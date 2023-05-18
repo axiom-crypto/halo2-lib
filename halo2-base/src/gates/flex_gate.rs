@@ -759,7 +759,7 @@ pub trait GateInstructions<F: ScalarField> {
 
     /// Performs and constrains Lagrange interpolation on `coords` and evaluates the resulting polynomial at `x`.
     ///
-    /// Given pairs `coords[i] = (x_i, y_i)`, let `f` be the unique degree `len(coords)` polynomial such that `f(x_i) = y_i` for all `i`.
+    /// Given pairs `coords[i] = (x_i, y_i)`, let `f` be the unique degree `len(coords) - 1` polynomial such that `f(x_i) = y_i` for all `i`.
     ///
     /// Returns:
     /// (f(x), Prod_i(x - x_i))

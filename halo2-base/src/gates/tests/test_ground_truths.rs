@@ -160,14 +160,10 @@ pub fn is_equal_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
     }
 }
 
+/*
 pub fn lagrange_eval_ground_truth<F: ScalarField>(inputs: &[F]) -> (F, F) {
-    let x1 = inputs[0];
-    let x2 = inputs[1];
-    let y1 = inputs[2];
-    let quotient = (y1 - x1).invert().unwrap() * (x2 - x1);
-    let y2 = quotient * (x2 - x1) + x1;
-    (quotient, y2)
 }
+*/
 
 pub fn get_field_element_ground_truth<F: ScalarField>(n: u64) -> F {
     F::from(n)

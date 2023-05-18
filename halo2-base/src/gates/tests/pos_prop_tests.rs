@@ -230,13 +230,11 @@ proptest! {
         prop_assert_eq!(result, ground_truth);
     }
 
-    // This needs entire refactor
+    /*
     #[test]
     fn prop_test_lagrange_eval(inputs in vec(rand_fr(), 3)) {
-        let ground_truth = lagrange_eval_ground_truth(inputs.as_slice());
-        let result = flex_gate_tests::test_lagrange_eval(inputs.as_slice());
-        prop_assert_eq!(result, ground_truth);
     }
+    */
 
     #[test]
     fn prop_test_get_field_element(n in any::<u64>()) {
