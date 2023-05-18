@@ -1,11 +1,11 @@
-
+#![allow(clippy::type_complexity)]
 use num_integer::Integer;
 
+use crate::utils::biguint_to_fe;
+use crate::utils::fe_to_biguint;
 use crate::utils::BigPrimeField;
 use crate::utils::ScalarField;
 use crate::QuantumCell;
-use crate::utils::fe_to_biguint;
-use crate::utils::biguint_to_fe;
 
 // Ground truth functions
 
@@ -39,17 +39,27 @@ pub fn div_unsafe_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
     inputs[1].value().invert().unwrap() * *inputs[0].value()
 }
 
-pub fn inner_product_ground_truth<F: ScalarField>(inputs: &(Vec<QuantumCell<F>>, Vec<QuantumCell<F>>)) -> F {
-    inputs.0.iter().zip(inputs.1.iter()).fold(F::zero(),|acc, (a, b)| acc + (*a.value() * *b.value()))    
+pub fn inner_product_ground_truth<F: ScalarField>(
+    inputs: &(Vec<QuantumCell<F>>, Vec<QuantumCell<F>>),
+) -> F {
+    inputs
+        .0
+        .iter()
+        .zip(inputs.1.iter())
+        .fold(F::zero(), |acc, (a, b)| acc + (*a.value() * *b.value()))
 }
 
-pub fn inner_product_left_last_ground_truth<F: ScalarField>(inputs: &(Vec<QuantumCell<F>>, Vec<QuantumCell<F>>)) -> (F, F) {
+pub fn inner_product_left_last_ground_truth<F: ScalarField>(
+    inputs: &(Vec<QuantumCell<F>>, Vec<QuantumCell<F>>),
+) -> (F, F) {
     let product = inner_product_ground_truth(inputs);
     let last = *inputs.0.last().unwrap().value();
     (product, last)
 }
 
-pub fn inner_product_with_sums_ground_truth<F: ScalarField>(input: &(Vec<QuantumCell<F>>, Vec<QuantumCell<F>>)) -> Vec<F> {
+pub fn inner_product_with_sums_ground_truth<F: ScalarField>(
+    input: &(Vec<QuantumCell<F>>, Vec<QuantumCell<F>>),
+) -> Vec<F> {
     let (a, b) = &input;
     let mut result = Vec::new();
     let mut sum = F::zero();
@@ -62,7 +72,9 @@ pub fn inner_product_with_sums_ground_truth<F: ScalarField>(input: &(Vec<Quantum
     result
 }
 
-pub fn sum_products_with_coeff_and_var_ground_truth<F: ScalarField>(input: &(Vec<(F, QuantumCell<F>, QuantumCell<F>)>, QuantumCell<F>)) -> F {
+pub fn sum_products_with_coeff_and_var_ground_truth<F: ScalarField>(
+    input: &(Vec<(F, QuantumCell<F>, QuantumCell<F>)>, QuantumCell<F>),
+) -> F {
     let expected = input.0.iter().fold(F::zero(), |acc, (coeff, cell1, cell2)| {
         acc + *coeff * *cell1.value() * *cell2.value()
     }) + *input.1.value();
@@ -102,10 +114,12 @@ pub fn idx_to_indicator_ground_truth<F: ScalarField>(inputs: (QuantumCell<F>, us
     indicator
 }
 
-pub fn select_by_indicator_ground_truth<F: ScalarField>(inputs: &(Vec<QuantumCell<F>>, QuantumCell<F>)) -> F {
+pub fn select_by_indicator_ground_truth<F: ScalarField>(
+    inputs: &(Vec<QuantumCell<F>>, QuantumCell<F>),
+) -> F {
     let mut idx_value = inputs.0.len() + 1;
     let mut indicator = vec![F::zero(); inputs.0.len()];
-    for i in 0..inputs.0.len() as u64{
+    for i in 0..inputs.0.len() as u64 {
         if F::from(i) == *inputs.1.value() {
             idx_value = i as usize;
             break;
@@ -115,10 +129,12 @@ pub fn select_by_indicator_ground_truth<F: ScalarField>(inputs: &(Vec<QuantumCel
         indicator[idx_value] = F::one();
     }
     // take cross product of indicator and inputs.0
-    inputs.0.iter().zip(indicator.iter()).fold(F::zero(),|acc, (a, b)| acc + (*a.value() * *b))
+    inputs.0.iter().zip(indicator.iter()).fold(F::zero(), |acc, (a, b)| acc + (*a.value() * *b))
 }
 
-pub fn select_from_idx_ground_truth<F: ScalarField>(inputs: &(Vec<QuantumCell<F>>, QuantumCell<F>)) -> F {
+pub fn select_from_idx_ground_truth<F: ScalarField>(
+    inputs: &(Vec<QuantumCell<F>>, QuantumCell<F>),
+) -> F {
     let idx = inputs.1.value();
     // Since F does not implement From<u64>, we have to iterate and find the matching index
     for i in 0..inputs.0.len() as u64 {
@@ -130,7 +146,11 @@ pub fn select_from_idx_ground_truth<F: ScalarField>(inputs: &(Vec<QuantumCell<F>
 }
 
 pub fn is_zero_ground_truth<F: ScalarField>(x: F) -> F {
-    if x.is_zero().into() { F::one() } else { F::zero() }
+    if x.is_zero().into() {
+        F::one()
+    } else {
+        F::zero()
+    }
 }
 
 pub fn is_equal_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {

@@ -1,7 +1,7 @@
-use proptest::{prelude::*, collection::vec};
-use crate::gates::tests::{Fr, flex_gate_tests, range_gate_tests, test_ground_truths::*};
-use crate::{QuantumCell, QuantumCell::Witness};
+use crate::gates::tests::{flex_gate_tests, range_gate_tests, test_ground_truths::*, Fr};
 use crate::utils::bit_length;
+use crate::{QuantumCell, QuantumCell::Witness};
+use proptest::{collection::vec, prelude::*};
 //TODO: implement Copy for rand witness and rand fr to allow for array creation
 //  create vec and convert to array???
 //TODO: implement arbitrary for fr using looks like you'd probably need to implement your own TestFr struct to implement Arbitrary: https://docs.rs/quickcheck/latest/quickcheck/trait.Arbitrary.html , can probably just hack it from Fr = [u64; 4]
@@ -58,7 +58,7 @@ prop_compose! {
     fn check_less_than_strat((k_lo, k_hi): (usize, usize), min_lookup_bits: usize, max_num_bits: usize)
     (num_bits in 2..max_num_bits, k in k_lo..=k_hi)
     (k in Just(k), a in rand_witness_range(0, num_bits as u32), b in rand_witness_range(0, num_bits as u32),
-    num_bits in Just(num_bits), lookup_bits in min_lookup_bits..k) 
+    num_bits in Just(num_bits), lookup_bits in min_lookup_bits..k)
     -> (usize, usize, QuantumCell<Fr>, QuantumCell<Fr>, usize) {
         (k, lookup_bits, a, b, num_bits)
     }
@@ -67,7 +67,7 @@ prop_compose! {
 prop_compose! {
     fn check_less_than_safe_strat((k_lo, k_hi): (usize, usize), min_lookup_bits: usize)
     (k in k_lo..=k_hi)
-    (k in Just(k), b in any::<u64>(), a in rand_fr(), lookup_bits in min_lookup_bits..k) 
+    (k in Just(k), b in any::<u64>(), a in rand_fr(), lookup_bits in min_lookup_bits..k)
     -> (usize, usize, Fr, u64) {
         (k, lookup_bits, a, b)
     }
@@ -121,10 +121,7 @@ proptest! {
     #[test]
     fn prop_test_assert_bit(input in rand_fr()) {
         let ground_truth = input == Fr::one() || input == Fr::zero();
-        let result = match flex_gate_tests::test_assert_bit(input) {
-            Ok(_) => true,
-            Err(_) => false
-        };
+        let result = flex_gate_tests::test_assert_bit(input).is_ok();
         prop_assert_eq!(result, ground_truth);
     }
 
@@ -204,7 +201,7 @@ proptest! {
         let result = flex_gate_tests::test_idx_to_indicator((input.0, input.1));
         prop_assert_eq!(result, ground_truth);
     }
-    
+
     #[test]
     fn prop_test_select_by_indicator(inputs in (vec(rand_witness(), 1..=10), rand_witness())) {
         let ground_truth = select_by_indicator_ground_truth(&inputs);
@@ -249,10 +246,10 @@ proptest! {
     }
 
     // Range Check Property Tests
-    
+
     #[test]
-    fn prop_test_is_less_than(a in rand_witness().prop_filter("not zero", |&x| *x.value() != Fr::zero()), 
-    b in any::<u64>().prop_filter("not zero", |&x| x != 0), 
+    fn prop_test_is_less_than(a in rand_witness().prop_filter("not zero", |&x| *x.value() != Fr::zero()),
+    b in any::<u64>().prop_filter("not zero", |&x| x != 0),
     lookup_bits in 4..=16_usize) {
         let ground_truth = is_less_than_ground_truth((*a.value(), Fr::from(b)));
         let result = range_gate_tests::test_is_less_than(([a, Witness(Fr::from(b))], bit_length(b), lookup_bits));
@@ -260,8 +257,8 @@ proptest! {
     }
 
     #[test]
-    fn prop_test_is_less_than_safe(a in rand_fr().prop_filter("not zero", |&x| x != Fr::zero()), 
-    b in any::<u64>().prop_filter("not zero", |&x| x != 0), 
+    fn prop_test_is_less_than_safe(a in rand_fr().prop_filter("not zero", |&x| x != Fr::zero()),
+    b in any::<u64>().prop_filter("not zero", |&x| x != 0),
     lookup_bits in 4..=16_usize) {
         let ground_truth = is_less_than_ground_truth((a, Fr::from(b)));
         let result = range_gate_tests::test_is_less_than_safe((a, b, lookup_bits));
