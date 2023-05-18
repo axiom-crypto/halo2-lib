@@ -1,4 +1,3 @@
-#![allow(clippy::type_complexity)]
 use num_integer::Integer;
 
 use crate::utils::biguint_to_fe;

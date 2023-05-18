@@ -104,7 +104,7 @@ pub fn test_is_less_than_safe<F: ScalarField>(inputs: (F, u64, usize)) -> F {
     *b.value()
 }
 
-#[test_case((biguint_to_fe(&BigUint::from(2u64).pow(252)), BigUint::from(2u64).pow(253) - 1usize, 8) => Fr::from(1) ; "is_big_less_than_safe() pos")]
+#[test_case((biguint_to_fe(&BigUint::from(2u64).pow(239)), BigUint::from(2u64).pow(240) - 1usize, 8) => Fr::from(1) ; "is_big_less_than_safe() pos")]
 pub fn test_is_big_less_than_safe<F: ScalarField + BigPrimeField>(
     (a, b, lookup_bits): (F, BigUint, usize),
 ) -> F {
