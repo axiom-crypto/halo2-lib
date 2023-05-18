@@ -1,27 +1,30 @@
 use std::env::set_var;
 
-use crate::halo2_proofs::plonk::Assigned;
-use crate::utils::biguint_to_fe;
-use crate::QuantumCell::Witness;
+use ff::Field;
+use itertools::Itertools;
+use num_bigint::BigUint;
+use proptest::{collection::vec, prelude::*};
+use rand::rngs::OsRng;
+
+use crate::halo2_proofs::{
+    dev::MockProver,
+    halo2curves::{bn256::Fr, FieldExt},
+    plonk::Assigned,
+};
 use crate::{
     gates::{
         builder::{GateCircuitBuilder, GateThreadBuilder, RangeCircuitBuilder},
         range::{RangeChip, RangeInstructions},
         tests::{
             pos_prop_tests::{rand_bin_witness, rand_fr, rand_witness},
-            test_ground_truths, Fr,
+            test_ground_truths,
         },
         GateChip, GateInstructions,
     },
-    utils::{bit_length, fe_to_biguint, ScalarField},
+    utils::{biguint_to_fe, bit_length, fe_to_biguint, ScalarField},
     QuantumCell,
+    QuantumCell::Witness,
 };
-use ff::Field;
-use halo2_proofs_axiom::dev::MockProver;
-use itertools::Itertools;
-use num_bigint::BigUint;
-use proptest::{collection::vec, prelude::*};
-use rand::rngs::OsRng;
 
 // Strategies for generating random witnesses
 prop_compose! {
@@ -83,7 +86,12 @@ prop_compose! {
     pub fn range_check_strat(k_bounds: (usize, usize), max_range_bits: usize)
     (k in k_bounds.0..=k_bounds.1, range_bits in 1usize..=max_range_bits) // lookup_bits must be less than k
     (k in Just(k), range_bits in Just(range_bits), lookup_bits in 8..k,
-    rand_a in prop::sample::select(vec![biguint_to_fe(&BigUint::from(2u64).pow(range_bits as u32)), biguint_to_fe(&(BigUint::from(2u64).pow(range_bits as u32) + 1usize)), Fr::random(OsRng)]))
+    rand_a in prop::sample::select(vec![
+        biguint_to_fe(&(BigUint::from(2u64).pow(range_bits as u32) - 1usize)),
+        biguint_to_fe(&BigUint::from(2u64).pow(range_bits as u32)),
+        biguint_to_fe(&(BigUint::from(2u64).pow(range_bits as u32) + 1usize)),
+        Fr::random(OsRng)
+    ]))
     -> (usize, usize, usize, Fr) {
         (k, range_bits, lookup_bits, rand_a)
     }
@@ -93,9 +101,9 @@ prop_compose! {
     fn is_less_than_safe_strat(k_bounds: (usize, usize))
     // compose strat to generate random rand fr in range
     (b in any::<u64>().prop_filter("not zero", |&i| i != 0), k in k_bounds.0..=k_bounds.1)
-    (k in Just(k), b in Just(b), lookup_bits in 12..k, rand_a in rand_fr().prop_filter("not zero", move |&i| i != Fr::zero() && i != Fr::from(b)))
-    -> (usize, u64, usize, Fr) {
-        (k, b, lookup_bits, rand_a)
+    (k in Just(k), b in Just(b), lookup_bits in k_bounds.0 - 1..k, rand_a in rand_fr(), out in any::<bool>())
+    -> (usize, u64, usize, Fr, bool) {
+        (k, b, lookup_bits, rand_a, out)
     }
 }
 
@@ -113,12 +121,7 @@ fn check_idx_to_indicator(idx: Fr, len: usize, ind_witnesses: &[Fr]) -> bool {
         return false;
     }
 
-    let mut idx_val = usize::MAX;
-    for i in 0..len {
-        if Fr::from(i as u64) == idx {
-            idx_val = i;
-        }
-    }
+    let idx_val = idx.get_lower_128() as usize;
 
     // Check that all indexes are zero except for the one at idx
     for (i, v) in ind_witnesses.iter().enumerate() {
@@ -309,51 +312,46 @@ fn neg_test_range_check(k: usize, range_bits: usize, lookup_bits: usize, rand_a:
     let mut builder = GateThreadBuilder::mock();
     let gate = RangeChip::default(lookup_bits);
 
-    let a_witness = builder.main(0).load_witness(Fr::zero());
+    let a_witness = builder.main(0).load_witness(rand_a);
     gate.range_check(builder.main(0), a_witness, range_bits);
+
     builder.config(k, Some(9));
     set_var("LOOKUP_BITS", lookup_bits.to_string());
-
-    let a_offset = a_witness.cell.unwrap().offset;
-    builder.main(0).advice[a_offset] = Assigned::Trivial(rand_a);
-
     let circuit = RangeCircuitBuilder::mock(builder); // no break points
                                                       // Check soundness of witness values
-    let is_valid_witness = fe_to_biguint(&rand_a).bits() <= range_bits as u64;
-    // Note: because rand_a is random in Fr, it is essentially never < 2^range_bits
-    match MockProver::run(k as u32, &circuit, vec![]).unwrap().verify() {
-        // if the proof is valid, then the instance should be valid -> return true
-        Ok(_) => is_valid_witness,
-        // if the proof is invalid, ignore
-        Err(_) => !is_valid_witness,
-    }
+    let correct = fe_to_biguint(&rand_a).bits() <= range_bits as u64;
+
+    MockProver::run(k as u32, &circuit, vec![]).unwrap().verify().is_ok() == correct
 }
 
 // TODO: expand to prank output of is_less_than_safe()
-fn neg_test_is_less_than_safe(k: usize, b: u64, lookup_bits: usize, rand_a: Fr) -> bool {
+fn neg_test_is_less_than_safe(
+    k: usize,
+    b: u64,
+    lookup_bits: usize,
+    rand_a: Fr,
+    prank_out: bool,
+) -> bool {
     let mut builder = GateThreadBuilder::mock();
     let gate = RangeChip::default(lookup_bits);
+    let ctx = builder.main(0);
 
-    let a_witness = builder.main(0).load_witness(Fr::zero());
-    gate.is_less_than_safe(builder.main(0), a_witness, b);
+    let a_witness = ctx.load_witness(rand_a); // cannot prank this later because this witness will be copy-constrained
+    let out = gate.is_less_than_safe(ctx, a_witness, b);
+
+    let out_idx = out.cell.unwrap().offset;
+    ctx.advice[out_idx] = Assigned::Trivial(Fr::from(prank_out));
+
     builder.config(k, Some(9));
     set_var("LOOKUP_BITS", lookup_bits.to_string());
-
-    let a_offset = a_witness.cell.unwrap().offset;
-
-    builder.main(0).advice[a_offset] = Assigned::Trivial(rand_a);
-
     let circuit = RangeCircuitBuilder::mock(builder); // no break points
                                                       // Check soundness of witness values
                                                       // println!("rand_a: {rand_a:?}, b: {b:?}");
-    let is_less_than_bits = fe_to_biguint(&rand_a).bits() < bit_length(b) as u64;
-    let is_valid_witness = rand_a < Fr::from(b);
-    // println!("is_less_ground_truth: {is_valid_witness} bit_length: {}", bit_length(b));
-    //if rand_a has to many bits, then mock prover must fail take this into account
-    match MockProver::run(k as u32, &circuit, vec![]).unwrap().verify() {
-        Ok(_) => is_valid_witness,
-        Err(_) => is_valid_witness || !is_less_than_bits,
-    }
+    let a_big = fe_to_biguint(&rand_a);
+    let is_lt = a_big < BigUint::from(b);
+    let correct = (is_lt == prank_out)
+        && (a_big.bits() as usize <= (bit_length(b) + lookup_bits - 1) / lookup_bits * lookup_bits); // circuit should always fail if `a` doesn't pass range check
+    MockProver::run(k as u32, &circuit, vec![]).unwrap().verify().is_ok() == correct
 }
 
 proptest! {
@@ -394,7 +392,7 @@ proptest! {
     }
 
     #[test]
-    fn prop_test_neg_is_less_than_safe((k, b, lookup_bits, rand_a) in is_less_than_safe_strat((10,20))) {
-        prop_assert!(neg_test_is_less_than_safe(k, b, lookup_bits, rand_a));
+    fn prop_test_neg_is_less_than_safe((k, b, lookup_bits, rand_a, out) in is_less_than_safe_strat((10,20))) {
+        prop_assert!(neg_test_is_less_than_safe(k, b, lookup_bits, rand_a, out));
     }
 }

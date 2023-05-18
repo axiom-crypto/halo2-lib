@@ -87,7 +87,6 @@ pub fn test_check_big_less_than_safe<F: ScalarField + BigPrimeField>(
 
 #[test_case(([0, 1].map(Fr::from).map(Witness), 3, 12) => Fr::from(1) ; "is_less_than() pos")]
 pub fn test_is_less_than<F: ScalarField>(inputs: ([QuantumCell<F>; 2], usize, usize)) -> F {
-    set_var("LOOKUP_BITS", inputs.2.to_string());
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = RangeChip::default(inputs.2);
@@ -97,7 +96,6 @@ pub fn test_is_less_than<F: ScalarField>(inputs: ([QuantumCell<F>; 2], usize, us
 
 #[test_case((Fr::zero(), 3, 3) => Fr::from(1) ; "is_less_than_safe() pos")]
 pub fn test_is_less_than_safe<F: ScalarField>(inputs: (F, u64, usize)) -> F {
-    set_var("LOOKUP_BITS", inputs.2.to_string());
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = RangeChip::default(inputs.2);
@@ -108,14 +106,13 @@ pub fn test_is_less_than_safe<F: ScalarField>(inputs: (F, u64, usize)) -> F {
 
 #[test_case((biguint_to_fe(&BigUint::from(2u64).pow(252)), BigUint::from(2u64).pow(253) - 1usize, 8) => Fr::from(1) ; "is_big_less_than_safe() pos")]
 pub fn test_is_big_less_than_safe<F: ScalarField + BigPrimeField>(
-    inputs: (F, BigUint, usize),
+    (a, b, lookup_bits): (F, BigUint, usize),
 ) -> F {
-    set_var("LOOKUP_BITS", inputs.2.to_string());
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
-    let chip = RangeChip::default(inputs.2);
-    let a = ctx.assign_witnesses([inputs.0])[0];
-    let b = chip.is_big_less_than_safe(ctx, a, inputs.1);
+    let chip = RangeChip::default(lookup_bits);
+    let a = ctx.load_witness(a);
+    let b = chip.is_big_less_than_safe(ctx, a, b);
     *b.value()
 }
 
@@ -123,7 +120,6 @@ pub fn test_is_big_less_than_safe<F: ScalarField + BigPrimeField>(
 pub fn test_div_mod<F: ScalarField + BigPrimeField>(
     inputs: (QuantumCell<F>, u64, usize),
 ) -> (F, F) {
-    set_var("LOOKUP_BITS", "3");
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = RangeChip::default(3);
@@ -133,7 +129,6 @@ pub fn test_div_mod<F: ScalarField + BigPrimeField>(
 
 #[test_case((Fr::from(6), 4) => Fr::one() ; "get_last_bit() pos")]
 pub fn test_get_last_bit<F: ScalarField>(inputs: (F, usize)) -> F {
-    set_var("LOOKUP_BITS", "3");
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = RangeChip::default(3);
@@ -146,7 +141,6 @@ pub fn test_get_last_bit<F: ScalarField>(inputs: (F, usize)) -> F {
 pub fn test_div_mod_var<F: ScalarField + BigPrimeField>(
     inputs: (QuantumCell<F>, QuantumCell<F>, usize, usize),
 ) -> (F, F) {
-    set_var("LOOKUP_BITS", "3");
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = RangeChip::default(3);

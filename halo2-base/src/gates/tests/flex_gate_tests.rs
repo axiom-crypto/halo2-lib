@@ -1,13 +1,16 @@
 use super::*;
-use crate::{gates::{
-    builder::{GateCircuitBuilder,GateThreadBuilder},
-    flex_gate::{GateChip, GateInstructions},
-}, QuantumCell};
 use crate::halo2_proofs::dev::MockProver;
+use crate::halo2_proofs::dev::VerifyFailure;
 use crate::utils::ScalarField;
 use crate::QuantumCell::Witness;
+use crate::{
+    gates::{
+        builder::{GateCircuitBuilder, GateThreadBuilder},
+        flex_gate::{GateChip, GateInstructions},
+    },
+    QuantumCell,
+};
 use test_case::test_case;
-use crate::halo2_proofs::dev::VerifyFailure;
 
 #[test_case(&[1, 1].map(Fr::from).map(Witness) => Fr::from(2) ; "add(): 1 + 1 == 2")]
 pub fn test_add<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
@@ -68,7 +71,7 @@ pub fn test_assert_bit<F: ScalarField>(input: F) -> Result<(), Vec<VerifyFailure
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = GateChip::default();
-    let a = ctx.assign_witnesses([input])[0]; 
+    let a = ctx.assign_witnesses([input])[0];
     chip.assert_bit(ctx, a);
     // auto-tune circuit
     builder.config(6, Some(9));
@@ -91,7 +94,7 @@ pub fn test_assert_is_const<F: ScalarField>(inputs: &[F]) {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = GateChip::default();
-    let a = ctx.assign_witnesses([inputs[0]])[0]; 
+    let a = ctx.assign_witnesses([inputs[0]])[0];
     chip.assert_is_const(ctx, &a, &inputs[1]);
     // auto-tune circuit
     builder.config(6, Some(9));
@@ -110,7 +113,9 @@ pub fn test_inner_product<F: ScalarField>(input: (Vec<QuantumCell<F>>, Vec<Quant
 }
 
 #[test_case((vec![Witness(Fr::one()); 5], vec![Witness(Fr::one()); 5]) => (Fr::from(5), Fr::from(1)); "inner_product_left_last(): 1 * 1 + ... + 1 * 1 == (5, 1)")]
-pub fn test_inner_product_left_last<F: ScalarField>(input: (Vec<QuantumCell<F>>, Vec<QuantumCell<F>>)) -> (F, F) {
+pub fn test_inner_product_left_last<F: ScalarField>(
+    input: (Vec<QuantumCell<F>>, Vec<QuantumCell<F>>),
+) -> (F, F) {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = GateChip::default();
@@ -119,7 +124,9 @@ pub fn test_inner_product_left_last<F: ScalarField>(input: (Vec<QuantumCell<F>>,
 }
 
 #[test_case((vec![Witness(Fr::one()); 5], vec![Witness(Fr::one()); 5]) => vec![Fr::one(), Fr::from(2), Fr::from(3), Fr::from(4), Fr::from(5)]; "inner_product_with_sums(): 1 * 1 + ... + 1 * 1 == [1, 2, 3, 4, 5]")]
-pub fn test_inner_product_with_sums<F: ScalarField>(input: (Vec<QuantumCell<F>>, Vec<QuantumCell<F>>)) -> Vec<F> {
+pub fn test_inner_product_with_sums<F: ScalarField>(
+    input: (Vec<QuantumCell<F>>, Vec<QuantumCell<F>>),
+) -> Vec<F> {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = GateChip::default();
@@ -128,7 +135,9 @@ pub fn test_inner_product_with_sums<F: ScalarField>(input: (Vec<QuantumCell<F>>,
 }
 
 #[test_case((vec![(Fr::from(1), Witness(Fr::from(1)), Witness(Fr::from(1)))], Witness(Fr::from(1))) => Fr::from(2) ; "sum_product_with_coeff_and_var(): 1 * 1 + 1 == 2")]
-pub fn test_sum_products_with_coeff_and_var<F: ScalarField>(input: (Vec<(F, QuantumCell<F>, QuantumCell<F>)>, QuantumCell<F>)) -> F {
+pub fn test_sum_products_with_coeff_and_var<F: ScalarField>(
+    input: (Vec<(F, QuantumCell<F>, QuantumCell<F>)>, QuantumCell<F>),
+) -> F {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = GateChip::default();
@@ -177,7 +186,7 @@ pub fn test_bits_to_indicator<F: ScalarField>(bits: F) -> Vec<F> {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = GateChip::default();
-    let a = ctx.assign_witnesses([bits])[0]; 
+    let a = ctx.assign_witnesses([bits])[0];
     let a = chip.bits_to_indicator(ctx, &[a]);
     a.iter().map(|x| *x.value()).collect()
 }
@@ -216,7 +225,7 @@ pub fn test_is_zero<F: ScalarField>(x: F) -> F {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = GateChip::default();
-    let a = ctx.assign_witnesses([x])[0]; 
+    let a = ctx.assign_witnesses([x])[0];
     let a = chip.is_zero(ctx, a);
     *a.value()
 }
@@ -231,20 +240,21 @@ pub fn test_is_equal<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
 }
 
 #[test_case((Fr::one(), 2) => vec![Fr::one(), Fr::zero()] ; "num_to_bits(): 1 -> [1, 0]")]
-pub fn test_num_to_bits<F: ScalarField>(input: (F, usize)) -> Vec<F> { let mut builder = GateThreadBuilder::mock();
+pub fn test_num_to_bits<F: ScalarField>(input: (F, usize)) -> Vec<F> {
+    let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = GateChip::default();
-    let a = ctx.assign_witnesses([input.0])[0]; 
+    let a = ctx.assign_witnesses([input.0])[0];
     let a = chip.num_to_bits(ctx, a, input.1);
     a.iter().map(|x| *x.value()).collect()
 }
 
 #[test_case(&[0, 1, 2].map(Fr::from) => (Fr::one(), Fr::from(2)) ; "lagrange_eval(): [0, 1, 2] -> (1, 2)")]
-pub fn test_lagrange_eval<F: ScalarField>(input: &[F]) -> (F, F){
+pub fn test_lagrange_eval<F: ScalarField>(input: &[F]) -> (F, F) {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = GateChip::default();
-    ctx.assign_witnesses([input[0], input[1], input[2]])[0]; 
+    ctx.assign_witnesses(input.iter().copied());
     let a = chip.lagrange_and_eval(ctx, &[(ctx.get(-3), ctx.get(-2))], ctx.get(-1));
     (*a.0.value(), *a.1.value())
 }
