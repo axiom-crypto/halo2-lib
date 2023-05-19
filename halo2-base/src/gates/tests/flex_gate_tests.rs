@@ -239,7 +239,7 @@ pub fn test_is_equal<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
     *a.value()
 }
 
-#[test_case((Fr::one(), 2) => vec![Fr::one(), Fr::zero()] ; "num_to_bits(): 1 -> [1, 0]")]
+#[test_case((Fr::from(6u64), 3) => vec![Fr::zero(), Fr::one(), Fr::one()] ; "num_to_bits(): 6")]
 pub fn test_num_to_bits<F: ScalarField>(input: (F, usize)) -> Vec<F> {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);

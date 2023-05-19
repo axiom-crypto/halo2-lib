@@ -230,6 +230,21 @@ proptest! {
         prop_assert_eq!(result, ground_truth);
     }
 
+    #[test]
+    fn prop_test_num_to_bits(num in any::<u64>()) {
+        let mut tmp = num;
+        let mut bits = vec![];
+        if num == 0 {
+            bits.push(0);
+        }
+        while tmp > 0 {
+            bits.push(tmp & 1);
+            tmp /= 2;
+        }
+        let result = flex_gate_tests::test_num_to_bits((Fr::from(num), bits.len()));
+        prop_assert_eq!(bits.into_iter().map(Fr::from).collect::<Vec<_>>(), result);
+    }
+
     /*
     #[test]
     fn prop_test_lagrange_eval(inputs in vec(rand_fr(), 3)) {
