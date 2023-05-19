@@ -1,5 +1,5 @@
 use crate::gates::tests::{flex_gate_tests, range_gate_tests, test_ground_truths::*, Fr};
-use crate::utils::bit_length;
+use crate::utils::{bit_length, fe_to_biguint};
 use crate::{QuantumCell, QuantumCell::Witness};
 use proptest::{collection::vec, prelude::*};
 //TODO: implement Copy for rand witness and rand fr to allow for array creation
@@ -285,12 +285,11 @@ proptest! {
         prop_assert_eq!(result, ground_truth);
     }
 
-    // BROKEN
     #[test]
-    fn prop_test_get_last_bit(inputs in (rand_fr().prop_filter("can't be 0", |x| *x != Fr::zero()), 1..=32_usize)) {
-        let ground_truth = get_last_bit_ground_truth(inputs.0);
-        let result = range_gate_tests::test_get_last_bit((inputs.0, inputs.1));
-        println!("result: {result:?}, ground_truth: {ground_truth:?}");
+    fn prop_test_get_last_bit(input in rand_fr(), pad_bits in 0..10usize) {
+        let ground_truth = get_last_bit_ground_truth(input);
+        let bits = fe_to_biguint(&input).bits() as usize + pad_bits;
+        let result = range_gate_tests::test_get_last_bit((input, bits));
         prop_assert_eq!(result, ground_truth);
     }
 

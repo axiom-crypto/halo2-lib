@@ -127,13 +127,17 @@ pub fn test_div_mod<F: ScalarField + BigPrimeField>(
     (*a.0.value(), *a.1.value())
 }
 
-#[test_case((Fr::from(6), 4) => Fr::one() ; "get_last_bit() pos")]
-pub fn test_get_last_bit<F: ScalarField>(inputs: (F, usize)) -> F {
+#[test_case((Fr::from(3), 8) => Fr::one() ; "get_last_bit(): 3, 8 bits")]
+#[test_case((Fr::from(3), 2) => Fr::one() ; "get_last_bit(): 3, 2 bits")]
+#[test_case((Fr::from(0), 2) => Fr::zero() ; "get_last_bit(): 0")]
+#[test_case((Fr::from(1), 2) => Fr::one() ; "get_last_bit(): 1")]
+#[test_case((Fr::from(2), 2) => Fr::zero() ; "get_last_bit(): 2")]
+pub fn test_get_last_bit<F: ScalarField>((a, bits): (F, usize)) -> F {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = RangeChip::default(3);
-    let a = ctx.assign_witnesses([inputs.0])[0];
-    let b = chip.get_last_bit(ctx, a, inputs.1);
+    let a = ctx.load_witness(a);
+    let b = chip.get_last_bit(ctx, a, bits);
     *b.value()
 }
 

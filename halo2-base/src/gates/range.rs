@@ -413,18 +413,16 @@ pub trait RangeInstructions<F: ScalarField> {
         a: AssignedValue<F>,
         limb_bits: usize,
     ) -> AssignedValue<F> {
-        let a_v = a.value();
-        let bit_v = {
-            let a = a_v.get_lower_32();
-            F::from(a ^ 1 != 0)
-        };
+        let a_big = fe_to_biguint(a.value());
+        let bit_v = F::from(a_big.bit(0));
         let two = self.gate().get_field_element(2u64);
-        let h_v = (*a_v - bit_v) * two.invert().unwrap();
-        ctx.assign_region([Witness(bit_v), Witness(h_v), Constant(two), Existing(a)], [0]);
+        let h_v = F::from_bytes_le(&(a_big >> 1usize).to_bytes_le());
 
+        ctx.assign_region([Witness(bit_v), Witness(h_v), Constant(two), Existing(a)], [0]);
         let half = ctx.get(-3);
-        self.range_check(ctx, half, limb_bits - 1);
         let bit = ctx.get(-4);
+
+        self.range_check(ctx, half, limb_bits - 1);
         self.gate().assert_bit(ctx, bit);
         bit
     }
