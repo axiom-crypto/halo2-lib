@@ -1,7 +1,11 @@
 use super::{CRTInteger, OverflowInteger};
 use halo2_base::{gates::GateInstructions, utils::ScalarField, AssignedValue, Context};
+use itertools::Itertools;
 use std::cmp::max;
 
+/// # Assumptions
+/// * `a, b` have same number of limbs
+/// * Number of limbs is nonzero
 pub fn assign<F: ScalarField>(
     gate: &impl GateInstructions<F>,
     ctx: &mut Context<F>,
@@ -9,11 +13,10 @@ pub fn assign<F: ScalarField>(
     b: OverflowInteger<F>,
     sel: AssignedValue<F>,
 ) -> OverflowInteger<F> {
-    debug_assert_eq!(a.limbs.len(), b.limbs.len());
     let out_limbs = a
         .limbs
         .into_iter()
-        .zip(b.limbs.into_iter())
+        .zip_eq(b.limbs)
         .map(|(a_limb, b_limb)| gate.select(ctx, a_limb, b_limb, sel))
         .collect();
 

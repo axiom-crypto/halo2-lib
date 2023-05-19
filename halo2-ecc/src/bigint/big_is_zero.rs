@@ -1,7 +1,10 @@
 use super::{CRTInteger, OverflowInteger};
 use halo2_base::{gates::GateInstructions, utils::ScalarField, AssignedValue, Context};
 
-/// assume you know that the limbs of `a` are all in [0, 2^{a.max_limb_bits})
+/// # Assumptions
+/// * `a` has nonzero number of limbs
+/// * The limbs of `a` are all in [0, 2<sup>a.max_limb_bits</sup>)
+/// * a.limbs.len() * 2<sup>a.max_limb_bits</sup> ` is less than modulus of `F`
 pub fn positive<F: ScalarField>(
     gate: &impl GateInstructions<F>,
     ctx: &mut Context<F>,
@@ -15,14 +18,16 @@ pub fn positive<F: ScalarField>(
     gate.is_zero(ctx, sum)
 }
 
-// given OverflowInteger<F> `a`, returns whether `a == 0`
+/// Given OverflowInteger<F> `a`, returns whether `a == 0`
+///
+/// # Assumptions
+/// * `a` has nonzero number of limbs
 pub fn assign<F: ScalarField>(
     gate: &impl GateInstructions<F>,
     ctx: &mut Context<F>,
     a: &OverflowInteger<F>,
 ) -> AssignedValue<F> {
-    let k = a.limbs.len();
-    debug_assert_ne!(k, 0);
+    debug_assert!(!a.limbs.is_empty());
 
     let mut a_limbs = a.limbs.iter();
     let mut partial = gate.is_zero(ctx, *a_limbs.next().unwrap());

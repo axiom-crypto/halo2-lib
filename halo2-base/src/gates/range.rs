@@ -441,8 +441,8 @@ pub struct RangeChip<F: ScalarField> {
     pub gate: GateChip<F>,
     /// Defines the number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>).
     pub lookup_bits: usize,
-    /// [Vec] of 'limbs' represented as [QuantumCell] that divide the underlying scalar field element into sections smaller than lookup_bits.
-    /// * This allows range checks on field elements that are larger than the maximum value of the lookup table.
+    /// [Vec] of powers of `2 ** lookup_bits` represented as [QuantumCell::Constant].
+    /// These are precomputed and cached as a performance optimization for later limb decompositions. We precompute up to the higher power that fits in `F`, which is `2 ** ((F::CAPACITY / lookup_bits) * lookup_bits)`.
     pub limb_bases: Vec<QuantumCell<F>>,
 }
 
@@ -453,7 +453,7 @@ impl<F: ScalarField> RangeChip<F> {
     pub fn new(strategy: RangeStrategy, lookup_bits: usize) -> Self {
         let limb_base = F::from(1u64 << lookup_bits);
         let mut running_base = limb_base;
-        let num_bases = F::NUM_BITS as usize / lookup_bits;
+        let num_bases = F::CAPACITY as usize / lookup_bits;
         let mut limb_bases = Vec::with_capacity(num_bases + 1);
         limb_bases.extend([Constant(F::one()), Constant(running_base)]);
         for _ in 2..=num_bases {
@@ -494,13 +494,16 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
 
     /// Checks and constrains that `a` lies in the range [0, 2<sup>range_bits</sup>).
     ///
-    /// This is done by decomposing `a` into `k` limbs, where `k = (range_bits + lookup_bits - 1) / lookup_bits`.
+    /// This is done by decomposing `a` into `k` limbs, where `k = ceil(range_bits / lookup_bits)`.
     /// Each limb is constrained to be within the range [0, 2<sup>lookup_bits</sup>).
     /// The limbs are then combined to form `a` again with the last limb having `rem_bits` number of bits.
     ///
     /// * `a`: [AssignedValue] value to be range checked
     /// * `range_bits`: number of bits in the range
     /// * `lookup_bits`: number of bits in the lookup table
+    ///
+    /// # Assumptions
+    /// * `ceil(range_bits / lookup_bits) * lookup_bits <= F::CAPACITY`
     fn range_check(&self, ctx: &mut Context<F>, a: AssignedValue<F>, range_bits: usize) {
         // the number of limbs
         let k = (range_bits + self.lookup_bits - 1) / self.lookup_bits;
@@ -585,10 +588,13 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
 
     /// Constrains whether `a` is in `[0, b)`, and returns 1 if `a` < `b`, otherwise 0.
     ///
-    /// Assumes that`a` and `b` are known to have <= num_bits bits.
     /// * a: first [QuantumCell] to compare
     /// * b: second [QuantumCell] to compare
     /// * num_bits: number of bits to represent the values
+    ///
+    /// # Assumptions
+    /// * `a` and `b` are known to have `<= num_bits` bits.
+    /// * (`ceil(num_bits / lookup_bits) + 1) * lookup_bits <= F::CAPACITY`
     fn is_less_than(
         &self,
         ctx: &mut Context<F>,

@@ -5,8 +5,11 @@ use halo2_base::{
     AssignedValue, Context,
     QuantumCell::{Constant, Existing, Witness},
 };
+use itertools::Itertools;
 
-/// Should only be called on integers a, b in proper representation with all limbs having at most `limb_bits` number of bits
+/// # Assumptions
+/// * Should only be called on integers a, b in proper representation with all limbs having at most `limb_bits` number of bits
+/// * `a, b` have same nonzero number of limbs
 pub fn assign<F: ScalarField>(
     range: &impl RangeInstructions<F>,
     ctx: &mut Context<F>,
@@ -17,12 +20,11 @@ pub fn assign<F: ScalarField>(
 ) -> (OverflowInteger<F>, AssignedValue<F>) {
     debug_assert!(a.max_limb_bits <= limb_bits);
     debug_assert!(b.max_limb_bits <= limb_bits);
-    debug_assert_eq!(a.limbs.len(), b.limbs.len());
     let k = a.limbs.len();
     let mut out_limbs = Vec::with_capacity(k);
 
     let mut borrow: Option<AssignedValue<F>> = None;
-    for (&a_limb, &b_limb) in a.limbs.iter().zip(b.limbs.iter()) {
+    for (&a_limb, &b_limb) in a.limbs.iter().zip_eq(b.limbs.iter()) {
         let (bottom, lt) = match borrow {
             None => {
                 let lt = range.is_less_than(ctx, a_limb, b_limb, limb_bits);
