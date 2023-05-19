@@ -31,7 +31,7 @@ where
 }
 
 /// Helper trait to convert to and from a [ScalarField] by decomposing its an field element into [u64] limbs.
-/// 
+///
 /// Note: Since the number of bits necessary to represent a field element is larger than the number of bits in a u64, we decompose the bit representation of the field element into multiple [u64] values e.g. `limbs`.
 #[cfg(feature = "halo2-axiom")]
 pub trait ScalarField: FieldExt + Hash {
@@ -122,10 +122,10 @@ pub fn bit_length(x: u64) -> usize {
 }
 
 /// Returns the ceiling of the base 2 logarithm of `x`.
-/// 
-/// Assumes x != 0
+///
+/// `log2_ceil(0)` returns 0.
 pub fn log2_ceil(x: u64) -> usize {
-    (u64::BITS - x.leading_zeros() - (x & (x - 1) == 0) as u32) as usize
+    (u64::BITS - x.leading_zeros()) as usize - usize::from(x.is_power_of_two())
 }
 
 /// Returns the modulus of [BigPrimeField].
@@ -182,13 +182,13 @@ pub fn bigint_to_fe<F: BigPrimeField>(e: &BigInt) -> F {
     }
 }
 
-/// Converts an immutable reference to an PrimeField element into a [BigUint] element. 
+/// Converts an immutable reference to an PrimeField element into a [BigUint] element.
 /// * `fe`: immutable reference to PrimeField element to convert
 pub fn fe_to_biguint<F: ff::PrimeField>(fe: &F) -> BigUint {
     BigUint::from_bytes_le(fe.to_repr().as_ref())
 }
 
-/// Converts an immutable reference to a [BigPrimeField] element into a [BigInt] element. 
+/// Converts an immutable reference to a [BigPrimeField] element into a [BigInt] element.
 /// * `fe`: immutable reference to [BigPrimeField] element to convert
 pub fn fe_to_bigint<F: BigPrimeField>(fe: &F) -> BigInt {
     // TODO: `F` should just have modulus as lazy_static or something
@@ -202,7 +202,7 @@ pub fn fe_to_bigint<F: BigPrimeField>(fe: &F) -> BigInt {
 }
 
 /// Decomposes an immutable reference to a [BigPrimeField] element into `number_of_limbs` limbs of `bit_len` bits each and returns a [Vec] of [BigPrimeField] represented by those limbs.
-/// 
+///
 /// Assumes `bit_len < 128`.
 /// * `e`: immutable reference to [BigPrimeField] element to decompose
 /// * `number_of_limbs`: number of limbs to decompose `e` into
@@ -282,7 +282,7 @@ pub fn decompose_biguint<F: BigPrimeField>(
 }
 
 /// Decomposes an immutable reference to a [BigInt] into `num_limbs` limbs of `bit_len` bits each and returns a [Vec] of [BigPrimeField] represented by those limbs.
-/// 
+///
 /// Assumes `bit_len < 128`.
 /// * `e`: immutable reference to `BigInt` to decompose
 /// * `num_limbs`: number of limbs to decompose `e` into
@@ -296,7 +296,7 @@ pub fn decompose_bigint<F: BigPrimeField>(e: &BigInt, num_limbs: usize, bit_len:
 }
 
 /// Decomposes an immutable reference to a [BigInt] into `num_limbs` limbs of `bit_len` bits each and returns a [Vec] of [BigPrimeField] represented by those limbs wrapped in [Value].
-/// 
+///
 /// Assumes `bit_len` < 128.
 /// * `e`: immutable reference to `BigInt` to decompose
 /// * `num_limbs`: number of limbs to decompose `e` into
@@ -309,7 +309,7 @@ pub fn decompose_bigint_option<F: BigPrimeField>(
     value.map(|e| decompose_bigint(e, number_of_limbs, bit_len)).transpose_vec(number_of_limbs)
 }
 
-/// Wraps the internal value of `value` in an [Option]. 
+/// Wraps the internal value of `value` in an [Option].
 /// If the value is [None], then the function returns [None].
 /// * `value`: Value to convert.
 pub fn value_to_option<V>(value: Value<V>) -> Option<V> {
@@ -401,7 +401,7 @@ pub mod fs {
         }
     }
 
-    /// Generates the SRS for the KZG scheme and writes it to a file found in "./params/kzg_bn2_{k}.srs` or `{dir}/kzg_bn254_{k}.srs` if `PARAMS_DIR` env var is specified, creates a file it if it does not exist" 
+    /// Generates the SRS for the KZG scheme and writes it to a file found in "./params/kzg_bn2_{k}.srs` or `{dir}/kzg_bn254_{k}.srs` if `PARAMS_DIR` env var is specified, creates a file it if it does not exist"
     /// * `k`: degree that expresses the size of circuit (i.e., 2^<sup>k</sup> is the number of rows in the circuit)
     pub fn gen_srs(k: u32) -> ParamsKZG<Bn256> {
         read_or_create_srs::<G1Affine, _>(k, |k| {
@@ -480,5 +480,10 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_log2_ceil_zero() {
+        assert_eq!(log2_ceil(0), 0);
     }
 }
