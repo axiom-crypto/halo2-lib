@@ -44,6 +44,7 @@ pub mod utils;
 /// Constant representing whether the Layouter calls `synthesize` once just to get region shape.
 #[cfg(feature = "halo2-axiom")]
 pub const SKIP_FIRST_PASS: bool = false;
+/// Constant representing whether the Layouter calls `synthesize` once just to get region shape.
 #[cfg(feature = "halo2-pse")]
 pub const SKIP_FIRST_PASS: bool = true;
 
