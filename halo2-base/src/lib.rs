@@ -43,6 +43,7 @@ use utils::ScalarField;
 pub mod gates;
 /// Utility functions for converting between different types of field elements.
 pub mod utils;
+/// Module for SafeType which enforce value range and realted functions.
 pub mod safe_types;
 
 /// Constant representing whether the Layouter calls `synthesize` once just to get region shape.

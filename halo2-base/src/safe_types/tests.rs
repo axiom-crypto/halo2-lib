@@ -71,14 +71,13 @@ pub fn check_proof(
 }
 
 // soundness checks for `raw_bytes_to` function
-fn test_raw_bytes_to_gen<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(k: u32, raw_bytes: &[Fr], outputs: &[Fr], expect_satisfied: bool) 
-where [(); (TOTAL_BITS + BYTES_PER_ELE * BITS_PER_BYTE - 1) / (BYTES_PER_ELE  * BITS_PER_BYTE)]: Sized {
+fn test_raw_bytes_to_gen<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(k: u32, raw_bytes: &[Fr], outputs: &[Fr], expect_satisfied: bool) {
     // first create proving and verifying key
     let mut builder = GateThreadBuilder::<Fr>::keygen();
     let lookup_bits = 3;
     env::set_var("LOOKUP_BITS", lookup_bits.to_string());
     let range_chip = RangeChip::<Fr>::default(lookup_bits);
-    let safe_type_chip = SafeTypeChip::new(Arc::new(range_chip));
+    let safe_type_chip = SafeTypeChip::new(&range_chip);
 
     let dummy_raw_bytes = builder.main(0).assign_witnesses((0..raw_bytes.len()).map(|_| Fr::zero()).collect::<Vec<_>>());
 
@@ -101,7 +100,7 @@ where [(); (TOTAL_BITS + BYTES_PER_ELE * BITS_PER_BYTE - 1) / (BYTES_PER_ELE  * 
     let gen_pf = |inputs: &[Fr], outputs: &[Fr]| {
         let mut builder = GateThreadBuilder::<Fr>::prover();
         let range_chip = RangeChip::<Fr>::default(lookup_bits);
-        let safe_type_chip = SafeTypeChip::new(Arc::new(range_chip));
+        let safe_type_chip = SafeTypeChip::new(&range_chip);
     
         let assigned_raw_bytes = builder.main(0).assign_witnesses(inputs.to_vec());
         safe_type_chip.raw_bytes_to::<BYTES_PER_ELE, TOTAL_BITS>(
@@ -133,7 +132,7 @@ fn test_raw_bytes_to_bool() {
 fn test_raw_bytes_to_uint256() {
     const BYTES_PER_ELE: usize = SafeUint256::<Fr>::BYTES_PER_ELE;
     const TOTAL_BITS: usize = SafeUint256::<Fr>::TOTAL_BITS;
-    let k = 10;
+    let k = 11;
     // [0x0; 32] -> [0x0, 0x0]
     test_raw_bytes_to_gen::<BYTES_PER_ELE, TOTAL_BITS>(k, &[Fr::from(0); 32], &[Fr::from(0), Fr::from(0)], true);
     test_raw_bytes_to_gen::<BYTES_PER_ELE, TOTAL_BITS>(
