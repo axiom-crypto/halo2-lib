@@ -4,7 +4,6 @@ use ff::Field;
 use halo2_base::{
     gates::{
         builder::{GateThreadBuilder, RangeCircuitBuilder},
-        tests::{check_proof, gen_proof},
         RangeChip,
     },
     halo2_proofs::{
@@ -13,6 +12,7 @@ use halo2_base::{
         plonk::keygen_vk,
         poly::kzg::commitment::ParamsKZG,
     },
+    utils::testing::{check_proof, gen_proof},
 };
 use num_bigint::BigInt;
 
