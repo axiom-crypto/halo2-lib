@@ -1107,13 +1107,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
         a: AssignedValue<F>,
         range_bits: usize,
     ) -> Vec<AssignedValue<F>> {
-        let a_bytes = a.value().to_repr();
-        let bits = a_bytes
-            .as_ref()
-            .iter()
-            .flat_map(|byte| (0..8u32).map(|i| (*byte as u64 >> i) & 1))
-            .map(|x| Witness(F::from(x)))
-            .take(range_bits);
+        let bits = a.value().to_u64_limbs(range_bits, 1).into_iter().map(|x| Witness(F::from(x)));
 
         let mut bit_cells = Vec::with_capacity(range_bits);
         let row_offset = ctx.advice.len();

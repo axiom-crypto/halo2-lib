@@ -1941,7 +1941,7 @@ pub fn keccak_phase0<F: Field>(
             .take(4)
             .map(|a| {
                 pack_with_base::<F>(&unpack(a[0]), 2)
-                    .to_repr()
+                    .to_bytes_le()
                     .into_iter()
                     .take(8)
                     .collect::<Vec<_>>()
