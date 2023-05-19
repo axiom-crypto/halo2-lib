@@ -69,7 +69,7 @@ fn ecdsa_test<F: PrimeField>(
     let pk = ecc_chip.load_private(ctx, (pk.x, pk.y));
     // test ECDSA
     let res = ecdsa_verify_no_pubkey_check::<F, Fp, Fq, Secp256k1Affine>(
-        &fp_chip, ctx, &pk, &r, &s, &m, 4, 4,
+        &ecc_chip, ctx, &pk, &r, &s, &m, 4, 4,
     );
     assert_eq!(res.value(), &F::one());
 }

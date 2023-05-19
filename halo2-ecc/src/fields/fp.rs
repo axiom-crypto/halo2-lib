@@ -338,9 +338,9 @@ impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, F
         let (_, underflow) =
             sub::crt::<F>(self.range(), ctx, a, &p, self.limb_bits, self.limb_bases[1]);
         let is_underflow_zero = self.gate().is_zero(ctx, underflow);
-        let range_check = self.gate().not(ctx, is_underflow_zero);
+        let no_underflow = self.gate().not(ctx, is_underflow_zero);
 
-        self.gate().and(ctx, is_nonzero, range_check)
+        self.gate().and(ctx, is_nonzero, no_underflow)
     }
 
     // assuming `a` has been range checked to be a proper BigInt
