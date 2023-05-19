@@ -1100,7 +1100,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     ///
     /// Assumes `range_bits >= number of bits in a`.
     /// * `a`: [QuantumCell] of the value to convert
-    /// * `range_bits`: range of bits needed to represent `a`
+    /// * `range_bits`: range of bits needed to represent `a`. Assumes `range_bits > 0`.
     fn num_to_bits(
         &self,
         ctx: &mut Context<F>,

@@ -43,7 +43,7 @@ pub fn crt<F: BigPrimeField>(
     // we need to constrain that `sum_i quot_vec[i] * 2^{n*i} = quot_native` in `F`
     let (quot_val, _out_val) = a.value.div_mod_floor(modulus);
 
-    // only perform safety checks in display mode so we can turn them off in production
+    // only perform safety checks in debug mode
     debug_assert_eq!(_out_val, BigInt::zero());
     debug_assert!(quot_val.abs() < (BigInt::one() << quot_max_bits));
 

@@ -1,6 +1,11 @@
 use super::{CRTInteger, OverflowInteger};
 use halo2_base::{gates::GateInstructions, utils::ScalarField, Context, QuantumCell::Existing};
 
+/// # Assumptions
+/// * `a` and `b` have the same number of limbs `k`
+/// * `k` is nonzero
+/// * `num_limbs_log2_ceil = log2_ceil(k)`
+/// * `log2_ceil(k) + a.max_limb_bits + b.max_limb_bits <= F::NUM_BITS as usize - 2`
 pub fn truncate<F: ScalarField>(
     gate: &impl GateInstructions<F>,
     ctx: &mut Context<F>,

@@ -50,7 +50,7 @@ where
 }
 
 // computes `[scalar] * P` on y^2 = x^3 + b where `P` is fixed (constant)
-// - `scalar` is represented as a reference array of `AssignedCell`s
+// - `scalar` is represented as a non-empty reference array of `AssignedValue`s
 // - `scalar = sum_i scalar_i * 2^{max_bits * i}`
 // - an array of length > 1 is needed when `scalar` exceeds the modulus of scalar field `F`
 // assumes:
@@ -261,6 +261,9 @@ where
     chip.sum::<C>(ctx, sm.iter())
 }
 
+/// # Assumptions
+/// * `points.len() = scalars.len()`
+/// * `scalars[i].len() = scalars[j].len()` for all `i,j`
 pub fn msm_par<F, FC, C>(
     chip: &EccChip<F, FC>,
     builder: &mut GateThreadBuilder<F>,
