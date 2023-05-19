@@ -24,8 +24,7 @@ pub mod select_by_indicator;
 pub mod sub;
 pub mod sub_no_carry;
 
-#[derive(Clone, Debug, PartialEq)]
-#[derive(Default)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub enum BigIntStrategy {
     // use existing gates
     #[default]
@@ -34,8 +33,6 @@ pub enum BigIntStrategy {
     // we restrict to gate of length 4 since this uses the same set of evaluation points Rotation(0..=3) as our simple gate
     // CustomVerticalShort,
 }
-
-
 
 #[derive(Clone, Debug)]
 pub struct OverflowInteger<F: ScalarField> {
@@ -73,6 +70,20 @@ impl<F: ScalarField> OverflowInteger<F> {
     ) -> AssignedValue<F> {
         // Constrain `out_native = sum_i out_assigned[i] * 2^{n*i}` in `F`
         gate.inner_product(ctx, limbs, limb_bases.into_iter().map(|c| Constant(c)))
+    }
+}
+
+/// Safe wrapper around a BigUint represented as a vector of limbs in **little endian**.
+/// The underlying BigUint is represented by
+/// sum<sub>i</sub> limbs\[i\] * 2<sup>limb_bits * i</sup>
+///
+/// To save memory we do not store the `limb_bits` and it must be inferred from context.
+#[derive(Clone, Debug)]
+pub struct ProperUint<F: ScalarField>(pub(crate) Vec<AssignedValue<F>>);
+
+impl<F: ScalarField> ProperUint<F> {
+    pub fn into_overflow(self, limb_bits: usize) -> OverflowInteger<F> {
+        OverflowInteger::construct(self.0, limb_bits)
     }
 }
 
@@ -131,7 +142,7 @@ impl<F: BigPrimeField> FixedOverflowInteger<F> {
 pub struct CRTInteger<F: ScalarField> {
     // keep track of an integer `a` using CRT as `a mod 2^t` and `a mod n`
     // where `t = truncation.limbs.len() * truncation.limb_bits`
-    //       `n = modulus::<Fn>`
+    //       `n = modulus::<F>`
     // `value` is the actual integer value we want to keep track of
 
     // we allow `value` to be a signed BigInt
@@ -160,6 +171,20 @@ impl<F: ScalarField> CRTInteger<F> {
 
     pub fn limbs(&self) -> &[AssignedValue<F>] {
         self.truncation.limbs.as_slice()
+    }
+}
+
+/// Safe wrapper for representing a BigUint as a [`CRTInteger`] whose underlying BigUint value is in `[0, 2^t)`
+/// where `t = truncation.limbs.len() * limb_bits`. This struct guarantees that
+/// * each `truncation.limbs[i]` is ranged checked to be in `[0, 2^limb_bits)`,
+/// * `native` is the evaluation of `sum_i truncation.limbs[i] * 2^{limb_bits * i} (mod modulus::<F>)` in the native field `F`
+/// * `value` is equal to `sum_i truncation.limbs[i] * 2^{limb_bits * i}` as integers
+#[derive(Clone, Debug)]
+pub struct ProperCrtUint<F: ScalarField>(pub(crate) CRTInteger<F>);
+
+impl<F: ScalarField> From<ProperCrtUint<F>> for CRTInteger<F> {
+    fn from(x: ProperCrtUint<F>) -> Self {
+        x.0
     }
 }
 
