@@ -330,6 +330,10 @@ impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, F
         // self.gate().and(ctx, is_zero, range_check)
     }
 
+    /// Given proper CRT integer `a`, returns 1 iff `a < modulus::<F>()` and `a != 0` as integers
+    ///
+    /// # Assumptions
+    /// * `a` is proper representation of BigUint
     fn is_soft_nonzero(&self, ctx: &mut Context<F>, a: &CRTInteger<F>) -> AssignedValue<F> {
         let is_zero = big_is_zero::crt::<F>(self.gate(), ctx, a);
         let is_nonzero = self.gate().not(ctx, is_zero);

@@ -73,7 +73,7 @@ pub fn ec_add_unequal<F: PrimeField, FC: FieldChip<F>>(
 
     let dx = chip.sub_no_carry(ctx, &Q.x, &P.x);
     let dy = chip.sub_no_carry(ctx, &Q.y, &P.y);
-    let lambda = chip.divide(ctx, &dy, &dx);
+    let lambda = chip.divide_unsafe(ctx, &dy, &dx);
 
     //  x_3 = lambda^2 - x_1 - x_2 (mod p)
     let lambda_sq = chip.mul_no_carry(ctx, &lambda, &lambda);
@@ -116,7 +116,7 @@ pub fn ec_sub_unequal<F: PrimeField, FC: FieldChip<F>>(
     let dx = chip.sub_no_carry(ctx, &Q.x, &P.x);
     let dy = chip.add_no_carry(ctx, &Q.y, &P.y);
 
-    let lambda = chip.neg_divide(ctx, &dy, &dx);
+    let lambda = chip.neg_divide_unsafe(ctx, &dy, &dx);
 
     // (x_2 - x_1) * lambda + y_2 + y_1 = 0 (mod p)
     let lambda_dx = chip.mul_no_carry(ctx, &lambda, &dx);
@@ -159,7 +159,7 @@ pub fn ec_double<F: PrimeField, FC: FieldChip<F>>(
     let two_y = chip.scalar_mul_no_carry(ctx, &P.y, 2);
     let three_x = chip.scalar_mul_no_carry(ctx, &P.x, 3);
     let three_x_sq = chip.mul_no_carry(ctx, &three_x, &P.x);
-    let lambda = chip.divide(ctx, &three_x_sq, &two_y);
+    let lambda = chip.divide_unsafe(ctx, &three_x_sq, &two_y);
 
     // x_3 = lambda^2 - 2 x % p
     let lambda_sq = chip.mul_no_carry(ctx, &lambda, &lambda);
@@ -200,7 +200,7 @@ pub fn ec_double_and_add_unequal<F: PrimeField, FC: FieldChip<F>>(
 
     let dx = chip.sub_no_carry(ctx, &Q.x, &P.x);
     let dy = chip.sub_no_carry(ctx, &Q.y, &P.y);
-    let lambda_0 = chip.divide(ctx, &dy, &dx);
+    let lambda_0 = chip.divide_unsafe(ctx, &dy, &dx);
 
     //  x_2 = lambda_0^2 - x_0 - x_1 (mod p)
     let lambda_0_sq = chip.mul_no_carry(ctx, &lambda_0, &lambda_0);
@@ -217,7 +217,7 @@ pub fn ec_double_and_add_unequal<F: PrimeField, FC: FieldChip<F>>(
     // lambda_1 = lambda_0 + 2 * y_0 / (x_2 - x_0)
     let two_y_0 = chip.scalar_mul_no_carry(ctx, &P.y, 2);
     let x_2_minus_x_0 = chip.sub_no_carry(ctx, &x_2, &P.x);
-    let lambda_1_minus_lambda_0 = chip.divide(ctx, &two_y_0, &x_2_minus_x_0);
+    let lambda_1_minus_lambda_0 = chip.divide_unsafe(ctx, &two_y_0, &x_2_minus_x_0);
     let lambda_1_no_carry = chip.add_no_carry(ctx, &lambda_0, &lambda_1_minus_lambda_0);
 
     // x_res = lambda_1^2 - x_0 - x_2

@@ -1,6 +1,6 @@
 use crate::halo2_proofs::arithmetic::Field;
 use halo2_base::{
-    gates::RangeInstructions,
+    gates::{GateInstructions, RangeInstructions},
     utils::{BigPrimeField, ScalarField},
     AssignedValue, Context,
 };
@@ -162,7 +162,23 @@ pub trait FieldChip<F: PrimeField>: Clone + Debug + Send + Sync {
         self.carry_mod(ctx, &no_carry)
     }
 
+    /// Constrains that `b` is nonzero as a field element and then returns `a / b`.
     fn divide(
+        &self,
+        ctx: &mut Context<F>,
+        a: &Self::FieldPoint,
+        b: &Self::FieldPoint,
+    ) -> Self::FieldPoint {
+        let b_is_zero = self.is_zero(ctx, b);
+        self.gate().assert_is_const(ctx, &b_is_zero, &F::zero());
+
+        self.divide_unsafe(ctx, a, b)
+    }
+
+    /// Returns `a / b` without constraining `b` to be nonzero.
+    ///
+    /// Warning: undefined behavior when `b` is zero.
+    fn divide_unsafe(
         &self,
         ctx: &mut Context<F>,
         a: &Self::FieldPoint,
@@ -170,7 +186,7 @@ pub trait FieldChip<F: PrimeField>: Clone + Debug + Send + Sync {
     ) -> Self::FieldPoint {
         let a_val = self.get_assigned_value(a);
         let b_val = self.get_assigned_value(b);
-        let b_inv = b_val.invert().unwrap();
+        let b_inv: Self::FieldType = Option::from(b_val.invert()).unwrap_or_default();
         let quot_val = a_val * b_inv;
 
         let quot = self.load_private(ctx, Self::fe_to_witness(&quot_val));
@@ -183,9 +199,22 @@ pub trait FieldChip<F: PrimeField>: Clone + Debug + Send + Sync {
         quot
     }
 
-    // constrain and output -a / b
-    // this is usually cheaper constraint-wise than computing -a and then (-a) / b separately
+    /// Constrains that `b` is nonzero as a field element and then returns `-a / b`.
     fn neg_divide(
+        &self,
+        ctx: &mut Context<F>,
+        a: &Self::FieldPoint,
+        b: &Self::FieldPoint,
+    ) -> Self::FieldPoint {
+        let b_is_zero = self.is_zero(ctx, b);
+        self.gate().assert_is_const(ctx, &b_is_zero, &F::zero());
+
+        self.neg_divide_unsafe(ctx, a, b)
+    }
+
+    // Returns `-a / b` without constraining `b` to be nonzero.
+    // this is usually cheaper constraint-wise than computing -a and then (-a) / b separately
+    fn neg_divide_unsafe(
         &self,
         ctx: &mut Context<F>,
         a: &Self::FieldPoint,
@@ -193,7 +222,7 @@ pub trait FieldChip<F: PrimeField>: Clone + Debug + Send + Sync {
     ) -> Self::FieldPoint {
         let a_val = self.get_assigned_value(a);
         let b_val = self.get_assigned_value(b);
-        let b_inv = b_val.invert().unwrap();
+        let b_inv: Self::FieldType = Option::from(b_val.invert()).unwrap_or_default();
         let quot_val = -a_val * b_inv;
 
         let quot = self.load_private(ctx, Self::fe_to_witness(&quot_val));
