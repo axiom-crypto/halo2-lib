@@ -205,13 +205,6 @@ pub struct FixedCRTInteger<F: ScalarField> {
     pub value: BigUint,
 }
 
-#[derive(Clone, Debug)]
-pub struct FixedAssignedCRTInteger<F: ScalarField> {
-    pub truncation: FixedOverflowInteger<F>,
-    pub limb_fixed_cells: Vec<Cell>,
-    pub value: BigUint,
-}
-
 impl<F: BigPrimeField> FixedCRTInteger<F> {
     pub fn construct(truncation: FixedOverflowInteger<F>, value: BigUint) -> Self {
         Self { truncation, value }
