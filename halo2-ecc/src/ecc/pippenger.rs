@@ -143,7 +143,11 @@ where
     (acc, rand_point)
 }
 
-/// Currently does not support if the final answer is actually the point at infinity
+/// Currently does not support if the final answer is actually the point at infinity (meaning constraints will fail in that case)
+///
+/// # Assumptions
+/// * `points.len() == scalars.len()`
+/// * `scalars[i].len() == scalars[j].len()` for all `i, j`
 pub fn multi_exp<F: PrimeField, FC, C>(
     chip: &FC,
     ctx: &mut Context<F>,
@@ -202,7 +206,11 @@ where
 /// Multi-thread witness generation for multi-scalar multiplication.
 /// Should give exact same circuit as `multi_exp`.
 ///
-/// Currently does not support if the final answer is actually the point at infinity
+/// Currently does not support if the final answer is actually the point at infinity (meaning constraints will fail in that case)
+///
+/// # Assumptions
+/// * `points.len() == scalars.len()`
+/// * `scalars[i].len() == scalars[j].len()` for all `i, j`
 pub fn multi_exp_par<F: PrimeField, FC, C>(
     chip: &FC,
     // these are the "threads" within a single Phase

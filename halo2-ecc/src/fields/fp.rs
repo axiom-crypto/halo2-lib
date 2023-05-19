@@ -290,6 +290,8 @@ impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, F
         )
     }
 
+    /// # Assumptions
+    /// * `max_bits` in `(n * (k - 1), n * k]`
     fn range_check(
         &self,
         ctx: &mut Context<F>,
@@ -301,7 +303,6 @@ impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, F
         debug_assert!(max_bits > n * (k - 1) && max_bits <= n * k);
         let last_limb_bits = max_bits - n * (k - 1);
 
-        #[cfg(debug_assertions)]
         debug_assert!(a.value.bits() as usize <= max_bits);
 
         // range check limbs of `a` are in [0, 2^n) except last limb should be in [0, 2^last_limb_bits)

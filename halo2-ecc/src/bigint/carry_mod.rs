@@ -18,7 +18,10 @@ use std::{cmp::max, iter};
 // `out.native = (a (mod modulus)) % (native_modulus::<F>)`
 // We constrain `a = out + modulus * quotient` and range check `out` and `quotient`
 //
-// Assumption: the leading two bits (in big endian) are 1, and `abs(a) <= 2^{n * k - 1 + F::NUM_BITS - 2}` (A weaker assumption is also enough, but this is good enough for forseeable use cases)
+// Assumption: the leading two bits (in big endian) are 1,
+/// # Assumptions
+/// * abs(a) <= 2<sup>n * k - 1 + F::NUM_BITS - 2</sup> (A weaker assumption is also enough, but this is good enough for forseeable use cases)
+/// * `native_modulus::<F>` requires *exactly* `k = a.limbs.len()` limbs to represent
 
 // This is currently optimized for limbs greater than 64 bits, so we need `F` to be a `BigPrimeField`
 // In the future we'll need a slightly different implementation for limbs that fit in 32 or 64 bits (e.g., `F` is Goldilocks)

@@ -5,9 +5,15 @@ use halo2_base::{
     Context,
     QuantumCell::Constant,
 };
+use itertools::Itertools;
 use std::cmp::max;
 
 /// compute a * c + b = b + a * c
+///
+/// # Assumptions
+/// * `a, b` have same number of limbs
+/// * Number of limbs is nonzero
+/// * `c_log2_ceil = log2_ceil(c)` where `c` is the BigUint value of `c_f`
 // this is uniquely suited for our simple gate
 pub fn assign<F: ScalarField>(
     gate: &impl GateInstructions<F>,
@@ -17,12 +23,10 @@ pub fn assign<F: ScalarField>(
     c_f: F,
     c_log2_ceil: usize,
 ) -> OverflowInteger<F> {
-    debug_assert_eq!(a.limbs.len(), b.limbs.len());
-
     let out_limbs = a
         .limbs
         .iter()
-        .zip(b.limbs.iter())
+        .zip_eq(b.limbs.iter())
         .map(|(&a_limb, &b_limb)| gate.mul_add(ctx, a_limb, Constant(c_f), b_limb))
         .collect();
 
