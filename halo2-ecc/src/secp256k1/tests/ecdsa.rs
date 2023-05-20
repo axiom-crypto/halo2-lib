@@ -96,6 +96,7 @@ fn random_ecdsa_circuit(
     let x_bigint = fe_to_biguint(x);
     let r = biguint_to_fe::<Fq>(&(x_bigint % modulus::<Fq>()));
     let s = k_inv * (msg_hash + (r * sk));
+    
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
     ecdsa_test(builder.main(0), params, r, s, msg_hash, pubkey);
 
