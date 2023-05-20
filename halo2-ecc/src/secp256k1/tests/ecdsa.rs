@@ -37,7 +37,6 @@ use std::io::BufReader;
 use std::io::Write;
 use std::{fs, io::BufRead};
 
-
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 struct CircuitParams {
     strategy: FpStrategy,
@@ -73,7 +72,6 @@ fn ecdsa_test<F: PrimeField>(
         &fp_chip, ctx, &pk, &r, &s, &m, 4, 4,
     );
     assert_eq!(res.value(), &F::one());
-
 }
 
 fn random_ecdsa_circuit(
@@ -96,13 +94,10 @@ fn random_ecdsa_circuit(
     let r_point = Secp256k1Affine::from(Secp256k1Affine::generator() * k).coordinates().unwrap();
     let x = r_point.x();
     let x_bigint = fe_to_biguint(x);
-    
     let r = biguint_to_fe::<Fq>(&(x_bigint % modulus::<Fq>()));
     let s = k_inv * (msg_hash + (r * sk));
-    
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
     ecdsa_test(builder.main(0), params, r, s, msg_hash, pubkey);
-    
 
     let circuit = match stage {
         CircuitBuilderStage::Mock => {
@@ -130,7 +125,6 @@ fn test_secp256k1_ecdsa() {
     let circuit = random_ecdsa_circuit(params, CircuitBuilderStage::Mock, None);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
-
 
 #[test]
 fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
