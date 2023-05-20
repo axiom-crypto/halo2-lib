@@ -95,4 +95,3 @@ fn plot_ecc() {
 
     halo2_proofs::dev::CircuitLayout::default().render(k, &circuit, &root).unwrap();
 }
-
