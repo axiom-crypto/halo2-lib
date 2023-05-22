@@ -69,6 +69,9 @@ pub struct FpChip<'range, F: PrimeField, Fp: PrimeField> {
 
 impl<'range, F: PrimeField, Fp: PrimeField> FpChip<'range, F, Fp> {
     pub fn new(range: &'range RangeChip<F>, limb_bits: usize, num_limbs: usize) -> Self {
+        assert!(limb_bits > 0);
+        assert!(num_limbs > 0);
+        assert!(limb_bits <= F::CAPACITY as usize);
         let limb_mask = (BigUint::from(1u64) << limb_bits) - 1usize;
         let p = modulus::<Fp>();
         let p_limbs = decompose_biguint(&p, num_limbs, limb_bits);
