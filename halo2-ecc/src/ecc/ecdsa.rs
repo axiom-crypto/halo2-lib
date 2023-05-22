@@ -31,7 +31,7 @@ where
         FpChip::<F, SF>::new(base_chip.range, base_chip.limb_bits, base_chip.num_limbs);
     let n = scalar_chip.p.to_biguint().unwrap();
     let n = FixedOverflowInteger::from_native(&n, scalar_chip.num_limbs, scalar_chip.limb_bits);
-    let n = n.assign(ctx, base_chip.limb_bits);
+    let n = n.assign(ctx);
 
     // check r,s are in [1, n - 1]
     let r_valid = scalar_chip.is_soft_nonzero(ctx, &r);
@@ -81,7 +81,7 @@ where
     let u1_small = big_less_than::assign(
         base_chip.range(),
         ctx,
-        u1.0.truncation,
+        u1,
         n.clone(),
         base_chip.limb_bits,
         base_chip.limb_bases[1],
@@ -89,7 +89,7 @@ where
     let u2_small = big_less_than::assign(
         base_chip.range(),
         ctx,
-        u2.0.truncation,
+        u2,
         n,
         base_chip.limb_bits,
         base_chip.limb_bases[1],

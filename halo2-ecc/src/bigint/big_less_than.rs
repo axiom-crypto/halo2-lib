@@ -1,4 +1,4 @@
-use super::OverflowInteger;
+use super::ProperUint;
 use halo2_base::{gates::RangeInstructions, utils::ScalarField, AssignedValue, Context};
 
 // given OverflowInteger<F>'s `a` and `b` of the same shape,
@@ -6,8 +6,8 @@ use halo2_base::{gates::RangeInstructions, utils::ScalarField, AssignedValue, Co
 pub fn assign<F: ScalarField>(
     range: &impl RangeInstructions<F>,
     ctx: &mut Context<F>,
-    a: OverflowInteger<F>,
-    b: OverflowInteger<F>,
+    a: impl Into<ProperUint<F>>,
+    b: impl Into<ProperUint<F>>,
     limb_bits: usize,
     limb_base: F,
 ) -> AssignedValue<F> {

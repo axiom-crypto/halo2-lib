@@ -137,9 +137,9 @@ impl<F: BigPrimeField> FixedOverflowInteger<F> {
             .fold(BigUint::zero(), |acc, x| (acc << limb_bits) + fe_to_biguint(x))
     }
 
-    pub fn assign(self, ctx: &mut Context<F>, limb_bits: usize) -> OverflowInteger<F> {
+    pub fn assign(self, ctx: &mut Context<F>) -> ProperUint<F> {
         let assigned_limbs = self.limbs.into_iter().map(|limb| ctx.load_constant(limb)).collect();
-        OverflowInteger::new(assigned_limbs, limb_bits)
+        ProperUint(assigned_limbs)
     }
 
     /// only use case is when coeffs has only a single 1, rest are 0
@@ -299,7 +299,7 @@ impl<F: BigPrimeField> FixedCRTInteger<F> {
         limb_bits: usize,
         native_modulus: &BigUint,
     ) -> ProperCrtUint<F> {
-        let assigned_truncation = self.truncation.assign(ctx, limb_bits);
+        let assigned_truncation = self.truncation.assign(ctx).into_overflow(limb_bits);
         let assigned_native = ctx.load_constant(biguint_to_fe(&(&self.value % native_modulus)));
         ProperCrtUint(CRTInteger::new(assigned_truncation, assigned_native, self.value.into()))
     }

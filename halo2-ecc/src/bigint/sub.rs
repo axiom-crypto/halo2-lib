@@ -1,4 +1,4 @@
-use super::{CRTInteger, OverflowInteger, ProperCrtUint};
+use super::{CRTInteger, OverflowInteger, ProperCrtUint, ProperUint};
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
     utils::ScalarField,
@@ -13,18 +13,18 @@ use itertools::Itertools;
 pub fn assign<F: ScalarField>(
     range: &impl RangeInstructions<F>,
     ctx: &mut Context<F>,
-    a: OverflowInteger<F>,
-    b: OverflowInteger<F>,
+    a: impl Into<ProperUint<F>>,
+    b: impl Into<ProperUint<F>>,
     limb_bits: usize,
     limb_base: F,
 ) -> (OverflowInteger<F>, AssignedValue<F>) {
-    debug_assert!(a.max_limb_bits <= limb_bits);
-    debug_assert!(b.max_limb_bits <= limb_bits);
-    let k = a.limbs.len();
+    let a = a.into();
+    let b = b.into();
+    let k = a.0.len();
     let mut out_limbs = Vec::with_capacity(k);
 
     let mut borrow: Option<AssignedValue<F>> = None;
-    for (a_limb, b_limb) in a.limbs.into_iter().zip_eq(b.limbs) {
+    for (a_limb, b_limb) in a.0.into_iter().zip_eq(b.0) {
         let (bottom, lt) = match borrow {
             None => {
                 let lt = range.is_less_than(ctx, a_limb, b_limb, limb_bits);
@@ -70,9 +70,10 @@ pub fn crt<F: ScalarField>(
     limb_bits: usize,
     limb_base: F,
 ) -> (CRTInteger<F>, AssignedValue<F>) {
-    let (out_trunc, underflow) =
-        assign(range, ctx, a.0.truncation, b.0.truncation, limb_bits, limb_base);
     let out_native = range.gate().sub(ctx, a.0.native, b.0.native);
+    let a_limbs = ProperUint(a.0.truncation.limbs);
+    let b_limbs = ProperUint(b.0.truncation.limbs);
+    let (out_trunc, underflow) = assign(range, ctx, a_limbs, b_limbs, limb_bits, limb_base);
     let out_val = a.0.value - b.0.value;
     (CRTInteger::new(out_trunc, out_native, out_val), underflow)
 }
