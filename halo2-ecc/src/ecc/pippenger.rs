@@ -7,11 +7,13 @@ use crate::{
     fields::{FieldChip, PrimeField, Selectable},
 };
 use halo2_base::{
-    gates::{builder::GateThreadBuilder, GateInstructions},
+    gates::{
+        builder::{parallelize_in, GateThreadBuilder},
+        GateInstructions,
+    },
     utils::CurveAffineExt,
-    AssignedValue, Context,
+    AssignedValue,
 };
-use rayon::prelude::*;
 
 // Reference: https://jbootle.github.io/Misc/pippenger.pdf
 
@@ -238,7 +240,6 @@ where
 
     // get a main thread
     let ctx = builder.main(phase);
-    let witness_gen_only = ctx.witness_gen_only();
     // single-threaded computation:
     for scalar in scalars {
         for (scalar_chunk, bool_chunk) in
@@ -250,32 +251,28 @@ where
             }
         }
     }
-    // see multi-product comments for explanation of below
 
     let c = clump_factor;
     let num_rounds = (points.len() + c - 1) / c;
+    // to avoid adding two points that are equal or negative of each other,
+    // we use a trick from halo2wrong where we load a "sufficiently generic" `C` point as witness
+    // note that while we load a random point, an adversary could load a specifically chosen point, so we must carefully handle edge cases with constraints
+    // we call it "any point" instead of "random point" to emphasize that "any" sufficiently generic point will do
     let any_base = load_random_point::<F, FC, C>(chip, ctx);
     let mut any_points = Vec::with_capacity(num_rounds);
     any_points.push(any_base);
     for _ in 1..num_rounds {
         any_points.push(ec_double(chip, ctx, any_points.last().unwrap()));
     }
-    // we will use a different thread per round
-    // to prevent concurrency issues with context id, we generate all the ids first
-    let thread_ids = (0..num_rounds).map(|_| builder.get_new_thread_id()).collect::<Vec<_>>();
-    // now begins multi-threading
 
+    // now begins multi-threading
     // multi_prods is 2d vector of size `num_rounds` by `scalar_bits`
-    let (new_threads, multi_prods): (Vec<_>, Vec<_>) = points
-        .par_chunks(c)
-        .zip(any_points.par_iter())
-        .zip(thread_ids.into_par_iter())
-        .enumerate()
-        .map(|(round, ((points_clump, any_point), thread_id))| {
+    let multi_prods = parallelize_in(
+        phase,
+        builder,
+        points.chunks(c).into_iter().zip(any_points.iter()).enumerate().collect(),
+        |ctx, (round, (points_clump, any_point))| {
             // compute all possible multi-products of elements in points[round * c .. round * (c+1)]
-            // create new thread
-            let mut thread = Context::new(witness_gen_only, thread_id);
-            let ctx = &mut thread;
             // stores { any_point, any_point + points[0], any_point + points[1], any_point + points[0] + points[1] , ... }
             let mut bucket = Vec::with_capacity(1 << c);
             let any_point = into_strict_point(chip, ctx, any_point.clone());
@@ -294,7 +291,7 @@ where
                     bucket.push(new_point);
                 }
             }
-            let multi_prods = bool_scalars
+            bool_scalars
                 .iter()
                 .map(|bits| {
                     strict_ec_select_from_bits(
@@ -304,31 +301,19 @@ where
                         &bits[round * c..round * c + points_clump.len()],
                     )
                 })
-                .collect::<Vec<_>>();
-
-            (thread, multi_prods)
-        })
-        .unzip();
-    // we collect the new threads to ensure they are a FIXED order, otherwise later `assign_threads_in` will get confused
-    builder.threads[phase].extend(new_threads);
+                .collect::<Vec<_>>()
+        },
+    );
 
     // agg[j] = sum_{i=0..num_rounds} multi_prods[i][j] for j = 0..scalar_bits
-    let thread_ids = (0..scalar_bits).map(|_| builder.get_new_thread_id()).collect::<Vec<_>>();
-    let (new_threads, mut agg): (Vec<_>, Vec<_>) = thread_ids
-        .into_par_iter()
-        .enumerate()
-        .map(|(i, thread_id)| {
-            let mut thread = Context::new(witness_gen_only, thread_id);
-            let ctx = &mut thread;
-            let mut acc = multi_prods[0][i].clone();
-            for multi_prod in multi_prods.iter().skip(1) {
-                let _acc = ec_add_unequal(chip, ctx, &acc, &multi_prod[i], true);
-                acc = into_strict_point(chip, ctx, _acc);
-            }
-            (thread, acc)
-        })
-        .unzip();
-    builder.threads[phase].extend(new_threads);
+    let mut agg = parallelize_in(phase, builder, (0..scalar_bits).collect(), |ctx, i| {
+        let mut acc = multi_prods[0][i].clone();
+        for multi_prod in multi_prods.iter().skip(1) {
+            let _acc = ec_add_unequal(chip, ctx, &acc, &multi_prod[i], true);
+            acc = into_strict_point(chip, ctx, _acc);
+        }
+        acc
+    });
 
     // gets the LAST thread for single threaded work
     let ctx = builder.main(phase);

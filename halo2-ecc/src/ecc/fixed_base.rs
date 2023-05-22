@@ -2,7 +2,7 @@
 use super::{ec_add_unequal, ec_select, ec_select_from_bits, EcPoint, EccChip};
 use crate::fields::{FieldChip, PrimeField, Selectable};
 use group::Curve;
-use halo2_base::gates::builder::GateThreadBuilder;
+use halo2_base::gates::builder::{parallelize_in, GateThreadBuilder};
 use halo2_base::{gates::GateInstructions, utils::CurveAffineExt, AssignedValue, Context};
 use itertools::Itertools;
 use rayon::prelude::*;
@@ -107,6 +107,7 @@ where
     curr_point.unwrap()
 }
 
+/* To reduce total amount of code, just always use msm_par below.
 // basically just adding up individual fixed_base::scalar_multiply except that we do all batched normalization of cached points at once to further save inversion time during witness generation
 // we also use the random accumulator for some extra efficiency (which also works in scalar multiply case but that is TODO)
 pub fn msm<F, FC, C>(
@@ -212,6 +213,7 @@ where
         .collect_vec();
     chip.sum::<C>(ctx, scalar_mults)
 }
+*/
 
 /// # Assumptions
 /// * `points.len() = scalars.len()`
@@ -269,25 +271,23 @@ where
     C::Curve::batch_normalize(&cached_points_jacobian, &mut cached_points_affine);
 
     let field_chip = chip.field_chip();
-    let witness_gen_only = builder.witness_gen_only();
 
     let zero = builder.main(phase).load_zero();
-    let thread_ids = (0..scalars.len()).map(|_| builder.get_new_thread_id()).collect::<Vec<_>>();
-    let (new_threads, scalar_mults): (Vec<_>, Vec<_>) = cached_points_affine
-        .par_chunks(cached_points_affine.len() / points.len())
-        .zip_eq(scalars.into_par_iter())
-        .zip(thread_ids.into_par_iter())
-        .map(|((cached_points, scalar), thread_id)| {
-            let mut thread = Context::new(witness_gen_only, thread_id);
-            let ctx = &mut thread;
-
+    let scalar_mults = parallelize_in(
+        phase,
+        builder,
+        cached_points_affine
+            .chunks(cached_points_affine.len() / points.len())
+            .zip_eq(scalars)
+            .collect(),
+        |ctx, (cached_points, scalar)| {
             let cached_points = cached_points
                 .iter()
                 .map(|point| chip.assign_constant_point(ctx, *point))
                 .collect_vec();
             let cached_point_window_rev = cached_points.chunks(1usize << window_bits).rev();
 
-            debug_assert_eq!(scalar.len(), scalar_len);
+            assert_eq!(scalar.len(), scalar_len);
             let bits = scalar
                 .into_iter()
                 .flat_map(|scalar_chunk| {
@@ -319,9 +319,8 @@ where
                     field_chip.gate().mul_add(ctx, is_started, is_zero_window, not_zero_window)
                 };
             }
-            (thread, curr_point.unwrap())
-        })
-        .unzip();
-    builder.threads[phase].extend(new_threads);
+            curr_point.unwrap()
+        },
+    );
     chip.sum::<C>(builder.main(phase), scalar_mults)
 }
