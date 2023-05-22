@@ -16,7 +16,7 @@ use std::{cmp::max, iter};
 pub fn crt<F: BigPrimeField>(
     range: &impl RangeInstructions<F>,
     ctx: &mut Context<F>,
-    a: &CRTInteger<F>,
+    a: CRTInteger<F>,
     k_bits: usize, // = a.len().bits()
     modulus: &BigInt,
     mod_vec: &[F],
@@ -68,7 +68,7 @@ pub fn crt<F: BigPrimeField>(
 
     // match chip.strategy {
     //    BigIntStrategy::Simple => {
-    for (i, (a_limb, quot_v)) in a.truncation.limbs.iter().zip(quot_vec.into_iter()).enumerate() {
+    for (i, (a_limb, quot_v)) in a.truncation.limbs.into_iter().zip(quot_vec).enumerate() {
         let (prod, new_quot_cell) = range.gate().inner_product_left_last(
             ctx,
             quot_assigned.iter().map(|x| Existing(*x)).chain(iter::once(Witness(quot_v))),
@@ -80,7 +80,7 @@ pub fn crt<F: BigPrimeField>(
         // | prod | -1 | a | prod - a |
         let check_val = *prod.value() - a_limb.value();
         let check_cell = ctx
-            .assign_region_last([Constant(-F::one()), Existing(*a_limb), Witness(check_val)], [-1]);
+            .assign_region_last([Constant(-F::one()), Existing(a_limb), Witness(check_val)], [-1]);
 
         quot_assigned.push(new_quot_cell);
         check_assigned.push(check_cell);
@@ -100,7 +100,7 @@ pub fn crt<F: BigPrimeField>(
     }
 
     let check_overflow_int =
-        OverflowInteger::construct(check_assigned, max(a.truncation.max_limb_bits, 2 * n + k_bits));
+        OverflowInteger::new(check_assigned, max(a.truncation.max_limb_bits, 2 * n + k_bits));
 
     // check that `modulus * quotient - a == 0 mod 2^{trunc_len}` after carry
     check_carry_to_zero::truncate::<F>(
@@ -113,12 +113,8 @@ pub fn crt<F: BigPrimeField>(
     );
 
     // Constrain `quot_native = sum_i out_assigned[i] * 2^{n*i}` in `F`
-    let quot_native = OverflowInteger::<F>::evaluate(
-        range.gate(),
-        ctx,
-        quot_assigned,
-        limb_bases.iter().copied(),
-    );
+    let quot_native =
+        OverflowInteger::evaluate_native(ctx, range.gate(), quot_assigned, limb_bases);
 
     // Check `0 + modulus * quotient - a = 0` in native field
     // | 0 | modulus | quotient | a |

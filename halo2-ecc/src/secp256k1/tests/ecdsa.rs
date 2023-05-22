@@ -62,14 +62,13 @@ fn ecdsa_test<F: PrimeField>(
     let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
     let fq_chip = FqChip::<F>::new(&range, params.limb_bits, params.num_limbs);
 
-    let [m, r, s] =
-        [msghash, r, s].map(|x| fq_chip.load_private(ctx, FqChip::<F>::fe_to_witness(&x)));
+    let [m, r, s] = [msghash, r, s].map(|x| fq_chip.load_private(ctx, x));
 
     let ecc_chip = EccChip::<F, FpChip<F>>::new(&fp_chip);
-    let pk = ecc_chip.load_private(ctx, (pk.x, pk.y));
+    let pk = ecc_chip.load_private_unchecked(ctx, (pk.x, pk.y));
     // test ECDSA
     let res = ecdsa_verify_no_pubkey_check::<F, Fp, Fq, Secp256k1Affine>(
-        &ecc_chip, ctx, &pk, &r, &s, &m, 4, 4,
+        &ecc_chip, ctx, pk, r, s, m, 4, 4,
     );
     assert_eq!(res.value(), &F::one());
 }

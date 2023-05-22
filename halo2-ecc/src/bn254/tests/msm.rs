@@ -47,8 +47,10 @@ fn msm_test(
     let ctx = builder.main(0);
     let scalars_assigned =
         scalars.iter().map(|scalar| vec![ctx.load_witness(*scalar)]).collect::<Vec<_>>();
-    let bases_assigned =
-        bases.iter().map(|base| ecc_chip.load_private(ctx, (base.x, base.y))).collect::<Vec<_>>();
+    let bases_assigned = bases
+        .iter()
+        .map(|base| ecc_chip.load_private_unchecked(ctx, (base.x, base.y)))
+        .collect::<Vec<_>>();
 
     let msm = ecc_chip.variable_base_msm_in::<G1Affine>(
         builder,
@@ -67,10 +69,10 @@ fn msm_test(
         .unwrap()
         .to_affine();
 
-    let msm_x = msm.x.value;
-    let msm_y = msm.y.value;
-    assert_eq!(msm_x, fe_to_biguint(&msm_answer.x).into());
-    assert_eq!(msm_y, fe_to_biguint(&msm_answer.y).into());
+    let msm_x = msm.x.value();
+    let msm_y = msm.y.value();
+    assert_eq!(msm_x, fe_to_biguint(&msm_answer.x));
+    assert_eq!(msm_y, fe_to_biguint(&msm_answer.y));
 }
 
 fn random_msm_circuit(

@@ -1,6 +1,6 @@
 use super::{
-    ec_add_unequal, ec_double, ec_select, ec_select_from_bits, ec_sub_unequal, load_random_point,
-    EcPoint,
+    ec_add_unequal, ec_double, ec_select, ec_sub_unequal, into_strict_point, load_random_point,
+    strict_ec_select_from_bits, EcPoint, StrictEcPoint,
 };
 use crate::fields::{FieldChip, PrimeField, Selectable};
 use halo2_base::{
@@ -73,9 +73,9 @@ pub fn multi_product<F: PrimeField, FC, C>(
     points: &[EcPoint<F, FC::FieldPoint>],
     bool_scalars: &[Vec<AssignedValue<F>>],
     clumping_factor: usize,
-) -> (Vec<EcPoint<F, FC::FieldPoint>>, EcPoint<F, FC::FieldPoint>)
+) -> (Vec<StrictEcPoint<F, FC>>, EcPoint<F, FC::FieldPoint>)
 where
-    FC: FieldChip<F> + Selectable<F, Point = FC::FieldPoint>,
+    FC: FieldChip<F> + Selectable<F, FC::FieldPoint> + Selectable<F, FC::ReducedFieldPoint>,
     C: CurveAffineExt<Base = FC::FieldType>,
 {
     let c = clumping_factor; // this is `b` in Section 3 of Bootle
@@ -84,63 +84,64 @@ where
     // we use a trick from halo2wrong where we load a random C point as witness
     // note that while we load a random point, an adversary could load a specifically chosen point, so we must carefully handle edge cases with constraints
     // TODO: an alternate approach is to use Fiat-Shamir transform (with Poseidon) to hash all the inputs (points, bool_scalars, ...) to get the random point. This could be worth it for large MSMs as we get savings from `add_unequal` in "non-strict" mode. Perhaps not worth the trouble / security concern, though.
-    let rand_base = load_random_point::<F, FC, C>(chip, ctx);
+    let any_base = load_random_point::<F, FC, C>(chip, ctx);
 
     let mut acc = Vec::with_capacity(bool_scalars.len());
 
     let mut bucket = Vec::with_capacity(1 << c);
-    let mut rand_point = rand_base.clone();
+    let mut any_point = any_base.clone();
     for (round, points_clump) in points.chunks(c).enumerate() {
         // compute all possible multi-products of elements in points[round * c .. round * (c+1)]
 
         // for later addition collision-prevension, we need a different random point per round
         // we take 2^round * rand_base
         if round > 0 {
-            rand_point = ec_double(chip, ctx, &rand_point);
+            any_point = ec_double(chip, ctx, any_point);
         }
         // stores { rand_point, rand_point + points[0], rand_point + points[1], rand_point + points[0] + points[1] , ... }
         // since rand_point is random, we can always use add_unequal (with strict constraint checking that the points are indeed unequal and not negative of each other)
         bucket.clear();
-        chip.enforce_less_than(ctx, rand_point.x());
-        bucket.push(rand_point.clone());
+        let strict_any_point = into_strict_point(chip, ctx, any_point.clone());
+        bucket.push(strict_any_point);
         for (i, point) in points_clump.iter().enumerate() {
             // we allow for points[i] to be the point at infinity, represented by (0, 0) in affine coordinates
             // this can be checked by points[i].y == 0 iff points[i] == O
             let is_infinity = chip.is_zero(ctx, &point.y);
-            chip.enforce_less_than(ctx, point.x());
+            let point = into_strict_point(chip, ctx, point.clone());
 
             for j in 0..(1 << i) {
-                let mut new_point = ec_add_unequal(chip, ctx, &bucket[j], point, true);
+                let mut new_point = ec_add_unequal(chip, ctx, &bucket[j], &point, true);
                 // if points[i] is point at infinity, do nothing
-                new_point = ec_select(chip, ctx, &bucket[j], &new_point, is_infinity);
-                chip.enforce_less_than(ctx, new_point.x());
+                new_point = ec_select(chip, ctx, (&bucket[j]).into(), new_point, is_infinity);
+                let new_point = into_strict_point(chip, ctx, new_point);
                 bucket.push(new_point);
             }
         }
 
         // for each j, select using clump in e[j][i=...]
         for (j, bits) in bool_scalars.iter().enumerate() {
-            let multi_prod = ec_select_from_bits::<F, _>(
+            let multi_prod = strict_ec_select_from_bits(
                 chip,
                 ctx,
                 &bucket,
                 &bits[round * c..round * c + points_clump.len()],
             );
+            // since `bucket` is all `StrictEcPoint` and we are selecting from it, we know `multi_prod` is StrictEcPoint
             // everything in bucket has already been enforced
             if round == 0 {
                 acc.push(multi_prod);
             } else {
-                acc[j] = ec_add_unequal(chip, ctx, &acc[j], &multi_prod, true);
-                chip.enforce_less_than(ctx, acc[j].x());
+                let _acc = ec_add_unequal(chip, ctx, &acc[j], multi_prod, true);
+                acc[j] = into_strict_point(chip, ctx, _acc);
             }
         }
     }
 
     // we have acc[j] = G'[j] + (2^num_rounds - 1) * rand_base
-    rand_point = ec_double(chip, ctx, &rand_point);
-    rand_point = ec_sub_unequal(chip, ctx, &rand_point, &rand_base, false);
+    any_point = ec_double(chip, ctx, any_point);
+    any_point = ec_sub_unequal(chip, ctx, any_point, any_base, false);
 
-    (acc, rand_point)
+    (acc, any_point)
 }
 
 /// Currently does not support if the final answer is actually the point at infinity (meaning constraints will fail in that case)
@@ -158,7 +159,7 @@ pub fn multi_exp<F: PrimeField, FC, C>(
     clump_factor: usize,
 ) -> EcPoint<F, FC::FieldPoint>
 where
-    FC: FieldChip<F> + Selectable<F, Point = FC::FieldPoint>,
+    FC: FieldChip<F> + Selectable<F, FC::FieldPoint> + Selectable<F, FC::ReducedFieldPoint>,
     C: CurveAffineExt<Base = FC::FieldType>,
 {
     // let (points, bool_scalars) = decompose::<F, _>(chip, ctx, points, scalars, max_scalar_bits_per_cell, radix);
@@ -178,29 +179,26 @@ where
         }
     }
 
-    let (mut agg, rand_point) =
+    let (mut agg, any_point) =
         multi_product::<F, FC, C>(chip, ctx, points, &bool_scalars, clump_factor);
     // everything in agg has been enforced
 
     // compute sum_{k=0..t} agg[k] * 2^{radix * k} - (sum_k 2^{radix * k}) * rand_point
     // (sum_{k=0..t} 2^{radix * k}) = (2^{radix * t} - 1)/(2^radix - 1)
-    let mut sum = agg.pop().unwrap();
-    let mut rand_sum = rand_point.clone();
+    let mut sum = agg.pop().unwrap().into();
+    let mut any_sum = any_point.clone();
     for g in agg.iter().rev() {
-        rand_sum = ec_double(chip, ctx, &rand_sum);
+        any_sum = ec_double(chip, ctx, any_sum);
         // cannot use ec_double_and_add_unequal because you cannot guarantee that `sum != g`
-        sum = ec_double(chip, ctx, &sum);
-        chip.enforce_less_than(ctx, sum.x());
-        sum = ec_add_unequal(chip, ctx, &sum, g, true);
+        sum = ec_double(chip, ctx, sum);
+        sum = ec_add_unequal(chip, ctx, sum, g, true);
     }
 
-    rand_sum = ec_double(chip, ctx, &rand_sum);
+    any_sum = ec_double(chip, ctx, any_sum);
     // assume 2^scalar_bits != +-1 mod modulus::<F>()
-    rand_sum = ec_sub_unequal(chip, ctx, &rand_sum, &rand_point, false);
+    any_sum = ec_sub_unequal(chip, ctx, any_sum, any_point, false);
 
-    chip.enforce_less_than(ctx, sum.x());
-    chip.enforce_less_than(ctx, rand_sum.x());
-    ec_sub_unequal(chip, ctx, &sum, &rand_sum, true)
+    ec_sub_unequal(chip, ctx, sum, any_sum, true)
 }
 
 /// Multi-thread witness generation for multi-scalar multiplication.
@@ -223,7 +221,7 @@ pub fn multi_exp_par<F: PrimeField, FC, C>(
     phase: usize,
 ) -> EcPoint<F, FC::FieldPoint>
 where
-    FC: FieldChip<F> + Selectable<F, Point = FC::FieldPoint>,
+    FC: FieldChip<F> + Selectable<F, FC::FieldPoint> + Selectable<F, FC::ReducedFieldPoint>,
     C: CurveAffineExt<Base = FC::FieldType>,
 {
     // let (points, bool_scalars) = decompose::<F, _>(chip, ctx, points, scalars, max_scalar_bits_per_cell, radix);
@@ -251,11 +249,11 @@ where
 
     let c = clump_factor;
     let num_rounds = (points.len() + c - 1) / c;
-    let rand_base = load_random_point::<F, FC, C>(chip, ctx);
-    let mut rand_points = Vec::with_capacity(num_rounds);
-    rand_points.push(rand_base);
+    let any_base = load_random_point::<F, FC, C>(chip, ctx);
+    let mut any_points = Vec::with_capacity(num_rounds);
+    any_points.push(any_base);
     for _ in 1..num_rounds {
-        rand_points.push(ec_double(chip, ctx, rand_points.last().unwrap()));
+        any_points.push(ec_double(chip, ctx, any_points.last().unwrap()));
     }
     // we will use a different thread per round
     // to prevent concurrency issues with context id, we generate all the ids first
@@ -265,36 +263,36 @@ where
     // multi_prods is 2d vector of size `num_rounds` by `scalar_bits`
     let (new_threads, multi_prods): (Vec<_>, Vec<_>) = points
         .par_chunks(c)
-        .zip(rand_points.par_iter())
+        .zip(any_points.par_iter())
         .zip(thread_ids.into_par_iter())
         .enumerate()
-        .map(|(round, ((points_clump, rand_point), thread_id))| {
+        .map(|(round, ((points_clump, any_point), thread_id))| {
             // compute all possible multi-products of elements in points[round * c .. round * (c+1)]
             // create new thread
             let mut thread = Context::new(witness_gen_only, thread_id);
             let ctx = &mut thread;
-            // stores { rand_point, rand_point + points[0], rand_point + points[1], rand_point + points[0] + points[1] , ... }
+            // stores { any_point, any_point + points[0], any_point + points[1], any_point + points[0] + points[1] , ... }
             let mut bucket = Vec::with_capacity(1 << c);
-            chip.enforce_less_than(ctx, rand_point.x());
-            bucket.push(rand_point.clone());
+            let any_point = into_strict_point(chip, ctx, any_point.clone());
+            bucket.push(any_point);
             for (i, point) in points_clump.iter().enumerate() {
                 // we allow for points[i] to be the point at infinity, represented by (0, 0) in affine coordinates
                 // this can be checked by points[i].y == 0 iff points[i] == O
                 let is_infinity = chip.is_zero(ctx, &point.y);
-                chip.enforce_less_than(ctx, point.x());
+                let point = into_strict_point(chip, ctx, point.clone());
 
                 for j in 0..(1 << i) {
-                    let mut new_point = ec_add_unequal(chip, ctx, &bucket[j], point, true);
+                    let mut new_point = ec_add_unequal(chip, ctx, &bucket[j], &point, true);
                     // if points[i] is point at infinity, do nothing
-                    new_point = ec_select(chip, ctx, &bucket[j], &new_point, is_infinity);
-                    chip.enforce_less_than(ctx, new_point.x());
+                    new_point = ec_select(chip, ctx, (&bucket[j]).into(), new_point, is_infinity);
+                    let new_point = into_strict_point(chip, ctx, new_point);
                     bucket.push(new_point);
                 }
             }
             let multi_prods = bool_scalars
                 .iter()
                 .map(|bits| {
-                    ec_select_from_bits::<F, _>(
+                    strict_ec_select_from_bits(
                         chip,
                         ctx,
                         &bucket,
@@ -317,15 +315,10 @@ where
         .map(|(i, thread_id)| {
             let mut thread = Context::new(witness_gen_only, thread_id);
             let ctx = &mut thread;
-            let mut acc = if multi_prods.len() == 1 {
-                multi_prods[0][i].clone()
-            } else {
-                ec_add_unequal(chip, ctx, &multi_prods[0][i], &multi_prods[1][i], true)
-            };
-            chip.enforce_less_than(ctx, acc.x());
-            for multi_prod in multi_prods.iter().skip(2) {
-                acc = ec_add_unequal(chip, ctx, &acc, &multi_prod[i], true);
-                chip.enforce_less_than(ctx, acc.x());
+            let mut acc = multi_prods[0][i].clone();
+            for multi_prod in multi_prods.iter().skip(1) {
+                let _acc = ec_add_unequal(chip, ctx, &acc, &multi_prod[i], true);
+                acc = into_strict_point(chip, ctx, _acc);
             }
             (thread, acc)
         })
@@ -333,31 +326,27 @@ where
     builder.threads[phase].extend(new_threads);
 
     // gets the LAST thread for single threaded work
-    // warning: don't get any earlier threads, because currently we assume equality constraints in thread i only involves threads <= i
     let ctx = builder.main(phase);
-    // we have agg[j] = G'[j] + (2^num_rounds - 1) * rand_base
-    // let rand_point = (2^num_rounds - 1) * rand_base
+    // we have agg[j] = G'[j] + (2^num_rounds - 1) * any_base
+    // let any_point = (2^num_rounds - 1) * any_base
     // TODO: can we remove all these random point operations somehow?
-    let mut rand_point = ec_double(chip, ctx, rand_points.last().unwrap());
-    rand_point = ec_sub_unequal(chip, ctx, &rand_point, &rand_points[0], false);
+    let mut any_point = ec_double(chip, ctx, any_points.last().unwrap());
+    any_point = ec_sub_unequal(chip, ctx, any_point, &any_points[0], false);
 
     // compute sum_{k=0..scalar_bits} agg[k] * 2^k - (sum_{k=0..scalar_bits} 2^k) * rand_point
     // (sum_{k=0..scalar_bits} 2^k) = (2^scalar_bits - 1)
-    let mut sum = agg.pop().unwrap();
-    let mut rand_sum = rand_point.clone();
+    let mut sum = agg.pop().unwrap().into();
+    let mut any_sum = any_point.clone();
     for g in agg.iter().rev() {
-        rand_sum = ec_double(chip, ctx, &rand_sum);
+        any_sum = ec_double(chip, ctx, any_sum);
         // cannot use ec_double_and_add_unequal because you cannot guarantee that `sum != g`
-        sum = ec_double(chip, ctx, &sum);
-        chip.enforce_less_than(ctx, sum.x());
-        sum = ec_add_unequal(chip, ctx, &sum, g, true);
+        sum = ec_double(chip, ctx, sum);
+        sum = ec_add_unequal(chip, ctx, sum, g, true);
     }
 
-    rand_sum = ec_double(chip, ctx, &rand_sum);
+    any_sum = ec_double(chip, ctx, any_sum);
     // assume 2^scalar_bits != +-1 mod modulus::<F>()
-    rand_sum = ec_sub_unequal(chip, ctx, &rand_sum, &rand_point, false);
+    any_sum = ec_sub_unequal(chip, ctx, any_sum, any_point, false);
 
-    chip.enforce_less_than(ctx, sum.x());
-    chip.enforce_less_than(ctx, rand_sum.x());
-    ec_sub_unequal(chip, ctx, &sum, &rand_sum, true)
+    ec_sub_unequal(chip, ctx, sum, any_sum, true)
 }

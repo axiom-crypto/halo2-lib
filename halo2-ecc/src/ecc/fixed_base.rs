@@ -1,53 +1,12 @@
 #![allow(non_snake_case)]
 use super::{ec_add_unequal, ec_select, ec_select_from_bits, EcPoint, EccChip};
-use crate::halo2_proofs::arithmetic::CurveAffine;
-use crate::{
-    bigint::{CRTInteger, FixedCRTInteger},
-    fields::{PrimeField, PrimeFieldChip, Selectable},
-};
+use crate::fields::{FieldChip, PrimeField, Selectable};
 use group::Curve;
 use halo2_base::gates::builder::GateThreadBuilder;
-use halo2_base::{
-    gates::GateInstructions,
-    utils::{fe_to_biguint, CurveAffineExt},
-    AssignedValue, Context,
-};
+use halo2_base::{gates::GateInstructions, utils::CurveAffineExt, AssignedValue, Context};
 use itertools::Itertools;
 use rayon::prelude::*;
-use std::{cmp::min, marker::PhantomData};
-
-// this only works for curves GA with base field of prime order
-#[derive(Clone, Debug)]
-pub struct FixedEcPoint<F: PrimeField, C: CurveAffine> {
-    pub x: FixedCRTInteger<F>, // limbs in `F` and value in `BigUint`
-    pub y: FixedCRTInteger<F>,
-    _marker: PhantomData<C>,
-}
-
-impl<F: PrimeField, C: CurveAffineExt> FixedEcPoint<F, C>
-where
-    C::Base: PrimeField,
-{
-    pub fn construct(x: FixedCRTInteger<F>, y: FixedCRTInteger<F>) -> Self {
-        Self { x, y, _marker: PhantomData }
-    }
-
-    pub fn from_curve(point: C, num_limbs: usize, limb_bits: usize) -> Self {
-        let (x, y) = point.into_coordinates();
-        let x = FixedCRTInteger::from_native(fe_to_biguint(&x), num_limbs, limb_bits);
-        let y = FixedCRTInteger::from_native(fe_to_biguint(&y), num_limbs, limb_bits);
-        Self::construct(x, y)
-    }
-
-    pub fn assign<FC>(self, chip: &FC, ctx: &mut Context<F>) -> EcPoint<F, FC::FieldPoint>
-    where
-        FC: PrimeFieldChip<F, FieldType = C::Base, FieldPoint = CRTInteger<F>>,
-    {
-        let assigned_x = self.x.assign(ctx, chip.limb_bits(), chip.native_modulus());
-        let assigned_y = self.y.assign(ctx, chip.limb_bits(), chip.native_modulus());
-        EcPoint::construct(assigned_x, assigned_y)
-    }
-}
+use std::cmp::min;
 
 // computes `[scalar] * P` on y^2 = x^3 + b where `P` is fixed (constant)
 // - `scalar` is represented as a non-empty reference array of `AssignedValue`s
@@ -68,13 +27,11 @@ pub fn scalar_multiply<F, FC, C>(
 where
     F: PrimeField,
     C: CurveAffineExt,
-    C::Base: PrimeField,
-    FC: PrimeFieldChip<F, FieldType = C::Base, FieldPoint = CRTInteger<F>>
-        + Selectable<F, Point = FC::FieldPoint>,
+    FC: FieldChip<F, FieldType = C::Base> + Selectable<F, FC::FieldPoint>,
 {
     if point.is_identity().into() {
-        let point = FixedEcPoint::from_curve(*point, chip.num_limbs(), chip.limb_bits());
-        return FixedEcPoint::assign(point, chip, ctx);
+        let zero = chip.load_constant(ctx, C::Base::zero());
+        return EcPoint::new(zero.clone(), zero);
     }
     debug_assert!(!scalar.is_empty());
     debug_assert!((max_bits as u32) <= F::NUM_BITS);
@@ -112,8 +69,9 @@ where
     let cached_points = cached_points_affine
         .into_iter()
         .map(|point| {
-            let point = FixedEcPoint::from_curve(point, chip.num_limbs(), chip.limb_bits());
-            FixedEcPoint::assign(point, chip, ctx)
+            let (x, y) = point.into_coordinates();
+            let [x, y] = [x, y].map(|x| chip.load_constant(ctx, x));
+            EcPoint::new(x, y)
         })
         .collect_vec();
 
@@ -131,11 +89,11 @@ where
         let bit_sum = chip.gate().sum(ctx, bit_window.iter().copied());
         // are we just adding a window of all 0s? if so, skip
         let is_zero_window = chip.gate().is_zero(ctx, bit_sum);
-        let add_point = ec_select_from_bits::<F, _>(chip, ctx, cached_point_window, bit_window);
+        let add_point = ec_select_from_bits(chip, ctx, cached_point_window, bit_window);
         curr_point = if let Some(curr_point) = curr_point {
             let sum = ec_add_unequal(chip, ctx, &curr_point, &add_point, false);
-            let zero_sum = ec_select(chip, ctx, &curr_point, &sum, is_zero_window);
-            Some(ec_select(chip, ctx, &zero_sum, &add_point, is_started))
+            let zero_sum = ec_select(chip, ctx, curr_point, sum, is_zero_window);
+            Some(ec_select(chip, ctx, zero_sum, add_point, is_started))
         } else {
             Some(add_point)
         };
@@ -162,9 +120,7 @@ pub fn msm<F, FC, C>(
 where
     F: PrimeField,
     C: CurveAffineExt,
-    C::Base: PrimeField,
-    FC: PrimeFieldChip<F, FieldType = C::Base, FieldPoint = CRTInteger<F>>
-        + Selectable<F, Point = FC::FieldPoint>,
+    FC: FieldChip<F, FieldType = C::Base> + Selectable<F, FC::FieldPoint>,
 {
     assert!((max_scalar_bits_per_cell as u32) <= F::NUM_BITS);
     let scalar_len = scalars[0].len();
@@ -205,11 +161,7 @@ where
     let field_chip = chip.field_chip();
     let cached_points = cached_points_affine
         .into_iter()
-        .map(|point| {
-            let point =
-                FixedEcPoint::from_curve(point, field_chip.num_limbs(), field_chip.limb_bits());
-            point.assign(field_chip, ctx)
-        })
+        .map(|point| chip.assign_constant_point(ctx, point))
         .collect_vec();
 
     let bits = scalars
@@ -225,7 +177,7 @@ where
         })
         .collect_vec();
 
-    let sm = cached_points
+    let scalar_mults = cached_points
         .chunks(cached_points.len() / points.len())
         .zip(bits.chunks(total_bits))
         .map(|(cached_points, bits)| {
@@ -240,11 +192,11 @@ where
                     field_chip.gate().is_zero(ctx, sum)
                 };
                 let add_point =
-                    ec_select_from_bits::<F, _>(field_chip, ctx, cached_point_window, bit_window);
+                    ec_select_from_bits(field_chip, ctx, cached_point_window, bit_window);
                 curr_point = if let Some(curr_point) = curr_point {
                     let sum = ec_add_unequal(field_chip, ctx, &curr_point, &add_point, false);
-                    let zero_sum = ec_select(field_chip, ctx, &curr_point, &sum, is_zero_window);
-                    Some(ec_select(field_chip, ctx, &zero_sum, &add_point, is_started))
+                    let zero_sum = ec_select(field_chip, ctx, curr_point, sum, is_zero_window);
+                    Some(ec_select(field_chip, ctx, zero_sum, add_point, is_started))
                 } else {
                     Some(add_point)
                 };
@@ -258,7 +210,7 @@ where
             curr_point.unwrap()
         })
         .collect_vec();
-    chip.sum::<C>(ctx, sm.iter())
+    chip.sum::<C>(ctx, scalar_mults)
 }
 
 /// # Assumptions
@@ -276,9 +228,7 @@ pub fn msm_par<F, FC, C>(
 where
     F: PrimeField,
     C: CurveAffineExt,
-    C::Base: PrimeField,
-    FC: PrimeFieldChip<F, FieldType = C::Base, FieldPoint = CRTInteger<F>>
-        + Selectable<F, Point = FC::FieldPoint>,
+    FC: FieldChip<F, FieldType = C::Base> + Selectable<F, FC::FieldPoint>,
 {
     assert!((max_scalar_bits_per_cell as u32) <= F::NUM_BITS);
     assert_eq!(points.len(), scalars.len());
@@ -333,14 +283,7 @@ where
 
             let cached_points = cached_points
                 .iter()
-                .map(|point| {
-                    let point = FixedEcPoint::from_curve(
-                        *point,
-                        field_chip.num_limbs(),
-                        field_chip.limb_bits(),
-                    );
-                    point.assign(field_chip, ctx)
-                })
+                .map(|point| chip.assign_constant_point(ctx, *point))
                 .collect_vec();
             let cached_point_window_rev = cached_points.chunks(1usize << window_bits).rev();
 
@@ -361,11 +304,11 @@ where
                     field_chip.gate().is_zero(ctx, sum)
                 };
                 let add_point =
-                    ec_select_from_bits::<F, _>(field_chip, ctx, cached_point_window, bit_window);
+                    ec_select_from_bits(field_chip, ctx, cached_point_window, bit_window);
                 curr_point = if let Some(curr_point) = curr_point {
                     let sum = ec_add_unequal(field_chip, ctx, &curr_point, &add_point, false);
-                    let zero_sum = ec_select(field_chip, ctx, &curr_point, &sum, is_zero_window);
-                    Some(ec_select(field_chip, ctx, &zero_sum, &add_point, is_started))
+                    let zero_sum = ec_select(field_chip, ctx, curr_point, sum, is_zero_window);
+                    Some(ec_select(field_chip, ctx, zero_sum, add_point, is_started))
                 } else {
                     Some(add_point)
                 };
@@ -380,5 +323,5 @@ where
         })
         .unzip();
     builder.threads[phase].extend(new_threads);
-    chip.sum::<C>(builder.main(phase), scalar_mults.iter())
+    chip.sum::<C>(builder.main(phase), scalar_mults)
 }
