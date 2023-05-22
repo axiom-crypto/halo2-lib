@@ -145,6 +145,9 @@ impl<F: PrimeField, FC: FieldChip<F>> From<ComparableEcPoint<F, FC>>
 /// If `is_strict = true`, then this function constrains that `P.x != Q.x`.
 /// If you are calling this with `is_strict = false`, you must ensure that `P.x != Q.x` by some external logic (such
 /// as a mathematical theorem).
+///
+/// # Assumptions
+/// * Neither `P` nor `Q` is the point at infinity (undefined behavior otherwise)
 pub fn ec_add_unequal<F: PrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
@@ -208,6 +211,9 @@ fn check_points_are_unequal<F: PrimeField, FC: FieldChip<F>>(
 /// If `is_strict = true`, then this function constrains that `P.x != Q.x`.
 /// If you are calling this with `is_strict = false`, you must ensure that `P.x != Q.x` by some external logic (such
 /// as a mathematical theorem).
+///
+/// # Assumptions
+/// * Neither `P` nor `Q` is the point at infinity (undefined behavior otherwise)
 pub fn ec_sub_unequal<F: PrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
@@ -242,6 +248,31 @@ pub fn ec_sub_unequal<F: PrimeField, FC: FieldChip<F>>(
     EcPoint::new(x_3, y_3)
 }
 
+/// Constrains `P != -Q` but allows `P == Q`, in which case output is (0,0).
+/// For Weierstrass curves only.
+pub fn ec_sub_strict<F: PrimeField, FC: FieldChip<F>>(
+    chip: &FC,
+    ctx: &mut Context<F>,
+    P: impl Into<EcPoint<F, FC::FieldPoint>>,
+    Q: impl Into<EcPoint<F, FC::FieldPoint>>,
+) -> EcPoint<F, FC::FieldPoint>
+where
+    FC: Selectable<F, FC::FieldPoint>,
+{
+    let P = P.into();
+    let Q = Q.into();
+    // Compute curr_point - start_point, allowing for output to be identity point
+    let x_is_eq = chip.is_equal(ctx, P.x(), Q.x());
+    let y_is_eq = chip.is_equal(ctx, P.y(), Q.y());
+    let is_identity = chip.gate().and(ctx, x_is_eq, y_is_eq);
+    // we ONLY allow x_is_eq = true if y_is_eq is also true; this constrains P != -Q
+    ctx.constrain_equal(&x_is_eq, &is_identity);
+
+    let out = ec_sub_unequal(chip, ctx, P, Q, false);
+    let zero = chip.load_constant(ctx, FC::FieldType::zero());
+    ec_select(chip, ctx, EcPoint::new(zero.clone(), zero), out, is_identity)
+}
+
 // Implements:
 // computing 2P on elliptic curve E for P = (x, y)
 // formula from https://crypto.stanford.edu/pbc/notes/elliptic/explicit.html
@@ -254,6 +285,9 @@ pub fn ec_sub_unequal<F: PrimeField, FC: FieldChip<F>>(
 // we precompute lambda and constrain (2y) * lambda = 3 x^2 (mod p)
 // then we compute x_3 = lambda^2 - 2 x (mod p)
 //                 y_3 = lambda (x - x_3) - y (mod p)
+/// # Assumptions
+/// * `P.y != 0`
+/// * `P` is not the point at infinity
 pub fn ec_double<F: PrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
@@ -290,6 +324,9 @@ pub fn ec_double<F: PrimeField, FC: FieldChip<F>>(
 // lambda_1 = lambda_0 + 2 * y_0 / (x_2 - x_0)
 // x_res = lambda_1^2 - x_0 - x_2
 // y_res = lambda_1 * (x_res - x_0) - y_0
+///
+/// # Assumptions
+/// * Neither `P` nor `Q` is the point at infinity (undefined behavior otherwise)
 pub fn ec_double_and_add_unequal<F: PrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
@@ -426,14 +463,16 @@ where
     StrictEcPoint::new(x, y)
 }
 
-// computes [scalar] * P on y^2 = x^3 + b
-// - `scalar` is represented as a reference array of `AssignedCell`s
+// computes [scalar] * P on short Weierstrass curve `y^2 = x^3 + b`
+// - `scalar` is represented as a reference array of `AssignedValue`s
 // - `scalar = sum_i scalar_i * 2^{max_bits * i}`
 // - an array of length > 1 is needed when `scalar` exceeds the modulus of scalar field `F`
 // assumes:
-// - `scalar_i < 2^{max_bits} for all i` (constrained by num_to_bits)
-// - `max_bits <= modulus::<F>.bits()`
-//   * P has order given by the scalar field modulus
+/// # Assumptions
+/// * `P` is not the point at infinity
+/// * `scalar` is less than the order of `P`
+/// * `scalar_i < 2^{max_bits} for all i`
+/// * `max_bits <= modulus::<F>.bits()`, and equality only allowed when the order of `P` equals the modulus of `F`
 pub fn scalar_multiply<F: PrimeField, FC>(
     chip: &FC,
     ctx: &mut Context<F>,
@@ -578,6 +617,16 @@ where
 // Input:
 // - `scalars` is vector of same length as `P`
 // - each `scalar` in `scalars` satisfies same assumptions as in `scalar_multiply` above
+
+/// # Assumptions
+/// * `points.len() == scalars.len()`
+/// * `scalars[i].len() == scalars[j].len()` for all `i, j`
+/// * `scalars[i]` is less than the order of `P`
+/// * `scalars[i][j] < 2^{max_bits} for all j`
+/// * `max_bits <= modulus::<F>.bits()`, and equality only allowed when the order of `P` equals the modulus of `F`
+/// * `points` are all on the curve or the point at infinity
+/// * `points[i]` is allowed to be (0, 0) to represent the point at infinity (identity point)
+/// * Currently implementation assumes that the only point on curve with y-coordinate equal to `0` is identity point
 pub fn multi_scalar_multiply<F: PrimeField, FC, C>(
     chip: &FC,
     ctx: &mut Context<F>,
@@ -688,7 +737,7 @@ where
             curr_point = ec_add_unequal(chip, ctx, curr_point, add_point, true);
         }
     }
-    ec_sub_unequal(chip, ctx, curr_point, start_point, true)
+    ec_sub_strict(chip, ctx, curr_point, start_point)
 }
 
 pub fn get_naf(mut exp: Vec<u64>) -> Vec<i8> {
@@ -965,6 +1014,7 @@ where
     }
 
     // default for most purposes
+    /// See [`pippenger::multi_exp_par`] for more details.
     pub fn variable_base_msm<C>(
         &self,
         thread_pool: &mut GateThreadBuilder<F>,
