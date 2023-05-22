@@ -287,7 +287,7 @@ where
 //                 y_3 = lambda (x - x_3) - y (mod p)
 /// # Assumptions
 /// * `P.y != 0`
-/// * `P` is not the point at infinity
+/// * `P` is not the point at infinity (undefined behavior otherwise)
 pub fn ec_double<F: PrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
@@ -463,14 +463,15 @@ where
     StrictEcPoint::new(x, y)
 }
 
-// computes [scalar] * P on short Weierstrass curve `y^2 = x^3 + b`
-// - `scalar` is represented as a reference array of `AssignedValue`s
-// - `scalar = sum_i scalar_i * 2^{max_bits * i}`
-// - an array of length > 1 is needed when `scalar` exceeds the modulus of scalar field `F`
-// assumes:
+/// Computes `[scalar] * P` on short Weierstrass curve `y^2 = x^3 + b`
+/// - `scalar` is represented as a reference array of `AssignedValue`s
+/// - `scalar = sum_i scalar_i * 2^{max_bits * i}`
+/// - an array of length > 1 is needed when `scalar` exceeds the modulus of scalar field `F`
+///
 /// # Assumptions
 /// * `P` is not the point at infinity
-/// * `scalar` is less than the order of `P`
+/// * `scalar > 0`
+/// * If `scalar_is_safe == true`, then we assume the integer `scalar` is in range [1, order of `P`)
 /// * `scalar_i < 2^{max_bits} for all i`
 /// * `max_bits <= modulus::<F>.bits()`, and equality only allowed when the order of `P` equals the modulus of `F`
 pub fn scalar_multiply<F: PrimeField, FC>(
@@ -480,6 +481,7 @@ pub fn scalar_multiply<F: PrimeField, FC>(
     scalar: Vec<AssignedValue<F>>,
     max_bits: usize,
     window_bits: usize,
+    scalar_is_safe: bool,
 ) -> EcPoint<F, FC::FieldPoint>
 where
     FC: FieldChip<F> + Selectable<F, FC::FieldPoint>,
@@ -530,7 +532,7 @@ where
             let double = ec_double(chip, ctx, &P);
             cached_points.push(double);
         } else {
-            let new_point = ec_add_unequal(chip, ctx, &cached_points[idx - 1], &P, false);
+            let new_point = ec_add_unequal(chip, ctx, &cached_points[idx - 1], &P, !scalar_is_safe);
             cached_points.push(new_point);
         }
     }
@@ -555,7 +557,7 @@ where
             &rounded_bits
                 [rounded_bitlen - window_bits * (idx + 1)..rounded_bitlen - window_bits * idx],
         );
-        let mult_and_add = ec_add_unequal(chip, ctx, &mult_point, &add_point, false);
+        let mult_and_add = ec_add_unequal(chip, ctx, &mult_point, &add_point, !scalar_is_safe);
         let is_started_point = ec_select(chip, ctx, mult_point, mult_and_add, is_zero_window[idx]);
 
         curr_point =
@@ -688,7 +690,7 @@ where
             ctx,
             &rand_start_vec[idx],
             &rand_start_vec[idx + window_bits],
-            false,
+            true, // not necessary if we assume (2^w - 1) * A != +- A, but put in for safety
         );
         let point = into_strict_point(chip, ctx, point.clone());
         let neg_mult_rand_start = into_strict_point(chip, ctx, neg_mult_rand_start);
@@ -1002,6 +1004,7 @@ where
         ec_select(self.field_chip, ctx, P, Q, condition)
     }
 
+    /// See [`scalar_multiply`] for more details.
     pub fn scalar_mult(
         &self,
         ctx: &mut Context<F>,
@@ -1009,8 +1012,17 @@ where
         scalar: Vec<AssignedValue<F>>,
         max_bits: usize,
         window_bits: usize,
+        scalar_is_safe: bool,
     ) -> EcPoint<F, FC::FieldPoint> {
-        scalar_multiply::<F, FC>(self.field_chip, ctx, P, scalar, max_bits, window_bits)
+        scalar_multiply::<F, FC>(
+            self.field_chip,
+            ctx,
+            P,
+            scalar,
+            max_bits,
+            window_bits,
+            scalar_is_safe,
+        )
     }
 
     // default for most purposes
