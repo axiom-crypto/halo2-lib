@@ -19,6 +19,7 @@ use halo2_base::{
     halo2_proofs::halo2curves::bn256::G1,
     utils::fs::gen_srs,
 };
+use itertools::Itertools;
 use rand_core::OsRng;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -68,6 +69,7 @@ fn fixed_base_msm_test(
 
 fn random_fixed_base_msm_circuit(
     params: MSMCircuitParams,
+    bases: Vec<G1Affine>, // bases are fixed in vkey so don't randomly generate
     stage: CircuitBuilderStage,
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
@@ -78,8 +80,7 @@ fn random_fixed_base_msm_circuit(
         CircuitBuilderStage::Keygen => GateThreadBuilder::keygen(),
     };
 
-    let (bases, scalars): (Vec<_>, Vec<_>) =
-        (0..params.batch_size).map(|_| (G1Affine::random(OsRng), Fr::random(OsRng))).unzip();
+    let scalars = (0..params.batch_size).map(|_| Fr::random(OsRng)).collect_vec();
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
     fixed_base_msm_test(&mut builder, params, bases, scalars);
 
@@ -106,7 +107,8 @@ fn test_fixed_base_msm() {
     )
     .unwrap();
 
-    let circuit = random_fixed_base_msm_circuit(params, CircuitBuilderStage::Mock, None);
+    let bases = (0..params.batch_size).map(|_| G1Affine::random(OsRng)).collect_vec();
+    let circuit = random_fixed_base_msm_circuit(params, bases, CircuitBuilderStage::Mock, None);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
@@ -132,8 +134,13 @@ fn bench_fixed_base_msm() -> Result<(), Box<dyn std::error::Error>> {
         let params = gen_srs(k);
         println!("{bench_params:?}");
 
-        let circuit =
-            random_fixed_base_msm_circuit(bench_params, CircuitBuilderStage::Keygen, None);
+        let bases = (0..bench_params.batch_size).map(|_| G1Affine::random(OsRng)).collect_vec();
+        let circuit = random_fixed_base_msm_circuit(
+            bench_params,
+            bases.clone(),
+            CircuitBuilderStage::Keygen,
+            None,
+        );
 
         let vk_time = start_timer!(|| "Generating vkey");
         let vk = keygen_vk(&params, &circuit)?;
@@ -149,6 +156,7 @@ fn bench_fixed_base_msm() -> Result<(), Box<dyn std::error::Error>> {
         let proof_time = start_timer!(|| "Proving time");
         let circuit = random_fixed_base_msm_circuit(
             bench_params,
+            bases,
             CircuitBuilderStage::Prover,
             Some(break_points),
         );
