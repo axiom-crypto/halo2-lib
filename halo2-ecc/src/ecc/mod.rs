@@ -756,6 +756,20 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         self.field_chip
     }
 
+    /// Load affine point as private witness. Constrains witness to lie on curve. Does not allow (0, 0) point,
+    pub fn load_private<C>(
+        &self,
+        ctx: &mut Context<F>,
+        (x, y): (FC::FieldType, FC::FieldType),
+    ) -> EcPoint<F, FC::FieldPoint>
+    where
+        C: CurveAffineExt<Base = FC::FieldType>,
+    {
+        let pt = self.load_private_unchecked(ctx, (x, y));
+        self.assert_is_on_curve::<C>(ctx, &pt);
+        pt
+    }
+
     /// Does not constrain witness to lie on curve
     pub fn load_private_unchecked(
         &self,
@@ -766,6 +780,19 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         let y_assigned = self.field_chip.load_private(ctx, y);
 
         EcPoint::new(x_assigned, y_assigned)
+    }
+
+    /// Load affine point as private witness. Constrains witness to either lie on curve or be the point at infinity,
+    /// represented in affine coordinates as (0, 0).
+    pub fn assign_point<C>(&self, ctx: &mut Context<F>, g: C) -> EcPoint<F, FC::FieldPoint>
+    where
+        C: CurveAffineExt<Base = FC::FieldType>,
+        C::Base: ff::PrimeField,
+    {
+        let pt = self.assign_point_unchecked(ctx, g);
+        let is_on_curve = self.is_on_curve_or_infinity::<C>(ctx, &pt);
+        self.field_chip.gate().assert_is_const(ctx, &is_on_curve, &F::one());
+        pt
     }
 
     /// Does not constrain witness to lie on curve
@@ -813,7 +840,6 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
     ) -> AssignedValue<F>
     where
         C: CurveAffine<Base = FC::FieldType>,
-        C::Base: ff::PrimeField,
     {
         let lhs = self.field_chip.mul_no_carry(ctx, &P.y, &P.y);
         let mut rhs = self.field_chip.mul(ctx, &P.x, &P.x).into();
