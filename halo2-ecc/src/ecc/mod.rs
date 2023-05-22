@@ -145,6 +145,9 @@ impl<F: PrimeField, FC: FieldChip<F>> From<ComparableEcPoint<F, FC>>
 /// If `is_strict = true`, then this function constrains that `P.x != Q.x`.
 /// If you are calling this with `is_strict = false`, you must ensure that `P.x != Q.x` by some external logic (such
 /// as a mathematical theorem).
+///
+/// # Assumptions
+/// * Neither `P` nor `Q` is the point at infinity (undefined behavior otherwise)
 pub fn ec_add_unequal<F: PrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
@@ -208,6 +211,9 @@ fn check_points_are_unequal<F: PrimeField, FC: FieldChip<F>>(
 /// If `is_strict = true`, then this function constrains that `P.x != Q.x`.
 /// If you are calling this with `is_strict = false`, you must ensure that `P.x != Q.x` by some external logic (such
 /// as a mathematical theorem).
+///
+/// # Assumptions
+/// * Neither `P` nor `Q` is the point at infinity (undefined behavior otherwise)
 pub fn ec_sub_unequal<F: PrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
@@ -254,6 +260,9 @@ pub fn ec_sub_unequal<F: PrimeField, FC: FieldChip<F>>(
 // we precompute lambda and constrain (2y) * lambda = 3 x^2 (mod p)
 // then we compute x_3 = lambda^2 - 2 x (mod p)
 //                 y_3 = lambda (x - x_3) - y (mod p)
+/// # Assumptions
+/// * `P.y != 0`
+/// * `P` is not the point at infinity
 pub fn ec_double<F: PrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
@@ -290,6 +299,9 @@ pub fn ec_double<F: PrimeField, FC: FieldChip<F>>(
 // lambda_1 = lambda_0 + 2 * y_0 / (x_2 - x_0)
 // x_res = lambda_1^2 - x_0 - x_2
 // y_res = lambda_1 * (x_res - x_0) - y_0
+///
+/// # Assumptions
+/// * Neither `P` nor `Q` is the point at infinity (undefined behavior otherwise)
 pub fn ec_double_and_add_unequal<F: PrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
@@ -426,14 +438,16 @@ where
     StrictEcPoint::new(x, y)
 }
 
-// computes [scalar] * P on y^2 = x^3 + b
-// - `scalar` is represented as a reference array of `AssignedCell`s
+// computes [scalar] * P on short Weierstrass curve `y^2 = x^3 + b`
+// - `scalar` is represented as a reference array of `AssignedValue`s
 // - `scalar = sum_i scalar_i * 2^{max_bits * i}`
 // - an array of length > 1 is needed when `scalar` exceeds the modulus of scalar field `F`
 // assumes:
-// - `scalar_i < 2^{max_bits} for all i` (constrained by num_to_bits)
-// - `max_bits <= modulus::<F>.bits()`
-//   * P has order given by the scalar field modulus
+/// # Assumptions
+/// * `P` is not the point at infinity
+/// * `scalar` is less than the order of `P`
+/// * `scalar_i < 2^{max_bits} for all i`
+/// * `max_bits <= modulus::<F>.bits()`, and equality only allowed when the order of `P` equals the modulus of `F`
 pub fn scalar_multiply<F: PrimeField, FC>(
     chip: &FC,
     ctx: &mut Context<F>,

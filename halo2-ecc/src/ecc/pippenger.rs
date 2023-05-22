@@ -202,13 +202,14 @@ where
 }
 
 /// Multi-thread witness generation for multi-scalar multiplication.
-/// Should give exact same circuit as `multi_exp`.
-///
-/// Currently does not support if the final answer is actually the point at infinity (meaning constraints will fail in that case)
 ///
 /// # Assumptions
 /// * `points.len() == scalars.len()`
 /// * `scalars[i].len() == scalars[j].len()` for all `i, j`
+/// * `points` are all on the curve or the point at infinity
+/// * `points[i]` is allowed to be (0, 0) to represent the point at infinity (identity point)
+/// * `2^max_scalar_bits != +-1 mod modulus::<F>()` where `max_scalar_bits = max_scalar_bits_per_cell * scalars[0].len()`
+/// * Currently implementation assumes that the only point on curve with y-coordinate equal to `0` is identity point
 pub fn multi_exp_par<F: PrimeField, FC, C>(
     chip: &FC,
     // these are the "threads" within a single Phase
@@ -348,5 +349,13 @@ where
     // assume 2^scalar_bits != +-1 mod modulus::<F>()
     any_sum = ec_sub_unequal(chip, ctx, any_sum, any_point, false);
 
-    ec_sub_unequal(chip, ctx, sum, any_sum, true)
+    let x_is_eq = chip.is_equal(ctx, sum.x(), any_sum.x());
+    let y_is_eq = chip.is_equal(ctx, sum.y(), any_sum.y());
+    let is_identity = chip.gate().and(ctx, x_is_eq, y_is_eq);
+    // we ONLY allow x_is_eq = true if y_is_eq is also true
+    ctx.constrain_equal(&x_is_eq, &is_identity);
+
+    let out = ec_sub_unequal(chip, ctx, sum, any_sum, false);
+    let zero = chip.load_constant(ctx, FC::FieldType::zero());
+    ec_select(chip, ctx, EcPoint::new(zero.clone(), zero), out, is_identity)
 }
