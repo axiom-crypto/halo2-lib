@@ -1,8 +1,11 @@
 use super::{
     ec_add_unequal, ec_double, ec_select, ec_sub_unequal, into_strict_point, load_random_point,
-    strict_ec_select_from_bits, EcPoint, StrictEcPoint,
+    strict_ec_select_from_bits, EcPoint,
 };
-use crate::fields::{FieldChip, PrimeField, Selectable};
+use crate::{
+    ecc::ec_sub_strict,
+    fields::{FieldChip, PrimeField, Selectable},
+};
 use halo2_base::{
     gates::{builder::GateThreadBuilder, GateInstructions},
     utils::CurveAffineExt,
@@ -64,6 +67,7 @@ where
 }
 */
 
+/* Left as reference; should always use msm_par
 // Given points[i] and bool_scalars[j][i],
 // compute G'[j] = sum_{i=0..points.len()} points[i] * bool_scalars[j][i]
 // output is [ G'[j] + rand_point ]_{j=0..bool_scalars.len()}, rand_point
@@ -200,6 +204,7 @@ where
 
     ec_sub_unequal(chip, ctx, sum, any_sum, true)
 }
+*/
 
 /// Multi-thread witness generation for multi-scalar multiplication.
 ///
@@ -227,7 +232,7 @@ where
 {
     // let (points, bool_scalars) = decompose::<F, _>(chip, ctx, points, scalars, max_scalar_bits_per_cell, radix);
 
-    debug_assert_eq!(points.len(), scalars.len());
+    assert_eq!(points.len(), scalars.len());
     let scalar_bits = max_scalar_bits_per_cell * scalars[0].len();
     // bool_scalars: 2d array `scalar_bits` by `points.len()`
     let mut bool_scalars = vec![Vec::with_capacity(points.len()); scalar_bits];
@@ -349,13 +354,5 @@ where
     // assume 2^scalar_bits != +-1 mod modulus::<F>()
     any_sum = ec_sub_unequal(chip, ctx, any_sum, any_point, false);
 
-    let x_is_eq = chip.is_equal(ctx, sum.x(), any_sum.x());
-    let y_is_eq = chip.is_equal(ctx, sum.y(), any_sum.y());
-    let is_identity = chip.gate().and(ctx, x_is_eq, y_is_eq);
-    // we ONLY allow x_is_eq = true if y_is_eq is also true
-    ctx.constrain_equal(&x_is_eq, &is_identity);
-
-    let out = ec_sub_unequal(chip, ctx, sum, any_sum, false);
-    let zero = chip.load_constant(ctx, FC::FieldType::zero());
-    ec_select(chip, ctx, EcPoint::new(zero.clone(), zero), out, is_identity)
+    ec_sub_strict(chip, ctx, sum, any_sum)
 }

@@ -248,6 +248,31 @@ pub fn ec_sub_unequal<F: PrimeField, FC: FieldChip<F>>(
     EcPoint::new(x_3, y_3)
 }
 
+/// Constrains `P != -Q` but allows `P == Q`, in which case output is (0,0).
+/// For Weierstrass curves only.
+pub fn ec_sub_strict<F: PrimeField, FC: FieldChip<F>>(
+    chip: &FC,
+    ctx: &mut Context<F>,
+    P: impl Into<EcPoint<F, FC::FieldPoint>>,
+    Q: impl Into<EcPoint<F, FC::FieldPoint>>,
+) -> EcPoint<F, FC::FieldPoint>
+where
+    FC: Selectable<F, FC::FieldPoint>,
+{
+    let P = P.into();
+    let Q = Q.into();
+    // Compute curr_point - start_point, allowing for output to be identity point
+    let x_is_eq = chip.is_equal(ctx, P.x(), Q.x());
+    let y_is_eq = chip.is_equal(ctx, P.y(), Q.y());
+    let is_identity = chip.gate().and(ctx, x_is_eq, y_is_eq);
+    // we ONLY allow x_is_eq = true if y_is_eq is also true; this constrains P != -Q
+    ctx.constrain_equal(&x_is_eq, &is_identity);
+
+    let out = ec_sub_unequal(chip, ctx, P, Q, false);
+    let zero = chip.load_constant(ctx, FC::FieldType::zero());
+    ec_select(chip, ctx, EcPoint::new(zero.clone(), zero), out, is_identity)
+}
+
 // Implements:
 // computing 2P on elliptic curve E for P = (x, y)
 // formula from https://crypto.stanford.edu/pbc/notes/elliptic/explicit.html
@@ -592,6 +617,16 @@ where
 // Input:
 // - `scalars` is vector of same length as `P`
 // - each `scalar` in `scalars` satisfies same assumptions as in `scalar_multiply` above
+
+/// # Assumptions
+/// * `points.len() == scalars.len()`
+/// * `scalars[i].len() == scalars[j].len()` for all `i, j`
+/// * `scalars[i]` is less than the order of `P`
+/// * `scalars[i][j] < 2^{max_bits} for all j`
+/// * `max_bits <= modulus::<F>.bits()`, and equality only allowed when the order of `P` equals the modulus of `F`
+/// * `points` are all on the curve or the point at infinity
+/// * `points[i]` is allowed to be (0, 0) to represent the point at infinity (identity point)
+/// * Currently implementation assumes that the only point on curve with y-coordinate equal to `0` is identity point
 pub fn multi_scalar_multiply<F: PrimeField, FC, C>(
     chip: &FC,
     ctx: &mut Context<F>,
@@ -702,7 +737,7 @@ where
             curr_point = ec_add_unequal(chip, ctx, curr_point, add_point, true);
         }
     }
-    ec_sub_unequal(chip, ctx, curr_point, start_point, true)
+    ec_sub_strict(chip, ctx, curr_point, start_point)
 }
 
 pub fn get_naf(mut exp: Vec<u64>) -> Vec<i8> {
@@ -979,6 +1014,7 @@ where
     }
 
     // default for most purposes
+    /// See [`pippenger::multi_exp_par`] for more details.
     pub fn variable_base_msm<C>(
         &self,
         thread_pool: &mut GateThreadBuilder<F>,
