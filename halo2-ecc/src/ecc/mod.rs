@@ -920,14 +920,13 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         self.field_chip.assert_equal(ctx, P.y, Q.y);
     }
 
-    pub fn sum<'b, 'v: 'b, C>(
+    pub fn sum<C>(
         &self,
         ctx: &mut Context<F>,
         points: impl IntoIterator<Item = EcPoint<F, FC::FieldPoint>>,
     ) -> EcPoint<F, FC::FieldPoint>
     where
         C: CurveAffineExt<Base = FC::FieldType>,
-        FC::FieldPoint: 'b,
     {
         let rand_point = self.load_random_point::<C>(ctx);
         let rand_point = into_strict_point(self.field_chip, ctx, rand_point);
