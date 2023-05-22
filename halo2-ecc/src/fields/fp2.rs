@@ -102,12 +102,12 @@ where
         let mut ab_coeffs = Vec::with_capacity(4);
         for a_i in a {
             for b_j in b.iter() {
-                let coeff = fp_chip.mul_no_carry(ctx, a_i.clone(), b_j.clone());
+                let coeff = fp_chip.mul_no_carry(ctx, &a_i, b_j);
                 ab_coeffs.push(coeff);
             }
         }
-        let a0b0_minus_a1b1 = fp_chip.sub_no_carry(ctx, ab_coeffs[0].clone(), ab_coeffs[3].clone());
-        let a0b1_plus_a1b0 = fp_chip.add_no_carry(ctx, ab_coeffs[1].clone(), ab_coeffs[2].clone());
+        let a0b0_minus_a1b1 = fp_chip.sub_no_carry(ctx, &ab_coeffs[0], &ab_coeffs[3]);
+        let a0b1_plus_a1b0 = fp_chip.add_no_carry(ctx, &ab_coeffs[1], &ab_coeffs[2]);
 
         FieldVector(vec![a0b0_minus_a1b1, a0b1_plus_a1b0])
     }

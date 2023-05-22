@@ -153,19 +153,15 @@ where
         let mut a1b1_coeffs: Vec<FpChip::UnsafeFieldPoint> = Vec::with_capacity(11);
         for i in 0..6 {
             for j in 0..6 {
-                let coeff00 = fp_chip.mul_no_carry(ctx, a[i].clone(), b[j].clone());
-                let coeff01 = fp_chip.mul_no_carry(ctx, a[i].clone(), b[j + 6].clone());
-                let coeff10 = fp_chip.mul_no_carry(ctx, a[i + 6].clone(), b[j].clone());
-                let coeff11 = fp_chip.mul_no_carry(ctx, a[i + 6].clone(), b[j + 6].clone());
+                let coeff00 = fp_chip.mul_no_carry(ctx, &a[i], &b[j]);
+                let coeff01 = fp_chip.mul_no_carry(ctx, &a[i], &b[j + 6]);
+                let coeff10 = fp_chip.mul_no_carry(ctx, &a[i + 6], &b[j]);
+                let coeff11 = fp_chip.mul_no_carry(ctx, &a[i + 6], &b[j + 6]);
                 if i + j < a0b0_coeffs.len() {
-                    a0b0_coeffs[i + j] =
-                        fp_chip.add_no_carry(ctx, a0b0_coeffs[i + j].clone(), coeff00);
-                    a0b1_coeffs[i + j] =
-                        fp_chip.add_no_carry(ctx, a0b1_coeffs[i + j].clone(), coeff01);
-                    a1b0_coeffs[i + j] =
-                        fp_chip.add_no_carry(ctx, a1b0_coeffs[i + j].clone(), coeff10);
-                    a1b1_coeffs[i + j] =
-                        fp_chip.add_no_carry(ctx, a1b1_coeffs[i + j].clone(), coeff11);
+                    a0b0_coeffs[i + j] = fp_chip.add_no_carry(ctx, &a0b0_coeffs[i + j], coeff00);
+                    a0b1_coeffs[i + j] = fp_chip.add_no_carry(ctx, &a0b1_coeffs[i + j], coeff01);
+                    a1b0_coeffs[i + j] = fp_chip.add_no_carry(ctx, &a1b0_coeffs[i + j], coeff10);
+                    a1b1_coeffs[i + j] = fp_chip.add_no_carry(ctx, &a1b1_coeffs[i + j], coeff11);
                 } else {
                     a0b0_coeffs.push(coeff00);
                     a0b1_coeffs.push(coeff01);
@@ -178,10 +174,8 @@ where
         let mut a0b0_minus_a1b1 = Vec::with_capacity(11);
         let mut a0b1_plus_a1b0 = Vec::with_capacity(11);
         for i in 0..11 {
-            let a0b0_minus_a1b1_entry =
-                fp_chip.sub_no_carry(ctx, a0b0_coeffs[i].clone(), a1b1_coeffs[i].clone());
-            let a0b1_plus_a1b0_entry =
-                fp_chip.add_no_carry(ctx, a0b1_coeffs[i].clone(), a1b0_coeffs[i].clone());
+            let a0b0_minus_a1b1_entry = fp_chip.sub_no_carry(ctx, &a0b0_coeffs[i], &a1b1_coeffs[i]);
+            let a0b1_plus_a1b0_entry = fp_chip.add_no_carry(ctx, &a0b1_coeffs[i], &a1b0_coeffs[i]);
 
             a0b0_minus_a1b1.push(a0b0_minus_a1b1_entry);
             a0b1_plus_a1b0.push(a0b1_plus_a1b0_entry);
@@ -194,11 +188,11 @@ where
             if i < 5 {
                 let mut coeff = fp_chip.scalar_mul_and_add_no_carry(
                     ctx,
-                    a0b0_minus_a1b1[i + 6].clone(),
-                    a0b0_minus_a1b1[i].clone(),
+                    &a0b0_minus_a1b1[i + 6],
+                    &a0b0_minus_a1b1[i],
                     XI_0,
                 );
-                coeff = fp_chip.sub_no_carry(ctx, coeff, a0b1_plus_a1b0[i + 6].clone());
+                coeff = fp_chip.sub_no_carry(ctx, coeff, &a0b1_plus_a1b0[i + 6]);
                 out_coeffs.push(coeff);
             } else {
                 out_coeffs.push(a0b0_minus_a1b1[i].clone());
@@ -206,17 +200,10 @@ where
         }
         for i in 0..6 {
             if i < 5 {
-                let mut coeff = fp_chip.add_no_carry(
-                    ctx,
-                    a0b1_plus_a1b0[i].clone(),
-                    a0b0_minus_a1b1[i + 6].clone(),
-                );
-                coeff = fp_chip.scalar_mul_and_add_no_carry(
-                    ctx,
-                    a0b1_plus_a1b0[i + 6].clone(),
-                    coeff,
-                    XI_0,
-                );
+                let mut coeff =
+                    fp_chip.add_no_carry(ctx, &a0b1_plus_a1b0[i], &a0b0_minus_a1b1[i + 6]);
+                coeff =
+                    fp_chip.scalar_mul_and_add_no_carry(ctx, &a0b1_plus_a1b0[i + 6], coeff, XI_0);
                 out_coeffs.push(coeff);
             } else {
                 out_coeffs.push(a0b1_plus_a1b0[i].clone());
