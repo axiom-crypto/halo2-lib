@@ -1,8 +1,11 @@
 use super::{
     ec_add_unequal, ec_double, ec_select, ec_sub_unequal, into_strict_point, load_random_point,
-    strict_ec_select_from_bits, EcPoint, StrictEcPoint,
+    strict_ec_select_from_bits, EcPoint,
 };
-use crate::fields::{FieldChip, PrimeField, Selectable};
+use crate::{
+    ecc::ec_sub_strict,
+    fields::{FieldChip, PrimeField, Selectable},
+};
 use halo2_base::{
     gates::{builder::GateThreadBuilder, GateInstructions},
     utils::CurveAffineExt,
@@ -64,6 +67,7 @@ where
 }
 */
 
+/* Left as reference; should always use msm_par
 // Given points[i] and bool_scalars[j][i],
 // compute G'[j] = sum_{i=0..points.len()} points[i] * bool_scalars[j][i]
 // output is [ G'[j] + rand_point ]_{j=0..bool_scalars.len()}, rand_point
@@ -200,15 +204,17 @@ where
 
     ec_sub_unequal(chip, ctx, sum, any_sum, true)
 }
+*/
 
 /// Multi-thread witness generation for multi-scalar multiplication.
-/// Should give exact same circuit as `multi_exp`.
-///
-/// Currently does not support if the final answer is actually the point at infinity (meaning constraints will fail in that case)
 ///
 /// # Assumptions
 /// * `points.len() == scalars.len()`
 /// * `scalars[i].len() == scalars[j].len()` for all `i, j`
+/// * `points` are all on the curve or the point at infinity
+/// * `points[i]` is allowed to be (0, 0) to represent the point at infinity (identity point)
+/// * `2^max_scalar_bits != +-1 mod modulus::<F>()` where `max_scalar_bits = max_scalar_bits_per_cell * scalars[0].len()`
+/// * Currently implementation assumes that the only point on curve with y-coordinate equal to `0` is identity point
 pub fn multi_exp_par<F: PrimeField, FC, C>(
     chip: &FC,
     // these are the "threads" within a single Phase
@@ -226,7 +232,7 @@ where
 {
     // let (points, bool_scalars) = decompose::<F, _>(chip, ctx, points, scalars, max_scalar_bits_per_cell, radix);
 
-    debug_assert_eq!(points.len(), scalars.len());
+    assert_eq!(points.len(), scalars.len());
     let scalar_bits = max_scalar_bits_per_cell * scalars[0].len();
     // bool_scalars: 2d array `scalar_bits` by `points.len()`
     let mut bool_scalars = vec![Vec::with_capacity(points.len()); scalar_bits];
@@ -348,5 +354,5 @@ where
     // assume 2^scalar_bits != +-1 mod modulus::<F>()
     any_sum = ec_sub_unequal(chip, ctx, any_sum, any_point, false);
 
-    ec_sub_unequal(chip, ctx, sum, any_sum, true)
+    ec_sub_strict(chip, ctx, sum, any_sum)
 }
