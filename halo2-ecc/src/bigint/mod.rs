@@ -1,4 +1,3 @@
-use crate::halo2_proofs::circuit::Cell;
 use halo2_base::{
     gates::flex_gate::GateInstructions,
     utils::{biguint_to_fe, decompose_biguint, fe_to_biguint, BigPrimeField, ScalarField},
@@ -44,7 +43,7 @@ pub struct OverflowInteger<F: ScalarField> {
 }
 
 impl<F: ScalarField> OverflowInteger<F> {
-    pub fn construct(limbs: Vec<AssignedValue<F>>, max_limb_bits: usize) -> Self {
+    pub fn new(limbs: Vec<AssignedValue<F>>, max_limb_bits: usize) -> Self {
         Self { limbs, max_limb_bits }
     }
 
@@ -62,14 +61,16 @@ impl<F: ScalarField> OverflowInteger<F> {
             .fold(BigInt::zero(), |acc, acell| (acc << limb_bits) + fe_to_bigint(acell.value()))
     }
 
-    pub fn evaluate(
-        gate: &impl GateInstructions<F>,
+    /// Computes `sum_i limbs[i] * limb_bases[i]` in native field `F`.
+    /// In practice assumes `limb_bases[i] = 2^{limb_bits * i}`.
+    pub fn evaluate_native(
         ctx: &mut Context<F>,
+        gate: &impl GateInstructions<F>,
         limbs: impl IntoIterator<Item = AssignedValue<F>>,
-        limb_bases: impl IntoIterator<Item = F>,
+        limb_bases: &[F],
     ) -> AssignedValue<F> {
         // Constrain `out_native = sum_i out_assigned[i] * 2^{n*i}` in `F`
-        gate.inner_product(ctx, limbs, limb_bases.into_iter().map(|c| Constant(c)))
+        gate.inner_product(ctx, limbs, limb_bases.iter().map(|c| Constant(*c)))
     }
 }
 
@@ -78,15 +79,39 @@ impl<F: ScalarField> OverflowInteger<F> {
 /// sum<sub>i</sub> limbs\[i\] * 2<sup>limb_bits * i</sup>
 ///
 /// To save memory we do not store the `limb_bits` and it must be inferred from context.
+#[repr(transparent)]
 #[derive(Clone, Debug)]
 pub struct ProperUint<F: ScalarField>(pub(crate) Vec<AssignedValue<F>>);
 
 impl<F: ScalarField> ProperUint<F> {
+    pub fn limbs(&self) -> &[AssignedValue<F>] {
+        self.0.as_slice()
+    }
+
     pub fn into_overflow(self, limb_bits: usize) -> OverflowInteger<F> {
-        OverflowInteger::construct(self.0, limb_bits)
+        OverflowInteger::new(self.0, limb_bits)
+    }
+
+    /// Computes `sum_i limbs[i] * limb_bases[i]` in native field `F`.
+    /// In practice assumes `limb_bases[i] = 2^{limb_bits * i}`.
+    ///
+    /// Assumes that `value` is the underlying BigUint value represented by `self`.
+    pub fn into_crt(
+        self,
+        ctx: &mut Context<F>,
+        gate: &impl GateInstructions<F>,
+        value: BigUint,
+        limb_bases: &[F],
+        limb_bits: usize,
+    ) -> ProperCrtUint<F> {
+        // Constrain `out_native = sum_i out_assigned[i] * 2^{n*i}` in `F`
+        let native =
+            OverflowInteger::evaluate_native(ctx, gate, self.0.iter().copied(), limb_bases);
+        ProperCrtUint(CRTInteger::new(self.into_overflow(limb_bits), native, value.into()))
     }
 }
 
+#[repr(transparent)]
 #[derive(Clone, Debug)]
 pub struct FixedOverflowInteger<F: ScalarField> {
     pub limbs: Vec<F>,
@@ -114,7 +139,7 @@ impl<F: BigPrimeField> FixedOverflowInteger<F> {
 
     pub fn assign(self, ctx: &mut Context<F>, limb_bits: usize) -> OverflowInteger<F> {
         let assigned_limbs = self.limbs.into_iter().map(|limb| ctx.load_constant(limb)).collect();
-        OverflowInteger::construct(assigned_limbs, limb_bits)
+        OverflowInteger::new(assigned_limbs, limb_bits)
     }
 
     /// only use case is when coeffs has only a single 1, rest are 0
@@ -134,7 +159,7 @@ impl<F: BigPrimeField> FixedOverflowInteger<F> {
             })
             .collect();
 
-        OverflowInteger::construct(out_limbs, limb_bits)
+        OverflowInteger::new(out_limbs, limb_bits)
     }
 }
 
@@ -156,12 +181,21 @@ pub struct CRTInteger<F: ScalarField> {
     pub value: BigInt,
 }
 
+impl<F: ScalarField> AsRef<CRTInteger<F>> for CRTInteger<F> {
+    fn as_ref(&self) -> &CRTInteger<F> {
+        self
+    }
+}
+
+// Cloning all the time impacts readability so we'll just implement From<&T> for T
+impl<'a, F: ScalarField> From<&'a CRTInteger<F>> for CRTInteger<F> {
+    fn from(x: &'a CRTInteger<F>) -> Self {
+        x.clone()
+    }
+}
+
 impl<F: ScalarField> CRTInteger<F> {
-    pub fn construct(
-        truncation: OverflowInteger<F>,
-        native: AssignedValue<F>,
-        value: BigInt,
-    ) -> Self {
+    pub fn new(truncation: OverflowInteger<F>, native: AssignedValue<F>, value: BigInt) -> Self {
         Self { truncation, native, value }
     }
 
@@ -179,12 +213,54 @@ impl<F: ScalarField> CRTInteger<F> {
 /// * each `truncation.limbs[i]` is ranged checked to be in `[0, 2^limb_bits)`,
 /// * `native` is the evaluation of `sum_i truncation.limbs[i] * 2^{limb_bits * i} (mod modulus::<F>)` in the native field `F`
 /// * `value` is equal to `sum_i truncation.limbs[i] * 2^{limb_bits * i}` as integers
+///
+/// Note this means `native` and `value` are completely determined by `truncation`. However, we still store them explicitly for convenience.
+#[repr(transparent)]
 #[derive(Clone, Debug)]
 pub struct ProperCrtUint<F: ScalarField>(pub(crate) CRTInteger<F>);
 
+impl<F: ScalarField> AsRef<CRTInteger<F>> for ProperCrtUint<F> {
+    fn as_ref(&self) -> &CRTInteger<F> {
+        &self.0
+    }
+}
+
+impl<'a, F: ScalarField> From<&'a ProperCrtUint<F>> for ProperCrtUint<F> {
+    fn from(x: &'a ProperCrtUint<F>) -> Self {
+        x.clone()
+    }
+}
+
+// cannot blanket implement From<Proper<T>> for T because of Rust
 impl<F: ScalarField> From<ProperCrtUint<F>> for CRTInteger<F> {
     fn from(x: ProperCrtUint<F>) -> Self {
         x.0
+    }
+}
+
+impl<'a, F: ScalarField> From<&'a ProperCrtUint<F>> for CRTInteger<F> {
+    fn from(x: &'a ProperCrtUint<F>) -> Self {
+        x.0.clone()
+    }
+}
+
+impl<F: ScalarField> From<ProperCrtUint<F>> for ProperUint<F> {
+    fn from(x: ProperCrtUint<F>) -> Self {
+        ProperUint(x.0.truncation.limbs)
+    }
+}
+
+impl<F: ScalarField> ProperCrtUint<F> {
+    pub fn limbs(&self) -> &[AssignedValue<F>] {
+        self.0.limbs()
+    }
+
+    pub fn native(&self) -> &AssignedValue<F> {
+        self.0.native()
+    }
+
+    pub fn value(&self) -> BigUint {
+        self.0.value.to_biguint().expect("Value of proper uint should not be negative")
     }
 }
 
@@ -206,7 +282,7 @@ pub struct FixedCRTInteger<F: ScalarField> {
 }
 
 impl<F: BigPrimeField> FixedCRTInteger<F> {
-    pub fn construct(truncation: FixedOverflowInteger<F>, value: BigUint) -> Self {
+    pub fn new(truncation: FixedOverflowInteger<F>, value: BigUint) -> Self {
         Self { truncation, value }
     }
 
@@ -222,9 +298,9 @@ impl<F: BigPrimeField> FixedCRTInteger<F> {
         ctx: &mut Context<F>,
         limb_bits: usize,
         native_modulus: &BigUint,
-    ) -> CRTInteger<F> {
+    ) -> ProperCrtUint<F> {
         let assigned_truncation = self.truncation.assign(ctx, limb_bits);
         let assigned_native = ctx.load_constant(biguint_to_fe(&(&self.value % native_modulus)));
-        CRTInteger::construct(assigned_truncation, assigned_native, self.value.into())
+        ProperCrtUint(CRTInteger::new(assigned_truncation, assigned_native, self.value.into()))
     }
 }

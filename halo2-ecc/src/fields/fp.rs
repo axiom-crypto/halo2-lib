@@ -2,11 +2,11 @@ use super::{FieldChip, PrimeField, PrimeFieldChip, Selectable};
 use crate::bigint::{
     add_no_carry, big_is_equal, big_is_zero, carry_mod, check_carry_mod_to_zero, mul_no_carry,
     scalar_mul_and_add_no_carry, scalar_mul_no_carry, select, select_by_indicator, sub,
-    sub_no_carry, CRTInteger, FixedCRTInteger, OverflowInteger,
+    sub_no_carry, CRTInteger, FixedCRTInteger, OverflowInteger, ProperCrtUint, ProperUint,
 };
 use crate::halo2_proofs::halo2curves::CurveAffine;
 use halo2_base::gates::RangeChip;
-use halo2_base::utils::decompose_bigint;
+use halo2_base::utils::ScalarField;
 use halo2_base::{
     gates::{range::RangeConfig, GateInstructions, RangeInstructions},
     utils::{bigint_to_fe, biguint_to_fe, bit_length, decompose_biguint, fe_to_biguint, modulus},
@@ -21,6 +21,28 @@ pub type BaseFieldChip<'range, C> =
     FpChip<'range, <C as CurveAffine>::ScalarExt, <C as CurveAffine>::Base>;
 
 pub type FpConfig<F> = RangeConfig<F>;
+
+/// Wrapper around `FieldPoint` to guarantee this is a "reduced" representation of an `Fp` field element.
+/// A reduced representation guarantees that there is a *unique* representation of each field element.
+/// Typically this means Uints that are less than the modulus.
+#[derive(Clone, Debug)]
+pub struct Reduced<FieldPoint, Fp>(pub(crate) FieldPoint, PhantomData<Fp>);
+
+impl<FieldPoint, Fp> Reduced<FieldPoint, Fp> {
+    pub fn as_ref(&self) -> Reduced<&FieldPoint, Fp> {
+        Reduced(&self.0, PhantomData)
+    }
+
+    pub fn inner(&self) -> &FieldPoint {
+        &self.0
+    }
+}
+
+impl<F: ScalarField, Fp> From<Reduced<ProperCrtUint<F>, Fp>> for ProperCrtUint<F> {
+    fn from(x: Reduced<ProperCrtUint<F>, Fp>) -> Self {
+        x.0
+    }
+}
 
 // `Fp` always needs to be `BigPrimeField`, we may later want support for `F` being just `ScalarField` but for optimization reasons we'll assume it's also `BigPrimeField` for now
 
@@ -77,14 +99,14 @@ impl<'range, F: PrimeField, Fp: PrimeField> FpChip<'range, F, Fp> {
         }
     }
 
-    pub fn enforce_less_than_p(&self, ctx: &mut Context<F>, a: &CRTInteger<F>) {
+    pub fn enforce_less_than_p(&self, ctx: &mut Context<F>, a: ProperCrtUint<F>) {
         // a < p iff a - p has underflow
         let mut borrow: Option<AssignedValue<F>> = None;
-        for (&p_limb, &a_limb) in self.p_limbs.iter().zip(a.truncation.limbs.iter()) {
+        for (&p_limb, a_limb) in self.p_limbs.iter().zip(a.0.truncation.limbs) {
             let lt = match borrow {
                 None => self.range.is_less_than(ctx, a_limb, Constant(p_limb), self.limb_bits),
                 Some(borrow) => {
-                    let plus_borrow = self.range.gate.add(ctx, Constant(p_limb), borrow);
+                    let plus_borrow = self.gate().add(ctx, Constant(p_limb), borrow);
                     self.range.is_less_than(
                         ctx,
                         Existing(a_limb),
@@ -95,7 +117,15 @@ impl<'range, F: PrimeField, Fp: PrimeField> FpChip<'range, F, Fp> {
             };
             borrow = Some(lt);
         }
-        self.range.gate.assert_is_const(ctx, &borrow.unwrap(), &F::one());
+        self.gate().assert_is_const(ctx, &borrow.unwrap(), &F::one());
+    }
+
+    pub fn load_constant_uint(&self, ctx: &mut Context<F>, a: BigUint) -> ProperCrtUint<F> {
+        FixedCRTInteger::from_native(a, self.num_limbs, self.limb_bits).assign(
+            ctx,
+            self.limb_bits,
+            self.native_modulus(),
+        )
     }
 }
 
@@ -113,9 +143,9 @@ impl<'range, F: PrimeField, Fp: PrimeField> PrimeFieldChip<F> for FpChip<'range,
 
 impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, Fp> {
     const PRIME_FIELD_NUM_BITS: u32 = Fp::NUM_BITS;
-    type ConstantType = BigUint;
-    type WitnessType = BigInt;
-    type FieldPoint = CRTInteger<F>;
+    type UnsafeFieldPoint = CRTInteger<F>;
+    type FieldPoint = ProperCrtUint<F>;
+    type ReducedFieldPoint = Reduced<ProperCrtUint<F>, Fp>;
     type FieldType = Fp;
     type RangeChip = RangeChip<F>;
 
@@ -133,135 +163,110 @@ impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, F
         bigint_to_fe(&(&x.value % &self.p))
     }
 
-    fn fe_to_constant(x: Fp) -> BigUint {
-        fe_to_biguint(&x)
-    }
-
-    fn fe_to_witness(x: &Fp) -> BigInt {
-        BigInt::from(fe_to_biguint(x))
-    }
-
-    fn load_private(&self, ctx: &mut Context<F>, a: BigInt) -> CRTInteger<F> {
-        let a_vec = decompose_bigint::<F>(&a, self.num_limbs, self.limb_bits);
+    fn load_private(&self, ctx: &mut Context<F>, a: Fp) -> ProperCrtUint<F> {
+        let a = fe_to_biguint(&a);
+        let a_vec = decompose_biguint::<F>(&a, self.num_limbs, self.limb_bits);
         let limbs = ctx.assign_witnesses(a_vec);
 
-        let a_native = OverflowInteger::<F>::evaluate(
-            self.range.gate(),
-            ctx,
-            limbs.iter().copied(),
-            self.limb_bases.iter().copied(),
-        );
-
         let a_loaded =
-            CRTInteger::construct(OverflowInteger::construct(limbs, self.limb_bits), a_native, a);
+            ProperUint(limbs).into_crt(ctx, self.gate(), a, &self.limb_bases, self.limb_bits);
 
-        // TODO: this range check prevents loading witnesses that are not in "proper" representation form, is that ok?
-        self.range_check(ctx, &a_loaded, Self::PRIME_FIELD_NUM_BITS as usize);
+        self.range_check(ctx, a_loaded.clone(), Self::PRIME_FIELD_NUM_BITS as usize);
         a_loaded
     }
 
-    fn load_constant(&self, ctx: &mut Context<F>, a: BigUint) -> CRTInteger<F> {
-        let a_native = ctx.load_constant(biguint_to_fe(&(&a % self.native_modulus())));
-        let a_limbs = decompose_biguint::<F>(&a, self.num_limbs, self.limb_bits)
-            .into_iter()
-            .map(|c| ctx.load_constant(c))
-            .collect();
-
-        CRTInteger::construct(
-            OverflowInteger::construct(a_limbs, self.limb_bits),
-            a_native,
-            BigInt::from(a),
-        )
+    fn load_constant(&self, ctx: &mut Context<F>, a: Fp) -> ProperCrtUint<F> {
+        self.load_constant_uint(ctx, fe_to_biguint(&a))
     }
 
     // signed overflow BigInt functions
     fn add_no_carry(
         &self,
         ctx: &mut Context<F>,
-        a: &CRTInteger<F>,
-        b: &CRTInteger<F>,
+        a: impl Into<CRTInteger<F>>,
+        b: impl Into<CRTInteger<F>>,
     ) -> CRTInteger<F> {
-        add_no_carry::crt::<F>(self.range.gate(), ctx, a, b)
+        add_no_carry::crt(self.gate(), ctx, a.into(), b.into())
     }
 
     fn add_constant_no_carry(
         &self,
         ctx: &mut Context<F>,
-        a: &CRTInteger<F>,
-        c: BigUint,
+        a: impl Into<CRTInteger<F>>,
+        c: Fp,
     ) -> CRTInteger<F> {
-        let c = FixedCRTInteger::from_native(c, self.num_limbs, self.limb_bits);
+        let c = FixedCRTInteger::from_native(fe_to_biguint(&c), self.num_limbs, self.limb_bits);
         let c_native = biguint_to_fe::<F>(&(&c.value % modulus::<F>()));
+        let a = a.into();
         let mut limbs = Vec::with_capacity(a.truncation.limbs.len());
-        for (a_limb, c_limb) in a.truncation.limbs.iter().zip(c.truncation.limbs.into_iter()) {
-            let limb = self.range.gate.add(ctx, *a_limb, Constant(c_limb));
+        for (a_limb, c_limb) in a.truncation.limbs.into_iter().zip(c.truncation.limbs) {
+            let limb = self.gate().add(ctx, a_limb, Constant(c_limb));
             limbs.push(limb);
         }
-        let native = self.range.gate.add(ctx, a.native, Constant(c_native));
+        let native = self.gate().add(ctx, a.native, Constant(c_native));
         let trunc =
-            OverflowInteger::construct(limbs, max(a.truncation.max_limb_bits, self.limb_bits) + 1);
-        let value = &a.value + BigInt::from(c.value);
+            OverflowInteger::new(limbs, max(a.truncation.max_limb_bits, self.limb_bits) + 1);
+        let value = a.value + BigInt::from(c.value);
 
-        CRTInteger::construct(trunc, native, value)
+        CRTInteger::new(trunc, native, value)
     }
 
     fn sub_no_carry(
         &self,
         ctx: &mut Context<F>,
-        a: &CRTInteger<F>,
-        b: &CRTInteger<F>,
+        a: impl Into<CRTInteger<F>>,
+        b: impl Into<CRTInteger<F>>,
     ) -> CRTInteger<F> {
-        sub_no_carry::crt::<F>(self.range.gate(), ctx, a, b)
+        sub_no_carry::crt::<F>(self.gate(), ctx, a.into(), b.into())
     }
 
     // Input: a
     // Output: p - a if a != 0, else a
     // Assume the actual value of `a` equals `a.truncation`
     // Constrains a.truncation <= p using subtraction with carries
-    fn negate(&self, ctx: &mut Context<F>, a: &CRTInteger<F>) -> CRTInteger<F> {
+    fn negate(&self, ctx: &mut Context<F>, a: ProperCrtUint<F>) -> ProperCrtUint<F> {
         // Compute p - a.truncation using carries
-        let p = self.load_constant(ctx, self.p.to_biguint().unwrap());
+        let p = self.load_constant_uint(ctx, self.p.to_biguint().unwrap());
         let (out_or_p, underflow) =
-            sub::crt::<F>(self.range(), ctx, &p, a, self.limb_bits, self.limb_bases[1]);
+            sub::crt(self.range(), ctx, p, a.clone(), self.limb_bits, self.limb_bases[1]);
         // constrain underflow to equal 0
-        self.range.gate.assert_is_const(ctx, &underflow, &F::zero());
+        self.gate().assert_is_const(ctx, &underflow, &F::zero());
 
-        let a_is_zero = big_is_zero::assign::<F>(self.gate(), ctx, &a.truncation);
-        select::crt::<F>(self.range.gate(), ctx, a, &out_or_p, a_is_zero)
+        let a_is_zero = big_is_zero::positive(self.gate(), ctx, a.0.truncation.clone());
+        ProperCrtUint(select::crt(self.gate(), ctx, a.0, out_or_p, a_is_zero))
     }
 
     fn scalar_mul_no_carry(
         &self,
         ctx: &mut Context<F>,
-        a: &CRTInteger<F>,
+        a: impl Into<CRTInteger<F>>,
         c: i64,
     ) -> CRTInteger<F> {
-        scalar_mul_no_carry::crt::<F>(self.range.gate(), ctx, a, c)
+        scalar_mul_no_carry::crt(self.gate(), ctx, a.into(), c)
     }
 
     fn scalar_mul_and_add_no_carry(
         &self,
         ctx: &mut Context<F>,
-        a: &CRTInteger<F>,
-        b: &CRTInteger<F>,
+        a: impl Into<CRTInteger<F>>,
+        b: impl Into<CRTInteger<F>>,
         c: i64,
     ) -> CRTInteger<F> {
-        scalar_mul_and_add_no_carry::crt::<F>(self.range.gate(), ctx, a, b, c)
+        scalar_mul_and_add_no_carry::crt(self.gate(), ctx, a.into(), b.into(), c)
     }
 
     fn mul_no_carry(
         &self,
         ctx: &mut Context<F>,
-        a: &CRTInteger<F>,
-        b: &CRTInteger<F>,
+        a: impl Into<CRTInteger<F>>,
+        b: impl Into<CRTInteger<F>>,
     ) -> CRTInteger<F> {
-        mul_no_carry::crt::<F>(self.range.gate(), ctx, a, b, self.num_limbs_log2_ceil)
+        mul_no_carry::crt(self.gate(), ctx, a.into(), b.into(), self.num_limbs_log2_ceil)
     }
 
-    fn check_carry_mod_to_zero(&self, ctx: &mut Context<F>, a: &CRTInteger<F>) {
+    fn check_carry_mod_to_zero(&self, ctx: &mut Context<F>, a: CRTInteger<F>) {
         check_carry_mod_to_zero::crt::<F>(
             self.range(),
-            // &self.bigint_chip,
             ctx,
             a,
             self.num_limbs_bits,
@@ -274,10 +279,9 @@ impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, F
         )
     }
 
-    fn carry_mod(&self, ctx: &mut Context<F>, a: &CRTInteger<F>) -> CRTInteger<F> {
+    fn carry_mod(&self, ctx: &mut Context<F>, a: CRTInteger<F>) -> ProperCrtUint<F> {
         carry_mod::crt::<F>(
             self.range(),
-            // &self.bigint_chip,
             ctx,
             a,
             self.num_limbs_bits,
@@ -295,10 +299,11 @@ impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, F
     fn range_check(
         &self,
         ctx: &mut Context<F>,
-        a: &CRTInteger<F>,
+        a: impl Into<CRTInteger<F>>,
         max_bits: usize, // the maximum bits that a.value could take
     ) {
         let n = self.limb_bits;
+        let a = a.into();
         let k = a.truncation.limbs.len();
         debug_assert!(max_bits > n * (k - 1) && max_bits <= n * k);
         let last_limb_bits = max_bits - n * (k - 1);
@@ -306,42 +311,48 @@ impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, F
         debug_assert!(a.value.bits() as usize <= max_bits);
 
         // range check limbs of `a` are in [0, 2^n) except last limb should be in [0, 2^last_limb_bits)
-        for (i, cell) in a.truncation.limbs.iter().enumerate() {
+        for (i, cell) in a.truncation.limbs.into_iter().enumerate() {
             let limb_bits = if i == k - 1 { last_limb_bits } else { n };
-            self.range.range_check(ctx, *cell, limb_bits);
+            self.range.range_check(ctx, cell, limb_bits);
         }
     }
 
-    fn enforce_less_than(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) {
-        self.enforce_less_than_p(ctx, a)
+    fn enforce_less_than(
+        &self,
+        ctx: &mut Context<F>,
+        a: ProperCrtUint<F>,
+    ) -> Reduced<ProperCrtUint<F>, Fp> {
+        self.enforce_less_than_p(ctx, a.clone());
+        Reduced(a, PhantomData)
     }
 
-    fn is_soft_zero(&self, ctx: &mut Context<F>, a: &CRTInteger<F>) -> AssignedValue<F> {
-        big_is_zero::crt::<F>(self.gate(), ctx, a)
-
-        // CHECK: I don't think this is necessary:
-        // underflow != 0 iff carry < p
-        // let p = self.load_constant(ctx, self.p.to_biguint().unwrap());
-        // let (_, underflow) =
-        //     sub::crt::<F>(self.range(), ctx, a, &p, self.limb_bits, self.limb_bases[1]);
-        // let is_underflow_zero = self.gate().is_zero(ctx, &underflow);
-        // let range_check = self.gate().not(ctx, Existing(&is_underflow_zero));
-
-        // self.gate().and(ctx, is_zero, range_check)
+    /// Returns 1 iff `a` is 0 as a BigUint. This means that even if `a` is 0 modulo `p`, this may return 0.
+    fn is_soft_zero(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<ProperCrtUint<F>>,
+    ) -> AssignedValue<F> {
+        let a = a.into();
+        big_is_zero::positive(self.gate(), ctx, a.0.truncation)
     }
 
     /// Given proper CRT integer `a`, returns 1 iff `a < modulus::<F>()` and `a != 0` as integers
     ///
     /// # Assumptions
     /// * `a` is proper representation of BigUint
-    fn is_soft_nonzero(&self, ctx: &mut Context<F>, a: &CRTInteger<F>) -> AssignedValue<F> {
-        let is_zero = big_is_zero::crt::<F>(self.gate(), ctx, a);
+    fn is_soft_nonzero(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<ProperCrtUint<F>>,
+    ) -> AssignedValue<F> {
+        let a = a.into();
+        let is_zero = big_is_zero::positive(self.gate(), ctx, a.0.truncation.clone());
         let is_nonzero = self.gate().not(ctx, is_zero);
 
         // underflow != 0 iff carry < p
-        let p = self.load_constant(ctx, self.p.to_biguint().unwrap());
+        let p = self.load_constant_uint(ctx, self.p.to_biguint().unwrap());
         let (_, underflow) =
-            sub::crt::<F>(self.range(), ctx, a, &p, self.limb_bits, self.limb_bases[1]);
+            sub::crt::<F>(self.range(), ctx, a, p, self.limb_bits, self.limb_bases[1]);
         let is_underflow_zero = self.gate().is_zero(ctx, underflow);
         let no_underflow = self.gate().not(ctx, is_underflow_zero);
 
@@ -351,53 +362,109 @@ impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, F
     // assuming `a` has been range checked to be a proper BigInt
     // constrain the witness `a` to be `< p`
     // then check if `a` is 0
-    fn is_zero(&self, ctx: &mut Context<F>, a: &CRTInteger<F>) -> AssignedValue<F> {
-        self.enforce_less_than_p(ctx, a);
+    fn is_zero(&self, ctx: &mut Context<F>, a: impl Into<ProperCrtUint<F>>) -> AssignedValue<F> {
+        let a = a.into();
+        self.enforce_less_than_p(ctx, a.clone());
         // just check truncated limbs are all 0 since they determine the native value
-        big_is_zero::positive::<F>(self.gate(), ctx, &a.truncation)
+        big_is_zero::positive(self.gate(), ctx, a.0.truncation)
     }
 
     fn is_equal_unenforced(
         &self,
         ctx: &mut Context<F>,
-        a: &Self::FieldPoint,
-        b: &Self::FieldPoint,
+        a: Reduced<ProperCrtUint<F>, Fp>,
+        b: Reduced<ProperCrtUint<F>, Fp>,
     ) -> AssignedValue<F> {
-        big_is_equal::assign::<F>(self.gate(), ctx, &a.truncation, &b.truncation)
+        big_is_equal::assign::<F>(self.gate(), ctx, a.0, b.0)
     }
 
     // assuming `a, b` have been range checked to be a proper BigInt
     // constrain the witnesses `a, b` to be `< p`
     // then assert `a == b` as BigInts
-    fn assert_equal(&self, ctx: &mut Context<F>, a: &Self::FieldPoint, b: &Self::FieldPoint) {
-        self.enforce_less_than_p(ctx, a);
-        self.enforce_less_than_p(ctx, b);
+    fn assert_equal(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<ProperCrtUint<F>>,
+        b: impl Into<ProperCrtUint<F>>,
+    ) {
+        let a = a.into();
+        let b = b.into();
         // a.native and b.native are derived from `a.truncation, b.truncation`, so no need to check if they're equal
-        for (limb_a, limb_b) in a.truncation.limbs.iter().zip(b.truncation.limbs.iter()) {
+        for (limb_a, limb_b) in a.limbs().iter().zip(b.limbs().iter()) {
             ctx.constrain_equal(limb_a, limb_b);
         }
+        self.enforce_less_than_p(ctx, a);
+        self.enforce_less_than_p(ctx, b);
     }
 }
 
-impl<'range, F: PrimeField, Fp: PrimeField> Selectable<F> for FpChip<'range, F, Fp> {
-    type Point = CRTInteger<F>;
-
+impl<'range, F: PrimeField, Fp: PrimeField> Selectable<F, CRTInteger<F>> for FpChip<'range, F, Fp> {
     fn select(
         &self,
         ctx: &mut Context<F>,
-        a: &CRTInteger<F>,
-        b: &CRTInteger<F>,
+        a: CRTInteger<F>,
+        b: CRTInteger<F>,
         sel: AssignedValue<F>,
     ) -> CRTInteger<F> {
-        select::crt::<F>(self.range.gate(), ctx, a, b, sel)
+        select::crt(self.gate(), ctx, a, b, sel)
     }
 
     fn select_by_indicator(
         &self,
         ctx: &mut Context<F>,
-        a: &[CRTInteger<F>],
+        a: &impl AsRef<[CRTInteger<F>]>,
         coeffs: &[AssignedValue<F>],
     ) -> CRTInteger<F> {
-        select_by_indicator::crt::<F>(self.range.gate(), ctx, a, coeffs, &self.limb_bases)
+        select_by_indicator::crt(self.gate(), ctx, a.as_ref(), coeffs, &self.limb_bases)
+    }
+}
+
+impl<'range, F: PrimeField, Fp: PrimeField> Selectable<F, ProperCrtUint<F>>
+    for FpChip<'range, F, Fp>
+{
+    fn select(
+        &self,
+        ctx: &mut Context<F>,
+        a: ProperCrtUint<F>,
+        b: ProperCrtUint<F>,
+        sel: AssignedValue<F>,
+    ) -> ProperCrtUint<F> {
+        ProperCrtUint(select::crt(self.gate(), ctx, a.0, b.0, sel))
+    }
+
+    fn select_by_indicator(
+        &self,
+        ctx: &mut Context<F>,
+        a: &impl AsRef<[ProperCrtUint<F>]>,
+        coeffs: &[AssignedValue<F>],
+    ) -> ProperCrtUint<F> {
+        let out = select_by_indicator::crt(self.gate(), ctx, a.as_ref(), coeffs, &self.limb_bases);
+        ProperCrtUint(out)
+    }
+}
+
+impl<F: PrimeField, Fp, Pt: Clone, FC> Selectable<F, Reduced<Pt, Fp>> for FC
+where
+    FC: Selectable<F, Pt>,
+{
+    fn select(
+        &self,
+        ctx: &mut Context<F>,
+        a: Reduced<Pt, Fp>,
+        b: Reduced<Pt, Fp>,
+        sel: AssignedValue<F>,
+    ) -> Reduced<Pt, Fp> {
+        Reduced(self.select(ctx, a.0, b.0, sel), PhantomData)
+    }
+
+    fn select_by_indicator(
+        &self,
+        ctx: &mut Context<F>,
+        a: &impl AsRef<[Reduced<Pt, Fp>]>,
+        coeffs: &[AssignedValue<F>],
+    ) -> Reduced<Pt, Fp> {
+        // this is inefficient, could do std::mem::transmute but that is unsafe. hopefully compiler optimizes it out
+        let a = a.as_ref().iter().map(|a| a.0.clone()).collect::<Vec<_>>();
+        Reduced(self.select_by_indicator(ctx, &a, coeffs), PhantomData)
     }
 }

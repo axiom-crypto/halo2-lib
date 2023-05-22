@@ -9,8 +9,8 @@ use halo2_base::{gates::GateInstructions, utils::ScalarField, Context, QuantumCe
 pub fn truncate<F: ScalarField>(
     gate: &impl GateInstructions<F>,
     ctx: &mut Context<F>,
-    a: &OverflowInteger<F>,
-    b: &OverflowInteger<F>,
+    a: OverflowInteger<F>,
+    b: OverflowInteger<F>,
     num_limbs_log2_ceil: usize,
 ) -> OverflowInteger<F> {
     let k = a.limbs.len();
@@ -31,19 +31,19 @@ pub fn truncate<F: ScalarField>(
         })
         .collect();
 
-    OverflowInteger::construct(out_limbs, num_limbs_log2_ceil + a.max_limb_bits + b.max_limb_bits)
+    OverflowInteger::new(out_limbs, num_limbs_log2_ceil + a.max_limb_bits + b.max_limb_bits)
 }
 
 pub fn crt<F: ScalarField>(
     gate: &impl GateInstructions<F>,
     ctx: &mut Context<F>,
-    a: &CRTInteger<F>,
-    b: &CRTInteger<F>,
+    a: CRTInteger<F>,
+    b: CRTInteger<F>,
     num_limbs_log2_ceil: usize,
 ) -> CRTInteger<F> {
-    let out_trunc = truncate::<F>(gate, ctx, &a.truncation, &b.truncation, num_limbs_log2_ceil);
+    let out_trunc = truncate::<F>(gate, ctx, a.truncation, b.truncation, num_limbs_log2_ceil);
     let out_native = gate.mul(ctx, a.native, b.native);
-    let out_val = &a.value * &b.value;
+    let out_val = a.value * b.value;
 
-    CRTInteger::construct(out_trunc, out_native, out_val)
+    CRTInteger::new(out_trunc, out_native, out_val)
 }

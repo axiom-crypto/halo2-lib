@@ -33,13 +33,14 @@ fn g2_add_test<F: PrimeField>(ctx: &mut Context<F>, params: CircuitParams, _poin
     let fp2_chip = Fp2Chip::<F>::new(&fp_chip);
     let g2_chip = EccChip::new(&fp2_chip);
 
-    let points = _points.iter().map(|pt| g2_chip.assign_point(ctx, *pt)).collect::<Vec<_>>();
+    let points =
+        _points.iter().map(|pt| g2_chip.assign_point_unchecked(ctx, *pt)).collect::<Vec<_>>();
 
-    let acc = g2_chip.sum::<G2Affine>(ctx, points.iter());
+    let acc = g2_chip.sum::<G2Affine>(ctx, points);
 
     let answer = _points.iter().fold(G2Affine::identity(), |a, b| (a + b).to_affine());
-    let x = fp2_chip.get_assigned_value(&acc.x);
-    let y = fp2_chip.get_assigned_value(&acc.y);
+    let x = fp2_chip.get_assigned_value(&acc.x.into());
+    let y = fp2_chip.get_assigned_value(&acc.y.into());
     assert_eq!(answer.x, x);
     assert_eq!(answer.y, y);
 }

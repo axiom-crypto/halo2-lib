@@ -1,4 +1,5 @@
-use super::{check_carry_to_zero, CRTInteger, OverflowInteger};
+use std::{cmp::max, iter};
+
 use halo2_base::{
     gates::{range::RangeStrategy, GateInstructions, RangeInstructions},
     utils::{decompose_bigint, BigPrimeField},
@@ -8,7 +9,8 @@ use halo2_base::{
 use num_bigint::BigInt;
 use num_integer::Integer;
 use num_traits::{One, Signed};
-use std::{cmp::max, iter};
+
+use super::{check_carry_to_zero, CRTInteger, OverflowInteger, ProperCrtUint, ProperUint};
 
 // Input `a` is `CRTInteger` with `a.truncation` of length `k` with "signed" limbs
 // Output is `out = a (mod modulus)` as CRTInteger with
@@ -29,7 +31,7 @@ pub fn crt<F: BigPrimeField>(
     range: &impl RangeInstructions<F>,
     // chip: &BigIntConfig<F>,
     ctx: &mut Context<F>,
-    a: &CRTInteger<F>,
+    a: CRTInteger<F>,
     k_bits: usize, // = a.len().bits()
     modulus: &BigInt,
     mod_vec: &[F],
@@ -37,7 +39,7 @@ pub fn crt<F: BigPrimeField>(
     limb_bits: usize,
     limb_bases: &[F],
     limb_base_big: &BigInt,
-) -> CRTInteger<F> {
+) -> ProperCrtUint<F> {
     let n = limb_bits;
     let k = a.truncation.limbs.len();
     let trunc_len = n * k;
@@ -96,8 +98,8 @@ pub fn crt<F: BigPrimeField>(
 
     // strategies where we carry out school-book multiplication in some form:
     //    BigIntStrategy::Simple => {
-    for (i, (a_limb, (quot_v, out_v))) in
-        a.truncation.limbs.iter().zip(quot_vec.into_iter().zip(out_vec.into_iter())).enumerate()
+    for (i, ((a_limb, quot_v), out_v)) in
+        a.truncation.limbs.into_iter().zip(quot_vec).zip(out_vec).enumerate()
     {
         let (prod, new_quot_cell) = range.gate().inner_product_left_last(
             ctx,
@@ -120,7 +122,7 @@ pub fn crt<F: BigPrimeField>(
                 ctx.assign_region(
                     [
                         Constant(-F::one()),
-                        Existing(*a_limb),
+                        Existing(a_limb),
                         Witness(temp1),
                         Constant(F::one()),
                         Witness(out_v),
@@ -156,7 +158,7 @@ pub fn crt<F: BigPrimeField>(
         range.range_check(ctx, quot_shift, limb_bits + 1);
     }
 
-    let check_overflow_int = OverflowInteger::construct(
+    let check_overflow_int = OverflowInteger::new(
         check_assigned,
         max(max(limb_bits, a.truncation.max_limb_bits) + 1, 2 * n + k_bits),
     );
@@ -172,21 +174,12 @@ pub fn crt<F: BigPrimeField>(
     );
 
     // Constrain `quot_native = sum_i quot_assigned[i] * 2^{n*i}` in `F`
-    let quot_native = OverflowInteger::<F>::evaluate(
-        range.gate(),
-        ctx,
-        quot_assigned,
-        limb_bases.iter().copied(),
-    );
+    let quot_native =
+        OverflowInteger::evaluate_native(ctx, range.gate(), quot_assigned, limb_bases);
 
     // Constrain `out_native = sum_i out_assigned[i] * 2^{n*i}` in `F`
-    let out_native = OverflowInteger::<F>::evaluate(
-        range.gate(),
-        ctx,
-        out_assigned.iter().copied(),
-        limb_bases.iter().copied(),
-    );
-
+    let out_native =
+        OverflowInteger::evaluate_native(ctx, range.gate(), out_assigned.clone(), limb_bases);
     // We save 1 cell by connecting `out_native` computation with the following:
 
     // Check `out + modulus * quotient - a = 0` in native field
@@ -196,5 +189,9 @@ pub fn crt<F: BigPrimeField>(
         [-1], // negative index because -1 relative offset is `out_native` assigned value
     );
 
-    CRTInteger::construct(OverflowInteger::construct(out_assigned, limb_bits), out_native, out_val)
+    ProperCrtUint(CRTInteger::new(
+        ProperUint(out_assigned).into_overflow(limb_bits),
+        out_native,
+        out_val,
+    ))
 }

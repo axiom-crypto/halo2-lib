@@ -13,7 +13,10 @@ use num_traits::{One, Zero};
 pub trait BigPrimeField: ScalarField {
     /// Converts a slice of [u64] to [BigPrimeField]
     /// * `val`: the slice of u64
-    /// Assumes val.len() <= 4
+    ///
+    /// # Assumptions
+    /// * `val` has the correct length for the implementation
+    /// * The integer value of `val` is already less than the modulus of `Self`
     fn from_u64_digits(val: &[u64]) -> Self;
 }
 #[cfg(feature = "halo2-axiom")]
@@ -139,6 +142,9 @@ pub fn power_of_two<F: BigPrimeField>(n: usize) -> F {
 
 /// Converts an immutable reference to [BigUint] to a [BigPrimeField].
 /// * `e`: immutable reference to [BigUint]
+///
+/// # Assumptions:
+/// * `e` is less than the modulus of `F`
 pub fn biguint_to_fe<F: BigPrimeField>(e: &BigUint) -> F {
     #[cfg(feature = "halo2-axiom")]
     {
@@ -154,6 +160,9 @@ pub fn biguint_to_fe<F: BigPrimeField>(e: &BigUint) -> F {
 
 /// Converts an immutable reference to [BigInt] to a [BigPrimeField].
 /// * `e`: immutable reference to [BigInt]
+///
+/// # Assumptions:
+/// * The absolute value of `e` is less than the modulus of `F`
 pub fn bigint_to_fe<F: BigPrimeField>(e: &BigInt) -> F {
     #[cfg(feature = "halo2-axiom")]
     {
@@ -240,6 +249,8 @@ pub fn decompose_fe_to_u64_limbs<F: ScalarField>(
 /// * `e`: immutable reference to [BigInt] to decompose
 /// * `num_limbs`: number of limbs to decompose `e` into
 /// * `bit_len`: number of bits in each limb
+///
+/// Truncates to `num_limbs` limbs if `e` is too large.
 pub fn decompose_biguint<F: BigPrimeField>(
     e: &BigUint,
     num_limbs: usize,

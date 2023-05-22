@@ -1,4 +1,4 @@
-use super::{CRTInteger, OverflowInteger};
+use super::{CRTInteger, OverflowInteger, ProperCrtUint};
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
     utils::ScalarField,
@@ -13,8 +13,8 @@ use itertools::Itertools;
 pub fn assign<F: ScalarField>(
     range: &impl RangeInstructions<F>,
     ctx: &mut Context<F>,
-    a: &OverflowInteger<F>,
-    b: &OverflowInteger<F>,
+    a: OverflowInteger<F>,
+    b: OverflowInteger<F>,
     limb_bits: usize,
     limb_base: F,
 ) -> (OverflowInteger<F>, AssignedValue<F>) {
@@ -24,7 +24,7 @@ pub fn assign<F: ScalarField>(
     let mut out_limbs = Vec::with_capacity(k);
 
     let mut borrow: Option<AssignedValue<F>> = None;
-    for (&a_limb, &b_limb) in a.limbs.iter().zip_eq(b.limbs.iter()) {
+    for (a_limb, b_limb) in a.limbs.into_iter().zip_eq(b.limbs) {
         let (bottom, lt) = match borrow {
             None => {
                 let lt = range.is_less_than(ctx, a_limb, b_limb, limb_bits);
@@ -56,21 +56,23 @@ pub fn assign<F: ScalarField>(
         out_limbs.push(out_limb);
         borrow = Some(lt);
     }
-    (OverflowInteger::construct(out_limbs, limb_bits), borrow.unwrap())
+    (OverflowInteger::new(out_limbs, limb_bits), borrow.unwrap())
 }
 
 // returns (a-b, underflow), where underflow is nonzero iff a < b
+/// # Assumptions
+/// * `a, b` are proper CRT representations of integers with the same number of limbs
 pub fn crt<F: ScalarField>(
     range: &impl RangeInstructions<F>,
     ctx: &mut Context<F>,
-    a: &CRTInteger<F>,
-    b: &CRTInteger<F>,
+    a: ProperCrtUint<F>,
+    b: ProperCrtUint<F>,
     limb_bits: usize,
     limb_base: F,
 ) -> (CRTInteger<F>, AssignedValue<F>) {
     let (out_trunc, underflow) =
-        assign::<F>(range, ctx, &a.truncation, &b.truncation, limb_bits, limb_base);
-    let out_native = range.gate().sub(ctx, a.native, b.native);
-    let out_val = &a.value - &b.value;
-    (CRTInteger::construct(out_trunc, out_native, out_val), underflow)
+        assign(range, ctx, a.0.truncation, b.0.truncation, limb_bits, limb_base);
+    let out_native = range.gate().sub(ctx, a.0.native, b.0.native);
+    let out_val = a.0.value - b.0.value;
+    (CRTInteger::new(out_trunc, out_native, out_val), underflow)
 }
