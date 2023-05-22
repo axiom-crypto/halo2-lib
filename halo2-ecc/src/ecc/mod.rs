@@ -469,11 +469,12 @@ where
 /// - an array of length > 1 is needed when `scalar` exceeds the modulus of scalar field `F`
 ///
 /// # Assumptions
-/// * `P` is not the point at infinity
-/// * `scalar > 0`
-/// * If `scalar_is_safe == true`, then we assume the integer `scalar` is in range [1, order of `P`)
-/// * `scalar_i < 2^{max_bits} for all i`
-/// * `max_bits <= modulus::<F>.bits()`, and equality only allowed when the order of `P` equals the modulus of `F`
+/// - `P` is not the point at infinity
+/// - `scalar > 0`
+/// - If `scalar_is_safe == true`, then we assume the integer `scalar` is in range [1, order of `P`)
+/// - Even if `scalar_is_safe == false`, some constraints may still fail if `scalar` is not in range [1, order of `P`)
+/// - `scalar_i < 2^{max_bits} for all i`
+/// - `max_bits <= modulus::<F>.bits()`, and equality only allowed when the order of `P` equals the modulus of `F`
 pub fn scalar_multiply<F: PrimeField, FC>(
     chip: &FC,
     ctx: &mut Context<F>,
@@ -1094,6 +1095,7 @@ where
 }
 
 impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
+    /// See [`fixed_base::scalar_multiply`] for more details.
     // TODO: put a check in place that scalar is < modulus of C::Scalar
     pub fn fixed_base_scalar_mult<C>(
         &self,
@@ -1102,6 +1104,7 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         scalar: Vec<AssignedValue<F>>,
         max_bits: usize,
         window_bits: usize,
+        scalar_is_safe: bool,
     ) -> EcPoint<F, FC::FieldPoint>
     where
         C: CurveAffineExt,
@@ -1114,6 +1117,7 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
             scalar,
             max_bits,
             window_bits,
+            scalar_is_safe,
         )
     }
 
