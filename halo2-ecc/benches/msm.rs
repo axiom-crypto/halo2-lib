@@ -59,8 +59,10 @@ fn msm_bench(
     let ctx = builder.main(0);
     let scalars_assigned =
         scalars.iter().map(|scalar| vec![ctx.load_witness(*scalar)]).collect::<Vec<_>>();
-    let bases_assigned =
-        bases.iter().map(|base| ecc_chip.load_private(ctx, (base.x, base.y))).collect::<Vec<_>>();
+    let bases_assigned = bases
+        .iter()
+        .map(|base| ecc_chip.load_private_unchecked(ctx, (base.x, base.y)))
+        .collect::<Vec<_>>();
 
     ecc_chip.variable_base_msm_in::<G1Affine>(
         builder,

@@ -27,15 +27,12 @@ fn fp_mul_test<F: PrimeField>(
     let range = RangeChip::<F>::default(lookup_bits);
     let chip = FpChip::<F, Fq>::new(&range, limb_bits, num_limbs);
 
-    let [a, b] = [_a, _b].map(|x| chip.load_private(ctx, FpChip::<F, Fq>::fe_to_witness(&x)));
-    let c = chip.mul(ctx, &a, &b);
+    let [a, b] = [_a, _b].map(|x| chip.load_private(ctx, x));
+    let c = chip.mul(ctx, a, b);
 
-    assert_eq!(c.truncation.to_bigint(limb_bits), c.value);
-    assert_eq!(
-        c.native.value(),
-        &biguint_to_fe(&(&c.value.to_biguint().unwrap() % modulus::<F>()))
-    );
-    assert_eq!(c.value, fe_to_biguint(&(_a * _b)).into())
+    assert_eq!(c.0.truncation.to_bigint(limb_bits), c.0.value);
+    assert_eq!(c.native().value(), &biguint_to_fe(&(c.value() % modulus::<F>())));
+    assert_eq!(c.0.value, fe_to_biguint(&(_a * _b)).into())
 }
 
 #[test]

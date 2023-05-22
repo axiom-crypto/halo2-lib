@@ -3,8 +3,6 @@ use std::{
     io::{BufRead, BufReader},
 };
 
-#[allow(unused_imports)]
-use crate::ecc::fixed_base::FixedEcPoint;
 use crate::fields::{FpStrategy, PrimeField};
 
 use super::*;
@@ -62,10 +60,10 @@ fn fixed_base_msm_test(
     }
     let msm_answer = elts.into_iter().reduce(|a, b| a + b).unwrap().to_affine();
 
-    let msm_x = msm.x.value;
-    let msm_y = msm.y.value;
-    assert_eq!(msm_x, fe_to_biguint(&msm_answer.x).into());
-    assert_eq!(msm_y, fe_to_biguint(&msm_answer.y).into());
+    let msm_x = msm.x.value();
+    let msm_y = msm.y.value();
+    assert_eq!(msm_x, fe_to_biguint(&msm_answer.x));
+    assert_eq!(msm_y, fe_to_biguint(&msm_answer.y));
 }
 
 fn random_fixed_base_msm_circuit(
