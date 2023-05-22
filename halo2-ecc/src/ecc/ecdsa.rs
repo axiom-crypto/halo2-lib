@@ -57,6 +57,7 @@ where
         u2.limbs().to_vec(),
         base_chip.limb_bits,
         var_window_bits,
+        true, // we can call it with scalar_is_safe = true because of the u2_small check below
     );
 
     // check u1 * G != -(u2 * pubkey) but allow u1 * G == u2 * pubkey
@@ -77,7 +78,6 @@ where
     let x1 = scalar_chip.enforce_less_than(ctx, sum.x);
     let equal_check = big_is_equal::assign(base_chip.gate(), ctx, x1.0, r);
 
-    // TODO: maybe the big_less_than is optional?
     let u1_small = big_less_than::assign(
         base_chip.range(),
         ctx,

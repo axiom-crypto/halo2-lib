@@ -213,7 +213,6 @@ where
 /// * `scalars[i].len() == scalars[j].len()` for all `i, j`
 /// * `points` are all on the curve or the point at infinity
 /// * `points[i]` is allowed to be (0, 0) to represent the point at infinity (identity point)
-/// * `2^max_scalar_bits != +-1 mod modulus::<F>()` where `max_scalar_bits = max_scalar_bits_per_cell * scalars[0].len()`
 /// * Currently implementation assumes that the only point on curve with y-coordinate equal to `0` is identity point
 pub fn multi_exp_par<F: PrimeField, FC, C>(
     chip: &FC,
@@ -337,7 +336,7 @@ where
     // let any_point = (2^num_rounds - 1) * any_base
     // TODO: can we remove all these random point operations somehow?
     let mut any_point = ec_double(chip, ctx, any_points.last().unwrap());
-    any_point = ec_sub_unequal(chip, ctx, any_point, &any_points[0], false);
+    any_point = ec_sub_unequal(chip, ctx, any_point, &any_points[0], true);
 
     // compute sum_{k=0..scalar_bits} agg[k] * 2^k - (sum_{k=0..scalar_bits} 2^k) * rand_point
     // (sum_{k=0..scalar_bits} 2^k) = (2^scalar_bits - 1)
@@ -351,8 +350,7 @@ where
     }
 
     any_sum = ec_double(chip, ctx, any_sum);
-    // assume 2^scalar_bits != +-1 mod modulus::<F>()
-    any_sum = ec_sub_unequal(chip, ctx, any_sum, any_point, false);
+    any_sum = ec_sub_unequal(chip, ctx, any_sum, any_point, true);
 
     ec_sub_strict(chip, ctx, sum, any_sum)
 }
