@@ -74,7 +74,7 @@ impl<F: ScalarField> BasicGateConfig<F> {
     /// Wrapper for [ConstraintSystem].create_gate(name, meta) creates a gate form [q * (a + b * c - out)].
     /// * `meta`: [ConstraintSystem] used for the gate
     fn create_gate(&self, meta: &mut ConstraintSystem<F>) {
-        meta.create_gate("1 column a * b + c = out", |meta| {
+        meta.create_gate("1 column a + b * c = out", |meta| {
             let q = meta.query_selector(self.q_enable);
 
             let a = meta.query_advice(self.value, Rotation::cur());

@@ -337,7 +337,7 @@ impl<F: FieldExt> CellManager<F> {
         // Make sure all rows start at the same column
         let width = self.get_width();
         #[cfg(debug_assertions)]
-        for row in self.rows.iter_mut() {
+        for row in self.rows.iter() {
             self.num_unused_cells += width - *row;
         }
         self.rows = vec![width; self.height];
@@ -1135,7 +1135,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
             for i in 0..5 {
                 let input = scatter::expr(3, part_size_base) - 2.expr() * input[i].clone()
                     + input[(i + 1) % 5].clone()
-                    - input[(i + 2) % 5].clone().clone();
+                    - input[(i + 2) % 5].clone();
                 let output = output[i].clone();
                 meta.lookup("chi base", |_| {
                     vec![(input.clone(), chi_base_table[0]), (output.clone(), chi_base_table[1])]
