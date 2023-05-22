@@ -971,6 +971,7 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         self.field_chip.assert_equal(ctx, P.y, Q.y);
     }
 
+    /// None of elements in `points` can be point at infinity.
     pub fn sum<C>(
         &self,
         ctx: &mut Context<F>,
@@ -1153,21 +1154,15 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         #[cfg(feature = "display")]
         println!("computing length {} fixed base msm", points.len());
 
-        // heuristic to decide when to use parallelism
-        if points.len() < 25 {
-            let ctx = builder.main(phase);
-            fixed_base::msm(self, ctx, points, scalars, max_scalar_bits_per_cell, clump_factor)
-        } else {
-            fixed_base::msm_par(
-                self,
-                builder,
-                points,
-                scalars,
-                max_scalar_bits_per_cell,
-                clump_factor,
-                phase,
-            )
-        }
+        fixed_base::msm_par(
+            self,
+            builder,
+            points,
+            scalars,
+            max_scalar_bits_per_cell,
+            clump_factor,
+            phase,
+        )
 
         // Empirically does not seem like pippenger is any better for fixed base msm right now, because of the cost of `select_by_indicator`
         // Cell usage becomes around comparable when `points.len() > 100`, and `clump_factor` should always be 4
