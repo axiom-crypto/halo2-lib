@@ -4,13 +4,13 @@ use ff::Field;
 use halo2_base::{
     gates::{
         builder::{GateThreadBuilder, RangeCircuitBuilder},
-        tests::{check_proof, gen_proof},
         RangeChip,
     },
     halo2_proofs::{
         halo2curves::bn256::Fq, plonk::keygen_pk, plonk::keygen_vk,
         poly::kzg::commitment::ParamsKZG,
     },
+    utils::testing::{check_proof, gen_proof},
 };
 
 use crate::{bn254::FpChip, fields::FieldChip};
