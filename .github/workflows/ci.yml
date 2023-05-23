@@ -1,4 +1,4 @@
-name: Rust
+name: Tests
 
 on:
   push:
@@ -30,6 +30,7 @@ jobs:
         cargo test -- test_fp12 
         cargo test -- test_ecc
         cargo test -- test_secp256k1_ecdsa
+        cargo test -- test_ecdsa
         cargo test -- test_ec_add
         cargo test -- test_fixed_base_msm
         cargo test -- test_msm
