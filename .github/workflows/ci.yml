@@ -1,0 +1,47 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "main", "release-0.3.0" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build
+      run: cargo build --verbose
+    - name: Run halo2-base tests
+      run: |
+        cd halo2-base
+        cargo test -- --test-threads=1
+        cd ..
+    - name: Run halo2-ecc tests MockProver
+      run: |
+        cd halo2-ecc
+        cargo test -- test_fp
+        cargo test -- test_fp12 
+        cargo test -- test_ecc
+        cargo test -- test_secp256k1_ecdsa
+        cargo test -- test_ec_add
+        cargo test -- test_fixed_base_msm
+        cargo test -- test_msm
+        cargo test -- test_pairing
+        cd ..
+    - name: Run halo2-ecc tests real prover
+      run: |
+        cd halo2-ecc
+        cargo test --release -- test_fp_assert_eq
+        cargo test --release -- --nocapture bench_secp256k1_ecdsa
+        cargo test --release -- --nocapture bench_ec_add
+        cargo test --release -- --nocapture bench_fixed_base_msm
+        cargo test --release -- --nocapture bench_msm
+        cargo test --release -- --nocapture bench_pairing
+        cd ..
