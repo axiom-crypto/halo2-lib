@@ -261,11 +261,11 @@ proptest! {
     // Range Check Property Tests
 
     #[test]
-    fn prop_test_is_less_than(a in rand_witness().prop_filter("not zero", |&x| *x.value() != Fr::zero()),
-    b in any::<u64>().prop_filter("not zero", |&x| x != 0),
+    fn prop_test_is_less_than(a in rand_witness(), b in any::<u64>().prop_filter("not zero", |&x| x != 0),
     lookup_bits in 4..=16_usize) {
+        let bits = std::cmp::max(fe_to_biguint(a.value()).bits() as usize, bit_length(b));
         let ground_truth = is_less_than_ground_truth((*a.value(), Fr::from(b)));
-        let result = range_gate_tests::test_is_less_than(([a, Witness(Fr::from(b))], bit_length(b), lookup_bits));
+        let result = range_gate_tests::test_is_less_than(([a, Witness(Fr::from(b))], bits, lookup_bits));
         prop_assert_eq!(result, ground_truth);
     }
 
@@ -273,6 +273,7 @@ proptest! {
     fn prop_test_is_less_than_safe(a in rand_fr().prop_filter("not zero", |&x| x != Fr::zero()),
     b in any::<u64>().prop_filter("not zero", |&x| x != 0),
     lookup_bits in 4..=16_usize) {
+        prop_assume!(fe_to_biguint(&a).bits() as usize <= bit_length(b));
         let ground_truth = is_less_than_ground_truth((a, Fr::from(b)));
         let result = range_gate_tests::test_is_less_than_safe((a, b, lookup_bits));
         prop_assert_eq!(result, ground_truth);

@@ -86,22 +86,24 @@ pub fn test_check_big_less_than_safe<F: ScalarField + BigPrimeField>(
 }
 
 #[test_case(([0, 1].map(Fr::from).map(Witness), 3, 12) => Fr::from(1) ; "is_less_than() pos")]
-pub fn test_is_less_than<F: ScalarField>(inputs: ([QuantumCell<F>; 2], usize, usize)) -> F {
+pub fn test_is_less_than<F: ScalarField>(
+    (inputs, bits, lookup_bits): ([QuantumCell<F>; 2], usize, usize),
+) -> F {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
-    let chip = RangeChip::default(inputs.2);
-    let a = chip.is_less_than(ctx, inputs.0[0], inputs.0[1], inputs.1);
+    let chip = RangeChip::default(lookup_bits);
+    let a = chip.is_less_than(ctx, inputs[0], inputs[1], bits);
     *a.value()
 }
 
 #[test_case((Fr::zero(), 3, 3) => Fr::from(1) ; "is_less_than_safe() pos")]
-pub fn test_is_less_than_safe<F: ScalarField>(inputs: (F, u64, usize)) -> F {
+pub fn test_is_less_than_safe<F: ScalarField>((a, b, lookup_bits): (F, u64, usize)) -> F {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
-    let chip = RangeChip::default(inputs.2);
-    let a = ctx.assign_witnesses([inputs.0])[0];
-    let b = chip.is_less_than_safe(ctx, a, inputs.1);
-    *b.value()
+    let chip = RangeChip::default(lookup_bits);
+    let a = ctx.load_witness(a);
+    let lt = chip.is_less_than_safe(ctx, a, b);
+    *lt.value()
 }
 
 #[test_case((biguint_to_fe(&BigUint::from(2u64).pow(239)), BigUint::from(2u64).pow(240) - 1usize, 8) => Fr::from(1) ; "is_big_less_than_safe() pos")]
