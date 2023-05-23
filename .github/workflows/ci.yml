@@ -25,8 +25,7 @@ jobs:
       - name: Run halo2-ecc tests MockProver
         run: |
           cd halo2-ecc
-          cargo test -- test_fp
-          cargo test -- test_fp12 
+          cargo test -- --test-threads=1 test_fp
           cargo test -- test_ecc
           cargo test -- test_secp256k1_ecdsa
           cargo test -- test_ecdsa
