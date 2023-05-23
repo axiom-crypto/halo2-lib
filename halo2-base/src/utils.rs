@@ -192,7 +192,7 @@ pub fn fe_to_biguint<F: ScalarField>(fe: &F) -> BigUint {
 }
 
 /// Converts a [BigPrimeField] element into a [BigInt] element by sending `fe` in `[0, F::modulus())` to
-/// ```
+/// ```ignore
 /// fe,                 if fe < F::modulus() / 2
 /// fe - F::modulus(),  otherwise
 /// ```
