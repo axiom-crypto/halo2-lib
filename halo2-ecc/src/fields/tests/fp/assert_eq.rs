@@ -7,14 +7,11 @@ use halo2_base::{
         RangeChip,
     },
     halo2_proofs::{
-        halo2curves::bn256::{Fq, Fr},
-        plonk::keygen_pk,
-        plonk::keygen_vk,
+        halo2curves::bn256::Fq, plonk::keygen_pk, plonk::keygen_vk,
         poly::kzg::commitment::ParamsKZG,
     },
     utils::testing::{check_proof, gen_proof},
 };
-use num_bigint::BigInt;
 
 use crate::{bn254::FpChip, fields::FieldChip};
 use rand::thread_rng;
@@ -30,8 +27,8 @@ fn test_fp_assert_eq_gen(k: u32, lookup_bits: usize, num_tries: usize) {
     let chip = FpChip::new(&range, 88, 3);
 
     let ctx = builder.main(0);
-    let a = chip.load_private(ctx, BigInt::from(0));
-    let b = chip.load_private(ctx, BigInt::from(0));
+    let a = chip.load_private(ctx, Fq::zero());
+    let b = chip.load_private(ctx, Fq::zero());
     chip.assert_equal(ctx, &a, &b);
     // set env vars
     builder.config(k as usize, Some(9));
@@ -51,7 +48,7 @@ fn test_fp_assert_eq_gen(k: u32, lookup_bits: usize, num_tries: usize) {
         let chip = FpChip::new(&range, 88, 3);
 
         let ctx = builder.main(0);
-        let [a, b] = [a, b].map(|x| chip.load_private(ctx, FpChip::<Fr>::fe_to_witness(&x)));
+        let [a, b] = [a, b].map(|x| chip.load_private(ctx, x));
         chip.assert_equal(ctx, &a, &b);
         let circuit = RangeCircuitBuilder::prover(builder, vec![vec![]]); // no break points
         gen_proof(&params, &pk, circuit)

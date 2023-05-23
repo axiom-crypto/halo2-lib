@@ -1,12 +1,14 @@
-use super::{FieldChip, FieldExtConstructor, FieldExtPoint, PrimeField, PrimeFieldChip};
-use crate::halo2_proofs::arithmetic::Field;
-use halo2_base::{
-    gates::{GateInstructions, RangeInstructions},
-    utils::fe_to_biguint,
-    AssignedValue, Context,
-};
-use num_bigint::{BigInt, BigUint};
 use std::marker::PhantomData;
+
+use halo2_base::{utils::modulus, AssignedValue, Context};
+use num_bigint::BigUint;
+
+use crate::impl_field_ext_chip_common;
+
+use super::{
+    vector::{FieldVector, FieldVectorChip},
+    FieldChip, FieldExtConstructor, PrimeField, PrimeFieldChip,
+};
 
 /// Represent Fp12 point as FqPoint with degree = 12
 /// `Fp12 = Fp2[w] / (w^6 - u - xi)`
@@ -15,264 +17,151 @@ use std::marker::PhantomData;
 /// This means we store an Fp12 point as `\sum_{i = 0}^6 (a_{i0} + a_{i1} * u) * w^i`
 /// This is encoded in an FqPoint of degree 12 as `(a_{00}, ..., a_{50}, a_{01}, ..., a_{51})`
 #[derive(Clone, Copy, Debug)]
-pub struct Fp12Chip<'a, F: PrimeField, FpChip: PrimeFieldChip<F>, Fp12: Field, const XI_0: i64>
-where
-    FpChip::FieldType: PrimeField,
-{
-    // for historical reasons, leaving this as a reference
-    // for the current implementation we could also just use the de-referenced version: `fp_chip: FpChip`
-    pub fp_chip: &'a FpChip,
-    _f: PhantomData<F>,
-    _fp12: PhantomData<Fp12>,
-}
+pub struct Fp12Chip<'a, F: PrimeField, FpChip: FieldChip<F>, Fp12, const XI_0: i64>(
+    pub FieldVectorChip<'a, F, FpChip>,
+    PhantomData<Fp12>,
+);
 
 impl<'a, F, FpChip, Fp12, const XI_0: i64> Fp12Chip<'a, F, FpChip, Fp12, XI_0>
 where
     F: PrimeField,
     FpChip: PrimeFieldChip<F>,
     FpChip::FieldType: PrimeField,
-    Fp12: Field + FieldExtConstructor<FpChip::FieldType, 12>,
+    Fp12: ff::Field,
 {
     /// User must construct an `FpChip` first using a config. This is intended so everything shares a single `FlexGateChip`, which is needed for the column allocation to work.
     pub fn new(fp_chip: &'a FpChip) -> Self {
-        Self { fp_chip, _f: PhantomData, _fp12: PhantomData }
+        assert_eq!(
+            modulus::<FpChip::FieldType>() % 4usize,
+            BigUint::from(3u64),
+            "p must be 3 (mod 4) for the polynomial u^2 + 1 to be irreducible"
+        );
+        Self(FieldVectorChip::new(fp_chip), PhantomData)
+    }
+
+    pub fn fp_chip(&self) -> &FpChip {
+        self.0.fp_chip
     }
 
     pub fn fp2_mul_no_carry(
         &self,
         ctx: &mut Context<F>,
-        a: &FieldExtPoint<FpChip::FieldPoint>,
-        fp2_pt: &FieldExtPoint<FpChip::FieldPoint>,
-    ) -> FieldExtPoint<FpChip::FieldPoint> {
-        assert_eq!(a.coeffs.len(), 12);
-        assert_eq!(fp2_pt.coeffs.len(), 2);
+        fp12_pt: FieldVector<FpChip::UnsafeFieldPoint>,
+        fp2_pt: FieldVector<FpChip::UnsafeFieldPoint>,
+    ) -> FieldVector<FpChip::UnsafeFieldPoint> {
+        let fp12_pt = fp12_pt.0;
+        let fp2_pt = fp2_pt.0;
+        assert_eq!(fp12_pt.len(), 12);
+        assert_eq!(fp2_pt.len(), 2);
 
+        let fp_chip = self.fp_chip();
         let mut out_coeffs = Vec::with_capacity(12);
         for i in 0..6 {
-            let coeff1 = self.fp_chip.mul_no_carry(ctx, &a.coeffs[i], &fp2_pt.coeffs[0]);
-            let coeff2 = self.fp_chip.mul_no_carry(ctx, &a.coeffs[i + 6], &fp2_pt.coeffs[1]);
-            let coeff = self.fp_chip.sub_no_carry(ctx, &coeff1, &coeff2);
+            let coeff1 = fp_chip.mul_no_carry(ctx, fp12_pt[i].clone(), fp2_pt[0].clone());
+            let coeff2 = fp_chip.mul_no_carry(ctx, fp12_pt[i + 6].clone(), fp2_pt[1].clone());
+            let coeff = fp_chip.sub_no_carry(ctx, coeff1, coeff2);
             out_coeffs.push(coeff);
         }
         for i in 0..6 {
-            let coeff1 = self.fp_chip.mul_no_carry(ctx, &a.coeffs[i + 6], &fp2_pt.coeffs[0]);
-            let coeff2 = self.fp_chip.mul_no_carry(ctx, &a.coeffs[i], &fp2_pt.coeffs[1]);
-            let coeff = self.fp_chip.add_no_carry(ctx, &coeff1, &coeff2);
+            let coeff1 = fp_chip.mul_no_carry(ctx, fp12_pt[i + 6].clone(), fp2_pt[0].clone());
+            let coeff2 = fp_chip.mul_no_carry(ctx, fp12_pt[i].clone(), fp2_pt[1].clone());
+            let coeff = fp_chip.add_no_carry(ctx, coeff1, coeff2);
             out_coeffs.push(coeff);
         }
-        FieldExtPoint::construct(out_coeffs)
+        FieldVector(out_coeffs)
     }
 
     // for \sum_i (a_i + b_i u) w^i, returns \sum_i (-1)^i (a_i + b_i u) w^i
     pub fn conjugate(
         &self,
         ctx: &mut Context<F>,
-        a: &FieldExtPoint<FpChip::FieldPoint>,
-    ) -> FieldExtPoint<FpChip::FieldPoint> {
-        assert_eq!(a.coeffs.len(), 12);
+        a: FieldVector<FpChip::FieldPoint>,
+    ) -> FieldVector<FpChip::FieldPoint> {
+        let a = a.0;
+        assert_eq!(a.len(), 12);
 
         let coeffs = a
-            .coeffs
-            .iter()
+            .into_iter()
             .enumerate()
-            .map(|(i, c)| if i % 2 == 0 { c.clone() } else { self.fp_chip.negate(ctx, c) })
+            .map(|(i, c)| if i % 2 == 0 { c } else { self.fp_chip().negate(ctx, c) })
             .collect();
-        FieldExtPoint::construct(coeffs)
+        FieldVector(coeffs)
     }
 }
 
-/// multiply (a0 + a1 * u) * (XI0 + u) without carry
+/// multiply Fp2 elts: (a0 + a1 * u) * (XI0 + u) without carry
+///
+/// # Assumptions
+/// * `a` is `Fp2` point represented as `FieldVector` with degree = 2
 pub fn mul_no_carry_w6<F: PrimeField, FC: FieldChip<F>, const XI_0: i64>(
     fp_chip: &FC,
     ctx: &mut Context<F>,
-    a: &FieldExtPoint<FC::FieldPoint>,
-) -> FieldExtPoint<FC::FieldPoint> {
-    assert_eq!(a.coeffs.len(), 2);
-    let (a0, a1) = (&a.coeffs[0], &a.coeffs[1]);
+    a: FieldVector<FC::UnsafeFieldPoint>,
+) -> FieldVector<FC::UnsafeFieldPoint> {
+    let [a0, a1]: [_; 2] = a.0.try_into().unwrap();
     // (a0 + a1 u) * (XI_0 + u) = (a0 * XI_0 - a1) + (a1 * XI_0 + a0) u     with u^2 = -1
     // This should fit in the overflow representation if limb_bits is large enough
-    let a0_xi0 = fp_chip.scalar_mul_no_carry(ctx, a0, XI_0);
-    let out0_0_nocarry = fp_chip.sub_no_carry(ctx, &a0_xi0, a1);
+    let a0_xi0 = fp_chip.scalar_mul_no_carry(ctx, a0.clone(), XI_0);
+    let out0_0_nocarry = fp_chip.sub_no_carry(ctx, a0_xi0, a1.clone());
     let out0_1_nocarry = fp_chip.scalar_mul_and_add_no_carry(ctx, a1, a0, XI_0);
-    FieldExtPoint::construct(vec![out0_0_nocarry, out0_1_nocarry])
+    FieldVector(vec![out0_0_nocarry, out0_1_nocarry])
 }
 
 // a lot of this is common to any field extension (lots of for loops), but due to the way rust traits work, it is hard to create a common generic trait that does this. The main problem is that if you had a `FieldExtCommon` trait and wanted to implement `FieldChip` for anything with `FieldExtCommon`, rust will stop you because someone could implement `FieldExtCommon` and `FieldChip` for the same type, causing a conflict.
+// partially solved using macro
+
 impl<'a, F, FpChip, Fp12, const XI_0: i64> FieldChip<F> for Fp12Chip<'a, F, FpChip, Fp12, XI_0>
 where
     F: PrimeField,
-    FpChip: PrimeFieldChip<F, WitnessType = BigInt, ConstantType = BigUint>,
+    FpChip: PrimeFieldChip<F>,
     FpChip::FieldType: PrimeField,
-    Fp12: Field + FieldExtConstructor<FpChip::FieldType, 12>,
+    Fp12: ff::Field + FieldExtConstructor<FpChip::FieldType, 12>,
+    FieldVector<FpChip::UnsafeFieldPoint>: From<FieldVector<FpChip::FieldPoint>>,
+    FieldVector<FpChip::FieldPoint>: From<FieldVector<FpChip::ReducedFieldPoint>>,
 {
     const PRIME_FIELD_NUM_BITS: u32 = FpChip::FieldType::NUM_BITS;
-    type ConstantType = Fp12;
-    type WitnessType = Vec<BigInt>;
-    type FieldPoint = FieldExtPoint<FpChip::FieldPoint>;
+    type UnsafeFieldPoint = FieldVector<FpChip::UnsafeFieldPoint>;
+    type FieldPoint = FieldVector<FpChip::FieldPoint>;
+    type ReducedFieldPoint = FieldVector<FpChip::ReducedFieldPoint>;
     type FieldType = Fp12;
     type RangeChip = FpChip::RangeChip;
 
-    fn native_modulus(&self) -> &BigUint {
-        self.fp_chip.native_modulus()
-    }
-    fn range(&self) -> &Self::RangeChip {
-        self.fp_chip.range()
-    }
-
-    fn limb_bits(&self) -> usize {
-        self.fp_chip.limb_bits()
-    }
-
-    fn get_assigned_value(&self, x: &Self::FieldPoint) -> Fp12 {
-        assert_eq!(x.coeffs.len(), 12);
-        let values =
-            x.coeffs.iter().map(|v| self.fp_chip.get_assigned_value(v)).collect::<Vec<_>>();
+    fn get_assigned_value(&self, x: &Self::UnsafeFieldPoint) -> Fp12 {
+        assert_eq!(x.0.len(), 12);
+        let values = x.0.iter().map(|v| self.fp_chip().get_assigned_value(v)).collect::<Vec<_>>();
         Fp12::new(values.try_into().unwrap())
-    }
-
-    fn fe_to_constant(x: Self::FieldType) -> Self::ConstantType {
-        x
-    }
-    fn fe_to_witness(x: &Fp12) -> Vec<BigInt> {
-        x.coeffs().iter().map(|c| BigInt::from(fe_to_biguint(c))).collect()
-    }
-
-    fn load_private(&self, ctx: &mut Context<F>, coeffs: Vec<BigInt>) -> Self::FieldPoint {
-        assert_eq!(coeffs.len(), 12);
-        let mut assigned_coeffs = Vec::with_capacity(12);
-        for a in coeffs {
-            let assigned_coeff = self.fp_chip.load_private(ctx, a.clone());
-            assigned_coeffs.push(assigned_coeff);
-        }
-        Self::FieldPoint::construct(assigned_coeffs)
-    }
-
-    fn load_constant(&self, ctx: &mut Context<F>, c: Fp12) -> Self::FieldPoint {
-        let mut assigned_coeffs = Vec::with_capacity(12);
-        for a in &c.coeffs() {
-            let assigned_coeff = self.fp_chip.load_constant(ctx, fe_to_biguint(a));
-            assigned_coeffs.push(assigned_coeff);
-        }
-        Self::FieldPoint::construct(assigned_coeffs)
-    }
-
-    // signed overflow BigInt functions
-    fn add_no_carry(
-        &self,
-        ctx: &mut Context<F>,
-        a: &Self::FieldPoint,
-        b: &Self::FieldPoint,
-    ) -> Self::FieldPoint {
-        assert_eq!(a.coeffs.len(), b.coeffs.len());
-        let mut out_coeffs = Vec::with_capacity(a.coeffs.len());
-        for i in 0..a.coeffs.len() {
-            let coeff = self.fp_chip.add_no_carry(ctx, &a.coeffs[i], &b.coeffs[i]);
-            out_coeffs.push(coeff);
-        }
-        Self::FieldPoint::construct(out_coeffs)
-    }
-
-    fn add_constant_no_carry(
-        &self,
-        ctx: &mut Context<F>,
-        a: &Self::FieldPoint,
-        c: Self::ConstantType,
-    ) -> Self::FieldPoint {
-        let c_coeffs = c.coeffs();
-        assert_eq!(a.coeffs.len(), c_coeffs.len());
-        let mut out_coeffs = Vec::with_capacity(a.coeffs.len());
-        for (a, c) in a.coeffs.iter().zip(c_coeffs.into_iter()) {
-            let coeff = self.fp_chip.add_constant_no_carry(ctx, a, FpChip::fe_to_constant(c));
-            out_coeffs.push(coeff);
-        }
-        Self::FieldPoint::construct(out_coeffs)
-    }
-
-    fn sub_no_carry(
-        &self,
-        ctx: &mut Context<F>,
-        a: &Self::FieldPoint,
-        b: &Self::FieldPoint,
-    ) -> Self::FieldPoint {
-        assert_eq!(a.coeffs.len(), b.coeffs.len());
-        let mut out_coeffs = Vec::with_capacity(a.coeffs.len());
-        for i in 0..a.coeffs.len() {
-            let coeff = self.fp_chip.sub_no_carry(ctx, &a.coeffs[i], &b.coeffs[i]);
-            out_coeffs.push(coeff);
-        }
-        Self::FieldPoint::construct(out_coeffs)
-    }
-
-    fn negate(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> Self::FieldPoint {
-        let mut out_coeffs = Vec::with_capacity(a.coeffs.len());
-        for a_coeff in &a.coeffs {
-            let out_coeff = self.fp_chip.negate(ctx, a_coeff);
-            out_coeffs.push(out_coeff);
-        }
-        Self::FieldPoint::construct(out_coeffs)
-    }
-
-    fn scalar_mul_no_carry(
-        &self,
-        ctx: &mut Context<F>,
-        a: &Self::FieldPoint,
-        c: i64,
-    ) -> Self::FieldPoint {
-        let mut out_coeffs = Vec::with_capacity(a.coeffs.len());
-        for i in 0..a.coeffs.len() {
-            let coeff = self.fp_chip.scalar_mul_no_carry(ctx, &a.coeffs[i], c);
-            out_coeffs.push(coeff);
-        }
-        Self::FieldPoint::construct(out_coeffs)
-    }
-
-    fn scalar_mul_and_add_no_carry(
-        &self,
-        ctx: &mut Context<F>,
-        a: &Self::FieldPoint,
-        b: &Self::FieldPoint,
-        c: i64,
-    ) -> Self::FieldPoint {
-        let mut out_coeffs = Vec::with_capacity(a.coeffs.len());
-        for i in 0..a.coeffs.len() {
-            let coeff =
-                self.fp_chip.scalar_mul_and_add_no_carry(ctx, &a.coeffs[i], &b.coeffs[i], c);
-            out_coeffs.push(coeff);
-        }
-        Self::FieldPoint::construct(out_coeffs)
     }
 
     // w^6 = u + xi for xi = 9
     fn mul_no_carry(
         &self,
         ctx: &mut Context<F>,
-        a: &Self::FieldPoint,
-        b: &Self::FieldPoint,
-    ) -> Self::FieldPoint {
-        assert_eq!(a.coeffs.len(), 12);
-        assert_eq!(b.coeffs.len(), 12);
+        a: impl Into<Self::UnsafeFieldPoint>,
+        b: impl Into<Self::UnsafeFieldPoint>,
+    ) -> Self::UnsafeFieldPoint {
+        let a = a.into().0;
+        let b = b.into().0;
+        assert_eq!(a.len(), 12);
+        assert_eq!(b.len(), 12);
 
+        let fp_chip = self.fp_chip();
         // a = \sum_{i = 0}^5 (a_i * w^i + a_{i + 6} * w^i * u)
         // b = \sum_{i = 0}^5 (b_i * w^i + b_{i + 6} * w^i * u)
-        let mut a0b0_coeffs = Vec::with_capacity(11);
-        let mut a0b1_coeffs = Vec::with_capacity(11);
-        let mut a1b0_coeffs = Vec::with_capacity(11);
-        let mut a1b1_coeffs = Vec::with_capacity(11);
+        let mut a0b0_coeffs: Vec<FpChip::UnsafeFieldPoint> = Vec::with_capacity(11);
+        let mut a0b1_coeffs: Vec<FpChip::UnsafeFieldPoint> = Vec::with_capacity(11);
+        let mut a1b0_coeffs: Vec<FpChip::UnsafeFieldPoint> = Vec::with_capacity(11);
+        let mut a1b1_coeffs: Vec<FpChip::UnsafeFieldPoint> = Vec::with_capacity(11);
         for i in 0..6 {
             for j in 0..6 {
-                let coeff00 = self.fp_chip.mul_no_carry(ctx, &a.coeffs[i], &b.coeffs[j]);
-                let coeff01 = self.fp_chip.mul_no_carry(ctx, &a.coeffs[i], &b.coeffs[j + 6]);
-                let coeff10 = self.fp_chip.mul_no_carry(ctx, &a.coeffs[i + 6], &b.coeffs[j]);
-                let coeff11 = self.fp_chip.mul_no_carry(ctx, &a.coeffs[i + 6], &b.coeffs[j + 6]);
+                let coeff00 = fp_chip.mul_no_carry(ctx, &a[i], &b[j]);
+                let coeff01 = fp_chip.mul_no_carry(ctx, &a[i], &b[j + 6]);
+                let coeff10 = fp_chip.mul_no_carry(ctx, &a[i + 6], &b[j]);
+                let coeff11 = fp_chip.mul_no_carry(ctx, &a[i + 6], &b[j + 6]);
                 if i + j < a0b0_coeffs.len() {
-                    a0b0_coeffs[i + j] =
-                        self.fp_chip.add_no_carry(ctx, &a0b0_coeffs[i + j], &coeff00);
-                    a0b1_coeffs[i + j] =
-                        self.fp_chip.add_no_carry(ctx, &a0b1_coeffs[i + j], &coeff01);
-                    a1b0_coeffs[i + j] =
-                        self.fp_chip.add_no_carry(ctx, &a1b0_coeffs[i + j], &coeff10);
-                    a1b1_coeffs[i + j] =
-                        self.fp_chip.add_no_carry(ctx, &a1b1_coeffs[i + j], &coeff11);
+                    a0b0_coeffs[i + j] = fp_chip.add_no_carry(ctx, &a0b0_coeffs[i + j], coeff00);
+                    a0b1_coeffs[i + j] = fp_chip.add_no_carry(ctx, &a0b1_coeffs[i + j], coeff01);
+                    a1b0_coeffs[i + j] = fp_chip.add_no_carry(ctx, &a1b0_coeffs[i + j], coeff10);
+                    a1b1_coeffs[i + j] = fp_chip.add_no_carry(ctx, &a1b1_coeffs[i + j], coeff11);
                 } else {
                     a0b0_coeffs.push(coeff00);
                     a0b1_coeffs.push(coeff01);
@@ -285,10 +174,8 @@ where
         let mut a0b0_minus_a1b1 = Vec::with_capacity(11);
         let mut a0b1_plus_a1b0 = Vec::with_capacity(11);
         for i in 0..11 {
-            let a0b0_minus_a1b1_entry =
-                self.fp_chip.sub_no_carry(ctx, &a0b0_coeffs[i], &a1b1_coeffs[i]);
-            let a0b1_plus_a1b0_entry =
-                self.fp_chip.add_no_carry(ctx, &a0b1_coeffs[i], &a1b0_coeffs[i]);
+            let a0b0_minus_a1b1_entry = fp_chip.sub_no_carry(ctx, &a0b0_coeffs[i], &a1b1_coeffs[i]);
+            let a0b1_plus_a1b0_entry = fp_chip.add_no_carry(ctx, &a0b1_coeffs[i], &a1b0_coeffs[i]);
 
             a0b0_minus_a1b1.push(a0b0_minus_a1b1_entry);
             a0b1_plus_a1b0.push(a0b1_plus_a1b0_entry);
@@ -299,13 +186,13 @@ where
         let mut out_coeffs = Vec::with_capacity(12);
         for i in 0..6 {
             if i < 5 {
-                let mut coeff = self.fp_chip.scalar_mul_and_add_no_carry(
+                let mut coeff = fp_chip.scalar_mul_and_add_no_carry(
                     ctx,
                     &a0b0_minus_a1b1[i + 6],
                     &a0b0_minus_a1b1[i],
                     XI_0,
                 );
-                coeff = self.fp_chip.sub_no_carry(ctx, &coeff, &a0b1_plus_a1b0[i + 6]);
+                coeff = fp_chip.sub_no_carry(ctx, coeff, &a0b1_plus_a1b0[i + 6]);
                 out_coeffs.push(coeff);
             } else {
                 out_coeffs.push(a0b0_minus_a1b1[i].clone());
@@ -314,131 +201,18 @@ where
         for i in 0..6 {
             if i < 5 {
                 let mut coeff =
-                    self.fp_chip.add_no_carry(ctx, &a0b1_plus_a1b0[i], &a0b0_minus_a1b1[i + 6]);
-                coeff = self.fp_chip.scalar_mul_and_add_no_carry(
-                    ctx,
-                    &a0b1_plus_a1b0[i + 6],
-                    &coeff,
-                    XI_0,
-                );
+                    fp_chip.add_no_carry(ctx, &a0b1_plus_a1b0[i], &a0b0_minus_a1b1[i + 6]);
+                coeff =
+                    fp_chip.scalar_mul_and_add_no_carry(ctx, &a0b1_plus_a1b0[i + 6], coeff, XI_0);
                 out_coeffs.push(coeff);
             } else {
                 out_coeffs.push(a0b1_plus_a1b0[i].clone());
             }
         }
-        Self::FieldPoint::construct(out_coeffs)
+        FieldVector(out_coeffs)
     }
 
-    fn check_carry_mod_to_zero(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) {
-        for coeff in &a.coeffs {
-            self.fp_chip.check_carry_mod_to_zero(ctx, coeff);
-        }
-    }
-
-    fn carry_mod(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> Self::FieldPoint {
-        let mut out_coeffs = Vec::with_capacity(a.coeffs.len());
-        for a_coeff in &a.coeffs {
-            let coeff = self.fp_chip.carry_mod(ctx, a_coeff);
-            out_coeffs.push(coeff);
-        }
-        Self::FieldPoint::construct(out_coeffs)
-    }
-
-    fn range_check(&self, ctx: &mut Context<F>, a: &Self::FieldPoint, max_bits: usize) {
-        for a_coeff in &a.coeffs {
-            self.fp_chip.range_check(ctx, a_coeff, max_bits);
-        }
-    }
-
-    fn enforce_less_than(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) {
-        for a_coeff in &a.coeffs {
-            self.fp_chip.enforce_less_than(ctx, a_coeff)
-        }
-    }
-
-    fn is_soft_zero(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> AssignedValue<F> {
-        let mut prev = None;
-        for a_coeff in &a.coeffs {
-            let coeff = self.fp_chip.is_soft_zero(ctx, a_coeff);
-            if let Some(p) = prev {
-                let new = self.fp_chip.range().gate().and(ctx, coeff, p);
-                prev = Some(new);
-            } else {
-                prev = Some(coeff);
-            }
-        }
-        prev.unwrap()
-    }
-
-    fn is_soft_nonzero(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> AssignedValue<F> {
-        let mut prev = None;
-        for a_coeff in &a.coeffs {
-            let coeff = self.fp_chip.is_soft_nonzero(ctx, a_coeff);
-            if let Some(p) = prev {
-                let new = self.gate().or(ctx, coeff, p);
-                prev = Some(new);
-            } else {
-                prev = Some(coeff);
-            }
-        }
-        prev.unwrap()
-    }
-
-    fn is_zero(&self, ctx: &mut Context<F>, a: &Self::FieldPoint) -> AssignedValue<F> {
-        let mut prev = None;
-        for a_coeff in &a.coeffs {
-            let coeff = self.fp_chip.is_zero(ctx, a_coeff);
-            if let Some(p) = prev {
-                let new = self.gate().and(ctx, coeff, p);
-                prev = Some(new);
-            } else {
-                prev = Some(coeff);
-            }
-        }
-        prev.unwrap()
-    }
-
-    fn is_equal(
-        &self,
-        ctx: &mut Context<F>,
-        a: &Self::FieldPoint,
-        b: &Self::FieldPoint,
-    ) -> AssignedValue<F> {
-        let mut acc = None;
-        for (a_coeff, b_coeff) in a.coeffs.iter().zip(b.coeffs.iter()) {
-            let coeff = self.fp_chip.is_equal(ctx, a_coeff, b_coeff);
-            if let Some(c) = acc {
-                acc = Some(self.gate().and(ctx, coeff, c));
-            } else {
-                acc = Some(coeff);
-            }
-        }
-        acc.unwrap()
-    }
-
-    fn is_equal_unenforced(
-        &self,
-        ctx: &mut Context<F>,
-        a: &Self::FieldPoint,
-        b: &Self::FieldPoint,
-    ) -> AssignedValue<F> {
-        let mut acc = None;
-        for (a_coeff, b_coeff) in a.coeffs.iter().zip(b.coeffs.iter()) {
-            let coeff = self.fp_chip.is_equal_unenforced(ctx, a_coeff, b_coeff);
-            if let Some(c) = acc {
-                acc = Some(self.gate().and(ctx, coeff, c));
-            } else {
-                acc = Some(coeff);
-            }
-        }
-        acc.unwrap()
-    }
-
-    fn assert_equal(&self, ctx: &mut Context<F>, a: &Self::FieldPoint, b: &Self::FieldPoint) {
-        for (a_coeff, b_coeff) in a.coeffs.iter().zip(b.coeffs.iter()) {
-            self.fp_chip.assert_equal(ctx, a_coeff, b_coeff);
-        }
-    }
+    impl_field_ext_chip_common!();
 }
 
 mod bn254 {
