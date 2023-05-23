@@ -285,6 +285,7 @@ impl<F: FieldExt> CellManager<F> {
         let column = if column_idx < self.columns.len() {
             self.columns[column_idx].advice
         } else {
+            assert!(column_idx == self.columns.len());
             let advice = meta.advice_column();
             let mut expr = 0.expr();
             meta.create_gate("Query column", |meta| {
