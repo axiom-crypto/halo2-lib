@@ -1,3 +1,4 @@
+#![allow(clippy::type_complexity)]
 use super::*;
 use crate::halo2_proofs::dev::MockProver;
 use crate::halo2_proofs::dev::VerifyFailure;

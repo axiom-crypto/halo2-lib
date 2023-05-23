@@ -28,11 +28,13 @@ const BITS_PER_BYTE: usize = 8;
 /// BYTES_PER_ELE is the number of bytes of each element.
 #[derive(Clone, Debug)]
 pub struct SafeType<F: ScalarField, const BYTES_PER_ELE: usize, const TOTAL_BITS: usize> {
-    // value is stored in little-endian. 
+    // value is stored in little-endian.
     value: RawAssignedValues<F>,
 }
 
-impl<F: ScalarField, const BYTES_PER_ELE: usize, const TOTAL_BITS: usize> SafeType<F, BYTES_PER_ELE, TOTAL_BITS> {
+impl<F: ScalarField, const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>
+    SafeType<F, BYTES_PER_ELE, TOTAL_BITS>
+{
     /// Number of bytes of each element.
     pub const BYTES_PER_ELE: usize = BYTES_PER_ELE;
     /// Total bits of this type.
@@ -40,7 +42,8 @@ impl<F: ScalarField, const BYTES_PER_ELE: usize, const TOTAL_BITS: usize> SafeTy
     /// Number of bits of each element.
     pub const BITS_PER_ELE: usize = min(TOTAL_BITS, BYTES_PER_ELE * BITS_PER_BYTE);
     /// Number of elements of this type.
-    pub const VALUE_LENGTH: usize = (TOTAL_BITS + BYTES_PER_ELE * BITS_PER_BYTE - 1) / (BYTES_PER_ELE * BITS_PER_BYTE);
+    pub const VALUE_LENGTH: usize =
+        (TOTAL_BITS + BYTES_PER_ELE * BITS_PER_BYTE - 1) / (BYTES_PER_ELE * BITS_PER_BYTE);
 
     // new is private so Safetype can only be constructed by this crate.
     fn new(raw_values: RawAssignedValues<F>) -> Self {
@@ -57,7 +60,8 @@ impl<F: ScalarField, const BYTES_PER_ELE: usize, const TOTAL_BITS: usize> SafeTy
 /// Represent TOTAL_BITS with the least number of AssignedValue<F>.
 /// (2^(F::NUM_BITS) - 1) might not be a valid value for F. e.g. max value of F is a prime in [2^(F::NUM_BITS-1), 2^(F::NUM_BITS) - 1]
 #[allow(type_alias_bounds)]
-type CompactSafeType<F: ScalarField, const TOTAL_BITS: usize> = SafeType<F, { ((F::NUM_BITS - 1) / 8) as usize}, TOTAL_BITS>;
+type CompactSafeType<F: ScalarField, const TOTAL_BITS: usize> =
+    SafeType<F, { ((F::NUM_BITS - 1) / 8) as usize }, TOTAL_BITS>;
 
 /// SafeType for bool.
 pub type SafeBool<F> = CompactSafeType<F, 1>;
@@ -84,10 +88,10 @@ pub struct SafeTypeChip<'a, F: ScalarField> {
 impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
     /// Construct a SafeTypeChip.
     pub fn new(range_chip: &'a RangeChip<F>) -> Self {
-        Self { range_chip: &range_chip }
+        Self { range_chip }
     }
 
-    /// Convert a vector of AssignedValue(treated as little-endian) to a SafeType. 
+    /// Convert a vector of AssignedValue(treated as little-endian) to a SafeType.
     /// The number of bytes of inputs must equal to the number of bytes of outputs.
     /// This function also add contraints that a AssignedValue in inputs must be in the range of a byte.
     pub fn raw_bytes_to<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
@@ -107,16 +111,19 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
             return SafeType::<F, BYTES_PER_ELE, TOTAL_BITS>::new(inputs);
         };
 
-        let byte_base = (0..BYTES_PER_ELE).map(|i| {
-            Witness(self.range_chip.gate.pow_of_two[i * BITS_PER_BYTE])
-        }).collect::<Vec<_>>();
-        let value = inputs.chunks(BYTES_PER_ELE).map(|chunk| {
-            self.range_chip.gate.inner_product(
-                ctx,
-                chunk.to_vec(),
-                byte_base[..chunk.len()].to_vec(),
-            )
-        }).collect::<Vec<_>>();
+        let byte_base = (0..BYTES_PER_ELE)
+            .map(|i| Witness(self.range_chip.gate.pow_of_two[i * BITS_PER_BYTE]))
+            .collect::<Vec<_>>();
+        let value = inputs
+            .chunks(BYTES_PER_ELE)
+            .map(|chunk| {
+                self.range_chip.gate.inner_product(
+                    ctx,
+                    chunk.to_vec(),
+                    byte_base[..chunk.len()].to_vec(),
+                )
+            })
+            .collect::<Vec<_>>();
         SafeType::<F, BYTES_PER_ELE, TOTAL_BITS>::new(value)
     }
 
@@ -129,7 +136,7 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
         let mut bits_left = bits;
         for input in inputs {
             let num_bit = min(bits_left, BITS_PER_BYTE);
-            self.range_chip.range_check(ctx, *input,num_bit);
+            self.range_chip.range_check(ctx, *input, num_bit);
             bits_left -= num_bit;
         }
     }

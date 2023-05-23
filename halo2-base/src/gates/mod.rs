@@ -6,7 +6,7 @@ pub mod flex_gate;
 pub mod range;
 
 /// Tests
-#[cfg(any(test, feature = "test-utils"))]
+#[cfg(test)]
 pub mod tests;
 
 pub use flex_gate::{GateChip, GateInstructions};
