@@ -1,6 +1,6 @@
 # halo2-lib
 
-> ⚠️ **This branch contains un-audited contributions from the community.** Community contributions in this branch have been reviewed by the Axiom team, but they have not undergone official audit. To use the latest audited version make sure to use the correct commit. The tagged versions that are used by Axiom in production can be found in the [releases](https://github.com/axiom-crypto/halo2-lib/releases).
+> ⚠️ **This branch contains un-audited contributions from the community.** Community contributions in this branch have been reviewed by maintainers of this repository, but they have not undergone official audit. To use the latest audited version make sure to use the correct commit. The tagged versions that have undergone official audit and are ready for production use can be found in the [releases](https://github.com/axiom-crypto/halo2-lib/releases).
 
 This repository aims to provide basic primitives for writing zero-knowledge proof circuits using the [Halo 2](https://zcash.github.io/halo2/) proving stack. To discuss or collaborate, join our community on [Telegram](https://t.me/halo2lib).
 
