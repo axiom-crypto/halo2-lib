@@ -558,12 +558,16 @@ pub trait GateInstructions<F: ScalarField> {
     /// Constrains and returns an indicator vector from a slice of boolean values, where `output[idx] = 1` iff idx = (the number represented by `bits` in binary little endian), otherwise `output[idx] = 0`.
     /// * `ctx`: [Context] to add the constraints to
     /// * `bits`: slice of [QuantumCell]'s that contains boolean values
+    ///
+    /// # Assumptions
+    /// * `bits` is non-empty
     fn bits_to_indicator(
         &self,
         ctx: &mut Context<F>,
         bits: &[AssignedValue<F>],
     ) -> Vec<AssignedValue<F>> {
         let k = bits.len();
+        assert!(k > 0, "bits_to_indicator: bits must be non-empty");
 
         // (inv_last_bit, last_bit) = (1, 0) if bits[k - 1] = 0
         let (inv_last_bit, last_bit) = {
@@ -766,12 +770,16 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `ctx`: [Context] to add the constraints to
     /// * `coords`: immutable reference to a slice of tuples of [AssignedValue]s representing the points to interpolate over such that `coords[i] = (x_i, y_i)`
     /// * `x`: x-coordinate of the point to evaluate `f` at
+    ///
+    /// # Assumptions
+    /// * `coords` is non-empty
     fn lagrange_and_eval(
         &self,
         ctx: &mut Context<F>,
         coords: &[(AssignedValue<F>, AssignedValue<F>)],
         x: AssignedValue<F>,
     ) -> (AssignedValue<F>, AssignedValue<F>) {
+        assert!(!coords.is_empty(), "coords should not be empty");
         let mut z = self.sub(ctx, Existing(x), Existing(coords[0].0));
         for coord in coords.iter().skip(1) {
             let sub = self.sub(ctx, Existing(x), Existing(coord.0));
