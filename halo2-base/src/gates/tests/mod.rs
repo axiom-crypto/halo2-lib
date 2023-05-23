@@ -1,3 +1,4 @@
+#![allow(clippy::type_complexity)]
 use crate::halo2_proofs::{
     halo2curves::bn256::{Bn256, Fr, G1Affine},
     plonk::{create_proof, verify_proof, Circuit, ProvingKey, VerifyingKey},
@@ -13,9 +14,19 @@ use crate::halo2_proofs::{
 use rand::rngs::OsRng;
 
 #[cfg(test)]
+mod flex_gate_tests;
+#[cfg(test)]
 mod general;
 #[cfg(test)]
 mod idx_to_indicator;
+#[cfg(test)]
+mod neg_prop_tests;
+#[cfg(test)]
+mod pos_prop_tests;
+#[cfg(test)]
+mod range_gate_tests;
+#[cfg(test)]
+mod test_ground_truths;
 
 /// helper function to generate a proof with real prover
 pub fn gen_proof(

@@ -53,7 +53,7 @@ impl<F: FieldExt> BaseConstraintBuilder<F> {
 
     pub(crate) fn validate_degree(&self, degree: usize, name: &'static str) {
         if self.max_degree > 0 {
-            debug_assert!(
+            assert!(
                 degree <= self.max_degree,
                 "Expression {} degree too high: {} > {}",
                 name,
