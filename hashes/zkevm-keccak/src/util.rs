@@ -183,7 +183,7 @@ pub fn pack_part(bits: &[u8], info: &PartInfo) -> u64 {
 /// Unpack a sparse keccak word into bits in the range [0,BIT_SIZE[
 pub fn unpack<F: Field>(packed: F) -> [u8; NUM_BITS_PER_WORD] {
     let mut bits = [0; NUM_BITS_PER_WORD];
-    let packed = Word::from_little_endian(packed.to_repr().as_ref());
+    let packed = Word::from_little_endian(packed.to_bytes_le().as_ref());
     let mask = Word::from(BIT_SIZE - 1);
     for (idx, bit) in bits.iter_mut().enumerate() {
         *bit = ((packed >> (idx * BIT_COUNT)) & mask).as_u32() as u8;
@@ -200,10 +200,10 @@ pub fn pack_u64<F: Field>(value: u64) -> F {
 /// Calculates a ^ b with a and b field elements
 pub fn field_xor<F: Field>(a: F, b: F) -> F {
     let mut bytes = [0u8; 32];
-    for (idx, (a, b)) in a.to_repr().as_ref().iter().zip(b.to_repr().as_ref().iter()).enumerate() {
-        bytes[idx] = *a ^ *b;
+    for (idx, (a, b)) in a.to_bytes_le().into_iter().zip(b.to_bytes_le()).enumerate() {
+        bytes[idx] = a ^ b;
     }
-    F::from_repr(bytes).unwrap()
+    F::from_bytes_le(&bytes)
 }
 
 /// Returns the size (in bits) of each part size when splitting up a keccak word

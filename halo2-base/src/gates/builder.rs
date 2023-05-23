@@ -17,6 +17,9 @@ use std::{
     env::{set_var, var},
 };
 
+mod parallelize;
+pub use parallelize::*;
+
 /// Vector of thread advice column break points
 pub type ThreadBreakPoints = Vec<usize>;
 /// Vector of vectors tracking the thread break points across different halo2 phases

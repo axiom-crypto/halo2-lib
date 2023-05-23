@@ -7,5 +7,5 @@ pub fn assign<F: ScalarField>(
     a: OverflowInteger<F>,
 ) -> OverflowInteger<F> {
     let out_limbs = a.limbs.into_iter().map(|limb| gate.neg(ctx, limb)).collect();
-    OverflowInteger::construct(out_limbs, a.max_limb_bits)
+    OverflowInteger::new(out_limbs, a.max_limb_bits)
 }
