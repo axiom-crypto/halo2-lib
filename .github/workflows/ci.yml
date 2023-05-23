@@ -2,9 +2,9 @@ name: Tests
 
 on:
   push:
-    branches: ["main", "release-0.3.0"]
+    branches: ["main", "community-edition"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "community-edition"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -41,6 +41,7 @@ jobs:
           cargo test --release -- --nocapture bench_secp256k1_ecdsa
           cargo test --release -- --nocapture bench_ec_add
           cargo test --release -- --nocapture bench_fixed_base_msm
+          mv configs/bn254/bench_msm.t.config configs/bn254/bench_msm.config
           cargo test --release -- --nocapture bench_msm
           cargo test --release -- --nocapture bench_pairing
           cd ..
