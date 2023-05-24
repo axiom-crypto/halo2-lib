@@ -40,8 +40,10 @@ jobs:
           cargo test --release -- test_fp_assert_eq
           cargo test --release -- --nocapture bench_secp256k1_ecdsa
           cargo test --release -- --nocapture bench_ec_add
+          mv configs/bn254/bench_fixed_msm.t.config configs/bn254/bench_fixed_msm.config
           cargo test --release -- --nocapture bench_fixed_base_msm
           mv configs/bn254/bench_msm.t.config configs/bn254/bench_msm.config
           cargo test --release -- --nocapture bench_msm
+          mv configs/bn254/bench_pairing.t.config configs/bn254/bench_pairing.config
           cargo test --release -- --nocapture bench_pairing
           cd ..
