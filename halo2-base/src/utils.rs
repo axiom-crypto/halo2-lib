@@ -354,63 +354,45 @@ impl<C: CurveAffine> CurveAffineExt for C {}
 
 mod scalar_field_impls {
     use super::{decompose_u64_digits_to_limbs, ScalarField};
-    use crate::halo2_proofs::halo2curves::{
-        bn256::{Fq as bn254Fq, Fr as bn254Fr},
-        secp256k1::{Fp as secpFp, Fq as secpFq},
-    };
-    #[cfg(feature = "halo2-pse")]
-    use ff::PrimeField;
+    use crate::halo2_proofs::halo2curves::FieldExt;
+    use std::hash::Hash;
 
-    /// To ensure `ScalarField` is only implemented for `ff:Field` where `Repr` is little endian, we use the following macro
-    /// to implement the trait for each field.
+    /// We do a blanket implementation in 'community-edition' to make it easier to integrate with other crates.
     #[cfg(feature = "halo2-axiom")]
-    #[macro_export]
-    macro_rules! impl_scalar_field {
-        ($field:ident) => {
-            impl ScalarField for $field {
-                #[inline(always)]
-                fn to_u64_limbs(self, num_limbs: usize, bit_len: usize) -> Vec<u64> {
-                    // Basically same as `to_repr` but does not go further into bytes
-                    let tmp: [u64; 4] = self.into();
-                    decompose_u64_digits_to_limbs(tmp, num_limbs, bit_len)
-                }
+    impl<F: FieldExt + Hash + Into<[u64; 4]>> ScalarField for F {
+        #[inline(always)]
+        fn to_u64_limbs(self, num_limbs: usize, bit_len: usize) -> Vec<u64> {
+            // Basically same as `to_repr` but does not go further into bytes
+            let tmp: [u64; 4] = self.into();
+            decompose_u64_digits_to_limbs(tmp, num_limbs, bit_len)
+        }
 
-                #[inline(always)]
-                fn to_bytes_le(&self) -> Vec<u8> {
-                    let tmp: [u64; 4] = (*self).into();
-                    tmp.iter().flat_map(|x| x.to_le_bytes()).collect()
-                }
-            }
-        };
+        #[inline(always)]
+        fn to_bytes_le(&self) -> Vec<u8> {
+            let tmp: [u64; 4] = (*self).into();
+            tmp.iter().flat_map(|x| x.to_le_bytes()).collect()
+        }
     }
 
-    /// To ensure `ScalarField` is only implemented for `ff:Field` where `Repr` is little endian, we use the following macro
-    /// to implement the trait for each field.
     #[cfg(feature = "halo2-pse")]
-    #[macro_export]
-    macro_rules! impl_scalar_field {
-        ($field:ident) => {
-            impl ScalarField for $field {
-                #[inline(always)]
-                fn to_u64_limbs(self, num_limbs: usize, bit_len: usize) -> Vec<u64> {
-                    let bytes = self.to_repr();
-                    let digits = (0..4)
-                        .map(|i| u64::from_le_bytes(bytes[i * 8..(i + 1) * 8].try_into().unwrap()));
-                    decompose_u64_digits_to_limbs(digits, num_limbs, bit_len)
-                }
+    impl<F> ScalarField for F
+    where
+        F: FieldExt<Repr = [u8; 32]> + Hash,
+    {
+        #[inline(always)]
+        fn to_u64_limbs(self, num_limbs: usize, bit_len: usize) -> Vec<u64> {
+            let repr = self.to_repr();
+            let bytes = repr.as_ref();
+            let digits =
+                (0..4).map(|i| u64::from_le_bytes(bytes[i * 8..(i + 1) * 8].try_into().unwrap()));
+            decompose_u64_digits_to_limbs(digits, num_limbs, bit_len)
+        }
 
-                #[inline(always)]
-                fn to_bytes_le(&self) -> Vec<u8> {
-                    self.to_repr().to_vec()
-                }
-            }
-        };
+        #[inline(always)]
+        fn to_bytes_le(&self) -> Vec<u8> {
+            self.to_repr().to_vec()
+        }
     }
-
-    impl_scalar_field!(bn254Fr);
-    impl_scalar_field!(bn254Fq);
-    impl_scalar_field!(secpFp);
-    impl_scalar_field!(secpFq);
 }
 
 /// Module for reading parameters for Halo2 proving system from the file system.
