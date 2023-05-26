@@ -1,31 +1,35 @@
 # Halo2-base
 
+Halo2-base provides a streamlined frontend for interacting with the Halo2 API. It simplifies circuit programming to declaring constraints over a single advice and selector column and provides built-in circuit configuration and parellel proving and witness generation.
 
-Halo2-base provides a streamlined interface for interacting with the Halo2 API. It simplifies circuit programming to declaring constraints over a single advice and selector column and providing built-in circuit configuring and column splitting for proof parallelization.
+Programmed circuit constraints are stored in `GateThreadBuilder` as `Vec` of `Context`'s. Each `Context` can be interpreted as a "virtual column" which tracks all witness values and constraints but does not assign them as cells within the Halo2 backend. This allows the number of rows and columns in the circuit to be pre-computed from a `Context` eliminating the need to manually assign circuit parameters before circuit creation. 
+In addition, this simplifies parallelizing proving in the Halo2 backend since the number of columns needed in the circuit can be calculated ahead of time, and a `Context` can then be divided into multiple columns for parallel computation. 
 
-Programmed circuit constraints are stored in multiple `Context`'s held by `GateThreadBuilder` which tracks all assigned witness values and constraints. Before circuit synthesis the number of rows and columns in the circuit is pre-computed by calling `config()` in `GateThreadBuilder`. The two columns are split into mulitple columns at `breakpoints`. All assigned values in the circuit are then assigned by calling `synthesize()` in `GateCircuitBuilder` which in turn invokes `assign_all()` or `assign_threads_in` in `GateThreadBuilder` to assign the witness values tracked in the `Context` to there respective `Column` in the circuit within the Halo2 proving system.
+A user can also parallelize witness generation by specifying a function and a `Vec` of inputs to perform in parallel using `parallelize_in()` which creates a separate `Context` for each input that performs the specified function. These "virtual columns" are then computed in parallel during witness generation and combined back into a single column "virtual column" before cell assignment in the Halo2 backend.
 
-Pre-computing the number of rows and columns eliminates the necessity to manually specify columns ahead of time and leads to better proving performance through parallelizing advice columns.
+All assigned values in a circuit are assigned in the Halo2 backend by calling `synthesize()` in `GateCircuitBuilder` which in turn invokes `assign_all()` (or `assign_threads_in` for witness generation) in `GateThreadBuilder` to assign the witness values tracked in a `Context` to their respective `Column` in the circuit within the Halo2 backend.
 
-Witness computation is also parallelized in Halo2-base allowing for faster generation of circuit output. This is accomplished by splitting the single advice and selector column into multiple columns to solely compute the resulting witness value. This process is parallelization process is distinct from the final configuration of the circuit columns previously mentioned.
+Halo2-base also provides pre-built [Chips](https://zcash.github.io/halo2/concepts/chips.html) for common arithmetic operations in `GateChip` and lookup arguments in `RangeChip`. Our `Chip` implementations differ slightly from the Zcash's `Chip` implementations. In Zcash, the `Chip` struct stores knowledge about the `Config` and custom gates used. In halo2-base a `Chip` stores only functions while the interaction with a circuits `Config` is done in `GateCircuitBuilder`.
 
-Halo2-base also provides pre-built [Chips](https://zcash.github.io/halo2/concepts/chips.html) for common arithmetic operations in `GateChip` and lookup arguments in `RangeChip`. 
+The structure of halo2-base is outlined as follows:
 
-The structure of Halo2-base is outlines as follows:
-
-- `builder.rs`: Contains `GateThreadBuilder`, `GateCircuitBuilder`, and `RangeCircuitBuilder` which implement the logic to split the single advice and selector columns and there respective constraints across multiple columns for effective parellelization.
+- `builder.rs`: Contains `GateThreadBuilder`, `GateCircuitBuilder`, and `RangeCircuitBuilder` which implement the logic to provide different arithmetization configurations with different performance tradeoffs in the Halo2 backend.
 - `lib.rs`: Defines the `QuantumCell`, `ContextCell`, `AssignedValue`, and `Context` types which track assigned values within a circuit across multiple columns and provide a streamlined interface to assign witness values directly to the advice column.
-- `utils.rs`: Contains `BigPrimeField`, `BigUint`, and `ScalerField` traits which represent field elements within halo2 and provides methods to decompose Field elements into `u64`  limbs.
-- `flex_gate.rs`: Contains the implemenation of `GateChip` and the `GateInstructions` trait which provide circuits for basic arithmetic operations within halo2.
-- `range.rs:`: Implements `RangeChip` and the `RangeInstructions` trait which provide circuits for performing range check and other lookup argument values.
+- `utils.rs`: Contains `BigPrimeField`, and `ScalerField` traits which represent field elements within Halo2 and provides methods to decompose field elements into `u64` limbs and convert between field elements and `Biguint`.
+- `flex_gate.rs`: Contains the implementation of `GateChip` and the `GateInstructions` trait which provide functions for basic arithmetic operations within Halo2.
+- `range.rs:`: Implements `RangeChip` and the `RangeInstructions` trait which provide functions for performing range check and other lookup argument operations.
 
-This readme compliments the in-line documentation of Halo2-base providing an overview of `builder.rs` and `lib.rs`.
+This readme compliments the in-line documentation of halo2-base providing an overview of `builder.rs` and `lib.rs`.
 
 <br>
 
-## [Context](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/lib.rs#L128)
+## [**Context**](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/lib.rs)
 
-`Context` holds all information of an execution trace (circuit and its witness values). `Context` objects store the constraint information for a sub-section of the two columns in Halo2-base. Storing the circuit information in a `Context` allows for the rearrangement of the `single column` into multiple parallelizable columns while preserving the underlying circuit information. This allows witness computation and the precomputation of a circuits size. In Halo2-base the `single column` is split into sections at `breakpoints` each represented by a different `Context`. During circuit `synthesis()`, the cell assignments of a `Context` are extracted and assigned to a `region()` using the Halo2 API.
+`Context` holds all information of an execution trace (circuit and its witness values). `Context` represents a "virtual column" that stores unassigned constraint information in the Halo2 backend. Storing the circuit information in a `Context` rather than assigning it directly to the Halo2 backend allows for the pre-computation of circuit parameters and preserves the underlying circuit information allowing for its rearrangement into multiple columns for parallelization in the Halo2 backend.
+
+For parallel proving, the advice values of all `Context` are concatenated in single "virtual column" that is split into multiple at `breakpoints` each representing a different sub-section of the "virtual column". During circuit synthesis, cell assignments are extracted from the `Context` and assigned to a `Region` of a circuit as actual plonkish arithmetization columns within Halo2's backend.
+
+For parallel witness generation, multiple `Context`'s are created for each parallel operation. After parallel witness generation, these `Context`'s are combined to form a single "virtual column" which is then, as in parallel proving, split into multiple pre-computed columns for proving in the Halo2 backend.
 
 ```rust ignore
 pub struct Context<F: ScalarField> {
@@ -47,11 +51,12 @@ pub struct Context<F: ScalarField> {
     pub constant_equality_constraints: Vec<(F, ContextCell)>,
 }
 ```
-The `witness_gen_only` is set for witness computation, such as during Mock proving. Otherwise it is set to false.
+`witness_gen_only` is set only during witness generation, otherwise it is set to false. Setting this flag leads enables parallel witness generation by calling `assign_threads_in()` in `GateCircuitBuilder`. 
 
-The `Context` holds all equality and constant constraints as a `Vec` of `ContextCell` tuples representing the positions of the two cells to constrain. `advice`, `selector`, store the respective columns values of the `Context`'s section of the two columns. `cells_to_lookup` tracks `AssignedValue`'s of cells marked for use in a lookup table within the `Context`.
+A `Context` holds all equality and constant constraints as a `Vec` of `ContextCell` tuples representing the positions of the two cells to constrain. `advice`, and`selector` store the respective column values of the `Context`'s which may represent the entire advice and selector column or a sub-section of the advice and selector column during parellel witness generation. `cells_to_lookup` tracks `AssignedValue`'s of cells to be looked up in a global lookup table shared among all `Context`'s'.
 
-[ContextCell](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/lib.rs#L94) is a pointer to a specific cell within a `Context` identified by the Context's `context_id` and the cells relative `offset` from the first cell of the advice column of the Context.
+[**ContextCell**](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/lib.rs):
+`ContextCell` Is a pointer to a specific cell within a `Context` identified by the Context's `context_id` and the cell's relative `offset` from the first cell of the advice column of the `Context`.
 
 ``` rust ignore
 #[derive(Clone, Copy, Debug)]
@@ -63,7 +68,8 @@ pub struct ContextCell {
 }
 ```
 
-[AssignedValue](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/lib.rs#L105) represents a specific `Assigned` value assigned to a cell within a specific `Context` of a circuit referenced by a `ContextCell`. 
+[**AssignedValue**](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/lib.rs):
+`AssignedValue` represents a specific `Assigned` value assigned to a specific cell within a `Context` of a circuit referenced by a `ContextCell`. 
 ```rust ignore
 pub struct AssignedValue<F: ScalarField> {
     pub value: Assigned<F>,
@@ -72,7 +78,8 @@ pub struct AssignedValue<F: ScalarField> {
 }
 ```
     
-[Assigned](https://github.com/zcash/halo2/blob/main/halo2_proofs/src/plonk/assigned.rs#L11) is a wrapper enum for values assigned to a cell within a circuit which stores the value as a fraction and marks it for batched inversion using Montgomery's trick https://zcash.github.io/halo2/background/fields.html#montgomerys-trick. Performing batched inversion allows for the computation of the inverse of all marked values with a single inversion operation.
+[**Assigned**](https://github.com/zcash/halo2/blob/main/halo2_proofs/src/plonk/assigned.rs) 
+`Assigned` is a wrapper enum for values assigned to a cell within a circuit which stores the value as a fraction and marks it for batched inversion using [Montgomery's trick](https://zcash.github.io/halo2/background/fields.html#montgomerys-trick). Performing batched inversion allows for the computation of the inverse of all marked values with a single inversion operation.
 ```rust ignore
 pub enum Assigned<F> {
     /// The field element zero.
@@ -86,9 +93,9 @@ pub enum Assigned<F> {
     
 <br>
 
-## [QuantumCell](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/lib.rs#L53)
+## [QuantumCell](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/lib.rs)
 
-QuantumCell is a helper enum that abstracts the scenarios in which a value is assigned to the advice column in Halo2-base. Assigning existing or constant values to the advice column requires manually specifying the enforeced constraints on top of assigning the value leading to bloated code. QuantumCell handles these technical operations for you, all a developer needs to do is specify which enum option in `QuantumCell` there value corresponds to. The `assign_cell()` method `Context` then handles the technical operations for you.
+`QuantumCell` is a helper enum that abstracts the scenarios in which a value is assigned to the advice column in Halo2-base. Without `QuantumCell` assigning existing or constant values to the advice column requires manually specifying the enforced constraints on top of assigning the value leading to bloated code. `QuantumCell` handles these technical operations, all a developer needs to do is specify which enum option in `QuantumCell` the value they are adding corresponds to.
 
 ```rust ignore
 pub enum QuantumCell<F: ScalarField> {
@@ -105,7 +112,7 @@ pub enum QuantumCell<F: ScalarField> {
 QuantumCell contains the following enum variants.
 
 - **Existing**:
-    Assigns a value to the advice column that exists within the advice column. The value is an existing value from some previous part of your computation already in the advice column in the form of an AssignedValue. When you add an existing cell a into the table a new cell will be assigned into the advice column with value equal to the existing value. An equality constraint will then be added between the new cell and the cell of a so the Verifier has a guarantee that these two cells are always equal.
+    Assigns a value to the advice column that exists within the advice column. The value is an existing value from some previous part of your computation already in the advice column in the form of an `AssignedValue`. When you add an existing cell into the table a new cell will be assigned into the advice column with value equal to the existing value. An equality constraint will then be added between the new cell and the cell of a so the Verifier has a guarantee that these two cells are always equal.
     ```rust ignore
     QuantumCell::Existing(acell) => {
         self.advice.push(acell.value);
@@ -118,21 +125,21 @@ QuantumCell contains the following enum variants.
     }
     ```
 - **Witness**:
-    Assigns an entirely new number into the advice column, such as a private input. When `assign_cell` is called the value is wrapped in as an `Assigned::Trivial()`` which marks it for exclusion from batch inversion.
+    Assigns an entirely new witness value into the advice column, such as a private input. When `assign_cell()` is called the value is wrapped in as an `Assigned::Trivial()` which marks it for exclusion from batch inversion.
     ``` rust ignore
     QuantumCell::Witness(val) => {
         self.advice.push(Assigned::Trivial(val));
     }
     ```
 - **WitnessFraction**:
-    Assigns an entirely new witness value to the advice column. `WitnessFraction` exists for optimization purposes and accepts Assigned values wrapped in `Assigned::Rational()`` marked for batch inverion.
+    Assigns an entirely new witness value to the advice column. `WitnessFraction` exists for optimization purposes and accepts Assigned values wrapped in `Assigned::Rational()` marked for batch inverion.
     ``` rust ignore
     QuantumCell::WitnessFraction(val) => {
         self.advice.push(val);
     }
     ```
 - **Constant**:
-    A value that is a "known" constant. A "known" refers to known at circuit creation time to both the Prover and Verifier. When you assign a constant value there is exists another secret "Fixed" column in the circuit constraint table whose values are fixed at circuit creation time. When you assign a Constant value, you are adding this value to the Fixed column, adding the value as a witness to the Advice column, and then imposing an equality constraint between the two corresponding cells in the `Fixed` and `Advice` columns.
+    A value that is a "known" constant. A "known" refers to known at circuit creation time to both the Prover and Verifier. When you assign a constant value there is exists another secret "Fixed" column in the circuit constraint table whose values are fixed at circuit creation time. When you assign a Constant value, you are adding this value to the Fixed column, adding the value as a witness to the Advice column, and then imposing an equality constraint between the two corresponding cells in the Fixed and Advice columns.
 ``` rust ignore
 QuantumCell::Constant(c) => {
     self.advice.push(Assigned::Trivial(c));
@@ -147,9 +154,9 @@ QuantumCell::Constant(c) => {
 
 <br>
 
-## [GateThreadBuilder](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/gates/builder.rs#L49) & [GateCircuitBuilder](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/gates/builder.rs#L462)
+## [GateThreadBuilder](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/gates/builder.rs) & [GateCircuitBuilder](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/gates/builder.rs)
 
-GateThreadBuilder tracks the cell assignments of a circuit as a `Context` allowing for the pre-computation of a circuits size and splitting the two column into multiple columns for parallelization.
+GateThreadBuilder tracks the cell assignments of a circuit as an array of `Vec` of `Context`' where `threads[i]` contains all `Context`'s for that phase. Each array element corresponds to a distinct challenge phase of Halo2's proving system, each of which has its own unique set of rows and columns.
 
 ```rust ignore
 #[derive(Clone, Debug, Default)]
@@ -164,11 +171,10 @@ pub struct GateThreadBuilder<F: ScalarField> {
     use_unknown: bool,
 }
 ```
-GateThreadBuilder tracks circuit assignment as an array of `threads` consisting of `Vec` of `Context`'s. Halo2's proving system has distinct phases each of which its own unique column. To accomodate this `GateThreadBuilder` tracks a `thread` for each phase of the proving system. Each `Context` in a `thread` defines a sub-section of the two column split at a breakpoint stored in `break_points`.
 
-Once a `GateThreadBuilder` is created, gates may be assigned to a `Context` in `threads`. Once the circuit is created `config()` is called to pre-computes the circuits size and sets the circuits environment variables.
+Once a `GateThreadBuilder` is created, gates may be assigned to a `Context` (or in the case of parallel witness generation multiple `Context`'s) within `threads`. Once the circuit is written `config()` is called to pre-compute the circuits size and set the circuits environment variables.
 
-[config()](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/gates/builder.rs#L137)
+[**config()**](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/gates/builder.rs)
 ```rust ignore
 pub fn config(&self, k: usize, minimum_rows: Option<usize>) -> FlexGateConfigParams {
         let max_rows = (1 << k) - minimum_rows.unwrap_or(0);
@@ -224,7 +230,8 @@ pub fn config(&self, k: usize, minimum_rows: Option<usize>) -> FlexGateConfigPar
         params
     }
 ```
-For circuit creation the a `GateCircuitBuilder` is created by passing the created `GateThreadBuilder` as an argument to `GateCircuitBuilder`'s `keygen`,`mock`, or `prover` functions. `GateCircuitBuilder` acts as a middleman between `GateThreadBuilder` and the Halo2 API by implementing the `Circuit` Trait of the Halo2 API and calling into `GateThreadBuilder` to perform circuit assignment.
+
+For circuit creation a `GateCircuitBuilder` is created by passing the `GateThreadBuilder` as an argument to `GateCircuitBuilder`'s `keygen`,`mock`, or `prover` functions. `GateCircuitBuilder` acts as a middleman between `GateThreadBuilder` and the Halo2 backend by implementing Halo2's`Circuit` Trait and calling into `GateThreadBuilder` `assign_all()` and `assign_threads_in()` functions to perform circuit assignment.
 
 ```rust ignore
 /// Vector of vectors tracking the thread break points across different halo2 phases
@@ -270,11 +277,11 @@ impl<F: ScalarField> Circuit<F> for GateCircuitBuilder<F> {
     }
 }
 ```
-`GateCircuitBuilder` contains a list of breakpoints for each thread across all phases in and `GateThreadBuilder` itself. Both are wrapped in a `RefCell` allowing them to be borrowed mutably so `break_points` can be recorded during circuit creation for later use and the function performing circuit creation can take ownership of `builder`.
+During circuit creation `synthesize()` is invoked which passes into `sub_synthesize()` a `FlexGateConfig` containing the actual circuits columns and a mutable reference to a `Layouter` from the Halo2 API which facilitates the final assignment of cells within a `Region` of a circuit in Halo2's backend.
 
-During circuit creation `synthesize()` is invoked which passes into `sub_synthesize` a `FlexGateConfig` containing the circuits columns and a mutable reference to a Layouter from the Halo2 API which facilitates the final assignment of circuit cells.
+`GateCircuitBuilder` contains a list of breakpoints for each thread across all phases in and `GateThreadBuilder` itself. Both are wrapped in a `RefCell` allowing them to be borrowed mutably so the function performing circuit creation can take ownership of the `builder` and `break_points` can be recorded during circuit creation for later use.
 
-[sub_synthesize()](https://github.com/PatStiles/halo2-lib/blob/release-0.3.0/halo2-base/src/gates/builder.rs#LL490C2-L490C2)
+[**sub_synthesize()**](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/gates/builder.rs)
 ```rust ignore
 pub fn sub_synthesize(
     &self,
@@ -342,17 +349,18 @@ pub fn sub_synthesize(
 }
 
 ```
-`layouter`'s `assign_region()` function is invoked which yields a mutable reference to `Region`. `region` is used to assign of a contiguous region of cells representing the circuit within Halo2's proving system.
 
-If `witnes_gen_only` is not set within the `builder` (during keygen, and mock proving) `sub_synthesize` takes ownership of the `builder`, asserts all threads but the thread corresponding to the first phase are empty, and calls `assign_all()` to assign all cells within this `thread`'s context to the circuit. The resulting column breakpoints are recorded in `GateCircuitBuilder`'s `break_points` field. 
+Within `sub_synthesize()` `layouter`'s `assign_region()` function is invoked which yields a mutable reference to `Region`. `region` is used to assign cells within a contiguous region of the circuit represented in Halo2's proving system.
 
-It should be noted this process is only compatible with the first phase of Halo2's proving system as retrieving witness challenges in later phases requires more specialized witness generation during synthesis.
+If `witness_gen_only` is not set within the `builder` (for keygen, and mock proving) `sub_synthesize` takes ownership of the `builder`, and calls `assign_all()` to assign all cells within this context to a circuit in Halo2's backend. The resulting column breakpoints are recorded in `GateCircuitBuilder`'s `break_points` field. 
 
-`assign_all()` iterates over each `Context` within a thread and assigns the values and constraints of the advice, selector, fixed, and lookup columns to the circuit using `region`.
+`assign_all()` iterates over each `Context` within a `phase` and assigns the values and constraints of the advice, selector, fixed, and lookup columns to the circuit using `region`.
 
-Breakpoints for the advice column are assigned sequentially if the `row_offset` of the cell value being currently assigned exceeds the maximum amount of rows allowed in a column.
+Breakpoints for the advice column are assigned sequentially. If, the `row_offset` of the cell value being currently assigned exceeds the maximum amount of rows allowed in a column a new column is created.
 
-[assign_all()](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/gates/builder.rs#L205)
+It should be noted this process is only compatible with the first phase of Halo2's proving system as retrieving witness challenges in later phases requires more specialized witness generation during synthesis. Therefore, `assign_all()` must assert all elements in `threads` are unassigned excluding the first phase.
+
+[**assign_all()**](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/gates/builder.rs)
 ```rust ignore
 pub fn assign_all(
     &self,
@@ -391,7 +399,7 @@ pub fn assign_all(
             ...
                     
 ```
-In the case a breakpoint falls on the overlap between two gates (such as chained addition of two values) the cells the breakpoint falls on must be copied to the next column and a new equality constraint enforced between the value of the cell in the old column and the copied cell in the new column. This prevents the circuit from being undersconstratined and preserves the equality constraint from the overlapping gates.
+In the case a breakpoint falls on the overlap between two gates (such as chained addition of two cells) the cells the breakpoint falls on must be copied to the next column and a new equality constraint enforced between the value of the cell in the old column and the copied cell in the new column. This prevents the circuit from being undersconstratined and preserves the equality constraint from the overlapping gates.
 ```rust ignore
 if (q && row_offset + 4 > max_rows) || row_offset >= max_rows - 1 {
     break_point.push(row_offset);
@@ -421,11 +429,11 @@ if (q && row_offset + 4 > max_rows) || row_offset >= max_rows - 1 {
 
 ```
 
-If `witness_gen_only` flag is set witness generation is only performed. `sub_synthesize` calls `assign_threads_in()` to assign threads directly.
+If `witness_gen_only` is set, only witness generation is performed, and no copy constraints or selector values are considered. 
 
-`assign_threads_in` assumes that break points have been pre-computed. It iterates over all the `Context` within a thread and assigns lookup and advice column values to the circuit using `region`. 
+Witness generation can be parallelized by a user by calling `parallelize_in()` and specifying a function and a `Vec` of inputs to perform in parallel. `parallelize_in()` which creates a separate `Context` for each input that performs the specified function and appends them to the `Vec` of `Context`'s of a particular phase. 
 
-[assign_threads_in()](https://github.com/PatStiles/halo2-lib/blob/release-0.3.0/halo2-base/src/gates/builder.rs#L378)
+[**assign_threads_in()**](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/gates/builder.rs)
 ```rust ignore
 pub fn assign_threads_in<F: ScalarField>(
     phase: usize,
@@ -495,4 +503,63 @@ pub fn assign_threads_in<F: ScalarField>(
     }
 
 ```
-If a breakpoint is reached, a new column is created by incrementing `gate_index` and assigning `column` to a new advice column found at `config.basic_gates[phase][gate_index].value`.
+`sub_synthesize` iterates over all phases and calls `assign_threads_in()` for that phase. `assign_threads_in()` terates over all`Context`'s within that phase and assigns all lookup and advice values in the `Context` creating a new advice column at every pre-computed "breakpoint" by incrementing `gate_index` and assigning `column` to a new advice column found at `config.basic_gates[phase][gate_index].value`. Since, break points are assigned at the end of a `Context` within `assign_all()` (`row_offset >= max_rows - 1`) a new column is created for each `Context` within that phase enabling parallel witness generation.
+
+## [RangeCircuitBuilder](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/gates/builder.rs)
+
+`RangeCircuitBuilder` is a wrapper struct around `GateCircuitBuilder`. Like `GateCircuitBuilder` it acts as a middleman between `GateThreadBuilder` and the Halo2 backend by implementing Halo2's`Circuit` Trait. 
+```rust ignore
+#[derive(Clone, Debug)]
+pub struct RangeCircuitBuilder<F: ScalarField>(pub GateCircuitBuilder<F>);
+
+impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
+    type Config = RangeConfig<F>;
+    type FloorPlanner = SimpleFloorPlanner;
+
+    /// Creates a new instance of the [RangeCircuitBuilder] without witnesses by setting the witness_gen_only flag to false
+    fn without_witnesses(&self) -> Self {
+        unimplemented!()
+    }
+
+    /// Configures a new circuit using the the parameters specified [Config] and environment variable `LOOKUP_BITS`.
+    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+        let FlexGateConfigParams {
+            strategy,
+            num_advice_per_phase,
+            num_lookup_advice_per_phase,
+            num_fixed,
+            k,
+        } = serde_json::from_str(&var("FLEX_GATE_CONFIG_PARAMS").unwrap()).unwrap();
+        let strategy = match strategy {
+            GateStrategy::Vertical => RangeStrategy::Vertical,
+        };
+        let lookup_bits = var("LOOKUP_BITS").unwrap_or_else(|_| "0".to_string()).parse().unwrap();
+        RangeConfig::configure(
+            meta,
+            strategy,
+            &num_advice_per_phase,
+            &num_lookup_advice_per_phase,
+            num_fixed,
+            lookup_bits,
+            k,
+        )
+    }
+
+    /// Performs the actual computation on the circuit (e.g., witness generation), populating the lookup table and filling in all the advice values for a particular proof.
+    fn synthesize(
+        &self,
+        config: Self::Config,
+        mut layouter: impl Layouter<F>,
+    ) -> Result<(), Error> {
+        // only load lookup table if we are actually doing lookups
+        if config.lookup_advice.iter().map(|a| a.len()).sum::<usize>() != 0
+            || !config.q_lookup.iter().all(|q| q.is_none())
+        {
+            config.load_lookup_table(&mut layouter).expect("load lookup table should not fail");
+        }
+        self.0.sub_synthesize(&config.gate, &config.lookup_advice, &config.q_lookup, &mut layouter);
+        Ok(())
+    }
+}
+```
+`RangeCircuitBuilder` differs from `GateCircuitBuilder` in that it contains a `RangeConfig` instead of a `FlexGateConfig` as its `Config`. `RangeConfig` contains a `lookup` table needed to declare lookup arguments within Halo2's backend. When creating a circuit that uses lookup tables `GateThreadBuilder` must be wrapped with `RangeCircuitBuilder` instead of `GateCircuitBuilder` otherwise circuit synthesis will fail as a lookup table is not present within the Halo2 backend.
