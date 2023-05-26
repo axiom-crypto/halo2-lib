@@ -504,3 +504,62 @@ pub fn assign_threads_in<F: ScalarField>(
 
 ```
 `sub_synthesize` iterates over all phases and calls `assign_threads_in()` for that phase. `assign_threads_in()` terates over all`Context`'s within that phase and assigns all lookup and advice values in the `Context` creating a new advice column at every pre-computed "breakpoint" by incrementing `gate_index` and assigning `column` to a new advice column found at `config.basic_gates[phase][gate_index].value`. Since, break points are assigned at the end of a `Context` within `assign_all()` (`row_offset >= max_rows - 1`) a new column is created for each `Context` within that phase enabling parallel witness generation.
+
+## [RangeCircuitBuilder](https://github.com/axiom-crypto/halo2-lib/blob/release-0.3.0/halo2-base/src/gates/builder.rs)
+
+`RangeCircuitBuilder` is a wrapper struct around `GateCircuitBuilder`. Like `GateCircuitBuilder` it acts as a middleman between `GateThreadBuilder` and the Halo2 backend by implementing Halo2's`Circuit` Trait. 
+```rust ignore
+#[derive(Clone, Debug)]
+pub struct RangeCircuitBuilder<F: ScalarField>(pub GateCircuitBuilder<F>);
+
+impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
+    type Config = RangeConfig<F>;
+    type FloorPlanner = SimpleFloorPlanner;
+
+    /// Creates a new instance of the [RangeCircuitBuilder] without witnesses by setting the witness_gen_only flag to false
+    fn without_witnesses(&self) -> Self {
+        unimplemented!()
+    }
+
+    /// Configures a new circuit using the the parameters specified [Config] and environment variable `LOOKUP_BITS`.
+    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+        let FlexGateConfigParams {
+            strategy,
+            num_advice_per_phase,
+            num_lookup_advice_per_phase,
+            num_fixed,
+            k,
+        } = serde_json::from_str(&var("FLEX_GATE_CONFIG_PARAMS").unwrap()).unwrap();
+        let strategy = match strategy {
+            GateStrategy::Vertical => RangeStrategy::Vertical,
+        };
+        let lookup_bits = var("LOOKUP_BITS").unwrap_or_else(|_| "0".to_string()).parse().unwrap();
+        RangeConfig::configure(
+            meta,
+            strategy,
+            &num_advice_per_phase,
+            &num_lookup_advice_per_phase,
+            num_fixed,
+            lookup_bits,
+            k,
+        )
+    }
+
+    /// Performs the actual computation on the circuit (e.g., witness generation), populating the lookup table and filling in all the advice values for a particular proof.
+    fn synthesize(
+        &self,
+        config: Self::Config,
+        mut layouter: impl Layouter<F>,
+    ) -> Result<(), Error> {
+        // only load lookup table if we are actually doing lookups
+        if config.lookup_advice.iter().map(|a| a.len()).sum::<usize>() != 0
+            || !config.q_lookup.iter().all(|q| q.is_none())
+        {
+            config.load_lookup_table(&mut layouter).expect("load lookup table should not fail");
+        }
+        self.0.sub_synthesize(&config.gate, &config.lookup_advice, &config.q_lookup, &mut layouter);
+        Ok(())
+    }
+}
+```
+`RangeCircuitBuilder` differs from `GateCircuitBuilder` in that it contains a `RangeConfig` instead of a `FlexGateConfig` as its `Config`. `RangeConfig` contains a `lookup` table needed to declare lookup arguments within Halo2's backend. When creating a circuit that uses lookup tables `GateThreadBuilder` must be wrapped with `RangeCircuitBuilder` instead of `GateCircuitBuilder` otherwise circuit synthesis will fail as a lookup table is not present within the Halo2 backend.
