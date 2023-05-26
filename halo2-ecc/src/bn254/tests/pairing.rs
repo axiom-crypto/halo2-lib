@@ -32,6 +32,24 @@ struct PairingCircuitParams {
     num_limbs: usize,
 }
 
+fn pairing_check_test<F: PrimeField>(
+    ctx: &mut Context<F>,
+    params: PairingCircuitParams,
+    P: G1Affine,
+    Q: G2Affine,
+    S: G1Affine,
+) {
+    std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
+    let range = RangeChip::<F>::default(params.lookup_bits);
+    let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
+    let chip = PairingChip::new(&fp_chip);
+    let P_assigned = chip.load_private_g1_unchecked(ctx, P);
+    let Q_assigned = chip.load_private_g2_unchecked(ctx, Q);
+    let S_assigned = chip.load_private_g1_unchecked(ctx, S);
+    let T_assigned = chip.load_private_g2_unchecked(ctx, G2Affine::generator());
+    chip.pairing_check(ctx, &Q_assigned, &P_assigned, &T_assigned, &S_assigned);
+}
+
 fn pairing_test<F: PrimeField>(
     ctx: &mut Context<F>,
     params: PairingCircuitParams,
@@ -42,13 +60,10 @@ fn pairing_test<F: PrimeField>(
     let range = RangeChip::<F>::default(params.lookup_bits);
     let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
     let chip = PairingChip::new(&fp_chip);
-
     let P_assigned = chip.load_private_g1_unchecked(ctx, P);
     let Q_assigned = chip.load_private_g2_unchecked(ctx, Q);
-
     // test optimal ate pairing
     let f = chip.pairing(ctx, &Q_assigned, &P_assigned);
-
     let actual_f = pairing(&P, &Q);
     let fp12_chip = Fp12Chip::new(&fp_chip);
     // cannot directly compare f and actual_f because `Gt` has private field `Fq12`
@@ -58,25 +73,27 @@ fn pairing_test<F: PrimeField>(
     );
 }
 
-fn random_pairing_circuit(
+fn build_setup(
     params: PairingCircuitParams,
+    stage: CircuitBuilderStage,
+) -> (usize, GateThreadBuilder<Fr>) {
+    (
+        params.degree as usize,
+        match stage {
+            CircuitBuilderStage::Mock => GateThreadBuilder::mock(),
+            CircuitBuilderStage::Prover => GateThreadBuilder::prover(),
+            CircuitBuilderStage::Keygen => GateThreadBuilder::keygen(),
+        },
+    )
+}
+
+fn build_circuit(
+    k: usize,
+    builder: GateThreadBuilder<Fr>,
     stage: CircuitBuilderStage,
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
-    let k = params.degree as usize;
-    let mut builder = match stage {
-        CircuitBuilderStage::Mock => GateThreadBuilder::mock(),
-        CircuitBuilderStage::Prover => GateThreadBuilder::prover(),
-        CircuitBuilderStage::Keygen => GateThreadBuilder::keygen(),
-    };
-
-    let P = G1Affine::random(OsRng);
-    let Q = G2Affine::random(OsRng);
-
-    let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
-    pairing_test::<Fr>(builder.main(0), params, P, Q);
-
-    let circuit = match stage {
+    match stage {
         CircuitBuilderStage::Mock => {
             builder.config(k, Some(20));
             RangeCircuitBuilder::mock(builder)
@@ -86,7 +103,65 @@ fn random_pairing_circuit(
             RangeCircuitBuilder::keygen(builder)
         }
         CircuitBuilderStage::Prover => RangeCircuitBuilder::prover(builder, break_points.unwrap()),
-    };
+    }
+}
+
+fn random_pairing_circuit(
+    params: PairingCircuitParams,
+    stage: CircuitBuilderStage,
+    break_points: Option<MultiPhaseThreadBreakPoints>,
+) -> RangeCircuitBuilder<Fr> {
+    let (k, mut builder) = build_setup(params, stage);
+    let P = G1Affine::random(OsRng);
+    let Q = G2Affine::random(OsRng);
+    let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
+    pairing_test::<Fr>(builder.main(0), params, P, Q);
+    let circuit = build_circuit(k, builder, stage, break_points);
+    end_timer!(start0);
+    circuit
+}
+
+/*
+ * Samples a random α,β in Fr and does the pairing check
+ * e(H_1^α, H_2^β) = e(H_1^(α*β), H_2), where H_1 is the generator for G1 and
+ * H_2 for G2.
+ */
+fn random_pairing_check_circuit(
+    params: PairingCircuitParams,
+    stage: CircuitBuilderStage,
+    break_points: Option<MultiPhaseThreadBreakPoints>,
+) -> RangeCircuitBuilder<Fr> {
+    let (k, mut builder) = build_setup(params, stage);
+    let alpha = Fr::random(OsRng);
+    let beta = Fr::random(OsRng);
+    let P = G1Affine::from(G1Affine::generator() * alpha);
+    let Q = G2Affine::from(G2Affine::generator() * beta);
+    let S = G1Affine::from(G1Affine::generator() * alpha * beta);
+    let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
+    pairing_check_test::<Fr>(builder.main(0), params, P, Q, S);
+    let circuit = build_circuit(k, builder, stage, break_points);
+    end_timer!(start0);
+    circuit
+}
+
+/*
+ * Samples a random α,β in Fr and does an incorrect pairing check
+ * e(H_1^α, H_2^β) = e(H_1^α, H_2), where H_1 is the generator for G1 and
+ * H_2 for G2.
+ */
+fn random_pairing_check_fail_circuit(
+    params: PairingCircuitParams,
+    stage: CircuitBuilderStage,
+    break_points: Option<MultiPhaseThreadBreakPoints>,
+) -> RangeCircuitBuilder<Fr> {
+    let (k, mut builder) = build_setup(params, stage);
+    let alpha = Fr::random(OsRng);
+    let beta = Fr::random(OsRng);
+    let P = G1Affine::from(G1Affine::generator() * alpha);
+    let Q = G2Affine::from(G2Affine::generator() * beta);
+    let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
+    pairing_check_test::<Fr>(builder.main(0), params, P, Q, P);
+    let circuit = build_circuit(k, builder, stage, break_points);
     end_timer!(start0);
     circuit
 }
@@ -98,8 +173,30 @@ fn test_pairing() {
         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
     )
     .unwrap();
-
     let circuit = random_pairing_circuit(params, CircuitBuilderStage::Mock, None);
+    MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
+}
+
+#[test]
+fn test_pairing_check() {
+    let path = "configs/bn254/pairing_circuit.config";
+    let params: PairingCircuitParams = serde_json::from_reader(
+        File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
+    )
+    .unwrap();
+    let circuit = random_pairing_check_circuit(params, CircuitBuilderStage::Mock, None);
+    MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
+}
+
+#[test]
+#[should_panic]
+fn test_pairing_check_fail() {
+    let path = "configs/bn254/pairing_circuit.config";
+    let params: PairingCircuitParams = serde_json::from_reader(
+        File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
+    )
+    .unwrap();
+    let circuit = random_pairing_check_fail_circuit(params, CircuitBuilderStage::Mock, None);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
