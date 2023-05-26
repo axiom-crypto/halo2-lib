@@ -1,22 +1,22 @@
 # Halo2-base
 
-Halo2-base provides a streamlined frontend for interacting with the Halo2 API. It simplifies circuit programming to declaring constraints over a single advice and selector column and provides built-in circuit configuration and column splitting for circuit parallelization.
+Halo2-base provides a streamlined frontend for interacting with the Halo2 API. It simplifies circuit programming to declaring constraints over a single advice and selector column and provides built-in circuit configuration and parellel proving and witness generation.
 
 Programmed circuit constraints are stored in `GateThreadBuilder` as `Vec` of `Context`'s. Each `Context` can be interpreted as a "virtual column" which tracks all witness values and constraints but does not assign them as cells within the Halo2 backend. This allows the number of rows and columns in the circuit to be pre-computed from a `Context` eliminating the need to manually assign circuit parameters before circuit creation. 
-In addition, this simplifies parallelizing proving in the Halo2 backend since the number of columns needed in the circuit can be calculated ahead of time, and a `Context` can then be divided into multiple columns at for parallel computation. 
+In addition, this simplifies parallelizing proving in the Halo2 backend since the number of columns needed in the circuit can be calculated ahead of time, and a `Context` can then be divided into multiple columns for parallel computation. 
 
 A user can also parallelize witness generation by specifying a function and a `Vec` of inputs to perform in parallel using `parallelize_in()` which creates a separate `Context` for each input that performs the specified function. These "virtual columns" are then computed in parallel during witness generation and combined back into a single column "virtual column" before cell assignment in the Halo2 backend.
 
 All assigned values in a circuit are assigned in the Halo2 backend by calling `synthesize()` in `GateCircuitBuilder` which in turn invokes `assign_all()` (or `assign_threads_in` for witness generation) in `GateThreadBuilder` to assign the witness values tracked in a `Context` to their respective `Column` in the circuit within the Halo2 backend.
 
-Halo2-base also provides pre-built [Chips](https://zcash.github.io/halo2/concepts/chips.html) for common arithmetic operations in `GateChip` and lookup arguments in `RangeChip`. These `Chip` implementations differ slightly from `Chip`'s in Zcash. In Zcash the `Chip` struct stores knowledge about the `Config` and custom gates used. In halo2-base a `Chip` stores only functions while the interaction with a circuits `Config` is done in `GateCircuitBuilder`.
+Halo2-base also provides pre-built [Chips](https://zcash.github.io/halo2/concepts/chips.html) for common arithmetic operations in `GateChip` and lookup arguments in `RangeChip`. Our `Chip` implementations differ slightly from the Zcash's `Chip` implementations. In Zcash, the `Chip` struct stores knowledge about the `Config` and custom gates used. In halo2-base a `Chip` stores only functions while the interaction with a circuits `Config` is done in `GateCircuitBuilder`.
 
 The structure of halo2-base is outlined as follows:
 
 - `builder.rs`: Contains `GateThreadBuilder`, `GateCircuitBuilder`, and `RangeCircuitBuilder` which implement the logic to provide different arithmetization configurations with different performance tradeoffs in the Halo2 backend.
 - `lib.rs`: Defines the `QuantumCell`, `ContextCell`, `AssignedValue`, and `Context` types which track assigned values within a circuit across multiple columns and provide a streamlined interface to assign witness values directly to the advice column.
-- `utils.rs`: Contains `BigPrimeField`, and `ScalerField` traits which represent field elements within Halo2 and provides methods to decompose field elements into `u64`  limbs and convert between field elements and `Biguint`.
-- `flex_gate.rs`: Contains the implemenation of `GateChip` and the `GateInstructions` trait which provide functions for basic arithmetic operations within Halo2.
+- `utils.rs`: Contains `BigPrimeField`, and `ScalerField` traits which represent field elements within Halo2 and provides methods to decompose field elements into `u64` limbs and convert between field elements and `Biguint`.
+- `flex_gate.rs`: Contains the implementation of `GateChip` and the `GateInstructions` trait which provide functions for basic arithmetic operations within Halo2.
 - `range.rs:`: Implements `RangeChip` and the `RangeInstructions` trait which provide functions for performing range check and other lookup argument operations.
 
 This readme compliments the in-line documentation of halo2-base providing an overview of `builder.rs` and `lib.rs`.
@@ -27,9 +27,9 @@ This readme compliments the in-line documentation of halo2-base providing an ove
 
 `Context` holds all information of an execution trace (circuit and its witness values). `Context` represents a "virtual column" that stores unassigned constraint information in the Halo2 backend. Storing the circuit information in a `Context` rather than assigning it directly to the Halo2 backend allows for the pre-computation of circuit parameters and preserves the underlying circuit information allowing for its rearrangement into multiple columns for parallelization in the Halo2 backend.
 
-For parallelized proving, a `Context` representing a single "virtual column" is split into multiple columns at `breakpoints` each representing a different sub-section of that. During circuit synthesis, cell assignments are extracted from the `Context` and assigned to a `Region` of a circuit within Halo2's backend.
+For parallel proving, the advice values of all `Context` are concatenated in single "virtual column" that is split into multiple at `breakpoints` each representing a different sub-section of the "virtual column". During circuit synthesis, cell assignments are extracted from the `Context` and assigned to a `Region` of a circuit as actual plonkish arithmetization columns within Halo2's backend.
 
-For parallelized witness generation, multiple `Context`'s are created for each parallel operation. After witness generation, these `Context`'s are combined to form a single `Context` which is then split into multiple pre-computed columns for proving in the Halo2 backend.
+For parallel witness generation, multiple `Context`'s are created for each parallel operation. After parallel witness generation, these `Context`'s are combined to form a single "virtual column" which is then, as in parallel proving, split into multiple pre-computed columns for proving in the Halo2 backend.
 
 ```rust ignore
 pub struct Context<F: ScalarField> {
@@ -76,7 +76,7 @@ pub struct AssignedValue<F: ScalarField> {
 }
 ```
     
-[Assigned](https://github.com/zcash/halo2/blob/main/halo2_proofs/src/plonk/assigned.rs#L11) is a wrapper enum for values assigned to a cell within a circuit which stores the value as a fraction and marks it for batched inversion using Montgomery's trick https://zcash.github.io/halo2/background/fields.html#montgomerys-trick. Performing batched inversion allows for the computation of the inverse of all marked values with a single inversion operation.
+[Assigned](https://github.com/zcash/halo2/blob/main/halo2_proofs/src/plonk/assigned.rs#L11) is a wrapper enum for values assigned to a cell within a circuit which stores the value as a fraction and marks it for batched inversion using [Montgomery's trick](https://zcash.github.io/halo2/background/fields.html#montgomerys-trick). Performing batched inversion allows for the computation of the inverse of all marked values with a single inversion operation.
 ```rust ignore
 pub enum Assigned<F> {
     /// The field element zero.
@@ -109,7 +109,7 @@ pub enum QuantumCell<F: ScalarField> {
 QuantumCell contains the following enum variants.
 
 - **Existing**:
-    Assigns a value to the advice column that exists within the advice column. The value is an existing value from some previous part of your computation already in the advice column in the form of an `AssignedValue`. When you add an existing cell a into the table a new cell will be assigned into the advice column with value equal to the existing value. An equality constraint will then be added between the new cell and the cell of a so the Verifier has a guarantee that these two cells are always equal.
+    Assigns a value to the advice column that exists within the advice column. The value is an existing value from some previous part of your computation already in the advice column in the form of an `AssignedValue`. When you add an existing cell into the table a new cell will be assigned into the advice column with value equal to the existing value. An equality constraint will then be added between the new cell and the cell of a so the Verifier has a guarantee that these two cells are always equal.
     ```rust ignore
     QuantumCell::Existing(acell) => {
         self.advice.push(acell.value);
@@ -500,4 +500,4 @@ pub fn assign_threads_in<F: ScalarField>(
     }
 
 ```
-`sub_synthesize` iterates over all phases and calls `assign_threads_in()` for that phase. `assign_threads_in()` terates over all`Context`'s within that phase and assigns all lookup and advice values in the `Context` creating a new advice column at every pre-computed "breakpoint" by incrementing `gate_index` and assigning `column` to a new advice column found at `config.basic_gates[phase][gate_index].value`. Since, break points are assigned at the end of a `Context` within `assign_all()` (`row_offset >= max_rows - 1`) a new column is created for each `Context` within that phase enabling parallel witness generation.
+`sub_synthesize` iterates over all phases and calls `assign_threads_in()` for that phase. `assign_threads_in()` terates over all`Context`'s within that phase and assigns all lookup and advice values in the `Context` creating a new advice column at every pre-computed "breakpoint" by incrementing `gate_index` and assigning `column` to a new advice column found at `config.basic_gates[phase][gate_index].value`. Since, break points are assigned at the end of a `Context` within `assign_all()` a new column is created for each `Context` within that phase enabling parallel witness generation.
