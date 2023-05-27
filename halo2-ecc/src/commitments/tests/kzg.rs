@@ -62,6 +62,18 @@ fn test_kzg() {
     // Commit to a polynomial
     let idxs: Vec<Fr> = (0..dummy_data.len()).map(|x| Fr::from(x as u64)).collect();
     let p = Polynomial::from_points(&idxs, &dummy_data);
-    
-    println!("p: {:?}", p);
+    let p_bar = G1Affine::from(p.eval_ptau(&ptau_g1));
+
+    // Compute opening proof
+    let idxs_fr: Vec<Fr> = openings.iter().map(|idx| Fr::from(*idx)).collect();
+    let vals: Vec<Fr> = openings.iter().map(|idx| dummy_data[*idx as usize]).collect();
+    let r: Polynomial<Fr> = Polynomial::from_points(&idxs_fr, &vals);
+    let z: Polynomial<Fr> = Polynomial::vanishing(openings);
+    let (q, rem) = Polynomial::div_euclid(&(p.clone() - r.clone()), &z);
+    if !rem.is_zero() {
+        panic!("p(X) - r(X) is not divisible by z(X). Cannot compute q(X)");
+    }
+
+    let q_bar: G1Affine = G1Affine::from(q.eval_ptau(&ptau_g1));
+    // (q_bar, z.get_coeffs(), r.get_coeffs())
 }
