@@ -1,15 +1,29 @@
 /*
- * Runs through a smoke test for KZGChip. 
+ * Runs through a smoke test for KZGChip.
  */
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File},
     io::{BufRead, BufReader},
 };
+use super::*;
+use halo2_base::{
+    gates::{
+        builder::{
+            CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
+            RangeCircuitBuilder,
+        },
+        RangeChip,
+    },
+    halo2_proofs::poly::kzg::multiopen::{ProverGWC, VerifierGWC},
+    utils::fs::gen_srs,
+    Context,
+};
+use halo2_proofs::
 
+use crate::commitments::tests::polynomial::Polynomial;
 use crate::fields::FpStrategy;
 use crate::halo2_proofs::halo2curves::bn256::{Fr, G1Affine, G1, G2};
-use crate::commitments::tests::polynomial::Polynomial;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 struct KZGCircuitParams {
@@ -43,6 +57,37 @@ fn mock_trusted_setup(tau: Fr, blob_len: usize, n_openings: usize) -> (Vec<G1>, 
     (ptau_g1, ptau_g2)
 }
 
+fn kzg_smoke_circuit(
+    params: KZGCircuitParams,
+    stage: CircuitBuilderStage,
+    break_points: Option<MultiPhaseThreadBreakPoints>,
+) -> RangeCircuitBuilder<Fr> {
+    let k = params.degree as usize;
+    let mut builder = match stage {
+        CircuitBuilderStage::Mock => GateThreadBuilder::mock(),
+        CircuitBuilderStage::Prover => GateThreadBuilder::prover(),
+        CircuitBuilderStage::Keygen => GateThreadBuilder::keygen(),
+    };
+
+    let P = G1Affine::random(OsRng);
+    let Q = G2Affine::random(OsRng);
+
+    pairing_test::<Fr>(builder.main(0), params, P, Q);
+
+    let circuit = match stage {
+        CircuitBuilderStage::Mock => {
+            builder.config(k, Some(20));
+            RangeCircuitBuilder::mock(builder)
+        }
+        CircuitBuilderStage::Keygen => {
+            builder.config(k, Some(20));
+            RangeCircuitBuilder::keygen(builder)
+        }
+        CircuitBuilderStage::Prover => RangeCircuitBuilder::prover(builder, break_points.unwrap()),
+    };
+    circuit
+}
+
 #[test]
 fn test_kzg() {
     let path = "configs/commitments/kzg_circuit.config";
@@ -50,6 +95,9 @@ fn test_kzg() {
         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
     )
     .unwrap();
+
+    let circuit = kzg_smoke_circuit(params, CircuitBuilderStage::Mock, None);
+    MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 
     // Smoke test values
     let tau: Fr = Fr::from(111);
