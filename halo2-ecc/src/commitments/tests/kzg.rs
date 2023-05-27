@@ -1,12 +1,6 @@
 /*
  * Runs through a smoke test for KZGChip.
  */
-use serde::{Deserialize, Serialize};
-use std::{
-    fs::{self, File},
-    io::{BufRead, BufReader},
-};
-use super::*;
 use halo2_base::{
     gates::{
         builder::{
@@ -19,10 +13,16 @@ use halo2_base::{
     utils::fs::gen_srs,
     Context,
 };
-use halo2_proofs::
+use serde::{Deserialize, Serialize};
+use std::{
+    fs::{self, File},
+    io::{BufRead, BufReader},
+};
 
 use crate::commitments::tests::polynomial::Polynomial;
 use crate::fields::FpStrategy;
+use crate::fields::PrimeField;
+use crate::halo2_proofs::dev::MockProver;
 use crate::halo2_proofs::halo2curves::bn256::{Fr, G1Affine, G1, G2};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -57,6 +57,32 @@ fn mock_trusted_setup(tau: Fr, blob_len: usize, n_openings: usize) -> (Vec<G1>, 
     (ptau_g1, ptau_g2)
 }
 
+fn kzg_test<F: PrimeField>(
+    ctx: &mut Context<F>,
+    params: KZGCircuitParams,
+    P: G1Affine,
+    Q: G2Affine,
+) {
+    std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
+    let range = RangeChip::<F>::default(params.lookup_bits);
+    let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
+    let chip = PairingChip::new(&fp_chip);
+
+    let P_assigned = chip.load_private_g1_unchecked(ctx, P);
+    let Q_assigned = chip.load_private_g2_unchecked(ctx, Q);
+
+    // test optimal ate pairing
+    let f = chip.pairing(ctx, &Q_assigned, &P_assigned);
+
+    let actual_f = pairing(&P, &Q);
+    let fp12_chip = Fp12Chip::new(&fp_chip);
+    // cannot directly compare f and actual_f because `Gt` has private field `Fq12`
+    assert_eq!(
+        format!("Gt({:?})", fp12_chip.get_assigned_value(&f.into())),
+        format!("{actual_f:?}")
+    );
+}
+
 fn kzg_smoke_circuit(
     params: KZGCircuitParams,
     stage: CircuitBuilderStage,
@@ -69,8 +95,31 @@ fn kzg_smoke_circuit(
         CircuitBuilderStage::Keygen => GateThreadBuilder::keygen(),
     };
 
-    let P = G1Affine::random(OsRng);
-    let Q = G2Affine::random(OsRng);
+    // Smoke test values
+    let tau: Fr = Fr::from(111);
+    let dummy_data: Vec<Fr> = vec![Fr::from(12), Fr::from(34), Fr::from(56), Fr::from(78)];
+    let openings: Vec<u64> = vec![2, 3];
+
+    // Run mock trusted setup
+    let (ptau_g1, ptau_g2) = mock_trusted_setup(tau, dummy_data.len(), openings.len());
+
+    // Commit to a polynomial
+    let idxs: Vec<Fr> = (0..dummy_data.len()).map(|x| Fr::from(x as u64)).collect();
+    let p = Polynomial::from_points(&idxs, &dummy_data);
+    let p_bar = G1Affine::from(p.eval_ptau(&ptau_g1));
+
+    // Compute opening proof
+    let idxs_fr: Vec<Fr> = openings.iter().map(|idx| Fr::from(*idx)).collect();
+    let vals: Vec<Fr> = openings.iter().map(|idx| dummy_data[*idx as usize]).collect();
+    let r: Polynomial<Fr> = Polynomial::from_points(&idxs_fr, &vals);
+    let z: Polynomial<Fr> = Polynomial::vanishing(openings);
+    let (q, rem) = Polynomial::div_euclid(&(p.clone() - r.clone()), &z);
+    if !rem.is_zero() {
+        panic!("p(X) - r(X) is not divisible by z(X). Cannot compute q(X)");
+    }
+
+    let q_bar: G1Affine = G1Affine::from(q.eval_ptau(&ptau_g1));
+    // (q_bar, z.get_coeffs(), r.get_coeffs())
 
     pairing_test::<Fr>(builder.main(0), params, P, Q);
 
@@ -98,30 +147,4 @@ fn test_kzg() {
 
     let circuit = kzg_smoke_circuit(params, CircuitBuilderStage::Mock, None);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
-
-    // Smoke test values
-    let tau: Fr = Fr::from(111);
-    let dummy_data: Vec<Fr> = vec![Fr::from(12), Fr::from(34), Fr::from(56), Fr::from(78)];
-    let openings: Vec<u64> = vec![2, 3];
-
-    // Run mock trusted setup
-    let (ptau_g1, ptau_g2) = mock_trusted_setup(tau, dummy_data.len(), openings.len());
-
-    // Commit to a polynomial
-    let idxs: Vec<Fr> = (0..dummy_data.len()).map(|x| Fr::from(x as u64)).collect();
-    let p = Polynomial::from_points(&idxs, &dummy_data);
-    let p_bar = G1Affine::from(p.eval_ptau(&ptau_g1));
-
-    // Compute opening proof
-    let idxs_fr: Vec<Fr> = openings.iter().map(|idx| Fr::from(*idx)).collect();
-    let vals: Vec<Fr> = openings.iter().map(|idx| dummy_data[*idx as usize]).collect();
-    let r: Polynomial<Fr> = Polynomial::from_points(&idxs_fr, &vals);
-    let z: Polynomial<Fr> = Polynomial::vanishing(openings);
-    let (q, rem) = Polynomial::div_euclid(&(p.clone() - r.clone()), &z);
-    if !rem.is_zero() {
-        panic!("p(X) - r(X) is not divisible by z(X). Cannot compute q(X)");
-    }
-
-    let q_bar: G1Affine = G1Affine::from(q.eval_ptau(&ptau_g1));
-    // (q_bar, z.get_coeffs(), r.get_coeffs())
 }
