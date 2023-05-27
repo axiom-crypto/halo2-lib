@@ -1,8 +1,8 @@
 #![allow(non_snake_case)]
 use super::{Fp12Chip, Fp2Chip, FpChip, FpPoint, Fq, FqPoint};
-use crate::fields::vector::FieldVector;
+use crate::fields::vector::{FieldVector, FieldVectorChip};
 use crate::halo2_proofs::halo2curves::bn256::{
-    G1Affine, G2Affine, FROBENIUS_COEFF_FQ12_C1, SIX_U_PLUS_2_NAF,
+    Fq12, G1Affine, G2Affine, FROBENIUS_COEFF_FQ12_C1, SIX_U_PLUS_2_NAF
 };
 use crate::{
     ecc::{EcPoint, EccChip},
@@ -520,5 +520,31 @@ impl<'chip, F: PrimeField> PairingChip<'chip, F> {
         let fp12_chip = Fp12Chip::<F>::new(self.fp_chip);
         // final_exp implemented in final_exp module
         fp12_chip.final_exp(ctx, f0)
+    }
+
+
+    /*
+     * Conducts an efficient pairing check e(P, Q) = e(S, T) using only one
+     * final exponentiation. In particular, this constraints
+     * (e'(-P, Q)e'(S, T))^x = 1, where e' is the optimal ate pairing without
+     * the final exponentiation. Reduces number of necessary advice cells by
+     * ~30%.
+     */
+    pub fn pairing_check(
+        &self,
+        ctx: &mut Context<F>,
+        Q: &EcPoint<F, FqPoint<F>>,
+        P: &EcPoint<F, FpPoint<F>>,
+        T: &EcPoint<F, FqPoint<F>>,
+        S: &EcPoint<F, FpPoint<F>>,
+    ) {
+        let ecc_chip_fp = EccChip::new(self.fp_chip);
+        let negated_P = ecc_chip_fp.negate(ctx, P);
+        let mml = self.multi_miller_loop(ctx, vec![(&negated_P, Q), (S, T)]);
+        let fp12_chip = Fp12Chip::<F>::new(self.fp_chip);
+        let fe = fp12_chip.final_exp(ctx, mml);
+        let fv_chip = FieldVectorChip::new(self.fp_chip);
+        let fp12_one = fv_chip.load_constant(ctx, Fq12::one());
+        fv_chip.assert_equal(ctx, fe, fp12_one);
     }
 }
