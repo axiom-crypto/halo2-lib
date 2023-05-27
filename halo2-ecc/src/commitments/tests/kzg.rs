@@ -9,19 +9,27 @@ use halo2_base::{
         },
         RangeChip,
     },
-    halo2_proofs::poly::kzg::multiopen::{ProverGWC, VerifierGWC},
+    halo2_proofs::{poly::kzg::multiopen::{ProverGWC, VerifierGWC}, halo2curves::bn256::G2Affine},
     utils::fs::gen_srs,
     Context,
 };
+use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File},
     io::{BufRead, BufReader},
 };
-
+use crate::{fields::{FieldChip, PrimeField, fp::BaseFieldChip, FpStrategy}, ecc::EccChip, commitments::kzg::KZGChip};
+use crate::{
+    bn254::{pairing::PairingChip, FpChip, Fp2Chip},
+    fields::fp::{FpConfig},
+};
+use crate::{
+    fields::{
+        fp12::Fp12Chip,
+    },
+};
 use crate::commitments::tests::polynomial::Polynomial;
-use crate::fields::FpStrategy;
-use crate::fields::PrimeField;
 use crate::halo2_proofs::dev::MockProver;
 use crate::halo2_proofs::halo2curves::bn256::{Fr, G1Affine, G1, G2};
 
@@ -57,33 +65,67 @@ fn mock_trusted_setup(tau: Fr, blob_len: usize, n_openings: usize) -> (Vec<G1>, 
     (ptau_g1, ptau_g2)
 }
 
-fn kzg_test<F: PrimeField>(
-    ctx: &mut Context<F>,
+fn kzg_test(
+    builder: &mut GateThreadBuilder<Fr>,
     params: KZGCircuitParams,
-    P: G1Affine,
-    Q: G2Affine,
+    q_bar: G1Affine,
+    p_bar: G1Affine,
+    ptau_g1: Vec<G1>,
+    ptau_g2: Vec<G2>,
+    z_coeffs: Vec<Fr>,
+    r_coeffs: Vec<Fr>
 ) {
+    let ctx = builder.main(0);
     std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
-    let range = RangeChip::<F>::default(params.lookup_bits);
-    let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
-    let chip = PairingChip::new(&fp_chip);
+    let range = RangeChip::<Fr>::default(params.lookup_bits);
+    let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
+    let g1_chip = EccChip::new(&fp_chip);
+    let fp2_chip = Fp2Chip::<Fr>::new(&fp_chip);
+    let g2_chip = EccChip::new(&fp2_chip);
+    let pairing_chip = PairingChip::new(&fp_chip);
 
-    let P_assigned = chip.load_private_g1_unchecked(ctx, P);
-    let Q_assigned = chip.load_private_g2_unchecked(ctx, Q);
+    let assigned_q_bar = g1_chip.assign_point(ctx, q_bar);
+    let assigned_p_bar = g1_chip.assign_point(ctx, p_bar);
+    let g2_generator = g2_chip.assign_point(ctx, G2Affine::generator());
 
-    // test optimal ate pairing
-    let f = chip.pairing(ctx, &Q_assigned, &P_assigned);
+    let mut ptau_g1_loaded = vec![];
+    let mut ptau_g2_loaded = vec![];
+    let mut z_coeffs_loaded = vec![];
+    let mut r_coeffs_loaded = vec![];
 
-    let actual_f = pairing(&P, &Q);
-    let fp12_chip = Fp12Chip::new(&fp_chip);
-    // cannot directly compare f and actual_f because `Gt` has private field `Fq12`
-    assert_eq!(
-        format!("Gt({:?})", fp12_chip.get_assigned_value(&f.into())),
-        format!("{actual_f:?}")
+    for el in ptau_g1.iter() {
+        ptau_g1_loaded.push(g1_chip.assign_point(ctx, G1Affine::from(el)));
+    }
+    for el in ptau_g2.iter() {
+        ptau_g2_loaded.push(g2_chip.assign_point(ctx, G2Affine::from(el)));
+    }
+
+    for (i, z_coeff) in z_coeffs.iter().enumerate() {
+        z_coeffs_loaded.push(
+            ctx.load_witness(z_coeff.clone())
+        );
+    }
+
+    for (i, r_coeff) in r_coeffs.iter().enumerate() {
+        r_coeffs_loaded.push(
+            ctx.load_witness(r_coeff.clone())
+        );
+    }
+
+    let kzg_chip = KZGChip::new(&pairing_chip, &g1_chip, &g2_chip);
+
+    kzg_chip.opening_assert(
+        builder,
+        &ptau_g1_loaded[..],
+        &ptau_g2_loaded[..],
+        r_coeffs_loaded.iter().map(|x| vec![x.clone()]).collect::<Vec<_>>(),
+        z_coeffs_loaded.iter().map(|x| vec![x.clone()]).collect::<Vec<_>>(),
+        assigned_p_bar,
+        assigned_q_bar
     );
 }
 
-fn kzg_smoke_circuit(
+fn random_kzg_circuit(
     params: KZGCircuitParams,
     stage: CircuitBuilderStage,
     break_points: Option<MultiPhaseThreadBreakPoints>,
@@ -97,8 +139,10 @@ fn kzg_smoke_circuit(
 
     // Smoke test values
     let tau: Fr = Fr::from(111);
-    let dummy_data: Vec<Fr> = vec![Fr::from(12), Fr::from(34), Fr::from(56), Fr::from(78)];
+    let blob_len = 4;
+    let dummy_data: Vec<Fr> = (0..blob_len).map(|_| Fr::from(OsRng.next_u64())).collect();
     let openings: Vec<u64> = vec![2, 3];
+    let n_openings = openings.len();
 
     // Run mock trusted setup
     let (ptau_g1, ptau_g2) = mock_trusted_setup(tau, dummy_data.len(), openings.len());
@@ -119,9 +163,12 @@ fn kzg_smoke_circuit(
     }
 
     let q_bar: G1Affine = G1Affine::from(q.eval_ptau(&ptau_g1));
-    // (q_bar, z.get_coeffs(), r.get_coeffs())
 
-    pairing_test::<Fr>(builder.main(0), params, P, Q);
+    // use halo2_base::halo2_proofs::halo2curves::bn256::{pairing, G2Affine, Gt};
+    println!("p: {:?}", p);
+    println!("r: {:?}", r);
+
+    kzg_test(&mut builder, params, q_bar, p_bar, ptau_g1[..n_openings].to_vec(), ptau_g2[..=n_openings].to_vec(), z.get_coeffs(), r.get_coeffs());
 
     let circuit = match stage {
         CircuitBuilderStage::Mock => {
@@ -145,6 +192,6 @@ fn test_kzg() {
     )
     .unwrap();
 
-    let circuit = kzg_smoke_circuit(params, CircuitBuilderStage::Mock, None);
+    let circuit = random_kzg_circuit(params, CircuitBuilderStage::Mock, None);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
