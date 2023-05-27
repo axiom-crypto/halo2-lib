@@ -3,10 +3,7 @@ use crate::gates::{
     flex_gate::{GateChip, GateInstructions},
     range::{RangeChip, RangeInstructions},
 };
-use crate::halo2_proofs::{
-    dev::MockProver,
-    halo2curves::bn256::Fr,
-};
+use crate::halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use crate::utils::{BigPrimeField, ScalarField};
 use crate::{Context, QuantumCell::Constant};
 use ff::Field;

@@ -916,7 +916,7 @@ impl<F: ScalarField> GateChip<F> {
         b_starts_with_one
     }
 
-    /// Bitwise right rotate a by <bit> bits. This function should never be called directly 
+    /// Bitwise right rotate a by <bit> bits. This function should never be called directly
     /// because const bitwise rotation must be determined at compile time.
     ///
     /// Assumes 'a' is a <num_bits> bit integer and <num_bits> <= 128.
@@ -926,27 +926,17 @@ impl<F: ScalarField> GateChip<F> {
         a: AssignedValue<F>,
         bit: usize,
         num_bits: usize,
-    ) -> AssignedValue<F>
-    {
+    ) -> AssignedValue<F> {
         // Add a constrain a = l_witness << bit | r_wintess
         let val = a.value().get_lower_128();
         let val_l = val >> bit;
         let val_r = val - (val_l << bit);
         let l_witness = Witness(F::from_u128(val_l));
         let r_witness = Witness(F::from_u128(val_r));
-        let val_witness = self.mul_add(
-            ctx, 
-            l_witness,
-            Constant(self.pow_of_two()[bit]),
-            r_witness,
-        );
+        let val_witness = self.mul_add(ctx, l_witness, Constant(self.pow_of_two()[bit]), r_witness);
         ctx.constrain_equal(&a, &val_witness);
-        // Return (r_witness << (num_bits - bit + 1)) | l_witness
-        self.mul_add(
-            ctx, 
-            r_witness,
-            Constant(self.pow_of_two()[num_bits - bit + 1]),
-            l_witness)
+        // Return (r_witness << (num_bits - bit)) | l_witness
+        self.mul_add(ctx, r_witness, Constant(self.pow_of_two()[num_bits - bit]), l_witness)
     }
 }
 
@@ -1198,7 +1188,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
         a: AssignedValue<F>,
     ) -> AssignedValue<F> {
         if BIT == 0 {
-            return a
+            return a;
         };
         self.const_right_rotate_unsafe_internal(ctx, a, BIT, NUM_BITS)
     }
@@ -1209,9 +1199,9 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
         a: AssignedValue<F>,
     ) -> AssignedValue<F> {
         if BIT == 0 {
-            return a
+            return a;
         };
         // left rotate by BIT == right rotate by (NUM_BITS - BIT)
-        self.const_right_rotate_unsafe_internal(ctx, a, NUM_BITS - BIT + 1, NUM_BITS)
+        self.const_right_rotate_unsafe_internal(ctx, a, NUM_BITS - BIT, NUM_BITS)
     }
 }
