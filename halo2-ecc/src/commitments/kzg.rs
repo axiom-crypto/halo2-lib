@@ -10,7 +10,6 @@ use crate::{bn254::pairing::PairingChip, ecc::EccChip};
 use crate::fields::{
     FieldChip, PrimeField
 };
-use crate::fields::Selectable;
 
 /// Represent Fp2 point as `FieldVector` with degree = 2
 /// `Fp2 = Fp[u] / (u^2 + 1)`
