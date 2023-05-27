@@ -1,10 +1,15 @@
+/*
+ * Runs through a smoke test for KZGChip. 
+ */
+use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File},
     io::{BufRead, BufReader},
 };
-use super::*;
+
 use crate::fields::FpStrategy;
-use serde::{Deserialize, Serialize};
+use crate::halo2_proofs::halo2curves::bn256::{Fr, G1Affine, G1, G2};
+use crate::commitments::tests::polynomial::Polynomial;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 struct KZGCircuitParams {
@@ -18,6 +23,26 @@ struct KZGCircuitParams {
     num_limbs: usize,
 }
 
+/*
+ * Convenience function for running a mock setup() for the commitment
+ * scheme. This is not secure.
+ */
+fn mock_trusted_setup(tau: Fr, blob_len: usize, n_openings: usize) -> (Vec<G1>, Vec<G2>) {
+    // Powers of tau in G1 to commit to polynomials p(X) and q(X)
+    let mut ptau_g1: Vec<G1> = vec![G1::generator()];
+    for _ in 1..blob_len {
+        ptau_g1.push(ptau_g1.last().unwrap() * tau);
+    }
+
+    // Powers of tau in G2 to commit to polynomials z(X) and r(X)
+    let mut ptau_g2: Vec<G2> = vec![G2::generator()];
+    for _ in 1..=n_openings {
+        ptau_g2.push(ptau_g2.last().unwrap() * tau);
+    }
+
+    (ptau_g1, ptau_g2)
+}
+
 #[test]
 fn test_kzg() {
     let path = "configs/commitments/kzg_circuit.config";
@@ -26,5 +51,17 @@ fn test_kzg() {
     )
     .unwrap();
 
-    println!("params: {:?}", params);
+    // Smoke test values
+    let tau: Fr = Fr::from(111);
+    let dummy_data: Vec<Fr> = vec![Fr::from(12), Fr::from(34), Fr::from(56), Fr::from(78)];
+    let openings: Vec<u64> = vec![2, 3];
+
+    // Run mock trusted setup
+    let (ptau_g1, ptau_g2) = mock_trusted_setup(tau, dummy_data.len(), openings.len());
+
+    // Commit to a polynomial
+    let idxs: Vec<Fr> = (0..dummy_data.len()).map(|x| Fr::from(x as u64)).collect();
+    let p = Polynomial::from_points(&idxs, &dummy_data);
+    
+    println!("p: {:?}", p);
 }
