@@ -21,8 +21,8 @@ use halo2_base::{
 };
 use halo2_proofs::
 
-use crate::commitments::tests::polynomial::Polynomial;
-use crate::fields::FpStrategy;
+// use crate::commitments::tests::polynomial::Polynomial;
+// use crate::fields::FpStrategy;
 use crate::halo2_proofs::halo2curves::bn256::{Fr, G1Affine, G1, G2};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
