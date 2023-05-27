@@ -68,6 +68,38 @@ pub struct FieldVectorChip<'fp, F: PrimeField, FpChip: FieldChip<F>> {
     _f: PhantomData<F>,
 }
 
+impl<'fp, F: PrimeField, FpChip: FieldChip<F>, FP: Clone> Selectable<F, FieldVector<FP>> for FieldVectorChip<'fp, F, FpChip>
+where FpChip: Selectable<F, FP>
+{
+    fn select(
+        &self,
+        ctx: &mut Context<F>,
+        a: FieldVector<FP>,
+        b: FieldVector<FP>,
+        sel: AssignedValue<F>,
+    ) -> FieldVector<FP> {
+        FieldVector(
+            a.into_iter().zip_eq(b).map(|(a, b)| self.fp_chip.select(ctx, a, b, sel)).collect(),
+        )
+    }
+
+    fn select_by_indicator(
+        &self,
+        ctx: &mut Context<F>,
+        a: &impl AsRef<[FieldVector<FP>]>,
+        coeffs: &[AssignedValue<F>],
+    ) -> FieldVector<FP> {
+        // Copy iterator of a
+        let field_vec_len = (*a).as_ref().first().unwrap().0.len();
+        FieldVector(
+            (0..field_vec_len).map(
+                |x| self.fp_chip.select_by_indicator(ctx, &a.as_ref().iter().map(|vec| vec.0[x].clone()).collect::<Vec<_>>(), coeffs)
+            ).collect()
+        )
+    }
+}
+
+
 impl<'fp, F, FpChip> FieldVectorChip<'fp, F, FpChip>
 where
     F: PrimeField,

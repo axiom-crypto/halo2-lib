@@ -3,6 +3,10 @@ use std::marker::PhantomData;
 
 use halo2_base::{utils::modulus, AssignedValue, Context};
 use num_bigint::BigUint;
+use crate::fields::Selectable;
+use crate::bigint::ProperCrtUint;
+use crate::fields::fp::Reduced;
+use crate::halo2_proofs::halo2curves::bn256::{Fq, Fq2};
 
 use crate::impl_field_ext_chip_common;
 
@@ -114,6 +118,52 @@ where
 
     // ========= inherited from FieldVectorChip =========
     impl_field_ext_chip_common!();
+}
+
+impl<'fp, F: PrimeField, FpChip: FieldChip<F>, Fp2> Selectable<F, FieldVector<ProperCrtUint<F>>> for Fp2Chip<'fp, F, FpChip, Fp2>
+    where FpChip: Selectable<F, ProperCrtUint<F>>
+{
+    fn select(
+        &self,
+        ctx: &mut Context<F>,
+        a: FieldVector<ProperCrtUint<F>>,
+        b: FieldVector<ProperCrtUint<F>>,
+        sel: AssignedValue<F>,
+    ) -> FieldVector<ProperCrtUint<F>> {
+        self.0.select(ctx, a, b, sel)
+    }
+
+    fn select_by_indicator(
+        &self,
+        ctx: &mut Context<F>,
+        a: &impl AsRef<[FieldVector<ProperCrtUint<F>>]>,
+        coeffs: &[AssignedValue<F>],
+    ) -> FieldVector<ProperCrtUint<F>> {
+        self.0.select_by_indicator(ctx, a, coeffs)
+    }
+}
+
+impl<'fp, F: PrimeField, FpChip: FieldChip<F>, Fp2: Clone> Selectable<F, FieldVector<Reduced<ProperCrtUint<F>, Fq>>> for Fp2Chip<'fp, F, FpChip, Fp2>
+    where FpChip: Selectable<F, Reduced<ProperCrtUint<F>, Fq>>
+{
+    fn select(
+        &self,
+        ctx: &mut Context<F>,
+        a: FieldVector<Reduced<ProperCrtUint<F>, Fq>>,
+        b: FieldVector<Reduced<ProperCrtUint<F>, Fq>>,
+        sel: AssignedValue<F>,
+    ) -> FieldVector<Reduced<ProperCrtUint<F>, Fq>> {
+        (&self.0).select(ctx, a, b, sel)
+    }
+
+    fn select_by_indicator(
+        &self,
+        ctx: &mut Context<F>,
+        a: &impl AsRef<[FieldVector<Reduced<ProperCrtUint<F>, Fq>>]>,
+        coeffs: &[AssignedValue<F>],
+    ) -> FieldVector<Reduced<ProperCrtUint<F>, Fq>> {
+        (&self.0).select_by_indicator(ctx, a, coeffs)
+    }
 }
 
 mod bn254 {
