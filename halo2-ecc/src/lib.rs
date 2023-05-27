@@ -7,8 +7,8 @@
 pub mod bigint;
 pub mod ecc;
 pub mod fields;
-
 pub mod commitments;
+
 pub mod bn254;
 pub mod secp256k1;
 

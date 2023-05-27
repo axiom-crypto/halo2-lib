@@ -444,6 +444,7 @@ pub fn neg_twisted_frobenius<F: PrimeField>(
 }
 
 // To avoid issues with mutably borrowing twice (not allowed in Rust), we only store fp_chip and construct g2_chip and fp12_chip in scope when needed for temporary mutable borrows
+#[derive(Clone, Debug)]
 pub struct PairingChip<'chip, F: PrimeField> {
     pub fp_chip: &'chip FpChip<'chip, F>,
 }
