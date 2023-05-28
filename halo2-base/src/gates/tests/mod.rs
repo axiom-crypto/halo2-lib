@@ -1,5 +1,6 @@
 use crate::halo2_proofs::halo2curves::bn256::Fr;
 
+mod bitwise_rotate;
 mod flex_gate_tests;
 mod general;
 mod idx_to_indicator;

@@ -4,17 +4,17 @@ use crate::{
         GateChip, GateInstructions,
     },
     halo2_proofs::{
+        halo2curves::bn256::Fr,
         plonk::keygen_pk,
         plonk::{keygen_vk, Assigned},
         poly::kzg::commitment::ParamsKZG,
-        halo2curves::bn256::Fr,
     },
-    utils::testing::{gen_proof, check_proof},
+    utils::testing::{check_proof, gen_proof},
     QuantumCell::Witness,
 };
 use ff::Field;
 use itertools::Itertools;
-use rand::{thread_rng, Rng, rngs::OsRng};
+use rand::{rngs::OsRng, thread_rng, Rng};
 
 // soundness checks for `idx_to_indicator` function
 fn test_idx_to_indicator_gen(k: u32, len: usize) {
