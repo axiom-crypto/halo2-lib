@@ -153,7 +153,7 @@ fn test_msm3() {
     params.batch_size = 4;
     
     let random_point = G1Affine::random(OsRng);
-    let bases = vec![random_point, random_point, (random_point + random_point + random_point).to_affine()];
+    let bases = vec![random_point, random_point, random_point, (random_point + random_point + random_point).to_affine()];
     let scalars = vec![Fr::one(),Fr::one(),Fr::one(),-Fr::one()];
 
     let circuit = custom_msm_circuit(params, CircuitBuilderStage::Mock, None, bases, scalars);
