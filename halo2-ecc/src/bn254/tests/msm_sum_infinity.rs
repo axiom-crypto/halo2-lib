@@ -1,20 +1,13 @@
 use crate::fields::FpStrategy;
-use ff::{Field, PrimeField};
-use halo2_base::{
-    gates::{
-        builder::{
-            CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
-            RangeCircuitBuilder,
-        },
-        RangeChip,
+use ff::PrimeField;
+use halo2_base::gates::{
+    builder::{
+        CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints, RangeCircuitBuilder,
     },
-    utils::fs::gen_srs,
+    RangeChip,
 };
 use rand_core::OsRng;
-use std::{
-    fs::{self, File},
-    io::{BufRead, BufReader},
-};
+use std::fs::File;
 
 use super::*;
 
@@ -115,15 +108,14 @@ fn test_msm1() {
     )
     .unwrap();
     params.batch_size = 3;
-    
+
     let random_point = G1Affine::random(OsRng);
     let bases = vec![random_point, random_point, random_point];
-    let scalars = vec![Fr::one(),Fr::one(),-Fr::one()-Fr::one()];
+    let scalars = vec![Fr::one(), Fr::one(), -Fr::one() - Fr::one()];
 
     let circuit = custom_msm_circuit(params, CircuitBuilderStage::Mock, None, bases, scalars);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
-
 
 #[test]
 fn test_msm2() {
@@ -133,15 +125,14 @@ fn test_msm2() {
     )
     .unwrap();
     params.batch_size = 3;
-    
+
     let random_point = G1Affine::random(OsRng);
     let bases = vec![random_point, random_point, (random_point + random_point).to_affine()];
-    let scalars = vec![Fr::one(),Fr::one(),-Fr::one()];
+    let scalars = vec![Fr::one(), Fr::one(), -Fr::one()];
 
     let circuit = custom_msm_circuit(params, CircuitBuilderStage::Mock, None, bases, scalars);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
-
 
 #[test]
 fn test_msm3() {
@@ -151,15 +142,19 @@ fn test_msm3() {
     )
     .unwrap();
     params.batch_size = 4;
-    
+
     let random_point = G1Affine::random(OsRng);
-    let bases = vec![random_point, random_point, random_point, (random_point + random_point + random_point).to_affine()];
-    let scalars = vec![Fr::one(),Fr::one(),Fr::one(),-Fr::one()];
+    let bases = vec![
+        random_point,
+        random_point,
+        random_point,
+        (random_point + random_point + random_point).to_affine(),
+    ];
+    let scalars = vec![Fr::one(), Fr::one(), Fr::one(), -Fr::one()];
 
     let circuit = custom_msm_circuit(params, CircuitBuilderStage::Mock, None, bases, scalars);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
-
 
 #[test]
 fn test_msm4() {
@@ -169,10 +164,15 @@ fn test_msm4() {
     )
     .unwrap();
     params.batch_size = 4;
-    
+
     let generator_point = G1Affine::generator();
-    let bases = vec![generator_point, generator_point, generator_point, (generator_point + generator_point + generator_point).to_affine()];
-    let scalars = vec![Fr::one(),Fr::one(),Fr::one(),-Fr::one()];
+    let bases = vec![
+        generator_point,
+        generator_point,
+        generator_point,
+        (generator_point + generator_point + generator_point).to_affine(),
+    ];
+    let scalars = vec![Fr::one(), Fr::one(), Fr::one(), -Fr::one()];
 
     let circuit = custom_msm_circuit(params, CircuitBuilderStage::Mock, None, bases, scalars);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
@@ -187,10 +187,11 @@ fn test_msm5() {
     )
     .unwrap();
     params.batch_size = 4;
-    
+
     let random_point = G1Affine::random(OsRng);
-    let bases = vec![random_point, random_point, random_point, (random_point + random_point).to_affine()];
-    let scalars = vec![-Fr::one(),-Fr::one(),Fr::one(),Fr::one()];
+    let bases =
+        vec![random_point, random_point, random_point, (random_point + random_point).to_affine()];
+    let scalars = vec![-Fr::one(), -Fr::one(), Fr::one(), Fr::one()];
 
     let circuit = custom_msm_circuit(params, CircuitBuilderStage::Mock, None, bases, scalars);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();

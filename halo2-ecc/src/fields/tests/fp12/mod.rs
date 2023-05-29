@@ -25,13 +25,11 @@ fn fp12_mul_test<F: PrimeField>(
     let fp_chip = FpChip::<F, Fq>::new(&range, limb_bits, num_limbs);
     let chip = Fp12Chip::<F, _, Fq12, XI_0>::new(&fp_chip);
 
-    let [a, b] = [_a, _b].map(|x| {
-        chip.load_private(ctx, Fp12Chip::<F, FpChip<F, Fq>, Fq12, XI_0>::fe_to_witness(&x))
-    });
-    let c = chip.mul(ctx, &a, &b);
+    let [a, b] = [_a, _b].map(|x| chip.load_private(ctx, x));
+    let c = chip.mul(ctx, a, b).into();
 
     assert_eq!(chip.get_assigned_value(&c), _a * _b);
-    for c in c.coeffs {
+    for c in c.into_iter() {
         assert_eq!(c.truncation.to_bigint(limb_bits), c.value);
     }
 }

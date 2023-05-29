@@ -43,8 +43,8 @@ fn pairing_test<F: PrimeField>(
     let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
     let chip = PairingChip::new(&fp_chip);
 
-    let P_assigned = chip.load_private_g1(ctx, P);
-    let Q_assigned = chip.load_private_g2(ctx, Q);
+    let P_assigned = chip.load_private_g1_unchecked(ctx, P);
+    let Q_assigned = chip.load_private_g2_unchecked(ctx, Q);
 
     // test optimal ate pairing
     let f = chip.pairing(ctx, &Q_assigned, &P_assigned);
@@ -52,7 +52,10 @@ fn pairing_test<F: PrimeField>(
     let actual_f = pairing(&P, &Q);
     let fp12_chip = Fp12Chip::new(&fp_chip);
     // cannot directly compare f and actual_f because `Gt` has private field `Fq12`
-    assert_eq!(format!("Gt({:?})", fp12_chip.get_assigned_value(&f)), format!("{actual_f:?}"));
+    assert_eq!(
+        format!("Gt({:?})", fp12_chip.get_assigned_value(&f.into())),
+        format!("{actual_f:?}")
+    );
 }
 
 fn random_pairing_circuit(

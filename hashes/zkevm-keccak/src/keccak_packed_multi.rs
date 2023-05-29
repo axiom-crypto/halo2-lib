@@ -285,6 +285,7 @@ impl<F: FieldExt> CellManager<F> {
         let column = if column_idx < self.columns.len() {
             self.columns[column_idx].advice
         } else {
+            assert!(column_idx == self.columns.len());
             let advice = meta.advice_column();
             let mut expr = 0.expr();
             meta.create_gate("Query column", |meta| {
@@ -337,7 +338,7 @@ impl<F: FieldExt> CellManager<F> {
         // Make sure all rows start at the same column
         let width = self.get_width();
         #[cfg(debug_assertions)]
-        for row in self.rows.iter_mut() {
+        for row in self.rows.iter() {
             self.num_unused_cells += width - *row;
         }
         self.rows = vec![width; self.height];
@@ -1135,7 +1136,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
             for i in 0..5 {
                 let input = scatter::expr(3, part_size_base) - 2.expr() * input[i].clone()
                     + input[(i + 1) % 5].clone()
-                    - input[(i + 2) % 5].clone().clone();
+                    - input[(i + 2) % 5].clone();
                 let output = output[i].clone();
                 meta.lookup("chi base", |_| {
                     vec![(input.clone(), chi_base_table[0]), (output.clone(), chi_base_table[1])]
@@ -1941,7 +1942,7 @@ pub fn keccak_phase0<F: Field>(
             .take(4)
             .map(|a| {
                 pack_with_base::<F>(&unpack(a[0]), 2)
-                    .to_repr()
+                    .to_bytes_le()
                     .into_iter()
                     .take(8)
                     .collect::<Vec<_>>()

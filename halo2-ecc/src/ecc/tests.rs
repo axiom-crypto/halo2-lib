@@ -31,30 +31,30 @@ fn basic_g1_tests<F: PrimeField>(
     let fp_chip = FpChip::<F, Fq>::new(&range, limb_bits, num_limbs);
     let chip = EccChip::new(&fp_chip);
 
-    let P_assigned = chip.load_private(ctx, (P.x, P.y));
-    let Q_assigned = chip.load_private(ctx, (Q.x, Q.y));
+    let P_assigned = chip.load_private_unchecked(ctx, (P.x, P.y));
+    let Q_assigned = chip.load_private_unchecked(ctx, (Q.x, Q.y));
 
     // test add_unequal
-    chip.field_chip.enforce_less_than(ctx, P_assigned.x());
-    chip.field_chip.enforce_less_than(ctx, Q_assigned.x());
+    chip.field_chip.enforce_less_than(ctx, P_assigned.x().clone());
+    chip.field_chip.enforce_less_than(ctx, Q_assigned.x().clone());
     let sum = chip.add_unequal(ctx, &P_assigned, &Q_assigned, false);
-    assert_eq!(sum.x.truncation.to_bigint(limb_bits), sum.x.value);
-    assert_eq!(sum.y.truncation.to_bigint(limb_bits), sum.y.value);
+    assert_eq!(sum.x.0.truncation.to_bigint(limb_bits), sum.x.0.value);
+    assert_eq!(sum.y.0.truncation.to_bigint(limb_bits), sum.y.0.value);
     {
         let actual_sum = G1Affine::from(P + Q);
-        assert_eq!(bigint_to_fe::<Fq>(&sum.x.value), actual_sum.x);
-        assert_eq!(bigint_to_fe::<Fq>(&sum.y.value), actual_sum.y);
+        assert_eq!(bigint_to_fe::<Fq>(&sum.x.0.value), actual_sum.x);
+        assert_eq!(bigint_to_fe::<Fq>(&sum.y.0.value), actual_sum.y);
     }
     println!("add unequal witness OK");
 
     // test double
     let doub = chip.double(ctx, &P_assigned);
-    assert_eq!(doub.x.truncation.to_bigint(limb_bits), doub.x.value);
-    assert_eq!(doub.y.truncation.to_bigint(limb_bits), doub.y.value);
+    assert_eq!(doub.x.0.truncation.to_bigint(limb_bits), doub.x.0.value);
+    assert_eq!(doub.y.0.truncation.to_bigint(limb_bits), doub.y.0.value);
     {
         let actual_doub = G1Affine::from(P * Fr::from(2u64));
-        assert_eq!(bigint_to_fe::<Fq>(&doub.x.value), actual_doub.x);
-        assert_eq!(bigint_to_fe::<Fq>(&doub.y.value), actual_doub.y);
+        assert_eq!(bigint_to_fe::<Fq>(&doub.x.0.value), actual_doub.x);
+        assert_eq!(bigint_to_fe::<Fq>(&doub.y.0.value), actual_doub.y);
     }
     println!("double witness OK");
 }

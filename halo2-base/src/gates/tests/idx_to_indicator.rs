@@ -110,5 +110,10 @@ fn test_idx_to_indicator() {
     test_idx_to_indicator_gen(8, 4);
     test_idx_to_indicator_gen(8, 10);
     test_idx_to_indicator_gen(8, 20);
+}
+
+#[test]
+#[ignore = "takes too long"]
+fn test_idx_to_indicator_large() {
     test_idx_to_indicator_gen(11, 100);
 }

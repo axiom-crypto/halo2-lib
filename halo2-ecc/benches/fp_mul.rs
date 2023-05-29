@@ -44,7 +44,7 @@ fn fp_mul_bench<F: PrimeField>(
     let range = RangeChip::<F>::default(lookup_bits);
     let chip = FpChip::<F, Fq>::new(&range, limb_bits, num_limbs);
 
-    let [a, b] = [_a, _b].map(|x| chip.load_private(ctx, FpChip::<F, Fq>::fe_to_witness(&x)));
+    let [a, b] = [_a, _b].map(|x| chip.load_private(ctx, x));
     for _ in 0..2857 {
         chip.mul(ctx, &a, &b);
     }

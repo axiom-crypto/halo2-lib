@@ -74,7 +74,7 @@ impl<F: ScalarField> BasicGateConfig<F> {
     /// Wrapper for [ConstraintSystem].create_gate(name, meta) creates a gate form [q * (a + b * c - out)].
     /// * `meta`: [ConstraintSystem] used for the gate
     fn create_gate(&self, meta: &mut ConstraintSystem<F>) {
-        meta.create_gate("1 column a * b + c = out", |meta| {
+        meta.create_gate("1 column a + b * c = out", |meta| {
             let q = meta.query_selector(self.q_enable);
 
             let a = meta.query_advice(self.value, Rotation::cur());
@@ -558,12 +558,16 @@ pub trait GateInstructions<F: ScalarField> {
     /// Constrains and returns an indicator vector from a slice of boolean values, where `output[idx] = 1` iff idx = (the number represented by `bits` in binary little endian), otherwise `output[idx] = 0`.
     /// * `ctx`: [Context] to add the constraints to
     /// * `bits`: slice of [QuantumCell]'s that contains boolean values
+    ///
+    /// # Assumptions
+    /// * `bits` is non-empty
     fn bits_to_indicator(
         &self,
         ctx: &mut Context<F>,
         bits: &[AssignedValue<F>],
     ) -> Vec<AssignedValue<F>> {
         let k = bits.len();
+        assert!(k > 0, "bits_to_indicator: bits must be non-empty");
 
         // (inv_last_bit, last_bit) = (1, 0) if bits[k - 1] = 0
         let (inv_last_bit, last_bit) = {
@@ -759,19 +763,23 @@ pub trait GateInstructions<F: ScalarField> {
 
     /// Performs and constrains Lagrange interpolation on `coords` and evaluates the resulting polynomial at `x`.
     ///
-    /// Given pairs `coords[i] = (x_i, y_i)`, let `f` be the unique degree `len(coords)` polynomial such that `f(x_i) = y_i` for all `i`.
+    /// Given pairs `coords[i] = (x_i, y_i)`, let `f` be the unique degree `len(coords) - 1` polynomial such that `f(x_i) = y_i` for all `i`.
     ///
     /// Returns:
     /// (f(x), Prod_i(x - x_i))
     /// * `ctx`: [Context] to add the constraints to
     /// * `coords`: immutable reference to a slice of tuples of [AssignedValue]s representing the points to interpolate over such that `coords[i] = (x_i, y_i)`
     /// * `x`: x-coordinate of the point to evaluate `f` at
+    ///
+    /// # Assumptions
+    /// * `coords` is non-empty
     fn lagrange_and_eval(
         &self,
         ctx: &mut Context<F>,
         coords: &[(AssignedValue<F>, AssignedValue<F>)],
         x: AssignedValue<F>,
     ) -> (AssignedValue<F>, AssignedValue<F>) {
+        assert!(!coords.is_empty(), "coords should not be empty");
         let mut z = self.sub(ctx, Existing(x), Existing(coords[0].0));
         for coord in coords.iter().skip(1) {
             let sub = self.sub(ctx, Existing(x), Existing(coord.0));
@@ -1100,20 +1108,14 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     ///
     /// Assumes `range_bits >= number of bits in a`.
     /// * `a`: [QuantumCell] of the value to convert
-    /// * `range_bits`: range of bits needed to represent `a`
+    /// * `range_bits`: range of bits needed to represent `a`. Assumes `range_bits > 0`.
     fn num_to_bits(
         &self,
         ctx: &mut Context<F>,
         a: AssignedValue<F>,
         range_bits: usize,
     ) -> Vec<AssignedValue<F>> {
-        let a_bytes = a.value().to_repr();
-        let bits = a_bytes
-            .as_ref()
-            .iter()
-            .flat_map(|byte| (0..8u32).map(|i| (*byte as u64 >> i) & 1))
-            .map(|x| Witness(F::from(x)))
-            .take(range_bits);
+        let bits = a.value().to_u64_limbs(range_bits, 1).into_iter().map(|x| Witness(F::from(x)));
 
         let mut bit_cells = Vec::with_capacity(range_bits);
         let row_offset = ctx.advice.len();
