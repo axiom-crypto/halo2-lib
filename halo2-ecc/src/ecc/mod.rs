@@ -259,7 +259,7 @@ pub fn ec_sub_strict<F: PrimeField, FC: FieldChip<F>>(
 where
     FC: Selectable<F, FC::FieldPoint>,
 {
-    let P = P.into();
+    let mut P = P.into();
     let Q = Q.into();
     // Compute curr_point - start_point, allowing for output to be identity point
     let x_is_eq = chip.is_equal(ctx, P.x(), Q.x());
@@ -267,6 +267,17 @@ where
     let is_identity = chip.gate().and(ctx, x_is_eq, y_is_eq);
     // we ONLY allow x_is_eq = true if y_is_eq is also true; this constrains P != -Q
     ctx.constrain_equal(&x_is_eq, &is_identity);
+
+    // P.x = Q.x and P.y = Q.y
+    // in ec_sub_unequal it will try to do -(P.y + Q.y) / (P.x - Q.x) = -2P.y / 0
+    // this will cause divide_unsafe to panic when P.y != 0
+    // to avoid this, we load a random pair of points and replace P with it *only if* `is_identity == true`
+    // we don't even check (rand_x, rand_y) is on the curve, since we don't care about the output
+    let mut rng = ChaCha20Rng::from_entropy();
+    let [rand_x, rand_y] = [(); 2].map(|_| FC::FieldType::random(&mut rng));
+    let [rand_x, rand_y] = [rand_x, rand_y].map(|x| chip.load_private(ctx, x));
+    let rand_pt = EcPoint::new(rand_x, rand_y);
+    P = ec_select(chip, ctx, rand_pt, P, is_identity);
 
     let out = ec_sub_unequal(chip, ctx, P, Q, false);
     let zero = chip.load_constant(ctx, FC::FieldType::zero());
