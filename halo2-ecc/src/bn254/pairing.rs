@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 use super::{Fp12Chip, Fp2Chip, FpChip, FpPoint, Fq, FqPoint};
-use crate::fields::vector::{FieldVector, FieldVectorChip};
+use crate::fields::vector::FieldVector;
 use crate::halo2_proofs::halo2curves::bn256::{
     Fq12, G1Affine, G2Affine, FROBENIUS_COEFF_FQ12_C1, SIX_U_PLUS_2_NAF,
 };
@@ -542,8 +542,7 @@ impl<'chip, F: PrimeField> PairingChip<'chip, F> {
         let mml = self.multi_miller_loop(ctx, vec![(&negated_P, Q), (S, T)]);
         let fp12_chip = Fp12Chip::<F>::new(self.fp_chip);
         let fe = fp12_chip.final_exp(ctx, mml);
-        let fv_chip = FieldVectorChip::new(self.fp_chip);
-        let fp12_one = fv_chip.load_constant(ctx, Fq12::one());
-        fv_chip.assert_equal(ctx, fe, fp12_one);
+        let fp12_one = fp12_chip.load_constant(ctx, Fq12::one());
+        fp12_chip.assert_equal(ctx, fe, fp12_one);
     }
 }
