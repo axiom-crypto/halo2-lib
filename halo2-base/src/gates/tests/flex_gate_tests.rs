@@ -146,12 +146,30 @@ pub fn test_sum_products_with_coeff_and_var<F: ScalarField>(
     *a.value()
 }
 
+#[test_case(&[1, 0].map(Fr::from).map(Witness) => Fr::from(1) ; "or(): 1 || 0 == 1")]
+pub fn test_or<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = chip.or(ctx, inputs[0], inputs[1]);
+    *a.value()
+}
+
 #[test_case(&[1, 1].map(Fr::from).map(Witness) => Fr::from(1) ; "and(): 1 && 1 == 1")]
 pub fn test_and<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = GateChip::default();
     let a = chip.and(ctx, inputs[0], inputs[1]);
+    *a.value()
+}
+
+#[test_case(&[1, 1].map(Fr::from).map(Witness) => Fr::from(0) ; "xor(): 1 ^ 1 == 0")]
+pub fn test_xor<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
+    let mut builder = GateThreadBuilder::mock();
+    let ctx = builder.main(0);
+    let chip = GateChip::default();
+    let a = chip.xor(ctx, inputs[0], inputs[1]);
     *a.value()
 }
 
