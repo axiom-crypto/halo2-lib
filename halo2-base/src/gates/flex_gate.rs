@@ -516,6 +516,36 @@ pub trait GateInstructions<F: ScalarField> {
         self.mul(ctx, a, b)
     }
 
+    /// Constrains and returns `a ^ b`, assuming `a` and `b` are boolean.
+    ///
+    /// Defines a vertical gate of form `| 1 - 2 * b | 2 | b | 1 | b | a | 1 - 2 * b | out |`, where `out = a + b - 2 * a * b`.
+    /// * `ctx`: [Context] to add the constraints to.
+    /// * `a`: [QuantumCell] that contains a boolean value.
+    /// * `b`: [QuantumCell] that contains a boolean value.
+    fn xor(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+    ) -> AssignedValue<F> {
+        let a = a.into();
+        let b = b.into();
+        let not_two_b_val = F::one() - (F::one() + F::one()) * b.value();
+        let out_val = *a.value() + b.value() - (F::one() + F::one()) * *a.value() * b.value();
+        let cells = [
+            Witness(not_two_b_val),
+            Constant(F::one() + F::one()),
+            b,
+            Constant(F::one()),
+            b,
+            a,
+            Witness(not_two_b_val),
+            Witness(out_val),
+        ];
+        ctx.assign_region_smart(cells, [0, 4], [(0, 6), (2, 4)], []);
+        ctx.last().unwrap()
+    }
+
     /// Constrains and returns `!a` assumeing `a` is boolean.
     ///
     /// Defines a vertical gate of form | 1 - a | a | 1 | 1 |, where 1 - a = out.
