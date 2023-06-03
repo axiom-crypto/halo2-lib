@@ -530,11 +530,11 @@ pub trait GateInstructions<F: ScalarField> {
     ) -> AssignedValue<F> {
         let a = a.into();
         let b = b.into();
-        let not_two_b_val = F::one() - (F::one() + F::one()) * b.value();
-        let out_val = *a.value() + b.value() - (F::one() + F::one()) * *a.value() * b.value();
+        let not_two_b_val = F::one() - F::from(2u64) * b.value();
+        let out_val = *a.value() + b.value() - F::from(2u64) * *a.value() * b.value();
         let cells = [
             Witness(not_two_b_val),
-            Constant(F::one() + F::one()),
+            Constant(F::from(2u64)),
             b,
             Constant(F::one()),
             b,
