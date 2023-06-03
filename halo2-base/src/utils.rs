@@ -108,7 +108,7 @@ pub(crate) fn decompose_u64_digits_to_limbs(
             core::cmp::Ordering::Less => {
                 let mut limb = u64_digit;
                 u64_digit = e.next().unwrap_or(0);
-                limb |= (u64_digit & ((1 << (bit_len - rem)) - 1)) << rem;
+                limb |= (u64_digit & ((1u64 << (bit_len - rem)) - 1u64)) << rem;
                 u64_digit >>= bit_len - rem;
                 rem += 64 - bit_len;
                 limb
@@ -265,7 +265,7 @@ pub fn decompose_biguint<F: BigPrimeField>(
     let mut rem = bit_len - 64;
     let mut u64_digit = e.next().unwrap_or(0);
     // Extract second limb (bit length 64) from e
-    limb0 |= ((u64_digit & ((1 << rem) - 1u64)) as u128) << 64u32;
+    limb0 |= ((u64_digit & ((1u64 << rem) - 1u64)) as u128) << 64u32;
     u64_digit >>= rem;
     rem = 64 - rem;
 
@@ -281,7 +281,7 @@ pub fn decompose_biguint<F: BigPrimeField>(
                 bits += 64;
             }
             rem = bit_len - bits;
-            limb |= ((u64_digit & ((1 << rem) - 1)) as u128) << bits;
+            limb |= ((u64_digit & ((1u64 << rem) - 1u64)) as u128) << bits;
             u64_digit >>= rem;
             rem = 64 - rem;
             F::from_u128(limb)
