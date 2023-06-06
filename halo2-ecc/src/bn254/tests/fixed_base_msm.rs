@@ -23,7 +23,7 @@ use itertools::Itertools;
 use rand_core::OsRng;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-struct MSMCircuitParams {
+struct FixedMSMCircuitParams {
     strategy: FpStrategy,
     degree: u32,
     num_advice: usize,
@@ -39,7 +39,7 @@ struct MSMCircuitParams {
 
 fn fixed_base_msm_test(
     builder: &mut GateThreadBuilder<Fr>,
-    params: MSMCircuitParams,
+    params: FixedMSMCircuitParams,
     bases: Vec<G1Affine>,
     scalars: Vec<Fr>,
 ) {
@@ -68,7 +68,7 @@ fn fixed_base_msm_test(
 }
 
 fn random_fixed_base_msm_circuit(
-    params: MSMCircuitParams,
+    params: FixedMSMCircuitParams,
     bases: Vec<G1Affine>, // bases are fixed in vkey so don't randomly generate
     stage: CircuitBuilderStage,
     break_points: Option<MultiPhaseThreadBreakPoints>,
@@ -102,7 +102,7 @@ fn random_fixed_base_msm_circuit(
 #[test]
 fn test_fixed_base_msm() {
     let path = "configs/bn254/fixed_msm_circuit.config";
-    let params: MSMCircuitParams = serde_json::from_reader(
+    let params: FixedMSMCircuitParams = serde_json::from_reader(
         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
     )
     .unwrap();
@@ -113,9 +113,9 @@ fn test_fixed_base_msm() {
 }
 
 #[test]
-fn test_fb_msm_minus_1() {
+fn test_fixed_msm_minus_1() {
     let path = "configs/bn254/fixed_msm_circuit.config";
-    let params: MSMCircuitParams = serde_json::from_reader(
+    let params: FixedMSMCircuitParams = serde_json::from_reader(
         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
     )
     .unwrap();
@@ -143,7 +143,8 @@ fn bench_fixed_base_msm() -> Result<(), Box<dyn std::error::Error>> {
 
     let bench_params_reader = BufReader::new(bench_params_file);
     for line in bench_params_reader.lines() {
-        let bench_params: MSMCircuitParams = serde_json::from_str(line.unwrap().as_str()).unwrap();
+        let bench_params: FixedMSMCircuitParams =
+            serde_json::from_str(line.unwrap().as_str()).unwrap();
         let k = bench_params.degree;
         println!("---------------------- degree = {k} ------------------------------",);
         let rng = OsRng;

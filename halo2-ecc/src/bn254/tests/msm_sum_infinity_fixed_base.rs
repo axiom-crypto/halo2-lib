@@ -1,4 +1,3 @@
-use crate::fields::FpStrategy;
 use ff::PrimeField;
 use halo2_base::gates::{
     builder::{
@@ -10,20 +9,6 @@ use rand_core::OsRng;
 use std::fs::File;
 
 use super::*;
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-struct MSMCircuitParams {
-    strategy: FpStrategy,
-    degree: u32,
-    num_advice: usize,
-    num_lookup_advice: usize,
-    num_fixed: usize,
-    lookup_bits: usize,
-    limb_bits: usize,
-    num_limbs: usize,
-    batch_size: usize,
-    window_bits: usize,
-}
 
 fn msm_test(
     builder: &mut GateThreadBuilder<Fr>,
@@ -41,9 +26,9 @@ fn msm_test(
     let scalars_assigned =
         scalars.iter().map(|scalar| vec![ctx.load_witness(*scalar)]).collect::<Vec<_>>();
     let bases_assigned = bases;
-        //.iter()
-        //.map(|base| ecc_chip.load_private_unchecked(ctx, (base.x, base.y)))
-        //.collect::<Vec<_>>();
+    //.iter()
+    //.map(|base| ecc_chip.load_private_unchecked(ctx, (base.x, base.y)))
+    //.collect::<Vec<_>>();
 
     let msm = ecc_chip.fixed_base_msm_in::<G1Affine>(
         builder,

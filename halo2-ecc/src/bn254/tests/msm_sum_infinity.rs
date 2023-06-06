@@ -1,4 +1,3 @@
-use crate::fields::FpStrategy;
 use ff::PrimeField;
 use halo2_base::gates::{
     builder::{
@@ -10,20 +9,6 @@ use rand_core::OsRng;
 use std::fs::File;
 
 use super::*;
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-struct MSMCircuitParams {
-    strategy: FpStrategy,
-    degree: u32,
-    num_advice: usize,
-    num_lookup_advice: usize,
-    num_fixed: usize,
-    lookup_bits: usize,
-    limb_bits: usize,
-    num_limbs: usize,
-    batch_size: usize,
-    window_bits: usize,
-}
 
 fn msm_test(
     builder: &mut GateThreadBuilder<Fr>,
