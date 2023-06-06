@@ -1,3 +1,4 @@
+use rand_core::OsRng;
 /*
  * Test suite for KZGChip.
  */
@@ -18,7 +19,7 @@ use halo2_base::{
     },
     halo2_proofs::{dev::MockProver, halo2curves::bn256::G2Affine},
 };
-use rand_core::{OsRng, RngCore};
+use rand_core::{RngCore};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 
