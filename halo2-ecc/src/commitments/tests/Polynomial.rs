@@ -93,13 +93,13 @@ impl<F: FieldExt> Polynomial<F> {
      * Computes the vanishing polynomial z(X) = Σ X - z_i for a vector of 
      * indices. 
      */
-    pub fn vanishing(openings: Vec<u64>) -> Self {
+    pub fn vanishing(openings: &Vec<F>) -> Self {
         if openings.is_empty() {
             panic!("Cannot compute a vanishing polynomial for 0 openings.");
         }
         let mut z: Polynomial<F> = Self::new(vec![F::one()]);
         for open_idx in openings {
-            z = z * Self::new(vec![F::from(open_idx).neg(), F::one()]);
+            z = z * Self::new(vec![open_idx.neg(), F::one()]);
         }
         z
     }

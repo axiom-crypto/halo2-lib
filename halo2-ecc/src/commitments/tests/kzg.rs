@@ -1,3 +1,4 @@
+use ff::PrimeField;
 use rand_core::OsRng;
 /*
  * Test suite for KZGChip.
@@ -6,7 +7,7 @@ use crate::{
     bn254::{pairing::PairingChip, Fp2Chip, FpChip},
     commitments::{kzg::KZGChip, tests::polynomial::Polynomial},
     ecc::EccChip,
-    fields::{FpStrategy, PrimeField},
+    fields::{FpStrategy},
     halo2_proofs::halo2curves::bn256::{Fr, G1Affine, G1, G2},
 };
 use halo2_base::{
@@ -17,7 +18,7 @@ use halo2_base::{
         },
         RangeChip,
     },
-    halo2_proofs::{dev::MockProver, halo2curves::bn256::G2Affine},
+    halo2_proofs::{dev::MockProver, halo2curves::{bn256::G2Affine, FieldExt}},
 };
 use rand_core::{RngCore};
 use serde::{Deserialize, Serialize};
@@ -61,8 +62,12 @@ pub fn mock_trusted_setup(tau: Fr, blob_len: usize, n_openings: usize) -> (Vec<G
  * Creates vector commitment by interpolating a polynomial p(X) and evaluating
  * at p(τ).
  */
-pub fn commit_vector(d: &Vec<Fr>, ptau_g1: &Vec<G1>) -> (Polynomial<Fr>, G1Affine) {
-    let idxs: Vec<Fr> = (0..d.len()).map(|x| Fr::from(x as u64)).collect();
+pub fn commit_vector(K: usize, d: &Vec<Fr>, ptau_g1: &Vec<G1>) -> (Polynomial<Fr>, G1Affine) {
+    let selected_root = Fr::root_of_unity().pow(&[2u64.pow(Fr::S - K as u32) as u64, 0, 0, 0]);
+    let mut idxs = vec![Fr::one()];
+    for _ in 1..d.len() {
+        idxs.push(idxs.last().unwrap() * selected_root);
+    }
     let p = Polynomial::from_points(&idxs, &d);
     let p_bar = G1Affine::from(p.eval_ptau(&ptau_g1));
     (p, p_bar)
@@ -74,16 +79,19 @@ pub fn commit_vector(d: &Vec<Fr>, ptau_g1: &Vec<G1>) -> (Polynomial<Fr>, G1Affin
  * of z(X) and r(X) to avoid having to recompute within the circuit.
  */
 pub fn open_prf(
+    K: usize, 
     data: &Vec<Fr>,
     p: &Polynomial<Fr>,
     ptau_g1: &Vec<G1>,
     idxs: Vec<u64>,
 ) -> (G1Affine, Vec<Fr>, Vec<Fr>) {
-    let idxs_fr: Vec<Fr> = idxs.iter().map(|idx| Fr::from(*idx)).collect();
-    let vals: Vec<Fr> = idxs.iter().map(|idx| data[*idx as usize]).collect();
-    let r: Polynomial<Fr> = Polynomial::from_points(&idxs_fr, &vals);
 
-    let z: Polynomial<Fr> = Polynomial::vanishing(idxs);
+    let selected_root = Fr::root_of_unity().pow(&[2u64.pow(Fr::S - K as u32) as u64, 0, 0, 0]);
+    let idxs_fr: Vec<Fr> = idxs.iter().map(|idx| selected_root.pow(&[*idx as u64, 0, 0, 0])).collect();
+    let vals: Vec<Fr> = idxs.iter().map(|idx| data[*idx as usize]).collect();
+
+    let r: Polynomial<Fr> = Polynomial::from_points(&idxs_fr, &vals);
+    let z: Polynomial<Fr> = Polynomial::vanishing(&idxs_fr);
 
     let (q, rem) = Polynomial::div_euclid(&(p.clone() - r.clone()), &z);
     if !rem.is_zero() {
@@ -169,14 +177,15 @@ fn random_kzg_multi_circuit(
     };
 
     let tau: Fr = Fr::from(111);
+    let K = 2;
     let blob_len = 4;
     let openings: Vec<u64> = vec![2, 3];
     let n_openings = openings.len();
     let dummy_data: Vec<Fr> = (0..blob_len).map(|_| Fr::from(OsRng.next_u64())).collect();
 
     let (ptau_g1, ptau_g2) = mock_trusted_setup(tau, blob_len, n_openings);
-    let (p, p_bar) = commit_vector(&dummy_data, &ptau_g1);
-    let (q_bar, z_coeffs, r_coeffs) = open_prf(&dummy_data, &p, &ptau_g1, openings);
+    let (p, p_bar) = commit_vector(K, &dummy_data, &ptau_g1);
+    let (q_bar, z_coeffs, r_coeffs) = open_prf(K, &dummy_data, &p, &ptau_g1, openings);
 
     kzg_multi_test(
         &mut builder,
