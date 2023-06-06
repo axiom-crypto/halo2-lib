@@ -17,8 +17,8 @@ use crate::{
         builder::{GateCircuitBuilder, GateThreadBuilder, RangeCircuitBuilder},
         range::{RangeChip, RangeInstructions},
         tests::{
-            pos_prop_tests::{rand_bin_witness, rand_fr, rand_witness},
-            test_ground_truths,
+            pos_prop::{rand_bin_witness, rand_fr, rand_witness},
+            utils,
         },
         GateChip, GateInstructions,
     },
@@ -266,7 +266,7 @@ fn neg_test_inner_product(
     builder.main(0).advice[inner_product_offset] = Assigned::Trivial(rand_output);
     let circuit = GateCircuitBuilder::mock(builder); // no break points
                                                      // Check soundness of witness values
-    let is_valid_witness = rand_output == test_ground_truths::inner_product_ground_truth(&(a, b));
+    let is_valid_witness = rand_output == utils::inner_product_ground_truth(&(a, b));
     match MockProver::run(k as u32, &circuit, vec![]).unwrap().verify() {
         // if the proof is valid, then the instance should be valid -> return true
         Ok(_) => is_valid_witness,
@@ -295,8 +295,7 @@ fn neg_test_inner_product_left_last(
     let circuit = GateCircuitBuilder::mock(builder); // no break points
                                                      // Check soundness of witness values
                                                      // (inner_product_ground_truth, a[a.len()-1])
-    let inner_product_ground_truth =
-        test_ground_truths::inner_product_ground_truth(&(a.clone(), b));
+    let inner_product_ground_truth = utils::inner_product_ground_truth(&(a.clone(), b));
     let is_valid_witness =
         rand_output.0 == inner_product_ground_truth && rand_output.1 == *a[a.len() - 1].value();
     match MockProver::run(k as u32, &circuit, vec![]).unwrap().verify() {
