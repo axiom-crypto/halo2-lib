@@ -6,7 +6,7 @@ use halo2_base::{AssignedValue, Context};
 use num_bigint::BigUint;
 use num_traits::Zero;
 use crate::bigint::{CRTInteger, ProperCrtUint};
-use crate::bn254::{FpChip, Fp2Chip};
+use crate::bn254::{FrChip, FpChip, Fp2Chip};
 use crate::ecc::EcPoint;
 use crate::{bn254::pairing::PairingChip, ecc::EccChip};
 
@@ -21,26 +21,26 @@ use crate::fields::Selectable;
 /// This means we store an Fp2 point as `a_0 + a_1 * u` where `a_0, a_1 in Fp`
 #[derive(Clone, Debug)]
 pub struct PolyChip<'a, F: PrimeField> {
-    field_chip: &'a FpChip<'a, F>
+    pub fr_chip: &'a FrChip<'a, F>
 }
 
 impl<'a, F: PrimeField> PolyChip<'a, F> {
-    pub fn new(field_chip: &'a FpChip<F>) -> Self {
-        Self { field_chip }
+    pub fn new(fr_chip: &'a FrChip<F>) -> Self {
+        Self { fr_chip }
     }
 
     pub fn evaluate(
         &self,
         ctx: &mut Context<F>,
-        coeffs: &Vec<<FpChip<F> as FieldChip<F>>::FieldPoint>,
-        point: &<FpChip<F> as FieldChip<F>>::FieldPoint
-    ) -> <FpChip<F> as FieldChip<F>>::FieldPoint {
-        let mut acc  = self.field_chip.load_constant_uint(ctx, BigUint::zero());
+        coeffs: &Vec<<FrChip<F> as FieldChip<F>>::FieldPoint>,
+        point: &<FrChip<F> as FieldChip<F>>::FieldPoint
+    ) -> <FrChip<F> as FieldChip<F>>::FieldPoint {
+        let mut acc  = self.fr_chip.load_constant_uint(ctx, BigUint::zero());
         for c in coeffs.iter().rev() {
-            let mul_int = self.field_chip.mul_no_carry(ctx, acc, point);
-            acc = self.field_chip.carry_mod(ctx, mul_int);
-            let add_int = self.field_chip.add_no_carry(ctx, acc, point);
-            acc = self.field_chip.carry_mod(ctx, add_int);
+            let mul_int = self.fr_chip.mul_no_carry(ctx, acc, point);
+            acc = self.fr_chip.carry_mod(ctx, mul_int);
+            let add_int = self.fr_chip.add_no_carry(ctx, acc, point);
+            acc = self.fr_chip.carry_mod(ctx, add_int);
         }
         acc
     }

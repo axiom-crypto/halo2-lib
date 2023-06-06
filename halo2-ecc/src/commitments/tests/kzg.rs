@@ -4,10 +4,10 @@ use rand_core::OsRng;
  * Test suite for KZGChip.
  */
 use crate::{
-    bn254::{pairing::PairingChip, Fp2Chip, FpChip},
-    commitments::{kzg::KZGChip, tests::polynomial::Polynomial},
+    bn254::{pairing::PairingChip, Fp2Chip, FpChip, FrChip},
+    commitments::{kzg::KZGChip, tests::polynomial::Polynomial, poly::PolyChip},
     ecc::EccChip,
-    fields::{FpStrategy},
+    fields::{FpStrategy, FieldChip},
     halo2_proofs::halo2curves::bn256::{Fr, G1Affine, G1, G2},
 };
 use halo2_base::{
@@ -83,7 +83,7 @@ pub fn open_prf(
     data: &Vec<Fr>,
     p: &Polynomial<Fr>,
     ptau_g1: &Vec<G1>,
-    idxs: Vec<u64>,
+    idxs: &Vec<u64>,
 ) -> (G1Affine, Vec<Fr>, Vec<Fr>) {
 
     let selected_root = Fr::root_of_unity().pow(&[2u64.pow(Fr::S - K as u32) as u64, 0, 0, 0]);
@@ -114,17 +114,21 @@ fn kzg_multi_test(
     ptau_g2: Vec<G2>,
     z_coeffs: Vec<Fr>,
     r_coeffs: Vec<Fr>,
+    open_idxs: Vec<Fr>,
+    open_vals: Vec<Fr>
 ) {
     let ctx = builder.main(0);
     std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
 
     // Initialize chips
     let range = RangeChip::<Fr>::default(params.lookup_bits);
+    let fr_chip = FrChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
     let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
     let g1_chip = EccChip::new(&fp_chip);
     let fp2_chip = Fp2Chip::<Fr>::new(&fp_chip);
     let g2_chip = EccChip::new(&fp2_chip);
     let pairing_chip = PairingChip::new(&fp_chip);
+    let poly_chip = PolyChip::new(&fr_chip);
 
     // Load individual group elements
     let assigned_q_bar = g1_chip.assign_point(ctx, q_bar);
@@ -134,7 +138,11 @@ fn kzg_multi_test(
     let mut ptau_g1_loaded = vec![];
     let mut ptau_g2_loaded = vec![];
     let mut z_coeffs_loaded = vec![];
+    let mut z_coeffs_fr_loaded = vec![];
     let mut r_coeffs_loaded = vec![];
+    let mut r_coeffs_fr_loaded = vec![];
+    let mut open_idxs_loaded = vec![];
+    let mut open_vals_loaded = vec![];
     for el in ptau_g1.iter() {
         ptau_g1_loaded.push(g1_chip.assign_point(ctx, G1Affine::from(el)));
     }
@@ -143,19 +151,32 @@ fn kzg_multi_test(
     }
     for c in z_coeffs {
         z_coeffs_loaded.push(ctx.load_witness(c.clone()));
+        z_coeffs_fr_loaded.push(fr_chip.load_private(ctx, c));
     }
     for c in r_coeffs {
         r_coeffs_loaded.push(ctx.load_witness(c.clone()));
+        r_coeffs_fr_loaded.push(fr_chip.load_private(ctx, c));
+    }
+    for c in open_idxs {
+        open_idxs_loaded.push(fr_chip.load_private(ctx, c));
+    }
+    for c in open_vals {
+        open_vals_loaded.push(fr_chip.load_private(ctx, c));
     }
 
     // Test chip
-    let kzg_chip = KZGChip::new(&pairing_chip, &g1_chip, &g2_chip);
+    let kzg_chip = KZGChip::new(&poly_chip, &pairing_chip, &g1_chip, &g2_chip);
+
     kzg_chip.opening_assert(
         builder,
         &ptau_g1_loaded[..],
         &ptau_g2_loaded[..],
+        &open_idxs_loaded,
+        &open_vals_loaded,
         r_coeffs_loaded.iter().map(|x| vec![x.clone()]).collect::<Vec<_>>(),
+        &r_coeffs_fr_loaded,
         z_coeffs_loaded.iter().map(|x| vec![x.clone()]).collect::<Vec<_>>(),
+        &z_coeffs_fr_loaded,
         assigned_p_bar,
         assigned_q_bar,
     );
@@ -185,7 +206,7 @@ fn random_kzg_multi_circuit(
 
     let (ptau_g1, ptau_g2) = mock_trusted_setup(tau, blob_len, n_openings);
     let (p, p_bar) = commit_vector(K, &dummy_data, &ptau_g1);
-    let (q_bar, z_coeffs, r_coeffs) = open_prf(K, &dummy_data, &p, &ptau_g1, openings);
+    let (q_bar, z_coeffs, r_coeffs) = open_prf(K, &dummy_data, &p, &ptau_g1, &openings);
 
     kzg_multi_test(
         &mut builder,
@@ -196,6 +217,8 @@ fn random_kzg_multi_circuit(
         ptau_g2[..=n_openings].to_vec(),
         z_coeffs,
         r_coeffs,
+        openings.iter().map(|op| Fr::from(op.clone())).collect(),
+        openings.iter().map(|op| dummy_data[op.clone() as usize]).collect()
     );
 
     let circuit = match stage {
