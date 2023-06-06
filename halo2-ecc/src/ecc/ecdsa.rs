@@ -3,7 +3,7 @@ use halo2_base::{gates::GateInstructions, utils::CurveAffineExt, AssignedValue, 
 use crate::bigint::{big_is_equal, big_less_than, FixedOverflowInteger, ProperCrtUint};
 use crate::fields::{fp::FpChip, FieldChip, PrimeField};
 
-use super::{fixed_base, multi_scalar_multiply, EcPoint, EccChip};
+use super::{fixed_base, scalar_multiply, EcPoint, EccChip};
 // CF is the coordinate field of GA
 // SF is the scalar field of GA
 // p = coordinate field modulus
@@ -11,6 +11,7 @@ use super::{fixed_base, multi_scalar_multiply, EcPoint, EccChip};
 // Only valid when p is very close to n in size (e.g. for Secp256k1)
 // Assumes `r, s` are proper CRT integers
 /// **WARNING**: Only use this function if `1 / (p - n)` is very small (e.g., < 2<sup>-100</sup>)
+/// `pubkey` should not be the identity point
 pub fn ecdsa_verify_no_pubkey_check<F: PrimeField, CF: PrimeField, SF: PrimeField, GA>(
     chip: &EccChip<F, FpChip<F, CF>>,
     ctx: &mut Context<F>,
@@ -49,13 +50,14 @@ where
         base_chip.limb_bits,
         fixed_window_bits,
     );
-    let u2_mul = multi_scalar_multiply::<F, FpChip<_, _>, GA>(
+    let u2_mul = scalar_multiply::<_, _, GA>(
         base_chip,
         ctx,
-        &[pubkey],
-        vec![u2.limbs().to_vec()],
+        pubkey,
+        u2.limbs().to_vec(),
         base_chip.limb_bits,
         var_window_bits,
+        true, // we can call it with scalar_is_safe = true because of the u2_small check below
     );
 
     // check u1 * G != -(u2 * pubkey) but allow u1 * G == u2 * pubkey
