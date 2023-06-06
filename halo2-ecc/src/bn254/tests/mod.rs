@@ -26,3 +26,4 @@ pub mod fixed_base_msm;
 pub mod msm;
 pub mod pairing;
 pub mod msm_sum_infinity;
+pub mod msm_sum_infinity_fixed_base;
