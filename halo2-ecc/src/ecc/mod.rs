@@ -3,9 +3,10 @@ use crate::fields::{fp::FpChip, FieldChip, PrimeField, Selectable};
 use crate::halo2_proofs::arithmetic::CurveAffine;
 use group::{Curve, Group};
 use halo2_base::gates::builder::GateThreadBuilder;
+use halo2_base::utils::modulus;
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
-    utils::{modulus, CurveAffineExt},
+    utils::CurveAffineExt,
     AssignedValue, Context,
 };
 use itertools::Itertools;
@@ -480,26 +481,26 @@ where
 /// - an array of length > 1 is needed when `scalar` exceeds the modulus of scalar field `F`
 ///
 /// # Assumptions
-/// - `P` is not the point at infinity
-/// - `scalar > 0`
-/// - If `scalar_is_safe == true`, then we assume the integer `scalar` is in range [1, order of `P`)
-/// - Even if `scalar_is_safe == false`, some constraints may still fail if `scalar` is not in range [1, order of `P`)
+/// - `window_bits != 0`
+/// - The order of `P` is at least `2^{window_bits}` (in particular, `P` is not the point at infinity)
+/// - The curve has no points of order 2.
 /// - `scalar_i < 2^{max_bits} for all i`
 /// - `max_bits <= modulus::<F>.bits()`, and equality only allowed when the order of `P` equals the modulus of `F`
-pub fn scalar_multiply<F: PrimeField, FC>(
+pub fn scalar_multiply<F: PrimeField, FC, C>(
     chip: &FC,
     ctx: &mut Context<F>,
     P: EcPoint<F, FC::FieldPoint>,
     scalar: Vec<AssignedValue<F>>,
     max_bits: usize,
     window_bits: usize,
-    scalar_is_safe: bool,
 ) -> EcPoint<F, FC::FieldPoint>
 where
     FC: FieldChip<F> + Selectable<F, FC::FieldPoint>,
+    C: CurveAffineExt<Base = FC::FieldType>,
 {
     assert!(!scalar.is_empty());
     assert!((max_bits as u64) <= modulus::<F>().bits());
+    assert!(window_bits != 0);
 
     let total_bits = max_bits * scalar.len();
     let num_windows = (total_bits + window_bits - 1) / window_bits;
@@ -517,7 +518,7 @@ where
     // is_started[idx] holds whether there is a 1 in bits with index at least (rounded_bitlen - idx)
     let mut is_started = Vec::with_capacity(rounded_bitlen);
     is_started.resize(rounded_bitlen - total_bits + 1, zero_cell);
-    for idx in 1..total_bits {
+    for idx in 1..=total_bits {
         let or = chip.gate().or(ctx, *is_started.last().unwrap(), rounded_bits[total_bits - idx]);
         is_started.push(or);
     }
@@ -534,22 +535,23 @@ where
         is_zero_window.push(is_zero);
     }
 
-    // cached_points[idx] stores idx * P, with cached_points[0] = P
+    let any_point = load_random_point::<F, FC, C>(chip, ctx);
+    // cached_points[idx] stores idx * P, with cached_points[0] = any_point
     let cache_size = 1usize << window_bits;
     let mut cached_points = Vec::with_capacity(cache_size);
-    cached_points.push(P.clone());
+    cached_points.push(any_point);
     cached_points.push(P.clone());
     for idx in 2..cache_size {
         if idx == 2 {
             let double = ec_double(chip, ctx, &P);
             cached_points.push(double);
         } else {
-            let new_point = ec_add_unequal(chip, ctx, &cached_points[idx - 1], &P, !scalar_is_safe);
+            let new_point = ec_add_unequal(chip, ctx, &cached_points[idx - 1], &P, false);
             cached_points.push(new_point);
         }
     }
 
-    // if all the starting window bits are 0, get start_point = P
+    // if all the starting window bits are 0, get start_point = any_point
     let mut curr_point = ec_select_from_bits(
         chip,
         ctx,
@@ -569,13 +571,17 @@ where
             &rounded_bits
                 [rounded_bitlen - window_bits * (idx + 1)..rounded_bitlen - window_bits * idx],
         );
-        let mult_and_add = ec_add_unequal(chip, ctx, &mult_point, &add_point, !scalar_is_safe);
+        // if is_zero_window[idx] = true, add_point = any_point. We only need any_point to avoid divide by zero in add_unequal
+        // if is_zero_window = true and is_started = false, then mult_point = 2^window_bits * any_point. Since window_bits != 0, we have mult_point != +- any_point
+        let mult_and_add = ec_add_unequal(chip, ctx, &mult_point, &add_point, true);
         let is_started_point = ec_select(chip, ctx, mult_point, mult_and_add, is_zero_window[idx]);
 
         curr_point =
             ec_select(chip, ctx, is_started_point, add_point, is_started[window_bits * idx]);
     }
-    curr_point
+    // if at the end, return identity point (0,0) if still not started
+    let zero = chip.load_constant(ctx, FC::FieldType::zero());
+    ec_select(chip, ctx, curr_point, EcPoint::new(zero.clone(), zero), *is_started.last().unwrap())
 }
 
 /// Checks that `P` is indeed a point on the elliptic curve `C`.
@@ -1018,24 +1024,18 @@ where
     }
 
     /// See [`scalar_multiply`] for more details.
-    pub fn scalar_mult(
+    pub fn scalar_mult<C>(
         &self,
         ctx: &mut Context<F>,
         P: EcPoint<F, FC::FieldPoint>,
         scalar: Vec<AssignedValue<F>>,
         max_bits: usize,
         window_bits: usize,
-        scalar_is_safe: bool,
-    ) -> EcPoint<F, FC::FieldPoint> {
-        scalar_multiply::<F, FC>(
-            self.field_chip,
-            ctx,
-            P,
-            scalar,
-            max_bits,
-            window_bits,
-            scalar_is_safe,
-        )
+    ) -> EcPoint<F, FC::FieldPoint>
+    where
+        C: CurveAffineExt<Base = FC::FieldType>,
+    {
+        scalar_multiply::<F, FC, C>(self.field_chip, ctx, P, scalar, max_bits, window_bits)
     }
 
     // default for most purposes
@@ -1049,14 +1049,13 @@ where
     ) -> EcPoint<F, FC::FieldPoint>
     where
         C: CurveAffineExt<Base = FC::FieldType>,
-        C::Base: ff::PrimeField,
         FC: Selectable<F, FC::ReducedFieldPoint>,
     {
         // window_bits = 4 is optimal from empirical observations
         self.variable_base_msm_in::<C>(thread_pool, P, scalars, max_bits, 4, 0)
     }
 
-    // TODO: put a check in place that scalar is < modulus of C::Scalar
+    // TODO: add asserts to validate input assumptions described in docs
     pub fn variable_base_msm_in<C>(
         &self,
         builder: &mut GateThreadBuilder<F>,
@@ -1068,7 +1067,6 @@ where
     ) -> EcPoint<F, FC::FieldPoint>
     where
         C: CurveAffineExt<Base = FC::FieldType>,
-        C::Base: ff::PrimeField,
         FC: Selectable<F, FC::ReducedFieldPoint>,
     {
         #[cfg(feature = "display")]
@@ -1115,7 +1113,6 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         scalar: Vec<AssignedValue<F>>,
         max_bits: usize,
         window_bits: usize,
-        scalar_is_safe: bool,
     ) -> EcPoint<F, FC::FieldPoint>
     where
         C: CurveAffineExt,
@@ -1128,7 +1125,6 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
             scalar,
             max_bits,
             window_bits,
-            scalar_is_safe,
         )
     }
 

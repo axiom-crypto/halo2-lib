@@ -25,12 +25,12 @@ fn msm_test(
     let ctx = builder.main(0);
     let scalars_assigned =
         scalars.iter().map(|scalar| vec![ctx.load_witness(*scalar)]).collect::<Vec<_>>();
-    let bases_assigned = bases
-        .iter()
-        .map(|base| ecc_chip.load_private_unchecked(ctx, (base.x, base.y)))
-        .collect::<Vec<_>>();
+    let bases_assigned = bases;
+    //.iter()
+    //.map(|base| ecc_chip.load_private_unchecked(ctx, (base.x, base.y)))
+    //.collect::<Vec<_>>();
 
-    let msm = ecc_chip.variable_base_msm_in::<G1Affine>(
+    let msm = ecc_chip.fixed_base_msm_in::<G1Affine>(
         builder,
         &bases_assigned,
         scalars_assigned,
@@ -39,7 +39,7 @@ fn msm_test(
         0,
     );
 
-    let msm_answer = bases
+    let msm_answer = bases_assigned
         .iter()
         .zip(scalars.iter())
         .map(|(base, scalar)| base * scalar)
@@ -86,7 +86,7 @@ fn custom_msm_circuit(
 }
 
 #[test]
-fn test_msm1() {
+fn test_fb_msm1() {
     let path = "configs/bn254/msm_circuit.config";
     let mut params: MSMCircuitParams = serde_json::from_reader(
         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
@@ -103,7 +103,7 @@ fn test_msm1() {
 }
 
 #[test]
-fn test_msm2() {
+fn test_fb_msm2() {
     let path = "configs/bn254/msm_circuit.config";
     let mut params: MSMCircuitParams = serde_json::from_reader(
         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
@@ -120,7 +120,7 @@ fn test_msm2() {
 }
 
 #[test]
-fn test_msm3() {
+fn test_fb_msm3() {
     let path = "configs/bn254/msm_circuit.config";
     let mut params: MSMCircuitParams = serde_json::from_reader(
         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
@@ -142,7 +142,7 @@ fn test_msm3() {
 }
 
 #[test]
-fn test_msm4() {
+fn test_fb_msm4() {
     let path = "configs/bn254/msm_circuit.config";
     let mut params: MSMCircuitParams = serde_json::from_reader(
         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
@@ -164,7 +164,7 @@ fn test_msm4() {
 }
 
 #[test]
-fn test_msm5() {
+fn test_fb_msm5() {
     // Very similar example that does not add to infinity. It works fine.
     let path = "configs/bn254/msm_circuit.config";
     let mut params: MSMCircuitParams = serde_json::from_reader(
