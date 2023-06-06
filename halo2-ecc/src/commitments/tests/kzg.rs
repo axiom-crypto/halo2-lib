@@ -61,7 +61,7 @@ pub fn mock_trusted_setup(tau: Fr, blob_len: usize, n_openings: usize) -> (Vec<G
  * at p(τ).
  */
 pub fn commit_vector(k: usize, d: &Vec<Fr>, ptau_g1: &Vec<G1>) -> (Polynomial<Fr>, G1Affine) {
-    let selected_root = Fr::root_of_unity().pow(&[2u64.pow(Fr::S - K as u32) as u64, 0, 0, 0]);
+    let selected_root = Fr::root_of_unity().pow(&[2u64.pow(Fr::S - k as u32) as u64, 0, 0, 0]);
     let mut idxs = vec![Fr::one()];
     for _ in 1..d.len() {
         idxs.push(idxs.last().unwrap() * selected_root);
@@ -84,7 +84,7 @@ pub fn open_prf(
     idxs: &Vec<u64>,
 ) -> (G1Affine, Vec<Fr>, Vec<Fr>) {
 
-    let selected_root = Fr::root_of_unity().pow(&[2u64.pow(Fr::S - K as u32) as u64, 0, 0, 0]);
+    let selected_root = Fr::root_of_unity().pow(&[2u64.pow(Fr::S - k as u32) as u64, 0, 0, 0]);
     let idxs_fr: Vec<Fr> = idxs.iter().map(|idx| selected_root.pow(&[*idx as u64, 0, 0, 0])).collect();
     let vals: Vec<Fr> = idxs.iter().map(|idx| data[*idx as usize]).collect();
 
@@ -202,9 +202,9 @@ fn random_kzg_multi_circuit(
     let dummy_data: Vec<Fr> = (0..blob_len).map(|_| Fr::from(OsRng.next_u64())).collect();
 
     let (ptau_g1, ptau_g2) = mock_trusted_setup(tau, blob_len, n_openings);
-    let (p, p_bar) = commit_vector(K, &dummy_data, &ptau_g1);
-    let (q_bar, z_coeffs, r_coeffs) = open_prf(K, &dummy_data, &p, &ptau_g1, &openings);
-    let selected_root = Fr::root_of_unity().pow(&[2u64.pow(Fr::S - K as u32) as u64, 0, 0, 0]);
+    let (p, p_bar) = commit_vector(k, &dummy_data, &ptau_g1);
+    let (q_bar, z_coeffs, r_coeffs) = open_prf(k, &dummy_data, &p, &ptau_g1, &openings);
+    let selected_root = Fr::root_of_unity().pow(&[2u64.pow(Fr::S - k as u32) as u64, 0, 0, 0]);
 
     kzg_multi_test(
         &mut builder,

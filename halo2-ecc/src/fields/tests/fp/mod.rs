@@ -13,8 +13,6 @@ use rand::rngs::OsRng;
 
 pub mod assert_eq;
 
-const K: usize = 10;
-
 fn fp_mul_test<F: PrimeField>(
     ctx: &mut Context<F>,
     lookup_bits: usize,
