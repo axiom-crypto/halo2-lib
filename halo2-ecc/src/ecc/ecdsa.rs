@@ -49,7 +49,6 @@ where
         u1.limbs().to_vec(),
         base_chip.limb_bits,
         fixed_window_bits,
-        true, // we can call it with scalar_is_safe = true because of the u1_small check below
     );
     let u2_mul = scalar_multiply(
         base_chip,

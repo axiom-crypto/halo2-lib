@@ -113,6 +113,23 @@ fn test_fixed_base_msm() {
 }
 
 #[test]
+fn test_fb_msm_minus_1() {
+    let path = "configs/bn254/fixed_msm_circuit.config";
+    let params: MSMCircuitParams = serde_json::from_reader(
+        File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
+    )
+    .unwrap();
+    let base = G1Affine::random(OsRng);
+    let k = params.degree as usize;
+    let mut builder = GateThreadBuilder::mock();
+    fixed_base_msm_test(&mut builder, params, vec![base], vec![-Fr::one()]);
+
+    builder.config(k, Some(20));
+    let circuit = RangeCircuitBuilder::mock(builder);
+    MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
+}
+
+#[test]
 fn bench_fixed_base_msm() -> Result<(), Box<dyn std::error::Error>> {
     let config_path = "configs/bn254/bench_fixed_msm.config";
     let bench_params_file =

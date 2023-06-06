@@ -1115,7 +1115,6 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         scalar: Vec<AssignedValue<F>>,
         max_bits: usize,
         window_bits: usize,
-        scalar_is_safe: bool,
     ) -> EcPoint<F, FC::FieldPoint>
     where
         C: CurveAffineExt,
@@ -1128,7 +1127,6 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
             scalar,
             max_bits,
             window_bits,
-            scalar_is_safe,
         )
     }
 
