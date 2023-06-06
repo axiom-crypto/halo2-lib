@@ -1,3 +1,6 @@
+/*
+ * Test utilities for committing to data blobs with KZG
+ */
 use ff::PrimeField;
 use halo2_base::halo2_proofs::halo2curves::{bn256::{Fr, G1Affine, G2, G1}, FieldExt};
 use serde::{Deserialize, Serialize};
@@ -83,7 +86,7 @@ impl Blob {
     * Creates vector commitment by interpolating a polynomial p(X) and evaluating
     * at p(τ).
     */
-    pub fn commit_vector(&self) -> (Polynomial<Fr>, G1Affine) {
+    pub fn commit_vector(&self) -> G1Affine {
         let selected_root = self.root_of_unity();
         let mut idxs = vec![Fr::one()];
         for _ in 1..self.data.len() {
@@ -91,7 +94,7 @@ impl Blob {
         }
         let p = Polynomial::from_points(&idxs, &self.data);
         let p_bar = G1Affine::from(p.eval_ptau(&self.pp.ptau_g1));
-        (p, p_bar)
+        p_bar
     }
 
     /*
@@ -101,7 +104,6 @@ impl Blob {
     */
     pub fn open_prf(
         &self,
-        p: &Polynomial<Fr>,
         idxs: &Vec<u64>,
     ) -> (G1Affine, Vec<Fr>, Vec<Fr>) {
 
@@ -112,7 +114,7 @@ impl Blob {
         let r: Polynomial<Fr> = Polynomial::from_points(&idxs_fr, &vals);
         let z: Polynomial<Fr> = Polynomial::vanishing(&idxs_fr);
 
-        let (q, rem) = Polynomial::div_euclid(&(p.clone() - r.clone()), &z);
+        let (q, rem) = Polynomial::div_euclid(&(self.p.clone() - r.clone()), &z);
         if !rem.is_zero() {
             panic!("p(X) - r(X) is not divisible by z(X). Cannot compute q(X)");
         }

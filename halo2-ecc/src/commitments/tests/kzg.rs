@@ -1,13 +1,11 @@
-use std::fs::File;
-
 /*
  * Test suite for KZGChip.
  */
-use ff::PrimeField;
+use std::fs::File;
 use rand_core::OsRng;
 use crate::{
     bn254::{pairing::PairingChip, Fp2Chip, FpChip, FrChip},
-    commitments::{kzg::KZGChip, tests::polynomial::Polynomial, poly::PolyChip},
+    commitments::{kzg::KZGChip, poly::PolyChip},
     ecc::EccChip,
     fields::{FpStrategy, FieldChip},
     halo2_proofs::halo2curves::bn256::{Fr, G1Affine, G1, G2},
@@ -21,8 +19,7 @@ use halo2_base::{
 };
 use rand_core::{RngCore};
 use serde::{Deserialize, Serialize};
-
-use super::utils::{Blob, root_of_unity};
+use crate::commitments::utils::blob::{Blob, root_of_unity};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 struct KZGCircuitParams {
@@ -75,8 +72,6 @@ fn kzg_multi_test(
         ptau_g2.iter().map(|x| g2_chip.assign_point(ctx, G2Affine::from(x))).collect::<Vec<_>>();
 
     let mut load_fr = |x: Vec<Fr>| x.into_iter().map(|c| fr_chip.load_private(ctx, c)).collect::<Vec<_>>();
-    let z_coeffs_fr_loaded = load_fr(z_coeffs);
-    let r_coeffs_fr_loaded = load_fr(r_coeffs);
     let open_idxs_loaded = load_fr(open_idxs);
     let open_vals_loaded = load_fr(open_vals);
 
@@ -89,8 +84,6 @@ fn kzg_multi_test(
         &ptau_g2_loaded[..],
         &open_idxs_loaded,
         &open_vals_loaded,
-        &r_coeffs_fr_loaded,
-        &z_coeffs_fr_loaded,
         assigned_p_bar,
         assigned_q_bar,
     );
@@ -104,7 +97,7 @@ fn random_kzg_multi_circuit(
     stage: CircuitBuilderStage,
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
-    let _k = params.degree as usize;
+    let k = params.degree as usize;
     let mut builder = match stage {
         CircuitBuilderStage::Mock => GateThreadBuilder::mock(),
         CircuitBuilderStage::Prover => GateThreadBuilder::prover(),
@@ -112,18 +105,18 @@ fn random_kzg_multi_circuit(
     };
 
     let tau: Fr = Fr::from(111);
-    let k: usize = 2;
+    let kzg_k: u32 = 2;
     let blob_len = 4;
     let openings: Vec<u64> = vec![2, 3];
     let n_openings = openings.len();
     let dummy_data: Vec<Fr> = (0..blob_len).map(|_| Fr::from(OsRng.next_u64())).collect();
 
     let pp = Blob::mock_trusted_setup(tau, blob_len, n_openings);
-    let blob = Blob::new(dummy_data.clone(), pp.clone(), k as u32);
-    let (p, p_bar) = blob.commit_vector();
-    let (q_bar, z_coeffs, r_coeffs) = blob.open_prf(&p, &openings);
+    let blob = Blob::new(dummy_data.clone(), pp.clone(), kzg_k);
+    let p_bar = blob.commit_vector();
+    let (q_bar, z_coeffs, r_coeffs) = blob.open_prf(&openings);
     
-    let selected_root = root_of_unity(k as u32);
+    let selected_root = root_of_unity(kzg_k as u32);
 
     kzg_multi_test(
         &mut builder,
