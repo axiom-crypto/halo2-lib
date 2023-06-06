@@ -1,13 +1,12 @@
-use std::fmt::Debug;
-
-use halo2_base::{Context};
-use num_bigint::BigUint;
-use num_traits::Zero;
-use crate::bn254::{FrChip};
-
+use crate::bn254::FrChip;
 use crate::fields::{
     FieldChip, PrimeField
 };
+
+use std::fmt::Debug;
+use halo2_base::Context;
+use num_bigint::BigUint;
+use num_traits::Zero;
 
 /// Represent Fp2 point as `FieldVector` with degree = 2
 /// `Fp2 = Fp[u] / (u^2 + 1)`

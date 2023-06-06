@@ -22,6 +22,8 @@ use halo2_base::{
 use rand_core::{RngCore};
 use serde::{Deserialize, Serialize};
 
+use super::utils::{Blob, root_of_unity};
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 struct KZGCircuitParams {
     strategy: FpStrategy,
@@ -32,72 +34,6 @@ struct KZGCircuitParams {
     lookup_bits: usize,
     limb_bits: usize,
     num_limbs: usize,
-}
-
-/*
- * Convenience function for running a mock setup() for the commitment
- * scheme. This is not secure.
- */
-pub fn mock_trusted_setup(tau: Fr, blob_len: usize, n_openings: usize) -> (Vec<G1>, Vec<G2>) {
-    let tau_fr: Fr = Fr::from(tau);
-
-    // Powers of tau in G1 to commit to polynomials p(X) and q(X)
-    let mut ptau_g1: Vec<G1> = vec![G1::generator()];
-    for _ in 1..blob_len {
-        ptau_g1.push(ptau_g1.last().unwrap() * tau_fr);
-    }
-
-    // Powers of tau in G2 to commit to polynomials z(X) and r(X)
-    let mut ptau_g2: Vec<G2> = vec![G2::generator()];
-    for _ in 1..=n_openings {
-        ptau_g2.push(ptau_g2.last().unwrap() * tau_fr);
-    }
-
-    (ptau_g1, ptau_g2)
-}
-
-/*
- * Creates vector commitment by interpolating a polynomial p(X) and evaluating
- * at p(τ).
- */
-pub fn commit_vector(k: usize, d: &Vec<Fr>, ptau_g1: &Vec<G1>) -> (Polynomial<Fr>, G1Affine) {
-    let selected_root = Fr::root_of_unity().pow(&[2u64.pow(Fr::S - k as u32) as u64, 0, 0, 0]);
-    let mut idxs = vec![Fr::one()];
-    for _ in 1..d.len() {
-        idxs.push(idxs.last().unwrap() * selected_root);
-    }
-    let p = Polynomial::from_points(&idxs, &d);
-    let p_bar = G1Affine::from(p.eval_ptau(&ptau_g1));
-    (p, p_bar)
-}
-
-/*
- * Computes multi-open proof. Done by computing a quotient polynomial
- * q(X) = [p(X) - r(X)]/z(X). Opening proof is q(τ). Also saves the coefficients
- * of z(X) and r(X) to avoid having to recompute within the circuit.
- */
-pub fn open_prf(
-    k: usize, 
-    data: &Vec<Fr>,
-    p: &Polynomial<Fr>,
-    ptau_g1: &Vec<G1>,
-    idxs: &Vec<u64>,
-) -> (G1Affine, Vec<Fr>, Vec<Fr>) {
-
-    let selected_root = Fr::root_of_unity().pow(&[2u64.pow(Fr::S - k as u32) as u64, 0, 0, 0]);
-    let idxs_fr: Vec<Fr> = idxs.iter().map(|idx| selected_root.pow(&[*idx as u64, 0, 0, 0])).collect();
-    let vals: Vec<Fr> = idxs.iter().map(|idx| data[*idx as usize]).collect();
-
-    let r: Polynomial<Fr> = Polynomial::from_points(&idxs_fr, &vals);
-    let z: Polynomial<Fr> = Polynomial::vanishing(&idxs_fr);
-
-    let (q, rem) = Polynomial::div_euclid(&(p.clone() - r.clone()), &z);
-    if !rem.is_zero() {
-        panic!("p(X) - r(X) is not divisible by z(X). Cannot compute q(X)");
-    }
-
-    let q_bar: G1Affine = G1Affine::from(q.eval_ptau(&ptau_g1));
-    (q_bar, z.get_coeffs(), r.get_coeffs())
 }
 
 /*
@@ -121,7 +57,6 @@ fn kzg_multi_test(
     // Initialize chips
     let range = RangeChip::<Fr>::default(params.lookup_bits);
     let fr_chip = FrChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
-
     let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
     let g1_chip = EccChip::new(&fp_chip);
     let fp2_chip = Fp2Chip::<Fr>::new(&fp_chip);
@@ -134,34 +69,16 @@ fn kzg_multi_test(
     let assigned_p_bar = g1_chip.assign_point(ctx, p_bar);
 
     // Load vectors
-    let mut ptau_g1_loaded = vec![];
-    let mut ptau_g2_loaded = vec![];
-    let mut z_coeffs_loaded = vec![];
-    let mut z_coeffs_fr_loaded = vec![];
-    let mut r_coeffs_loaded = vec![];
-    let mut r_coeffs_fr_loaded = vec![];
-    let mut open_idxs_loaded = vec![];
-    let mut open_vals_loaded = vec![];
-    for el in ptau_g1.iter() {
-        ptau_g1_loaded.push(g1_chip.assign_point(ctx, G1Affine::from(el)));
-    }
-    for el in ptau_g2.iter() {
-        ptau_g2_loaded.push(g2_chip.assign_point(ctx, G2Affine::from(el)));
-    }
-    for c in z_coeffs {
-        z_coeffs_loaded.push(ctx.load_witness(c.clone()));
-        z_coeffs_fr_loaded.push(fr_chip.load_private(ctx, c));
-    }
-    for c in r_coeffs {
-        r_coeffs_loaded.push(ctx.load_witness(c.clone()));
-        r_coeffs_fr_loaded.push(fr_chip.load_private(ctx, c));
-    }
-    for c in open_idxs {
-        open_idxs_loaded.push(fr_chip.load_private(ctx, c));
-    }
-    for c in open_vals {
-        open_vals_loaded.push(fr_chip.load_private(ctx, c));
-    }
+    let ptau_g1_loaded = 
+        ptau_g1.iter().map(|x| g1_chip.assign_point(ctx, G1Affine::from(x))).collect::<Vec<_>>();
+    let ptau_g2_loaded = 
+        ptau_g2.iter().map(|x| g2_chip.assign_point(ctx, G2Affine::from(x))).collect::<Vec<_>>();
+
+    let mut load_fr = |x: Vec<Fr>| x.into_iter().map(|c| fr_chip.load_private(ctx, c)).collect::<Vec<_>>();
+    let z_coeffs_fr_loaded = load_fr(z_coeffs);
+    let r_coeffs_fr_loaded = load_fr(r_coeffs);
+    let open_idxs_loaded = load_fr(open_idxs);
+    let open_vals_loaded = load_fr(open_vals);
 
     // Test chip
     let kzg_chip = KZGChip::new(&poly_chip, &pairing_chip, &g1_chip, &g2_chip);
@@ -187,7 +104,7 @@ fn random_kzg_multi_circuit(
     stage: CircuitBuilderStage,
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
-    let k = params.degree as usize;
+    let _k = params.degree as usize;
     let mut builder = match stage {
         CircuitBuilderStage::Mock => GateThreadBuilder::mock(),
         CircuitBuilderStage::Prover => GateThreadBuilder::prover(),
@@ -195,24 +112,26 @@ fn random_kzg_multi_circuit(
     };
 
     let tau: Fr = Fr::from(111);
-    let k = 2;
+    let k: usize = 2;
     let blob_len = 4;
     let openings: Vec<u64> = vec![2, 3];
     let n_openings = openings.len();
     let dummy_data: Vec<Fr> = (0..blob_len).map(|_| Fr::from(OsRng.next_u64())).collect();
 
-    let (ptau_g1, ptau_g2) = mock_trusted_setup(tau, blob_len, n_openings);
-    let (p, p_bar) = commit_vector(k, &dummy_data, &ptau_g1);
-    let (q_bar, z_coeffs, r_coeffs) = open_prf(k, &dummy_data, &p, &ptau_g1, &openings);
-    let selected_root = Fr::root_of_unity().pow(&[2u64.pow(Fr::S - k as u32) as u64, 0, 0, 0]);
+    let pp = Blob::mock_trusted_setup(tau, blob_len, n_openings);
+    let blob = Blob::new(dummy_data.clone(), pp.clone(), k as u32);
+    let (p, p_bar) = blob.commit_vector();
+    let (q_bar, z_coeffs, r_coeffs) = blob.open_prf(&p, &openings);
+    
+    let selected_root = root_of_unity(k as u32);
 
     kzg_multi_test(
         &mut builder,
         params,
         q_bar,
         p_bar,
-        ptau_g1[..n_openings].to_vec(),
-        ptau_g2[..=n_openings].to_vec(),
+        pp.ptau_g1[..n_openings].to_vec(),
+        pp.ptau_g2[..=n_openings].to_vec(),
         z_coeffs,
         r_coeffs,
         openings.iter().map(|op| selected_root.pow(&[op.clone() as u64, 0, 0, 0])).collect(),
