@@ -4,7 +4,7 @@ on:
   push:
     branches: ["main", "release-0.3.0"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "release-0.3.0"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -27,11 +27,12 @@ jobs:
           cd halo2-ecc
           cargo test -- --test-threads=1 test_fp
           cargo test -- test_ecc
-          cargo test -- test_secp256k1_ecdsa
+          cargo test -- test_secp
           cargo test -- test_ecdsa
           cargo test -- test_ec_add
-          cargo test -- test_fixed_base_msm
+          cargo test -- test_fixed
           cargo test -- test_msm
+          cargo test -- test_fb
           cargo test -- test_pairing
           cd ..
       - name: Run halo2-ecc tests real prover
@@ -40,7 +41,10 @@ jobs:
           cargo test --release -- test_fp_assert_eq
           cargo test --release -- --nocapture bench_secp256k1_ecdsa
           cargo test --release -- --nocapture bench_ec_add
+          mv configs/bn254/bench_fixed_msm.t.config configs/bn254/bench_fixed_msm.config
           cargo test --release -- --nocapture bench_fixed_base_msm
+          mv configs/bn254/bench_msm.t.config configs/bn254/bench_msm.config
           cargo test --release -- --nocapture bench_msm
+          mv configs/bn254/bench_pairing.t.config configs/bn254/bench_pairing.config
           cargo test --release -- --nocapture bench_pairing
           cd ..

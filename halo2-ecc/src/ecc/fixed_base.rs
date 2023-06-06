@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 use super::{ec_add_unequal, ec_select, ec_select_from_bits, EcPoint, EccChip};
-use crate::ecc::ec_sub_strict;
+use crate::ecc::{ec_sub_strict, load_random_point};
 use crate::fields::{FieldChip, PrimeField, Selectable};
 use group::Curve;
 use halo2_base::gates::builder::{parallelize_in, GateThreadBuilder};
@@ -17,8 +17,6 @@ use std::cmp::min;
 /// # Assumptions
 /// - `scalar_i < 2^{max_bits} for all i` (constrained by num_to_bits)
 /// - `scalar > 0`
-/// - If `scalar_is_safe == true`, then we assume the integer `scalar` is in range [1, order of `P`)
-/// - Even if `scalar_is_safe == false`, some constraints may still fail if `scalar` is not in range [1, order of `P`)
 /// - `max_bits <= modulus::<F>.bits()`
 pub fn scalar_multiply<F, FC, C>(
     chip: &FC,
@@ -27,7 +25,6 @@ pub fn scalar_multiply<F, FC, C>(
     scalar: Vec<AssignedValue<F>>,
     max_bits: usize,
     window_bits: usize,
-    scalar_is_safe: bool,
 ) -> EcPoint<F, FC::FieldPoint>
 where
     F: PrimeField,
@@ -87,29 +84,19 @@ where
 
     let cached_point_window_rev = cached_points.chunks(1usize << window_bits).rev();
     let bit_window_rev = bits.chunks(window_bits).rev();
-    let mut curr_point = None;
-    // `is_started` is just a way to deal with if `curr_point` is actually identity
-    let mut is_started = ctx.load_zero();
+    let any_point = load_random_point::<F, FC, C>(chip, ctx);
+    let mut curr_point = any_point.clone();
     for (cached_point_window, bit_window) in cached_point_window_rev.zip(bit_window_rev) {
         let bit_sum = chip.gate().sum(ctx, bit_window.iter().copied());
         // are we just adding a window of all 0s? if so, skip
         let is_zero_window = chip.gate().is_zero(ctx, bit_sum);
-        let add_point = ec_select_from_bits(chip, ctx, cached_point_window, bit_window);
-        curr_point = if let Some(curr_point) = curr_point {
-            let sum = ec_add_unequal(chip, ctx, &curr_point, &add_point, !scalar_is_safe);
-            let zero_sum = ec_select(chip, ctx, curr_point, sum, is_zero_window);
-            Some(ec_select(chip, ctx, zero_sum, add_point, is_started))
-        } else {
-            Some(add_point)
-        };
-        is_started = {
-            // is_started || !is_zero_window
-            // (a || !b) = (1-b) + a*b
-            let not_zero_window = chip.gate().not(ctx, is_zero_window);
-            chip.gate().mul_add(ctx, is_started, is_zero_window, not_zero_window)
+        curr_point = {
+            let add_point = ec_select_from_bits(chip, ctx, cached_point_window, bit_window);
+            let sum = ec_add_unequal(chip, ctx, &curr_point, &add_point, true);
+            ec_select(chip, ctx, curr_point, sum, is_zero_window)
         };
     }
-    curr_point.unwrap()
+    ec_sub_strict(chip, ctx, curr_point, any_point)
 }
 
 // basically just adding up individual fixed_base::scalar_multiply except that we do all batched normalization of cached points at once to further save inversion time during witness generation
@@ -120,7 +107,7 @@ where
 /// * `scalars[i].len() = scalars[j].len()` for all `i,j`
 /// * `points` are all on the curve
 /// * `points[i]` is not point at infinity (0, 0); these should be filtered out beforehand
-/// * The integer value of `scalars[i]` is less than the order of `points[i]` (some constraints may fail otherwise)
+/// * The integer value of `scalars[i]` is less than the order of `points[i]`
 /// * Output may be point at infinity, in which case (0, 0) is returned
 pub fn msm_par<F, FC, C>(
     chip: &EccChip<F, FC>,
@@ -153,6 +140,7 @@ where
         .flat_map(|point| -> Vec<_> {
             let base_pt = point.to_curve();
             // cached_points[idx][i * 2^w + j] holds `[j * 2^(i * w)] * points[idx]` for j in {0, ..., 2^w - 1}
+            // EXCEPT cached_points[idx][0] = points[idx]
             let mut increment = base_pt;
             (0..num_windows)
                 .flat_map(|i| {
@@ -178,8 +166,9 @@ where
     C::Curve::batch_normalize(&cached_points_jacobian, &mut cached_points_affine);
 
     let field_chip = chip.field_chip();
+    let ctx = builder.main(phase);
+    let any_point = chip.load_random_point::<C>(ctx);
 
-    let zero = builder.main(phase).load_zero();
     let scalar_mults = parallelize_in(
         phase,
         builder,
@@ -202,41 +191,29 @@ where
                 })
                 .collect::<Vec<_>>();
             let bit_window_rev = bits.chunks(window_bits).rev();
-            let mut curr_point = None;
-            // `is_started` is just a way to deal with if `curr_point` is actually identity
-            let mut is_started = zero;
+            let mut curr_point = any_point.clone();
             for (cached_point_window, bit_window) in cached_point_window_rev.zip(bit_window_rev) {
                 let is_zero_window = {
                     let sum = field_chip.gate().sum(ctx, bit_window.iter().copied());
                     field_chip.gate().is_zero(ctx, sum)
                 };
-                let add_point =
-                    ec_select_from_bits(field_chip, ctx, cached_point_window, bit_window);
-                curr_point = if let Some(curr_point) = curr_point {
-                    // We don't need strict mode because we assume scalars[i] is less than the order of points[i]
-                    let sum = ec_add_unequal(field_chip, ctx, &curr_point, &add_point, false);
-                    let zero_sum = ec_select(field_chip, ctx, curr_point, sum, is_zero_window);
-                    Some(ec_select(field_chip, ctx, zero_sum, add_point, is_started))
-                } else {
-                    Some(add_point)
-                };
-                is_started = {
-                    // is_started || !is_zero_window
-                    // (a || !b) = (1-b) + a*b
-                    let not_zero_window = field_chip.gate().not(ctx, is_zero_window);
-                    field_chip.gate().mul_add(ctx, is_started, is_zero_window, not_zero_window)
+                curr_point = {
+                    let add_point =
+                        ec_select_from_bits(field_chip, ctx, cached_point_window, bit_window);
+                    let sum = ec_add_unequal(field_chip, ctx, &curr_point, &add_point, true);
+                    ec_select(field_chip, ctx, curr_point, sum, is_zero_window)
                 };
             }
-            (curr_point.unwrap(), is_started)
+            curr_point
         },
     );
     let ctx = builder.main(phase);
     // sum `scalar_mults` but take into account possiblity of identity points
-    let any_point = chip.load_random_point::<C>(ctx);
-    let mut acc = any_point.clone();
-    for (point, is_not_identity) in scalar_mults {
+    let any_point2 = chip.load_random_point::<C>(ctx);
+    let mut acc = any_point2.clone();
+    for point in scalar_mults {
         let new_acc = chip.add_unequal(ctx, &acc, point, true);
-        acc = chip.select(ctx, new_acc, acc, is_not_identity);
+        acc = chip.sub_unequal(ctx, new_acc, &any_point, true);
     }
-    ec_sub_strict(field_chip, ctx, acc, any_point)
+    ec_sub_strict(field_chip, ctx, acc, any_point2)
 }
