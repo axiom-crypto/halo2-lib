@@ -1,4 +1,4 @@
-use crate::gates::tests::{flex_gate_tests, range_gate_tests, test_ground_truths::*, Fr};
+use crate::gates::tests::{flex_gate, range_gate, utils::*, Fr};
 use crate::utils::{bit_length, fe_to_biguint};
 use crate::{QuantumCell, QuantumCell::Witness};
 use proptest::{collection::vec, prelude::*};
@@ -79,49 +79,49 @@ proptest! {
     #[test]
     fn prop_test_add(input in vec(rand_witness(), 2)) {
         let ground_truth = add_ground_truth(input.as_slice());
-        let result = flex_gate_tests::test_add(input.as_slice());
+        let result = flex_gate::test_add(input.as_slice());
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_sub(input in vec(rand_witness(), 2)) {
         let ground_truth = sub_ground_truth(input.as_slice());
-        let result = flex_gate_tests::test_sub(input.as_slice());
+        let result = flex_gate::test_sub(input.as_slice());
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_neg(input in rand_witness()) {
         let ground_truth = neg_ground_truth(input);
-        let result = flex_gate_tests::test_neg(input);
+        let result = flex_gate::test_neg(input);
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_mul(inputs in vec(rand_witness(), 2)) {
         let ground_truth = mul_ground_truth(inputs.as_slice());
-        let result = flex_gate_tests::test_mul(inputs.as_slice());
+        let result = flex_gate::test_mul(inputs.as_slice());
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_mul_add(inputs in vec(rand_witness(), 3)) {
         let ground_truth = mul_add_ground_truth(inputs.as_slice());
-        let result = flex_gate_tests::test_mul_add(inputs.as_slice());
+        let result = flex_gate::test_mul_add(inputs.as_slice());
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_mul_not(inputs in vec(rand_witness(), 2)) {
         let ground_truth = mul_not_ground_truth(inputs.as_slice());
-        let result = flex_gate_tests::test_mul_not(inputs.as_slice());
+        let result = flex_gate::test_mul_not(inputs.as_slice());
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_assert_bit(input in rand_fr()) {
         let ground_truth = input == Fr::one() || input == Fr::zero();
-        let result = flex_gate_tests::test_assert_bit(input).is_ok();
+        let result = flex_gate::test_assert_bit(input).is_ok();
         prop_assert_eq!(result, ground_truth);
     }
 
@@ -129,54 +129,54 @@ proptest! {
     #[test]
     fn prop_test_div_unsafe(inputs in vec(rand_witness().prop_filter("Input cannot be 0",|x| *x.value() != Fr::zero()), 2)) {
         let ground_truth = div_unsafe_ground_truth(inputs.as_slice());
-        let result = flex_gate_tests::test_div_unsafe(inputs.as_slice());
+        let result = flex_gate::test_div_unsafe(inputs.as_slice());
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_assert_is_const(input in rand_fr()) {
-        flex_gate_tests::test_assert_is_const(&[input; 2]);
+        flex_gate::test_assert_is_const(&[input; 2]);
     }
 
     #[test]
     fn prop_test_inner_product(inputs in (vec(rand_witness(), 0..=100), vec(rand_witness(), 0..=100)).prop_filter("Input vectors must have equal length", |(a, b)| a.len() == b.len())) {
         let ground_truth = inner_product_ground_truth(&inputs);
-        let result = flex_gate_tests::test_inner_product(inputs);
+        let result = flex_gate::test_inner_product(inputs);
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_inner_product_left_last(inputs in (vec(rand_witness(), 1..=100), vec(rand_witness(), 1..=100)).prop_filter("Input vectors must have equal length", |(a, b)| a.len() == b.len())) {
         let ground_truth = inner_product_left_last_ground_truth(&inputs);
-        let result = flex_gate_tests::test_inner_product_left_last(inputs);
+        let result = flex_gate::test_inner_product_left_last(inputs);
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_inner_product_with_sums(inputs in (vec(rand_witness(), 0..=10), vec(rand_witness(), 1..=100)).prop_filter("Input vectors must have equal length", |(a, b)| a.len() == b.len())) {
         let ground_truth = inner_product_with_sums_ground_truth(&inputs);
-        let result = flex_gate_tests::test_inner_product_with_sums(inputs);
+        let result = flex_gate::test_inner_product_with_sums(inputs);
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_sum_products_with_coeff_and_var(input in sum_products_with_coeff_and_var_strat(100)) {
         let expected = sum_products_with_coeff_and_var_ground_truth(&input);
-        let output = flex_gate_tests::test_sum_products_with_coeff_and_var(input);
+        let output = flex_gate::test_sum_products_with_coeff_and_var(input);
         prop_assert_eq!(expected, output);
     }
 
     #[test]
     fn prop_test_and(inputs in vec(rand_witness(), 2)) {
         let ground_truth = and_ground_truth(inputs.as_slice());
-        let result = flex_gate_tests::test_and(inputs.as_slice());
+        let result = flex_gate::test_and(inputs.as_slice());
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_not(input in rand_witness()) {
         let ground_truth = not_ground_truth(&input);
-        let result = flex_gate_tests::test_not(input);
+        let result = flex_gate::test_not(input);
         prop_assert_eq!(result, ground_truth);
     }
 
@@ -184,49 +184,49 @@ proptest! {
     fn prop_test_select(vals in vec(rand_witness(), 2), sel in rand_bin_witness()) {
         let inputs = vec![vals[0], vals[1], sel];
         let ground_truth = select_ground_truth(inputs.as_slice());
-        let result = flex_gate_tests::test_select(inputs.as_slice());
+        let result = flex_gate::test_select(inputs.as_slice());
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_or_and(inputs in vec(rand_witness(), 3)) {
         let ground_truth = or_and_ground_truth(inputs.as_slice());
-        let result = flex_gate_tests::test_or_and(inputs.as_slice());
+        let result = flex_gate::test_or_and(inputs.as_slice());
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_idx_to_indicator(input in (rand_witness(), 1..=16_usize)) {
         let ground_truth = idx_to_indicator_ground_truth(input);
-        let result = flex_gate_tests::test_idx_to_indicator((input.0, input.1));
+        let result = flex_gate::test_idx_to_indicator((input.0, input.1));
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_select_by_indicator(inputs in (vec(rand_witness(), 1..=10), rand_witness())) {
         let ground_truth = select_by_indicator_ground_truth(&inputs);
-        let result = flex_gate_tests::test_select_by_indicator(inputs);
+        let result = flex_gate::test_select_by_indicator(inputs);
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_select_from_idx(inputs in (vec(rand_witness(), 1..=10), rand_witness())) {
         let ground_truth = select_from_idx_ground_truth(&inputs);
-        let result = flex_gate_tests::test_select_from_idx(inputs);
+        let result = flex_gate::test_select_from_idx(inputs);
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_is_zero(x in rand_fr()) {
         let ground_truth = is_zero_ground_truth(x);
-        let result = flex_gate_tests::test_is_zero(x);
+        let result = flex_gate::test_is_zero(x);
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_is_equal(inputs in vec(rand_witness(), 2)) {
         let ground_truth = is_equal_ground_truth(inputs.as_slice());
-        let result = flex_gate_tests::test_is_equal(inputs.as_slice());
+        let result = flex_gate::test_is_equal(inputs.as_slice());
         prop_assert_eq!(result, ground_truth);
     }
 
@@ -241,7 +241,7 @@ proptest! {
             bits.push(tmp & 1);
             tmp /= 2;
         }
-        let result = flex_gate_tests::test_num_to_bits((Fr::from(num), bits.len()));
+        let result = flex_gate::test_num_to_bits((Fr::from(num), bits.len()));
         prop_assert_eq!(bits.into_iter().map(Fr::from).collect::<Vec<_>>(), result);
     }
 
@@ -254,7 +254,7 @@ proptest! {
     #[test]
     fn prop_test_get_field_element(n in any::<u64>()) {
         let ground_truth = get_field_element_ground_truth(n);
-        let result = flex_gate_tests::test_get_field_element::<Fr>(n);
+        let result = flex_gate::test_get_field_element::<Fr>(n);
         prop_assert_eq!(result, ground_truth);
     }
 
@@ -265,7 +265,7 @@ proptest! {
     lookup_bits in 4..=16_usize) {
         let bits = std::cmp::max(fe_to_biguint(a.value()).bits() as usize, bit_length(b));
         let ground_truth = is_less_than_ground_truth((*a.value(), Fr::from(b)));
-        let result = range_gate_tests::test_is_less_than(([a, Witness(Fr::from(b))], bits, lookup_bits));
+        let result = range_gate::test_is_less_than(([a, Witness(Fr::from(b))], bits, lookup_bits));
         prop_assert_eq!(result, ground_truth);
     }
 
@@ -275,14 +275,14 @@ proptest! {
     lookup_bits in 4..=16_usize) {
         prop_assume!(fe_to_biguint(&a).bits() as usize <= bit_length(b));
         let ground_truth = is_less_than_ground_truth((a, Fr::from(b)));
-        let result = range_gate_tests::test_is_less_than_safe((a, b, lookup_bits));
+        let result = range_gate::test_is_less_than_safe((a, b, lookup_bits));
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_div_mod(inputs in (rand_witness().prop_filter("Non-zero num", |x| *x.value() != Fr::zero()), any::<u64>().prop_filter("Non-zero divisor", |x| *x != 0u64), 1..=16_usize)) {
         let ground_truth = div_mod_ground_truth((*inputs.0.value(), inputs.1));
-        let result = range_gate_tests::test_div_mod((inputs.0, inputs.1, inputs.2));
+        let result = range_gate::test_div_mod((inputs.0, inputs.1, inputs.2));
         prop_assert_eq!(result, ground_truth);
     }
 
@@ -290,37 +290,37 @@ proptest! {
     fn prop_test_get_last_bit(input in rand_fr(), pad_bits in 0..10usize) {
         let ground_truth = get_last_bit_ground_truth(input);
         let bits = fe_to_biguint(&input).bits() as usize + pad_bits;
-        let result = range_gate_tests::test_get_last_bit((input, bits));
+        let result = range_gate::test_get_last_bit((input, bits));
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_div_mod_var(inputs in (rand_witness(), any::<u64>(), 1..=16_usize, 1..=16_usize)) {
         let ground_truth = div_mod_ground_truth((*inputs.0.value(), inputs.1));
-        let result = range_gate_tests::test_div_mod_var((inputs.0, Witness(Fr::from(inputs.1)), inputs.2, inputs.3));
+        let result = range_gate::test_div_mod_var((inputs.0, Witness(Fr::from(inputs.1)), inputs.2, inputs.3));
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_range_check((k, lookup_bits, a, range_bits) in range_check_strat((14,24), 3, 63)) {
-        prop_assert_eq!(range_gate_tests::test_range_check(k, lookup_bits, a, range_bits), ());
+        prop_assert_eq!(range_gate::test_range_check(k, lookup_bits, a, range_bits), ());
     }
 
     #[test]
     fn prop_test_check_less_than((k, lookup_bits, a, b, num_bits) in check_less_than_strat((14,24), 3, 10)) {
         prop_assume!(a.value() < b.value());
-        prop_assert_eq!(range_gate_tests::test_check_less_than(k, lookup_bits, a, b, num_bits), ());
+        prop_assert_eq!(range_gate::test_check_less_than(k, lookup_bits, a, b, num_bits), ());
     }
 
     #[test]
     fn prop_test_check_less_than_safe((k, lookup_bits, a, b) in check_less_than_safe_strat((12,24),3)) {
         prop_assume!(a < Fr::from(b));
-        prop_assert_eq!(range_gate_tests::test_check_less_than_safe(k, lookup_bits, a, b), ());
+        prop_assert_eq!(range_gate::test_check_less_than_safe(k, lookup_bits, a, b), ());
     }
 
     #[test]
     fn prop_test_check_big_less_than_safe((k, lookup_bits, a, b) in check_less_than_safe_strat((12,24),3)) {
         prop_assume!(a < Fr::from(b));
-        prop_assert_eq!(range_gate_tests::test_check_big_less_than_safe(k, lookup_bits, a, b), ());
+        prop_assert_eq!(range_gate::test_check_big_less_than_safe(k, lookup_bits, a, b), ());
     }
 }
