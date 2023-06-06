@@ -1,3 +1,5 @@
+use std::fs::File;
+
 /*
  * Test suite for KZGChip.
  */
@@ -15,7 +17,7 @@ use halo2_base::{
         builder::{CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints, RangeCircuitBuilder},
         RangeChip,
     },
-    halo2_proofs::{halo2curves::{bn256::G2Affine, FieldExt}},
+    halo2_proofs::{halo2curves::{bn256::G2Affine, FieldExt}, dev::MockProver},
 };
 use rand_core::{RngCore};
 use serde::{Deserialize, Serialize};
