@@ -88,7 +88,7 @@ fn sm_circuit(
     let k = params.degree as usize;
     let mut builder = GateThreadBuilder::new(stage == CircuitBuilderStage::Prover);
 
-    sm_test(&mut builder.main(0), params, base, scalar, 4);
+    sm_test(builder.main(0), params, base, scalar, 4);
 
     match stage {
         CircuitBuilderStage::Mock => {
@@ -144,7 +144,7 @@ fn test_secp_sm_minus_1() {
 }
 
 #[test]
-fn test_secp_sm_0() {
+fn test_secp_sm_0_1() {
     let path = "configs/secp256k1/ecdsa_circuit.config";
     let params: CircuitParams = serde_json::from_reader(
         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
@@ -153,6 +153,10 @@ fn test_secp_sm_0() {
 
     let base = Secp256k1Affine::random(OsRng);
     let s = Fq::zero();
+    let circuit = sm_circuit(params, CircuitBuilderStage::Mock, None, base, s);
+    MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
+
+    let s = Fq::one();
     let circuit = sm_circuit(params, CircuitBuilderStage::Mock, None, base, s);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }

@@ -518,7 +518,7 @@ where
     // is_started[idx] holds whether there is a 1 in bits with index at least (rounded_bitlen - idx)
     let mut is_started = Vec::with_capacity(rounded_bitlen);
     is_started.resize(rounded_bitlen - total_bits + 1, zero_cell);
-    for idx in 1..total_bits {
+    for idx in 1..=total_bits {
         let or = chip.gate().or(ctx, *is_started.last().unwrap(), rounded_bits[total_bits - idx]);
         is_started.push(or);
     }
@@ -576,21 +576,12 @@ where
         let mult_and_add = ec_add_unequal(chip, ctx, &mult_point, &add_point, true);
         let is_started_point = ec_select(chip, ctx, mult_point, mult_and_add, is_zero_window[idx]);
 
-        curr_point = if idx == num_windows - 1 {
-            // if at the end, return identity point (0,0) if still not started
-            let zero = chip.load_constant(ctx, FC::FieldType::zero());
-            ec_select(
-                chip,
-                ctx,
-                is_started_point,
-                EcPoint::new(zero.clone(), zero),
-                is_started[window_bits * idx],
-            )
-        } else {
-            ec_select(chip, ctx, is_started_point, add_point, is_started[window_bits * idx])
-        };
+        curr_point =
+            ec_select(chip, ctx, is_started_point, add_point, is_started[window_bits * idx]);
     }
-    curr_point
+    // if at the end, return identity point (0,0) if still not started
+    let zero = chip.load_constant(ctx, FC::FieldType::zero());
+    ec_select(chip, ctx, curr_point, EcPoint::new(zero.clone(), zero), *is_started.last().unwrap())
 }
 
 /// Checks that `P` is indeed a point on the elliptic curve `C`.
