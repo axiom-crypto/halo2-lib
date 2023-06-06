@@ -1,8 +1,8 @@
-use ff::PrimeField;
-use rand_core::OsRng;
 /*
  * Test suite for KZGChip.
  */
+use ff::PrimeField;
+use rand_core::OsRng;
 use crate::{
     bn254::{pairing::PairingChip, Fp2Chip, FpChip, FrChip},
     commitments::{kzg::KZGChip, tests::polynomial::Polynomial, poly::PolyChip},
@@ -12,17 +12,13 @@ use crate::{
 };
 use halo2_base::{
     gates::{
-        builder::{
-            CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
-            RangeCircuitBuilder,
-        },
+        builder::{CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints, RangeCircuitBuilder},
         RangeChip,
     },
-    halo2_proofs::{dev::MockProver, halo2curves::{bn256::G2Affine, FieldExt}},
+    halo2_proofs::{halo2curves::{bn256::G2Affine, FieldExt}},
 };
 use rand_core::{RngCore};
 use serde::{Deserialize, Serialize};
-use std::fs::File;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 struct KZGCircuitParams {

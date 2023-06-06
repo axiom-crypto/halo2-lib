@@ -14,7 +14,7 @@ use super::{
 use crate::fields::Selectable;
 use crate::bigint::ProperCrtUint;
 use crate::fields::fp::Reduced;
-use crate::halo2_proofs::halo2curves::bn256::{Fq, Fq2};
+use crate::halo2_proofs::halo2curves::bn256::{Fq};
 
 /// Represent Fp2 point as `FieldVector` with degree = 2
 /// `Fp2 = Fp[u] / (u^2 + 1)`

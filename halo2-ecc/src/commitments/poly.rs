@@ -1,19 +1,13 @@
 use std::fmt::Debug;
 
-use halo2_base::gates::builder::GateThreadBuilder;
-use halo2_base::halo2_proofs::halo2curves::bn256::{G1Affine, G2Affine};
-use halo2_base::{AssignedValue, Context};
+use halo2_base::{Context};
 use num_bigint::BigUint;
 use num_traits::Zero;
-use crate::bigint::{CRTInteger, ProperCrtUint};
-use crate::bn254::{FrChip, FpChip, Fp2Chip};
-use crate::ecc::EcPoint;
-use crate::{bn254::pairing::PairingChip, ecc::EccChip};
+use crate::bn254::{FrChip};
 
 use crate::fields::{
     FieldChip, PrimeField
 };
-use crate::fields::Selectable;
 
 /// Represent Fp2 point as `FieldVector` with degree = 2
 /// `Fp2 = Fp[u] / (u^2 + 1)`
