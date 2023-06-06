@@ -57,7 +57,6 @@ where
         u2.limbs().to_vec(),
         base_chip.limb_bits,
         var_window_bits,
-        true, // we can call it with scalar_is_safe = true because of the u2_small check below
     );
 
     // check u1 * G != -(u2 * pubkey) but allow u1 * G == u2 * pubkey

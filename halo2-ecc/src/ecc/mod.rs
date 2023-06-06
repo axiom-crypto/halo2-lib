@@ -482,11 +482,8 @@ where
 ///
 /// # Assumptions
 /// - `window_bits != 0`
-/// - `P` is not the point at infinity
+/// - The order of `P` is at least `2^{window_bits}` (in particular, `P` is not the point at infinity)
 /// - The curve has no points of order 2.
-/// - `scalar > 0`
-/// - If `scalar_is_safe == true`, then we assume the integer `scalar` is in range [1, order of `P`)
-/// - Even if `scalar_is_safe == false`, some constraints may still fail if `scalar` is not in range [1, order of `P`)
 /// - `scalar_i < 2^{max_bits} for all i`
 /// - `max_bits <= modulus::<F>.bits()`, and equality only allowed when the order of `P` equals the modulus of `F`
 pub fn scalar_multiply<F: PrimeField, FC, C>(
@@ -496,7 +493,6 @@ pub fn scalar_multiply<F: PrimeField, FC, C>(
     scalar: Vec<AssignedValue<F>>,
     max_bits: usize,
     window_bits: usize,
-    scalar_is_safe: bool,
 ) -> EcPoint<F, FC::FieldPoint>
 where
     FC: FieldChip<F> + Selectable<F, FC::FieldPoint>,
@@ -550,7 +546,7 @@ where
             let double = ec_double(chip, ctx, &P);
             cached_points.push(double);
         } else {
-            let new_point = ec_add_unequal(chip, ctx, &cached_points[idx - 1], &P, !scalar_is_safe);
+            let new_point = ec_add_unequal(chip, ctx, &cached_points[idx - 1], &P, false);
             cached_points.push(new_point);
         }
     }
@@ -1044,20 +1040,11 @@ where
         scalar: Vec<AssignedValue<F>>,
         max_bits: usize,
         window_bits: usize,
-        scalar_is_safe: bool,
     ) -> EcPoint<F, FC::FieldPoint>
     where
         C: CurveAffineExt<Base = FC::FieldType>,
     {
-        scalar_multiply::<F, FC, C>(
-            self.field_chip,
-            ctx,
-            P,
-            scalar,
-            max_bits,
-            window_bits,
-            scalar_is_safe,
-        )
+        scalar_multiply::<F, FC, C>(self.field_chip, ctx, P, scalar, max_bits, window_bits)
     }
 
     // default for most purposes
@@ -1077,7 +1064,7 @@ where
         self.variable_base_msm_in::<C>(thread_pool, P, scalars, max_bits, 4, 0)
     }
 
-    // TODO: put a check in place that scalar is < modulus of C::Scalar
+    // TODO: add asserts to validate input assumptions described in docs
     pub fn variable_base_msm_in<C>(
         &self,
         builder: &mut GateThreadBuilder<F>,
