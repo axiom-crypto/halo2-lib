@@ -39,7 +39,7 @@ impl<'a, F: PrimeField> PolyChip<'a, F> {
         for c in coeffs.iter().rev() {
             let mul_int = self.fr_chip.mul_no_carry(ctx, acc, point);
             acc = self.fr_chip.carry_mod(ctx, mul_int);
-            let add_int = self.fr_chip.add_no_carry(ctx, acc, point);
+            let add_int = self.fr_chip.add_no_carry(ctx, acc, c);
             acc = self.fr_chip.carry_mod(ctx, add_int);
         }
         acc

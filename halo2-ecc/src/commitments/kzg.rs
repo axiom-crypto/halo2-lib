@@ -5,7 +5,7 @@ use crate::bn254::{Fp2Chip, FpChip, FrChip};
 use crate::ecc::EcPoint;
 use crate::{bn254::pairing::PairingChip, ecc::EccChip};
 use halo2_base::gates::builder::GateThreadBuilder;
-use halo2_base::halo2_proofs::halo2curves::bn256::{G1Affine, G2Affine};
+use halo2_base::halo2_proofs::halo2curves::bn256::{G1Affine, G2Affine, Fr};
 use halo2_base::halo2_proofs::plonk::Assigned;
 use halo2_base::AssignedValue;
 
@@ -43,23 +43,34 @@ impl<'a, F: PrimeField> KZGChip<'a, F> {
         ptau_g2_loaded: &[EcPoint<F, <Fp2Chip<'a, F> as FieldChip<F>>::FieldPoint>],
         eval_roots: &Vec<<FrChip<F> as FieldChip<F>>::FieldPoint>,
         r_openings: &Vec<<FrChip<F> as FieldChip<F>>::FieldPoint>,
-        r_coeffs: Vec<Vec<AssignedValue<F>>>,
         r_coeffs_fr: &Vec<<FrChip<F> as FieldChip<F>>::FieldPoint>,
-        z_coeffs: Vec<Vec<AssignedValue<F>>>,
         z_coeffs_fr: &Vec<<FrChip<F> as FieldChip<F>>::FieldPoint>,
         p_bar: EcPoint<F, <FpChip<'a, F> as FieldChip<F>>::FieldPoint>,
         q_bar: EcPoint<F, <FpChip<'a, F> as FieldChip<F>>::FieldPoint>,
     ) {
-        let r_curve =
-            self.g1_chip.variable_base_msm::<G1Affine>(builder, &ptau_g1_loaded, r_coeffs, 254);
+        let r_curve = self.g1_chip.variable_base_msm::<G1Affine>(
+            builder,
+            &ptau_g1_loaded,
+            r_coeffs_fr.iter().map(|x| vec![*x.native()]).collect::<Vec<_>>(),
+            254,
+        );
 
-        let z_curve =
-            self.g2_chip.variable_base_msm::<G2Affine>(builder, &ptau_g2_loaded, z_coeffs, 254);
+        let z_curve = self.g2_chip.variable_base_msm::<G2Affine>(
+            builder,
+            &ptau_g2_loaded,
+            z_coeffs_fr.iter().map(|x| vec![*x.native()]).collect::<Vec<_>>(),
+            254,
+        );
 
         let ctx = builder.main(0);
         for (root, opening) in eval_roots.iter().zip(r_openings.iter()) {
             let eval = self.poly_chip.evaluate(ctx, r_coeffs_fr, root);
-            self.poly_chip.fr_chip.assert_equal(ctx, eval, opening)
+            self.poly_chip.fr_chip.assert_equal(ctx, eval, opening);
+        }
+        for root in eval_roots.iter() {
+            let eval = self.poly_chip.evaluate(ctx, z_coeffs_fr, root);
+            let zero = self.poly_chip.fr_chip.load_constant(ctx, Fr::zero());
+            self.poly_chip.fr_chip.assert_equal(ctx, eval, zero);
         }
 
         let p_bar_r_diff = self.g1_chip.sub_unequal(ctx, p_bar, r_curve, true);
