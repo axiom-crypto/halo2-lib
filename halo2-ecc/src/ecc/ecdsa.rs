@@ -3,8 +3,7 @@ use halo2_base::{gates::GateInstructions, utils::CurveAffineExt, AssignedValue, 
 use crate::bigint::{big_is_equal, big_less_than, FixedOverflowInteger, ProperCrtUint};
 use crate::fields::{fp::FpChip, FieldChip, PrimeField};
 
-use super::{fixed_base, EccChip};
-use super::{scalar_multiply, EcPoint};
+use super::{fixed_base, multi_scalar_multiply, EcPoint, EccChip};
 // CF is the coordinate field of GA
 // SF is the scalar field of GA
 // p = coordinate field modulus
@@ -50,14 +49,13 @@ where
         base_chip.limb_bits,
         fixed_window_bits,
     );
-    let u2_mul = scalar_multiply(
+    let u2_mul = multi_scalar_multiply::<F, FpChip<_, _>, GA>(
         base_chip,
         ctx,
-        pubkey,
-        u2.limbs().to_vec(),
+        &[pubkey],
+        vec![u2.limbs().to_vec()],
         base_chip.limb_bits,
         var_window_bits,
-        true, // we can call it with scalar_is_safe = true because of the u2_small check below
     );
 
     // check u1 * G != -(u2 * pubkey) but allow u1 * G == u2 * pubkey

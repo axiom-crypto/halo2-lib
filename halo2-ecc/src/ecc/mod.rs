@@ -5,7 +5,7 @@ use group::{Curve, Group};
 use halo2_base::gates::builder::GateThreadBuilder;
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
-    utils::{modulus, CurveAffineExt},
+    utils::CurveAffineExt,
     AssignedValue, Context,
 };
 use itertools::Itertools;
@@ -486,6 +486,7 @@ where
 /// - Even if `scalar_is_safe == false`, some constraints may still fail if `scalar` is not in range [1, order of `P`)
 /// - `scalar_i < 2^{max_bits} for all i`
 /// - `max_bits <= modulus::<F>.bits()`, and equality only allowed when the order of `P` equals the modulus of `F`
+/*
 pub fn scalar_multiply<F: PrimeField, FC>(
     chip: &FC,
     ctx: &mut Context<F>,
@@ -577,6 +578,7 @@ where
     }
     curr_point
 }
+*/
 
 /// Checks that `P` is indeed a point on the elliptic curve `C`.
 pub fn check_is_on_curve<F, FC, C>(chip: &FC, ctx: &mut Context<F>, P: &EcPoint<F, FC::FieldPoint>)
@@ -1018,6 +1020,7 @@ where
     }
 
     /// See [`scalar_multiply`] for more details.
+    /*
     pub fn scalar_mult(
         &self,
         ctx: &mut Context<F>,
@@ -1037,7 +1040,7 @@ where
             scalar_is_safe,
         )
     }
-
+    */
     // default for most purposes
     /// See [`pippenger::multi_exp_par`] for more details.
     pub fn variable_base_msm<C>(
