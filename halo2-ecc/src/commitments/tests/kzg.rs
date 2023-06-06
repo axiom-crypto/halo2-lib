@@ -60,7 +60,7 @@ pub fn mock_trusted_setup(tau: Fr, blob_len: usize, n_openings: usize) -> (Vec<G
  * Creates vector commitment by interpolating a polynomial p(X) and evaluating
  * at p(τ).
  */
-pub fn commit_vector(K: usize, d: &Vec<Fr>, ptau_g1: &Vec<G1>) -> (Polynomial<Fr>, G1Affine) {
+pub fn commit_vector(k: usize, d: &Vec<Fr>, ptau_g1: &Vec<G1>) -> (Polynomial<Fr>, G1Affine) {
     let selected_root = Fr::root_of_unity().pow(&[2u64.pow(Fr::S - K as u32) as u64, 0, 0, 0]);
     let mut idxs = vec![Fr::one()];
     for _ in 1..d.len() {
@@ -77,7 +77,7 @@ pub fn commit_vector(K: usize, d: &Vec<Fr>, ptau_g1: &Vec<G1>) -> (Polynomial<Fr
  * of z(X) and r(X) to avoid having to recompute within the circuit.
  */
 pub fn open_prf(
-    K: usize, 
+    k: usize, 
     data: &Vec<Fr>,
     p: &Polynomial<Fr>,
     ptau_g1: &Vec<G1>,
@@ -195,7 +195,7 @@ fn random_kzg_multi_circuit(
     };
 
     let tau: Fr = Fr::from(111);
-    let K = 2;
+    let k = 2;
     let blob_len = 4;
     let openings: Vec<u64> = vec![2, 3];
     let n_openings = openings.len();
