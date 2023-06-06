@@ -8,10 +8,9 @@ use halo2_base::Context;
 use num_bigint::BigUint;
 use num_traits::Zero;
 
-/// Represent Fp2 point as `FieldVector` with degree = 2
-/// `Fp2 = Fp[u] / (u^2 + 1)`
-/// This implementation assumes p = 3 (mod 4) in order for the polynomial u^2 + 1 to be irreducible over Fp; i.e., in order for -1 to not be a square (quadratic residue) in Fp
-/// This means we store an Fp2 point as `a_0 + a_1 * u` where `a_0, a_1 in Fp`
+/*
+ * Polynomial Chip
+ */
 #[derive(Clone, Debug)]
 pub struct PolyChip<'a, F: PrimeField> {
     pub fr_chip: &'a FrChip<'a, F>
@@ -22,6 +21,9 @@ impl<'a, F: PrimeField> PolyChip<'a, F> {
         Self { fr_chip }
     }
 
+    /*
+    * Evaluate a point at a polynomial that is defined by `coeffs`
+    */
     pub fn evaluate(
         &self,
         ctx: &mut Context<F>,
