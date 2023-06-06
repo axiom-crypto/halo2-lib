@@ -192,8 +192,6 @@ where
                 .collect::<Vec<_>>();
             let bit_window_rev = bits.chunks(window_bits).rev();
             let mut curr_point = any_point.clone();
-            // `is_started` is just a way to deal with if `curr_point` is actually identity
-            // let mut is_started = zero;
             for (cached_point_window, bit_window) in cached_point_window_rev.zip(bit_window_rev) {
                 let is_zero_window = {
                     let sum = field_chip.gate().sum(ctx, bit_window.iter().copied());
@@ -205,14 +203,7 @@ where
                     let sum = ec_add_unequal(field_chip, ctx, &curr_point, &add_point, true);
                     ec_select(field_chip, ctx, curr_point, sum, is_zero_window)
                 };
-                /*is_started = {
-                    // is_started || !is_zero_window
-                    // (a || !b) = (1-b) + a*b
-                    let not_zero_window = field_chip.gate().not(ctx, is_zero_window);
-                    field_chip.gate().mul_add(ctx, is_started, is_zero_window, not_zero_window)
-                };*/
             }
-            // `curr_point = [s]P + any_point`
             curr_point
         },
     );
