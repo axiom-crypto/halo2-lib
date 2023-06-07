@@ -225,14 +225,9 @@ pub fn ec_sub_unequal<F: PrimeField, FC: FieldChip<F>>(
     let (P, Q) = check_points_are_unequal(chip, ctx, P, Q, is_strict);
 
     let dx = chip.sub_no_carry(ctx, &Q.x, &P.x);
-    let dy = chip.add_no_carry(ctx, Q.y, &P.y);
+    let sy = chip.add_no_carry(ctx, Q.y, &P.y);
 
-    let lambda = chip.neg_divide_unsafe(ctx, &dy, &dx);
-
-    // (x_2 - x_1) * lambda + y_2 + y_1 = 0 (mod p)
-    let lambda_dx = chip.mul_no_carry(ctx, &lambda, dx);
-    let lambda_dx_plus_dy = chip.add_no_carry(ctx, lambda_dx, dy);
-    chip.check_carry_mod_to_zero(ctx, lambda_dx_plus_dy);
+    let lambda = chip.neg_divide_unsafe(ctx, sy, dx);
 
     //  x_3 = lambda^2 - x_1 - x_2 (mod p)
     let lambda_sq = chip.mul_no_carry(ctx, &lambda, &lambda);
