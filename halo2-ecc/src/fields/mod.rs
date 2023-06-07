@@ -234,19 +234,15 @@ pub trait FieldChip<F: PrimeField>: Clone + Send + Sync {
     ///
     /// `a, b` must be such that `quot * b - a` without carry does not overflow, where `quot` is the output.
     ///
-    /// If `cond` is None, it will constrain that
+    /// If `skip` is None, it will constrain that
     /// ```ignore
     /// out * b = a (mod p)
     /// ```
     /// Note in the `0 / 0` case any `out` will be accepted. In the case `a != 0, b = 0`, the constraint will be unsatisfiable.
     ///
-    /// If `skip = Some(skip)`, then it will constrain that
-    /// ```ignore
-    /// (1 - skip) * (out * b - a) = 0 (mod p)
-    /// ```
-    /// where it is **assumed** that `skip` is a boolean value.
-    /// In other words, if `skip = 0`, the behavior is the same as above.
-    /// If `skip = 1`, then nothing is constrained.
+    /// If `skip = Some(skip)`, then it is **assumed** that `skip` is a boolean value.
+    /// - If `skip = 0`, the behavior is the same as above.
+    /// - If `skip = 1`, then nothing is constrained.
     fn divide_unsafe(
         &self,
         ctx: &mut Context<F>,
@@ -267,13 +263,9 @@ pub trait FieldChip<F: PrimeField>: Clone + Send + Sync {
     /// ```
     /// Note in the `0 / 0` case any `out` will be accepted. In the case `a != 0, b = 0`, the constraint will be unsatisfiable.
     ///
-    /// If `skip = Some(skip)`, then it will constrain that
-    /// ```ignore
-    /// (1 - skip) * (out * b + a) = 0 (mod p)
-    /// ```
-    /// where it is **assumed** that `skip` is a boolean value.
-    /// In other words, if `skip = 0`, the behavior is the same as above.
-    /// If `skip = 1`, then nothing is constrained.
+    /// If `skip = Some(skip)`, then it is **assumed** that `skip` is a boolean value.
+    /// - If `skip = 0`, the behavior is the same as above.
+    /// - If `skip = 1`, then nothing is constrained.
     fn neg_divide_unsafe(
         &self,
         ctx: &mut Context<F>,
@@ -294,13 +286,9 @@ pub trait FieldChip<F: PrimeField>: Clone + Send + Sync {
     /// ```
     /// Note in the `0 / 0` case any `out` will be accepted. In the case `a != 0, b = 0`, the constraint will be unsatisfiable.
     ///
-    /// If `skip = Some(skip)`, then it will constrain that
-    /// ```ignore
-    /// (1 - skip) * (out * b - (-1)^sgn a) = 0 (mod p)
-    /// ```
-    /// where it is **assumed** that `skip` is a boolean value.
-    /// In other words, if `skip = 0`, the behavior is the same as above.
-    /// If `skip = 1`, then nothing is constrained.
+    /// If `skip = Some(skip)`, then it is **assumed** that `skip` is a boolean value.
+    /// - If `skip = 0`, the behavior is the same as above.
+    /// - If `skip = 1`, then nothing is constrained.
     fn signed_divide_unsafe(
         &self,
         ctx: &mut Context<F>,
