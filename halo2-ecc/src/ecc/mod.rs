@@ -3,7 +3,7 @@ use crate::fields::{fp::FpChip, FieldChip, PrimeField, Selectable};
 use crate::halo2_proofs::arithmetic::CurveAffine;
 use group::{Curve, Group};
 use halo2_base::gates::builder::GateThreadBuilder;
-use halo2_base::utils::modulus;
+use halo2_base::utils::{modulus, ScalarField};
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
     utils::CurveAffineExt,
@@ -13,6 +13,8 @@ use itertools::Itertools;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use std::marker::PhantomData;
+
+use self::AddUnequalMode::{Conditional, Strict, Unchecked, Unsafe};
 
 pub mod ecdsa;
 pub mod fixed_base;
@@ -133,6 +135,33 @@ impl<F: PrimeField, FC: FieldChip<F>> From<ComparableEcPoint<F, FC>>
     }
 }
 
+/// Enum to pass to [`ec_add_unequal`] for different methods of checking/handling
+/// when `P == +- Q` (equivalently, `P.x == Q.y`) for Weierstrass curves
+#[derive(Clone, Copy, Debug)]
+pub enum AddUnequalMode<F: ScalarField> {
+    /// No checks are done. **Be very careful when using this.**
+    Unchecked,
+    /// Checks that `P.x != Q.x` and constraints the check
+    Strict,
+    /// Assumes that `Conditional(skip)` has boolean `skip`. Constrains `P.x != Q.x` if `skip == 0`.
+    /// Otherwise if `skip == 1` does not do the check but ensures that no panic or overconstraint occurs.
+    /// The output in this case is undefined.
+    Conditional(AssignedValue<F>),
+    /// Assumes that `Unsafe(skip)` has boolean `skip`. Does no checks and passes `skip` to
+    /// `divide_unsafe` as a conditional on whether to skip division checks as well.
+    Unsafe(AssignedValue<F>),
+}
+
+impl<F: ScalarField> From<AddUnequalMode<F>> for Option<AssignedValue<F>> {
+    fn from(value: AddUnequalMode<F>) -> Self {
+        match value {
+            AddUnequalMode::Unchecked => None,
+            AddUnequalMode::Strict => None,
+            AddUnequalMode::Conditional(skip) => Some(skip),
+            AddUnequalMode::Unsafe(skip) => Some(skip),
+        }
+    }
+}
 // Implements:
 //  Given P = (x_1, y_1) and Q = (x_2, y_2), ecc points over the field F_p
 //      assume x_1 != x_2
@@ -143,9 +172,7 @@ impl<F: PrimeField, FC: FieldChip<F>> From<ComparableEcPoint<F, FC>>
 //  x_3 = lambda^2 - x_1 - x_2 (mod p)
 //  y_3 = lambda (x_1 - x_3) - y_1 mod p
 //
-/// If `is_strict = true`, then this function constrains that `P.x != Q.x`.
-/// If you are calling this with `is_strict = false`, you must ensure that `P.x != Q.x` by some external logic (such
-/// as a mathematical theorem).
+/// See [`AddUnequalMode`] for the different modes of checks done on whether `P.x != Q.x`.
 ///
 /// # Assumptions
 /// * Neither `P` nor `Q` is the point at infinity (undefined behavior otherwise)
@@ -154,13 +181,13 @@ pub fn ec_add_unequal<F: PrimeField, FC: FieldChip<F>>(
     ctx: &mut Context<F>,
     P: impl Into<ComparableEcPoint<F, FC>>,
     Q: impl Into<ComparableEcPoint<F, FC>>,
-    is_strict: bool,
+    mode: AddUnequalMode<F>,
 ) -> EcPoint<F, FC::FieldPoint> {
-    let (P, Q) = check_points_are_unequal(chip, ctx, P, Q, is_strict);
+    let (P, Q) = check_points_are_unequal(chip, ctx, P, Q, mode);
 
     let dx = chip.sub_no_carry(ctx, &Q.x, &P.x);
     let dy = chip.sub_no_carry(ctx, Q.y, &P.y);
-    let lambda = chip.divide_unsafe(ctx, dy, dx);
+    let lambda = chip.divide_unsafe(ctx, dy, dx, mode.into());
 
     //  x_3 = lambda^2 - x_1 - x_2 (mod p)
     let lambda_sq = chip.mul_no_carry(ctx, &lambda, &lambda);
@@ -177,25 +204,32 @@ pub fn ec_add_unequal<F: PrimeField, FC: FieldChip<F>>(
     EcPoint::new(x_3, y_3)
 }
 
-/// If `do_check = true`, then this function constrains that `P.x != Q.x`.
+/// If `mode` is `Strict` or `Conditional(skip)`, then this function constrains that `P.x != Q.x` OR `skip == 1`.
 /// Otherwise does nothing.
 fn check_points_are_unequal<F: PrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
     P: impl Into<ComparableEcPoint<F, FC>>,
     Q: impl Into<ComparableEcPoint<F, FC>>,
-    do_check: bool,
+    mode: AddUnequalMode<F>,
 ) -> (EcPoint<F, FC::FieldPoint> /*P */, EcPoint<F, FC::FieldPoint> /*Q */) {
     let P = P.into();
     let Q = Q.into();
-    if do_check {
-        // constrains that P.x != Q.x
-        let [x1, x2] = [&P, &Q].map(|pt| match pt {
-            ComparableEcPoint::Strict(pt) => pt.x.clone(),
-            ComparableEcPoint::NonStrict(pt) => chip.enforce_less_than(ctx, pt.x.clone()),
-        });
-        let x_is_equal = chip.is_equal_unenforced(ctx, x1, x2);
-        chip.gate().assert_is_const(ctx, &x_is_equal, &F::zero());
+    match mode {
+        AddUnequalMode::Unchecked | AddUnequalMode::Unsafe(_) => (),
+        _ => {
+            // convert x-coordinates to reduced form
+            let [x1, x2] = [&P, &Q].map(|pt| match pt {
+                ComparableEcPoint::Strict(pt) => pt.x.clone(),
+                ComparableEcPoint::NonStrict(pt) => chip.enforce_less_than(ctx, pt.x.clone()),
+            });
+            let mut x_is_equal = chip.is_equal_unenforced(ctx, x1, x2);
+            if let AddUnequalMode::Conditional(skip) = mode {
+                x_is_equal = chip.gate().mul_not(ctx, skip, x_is_equal);
+            }
+            // constrains that (P.x != Q.x) || (skip == 1)
+            chip.gate().assert_is_const(ctx, &x_is_equal, &F::zero());
+        }
     }
     (EcPoint::from(P), EcPoint::from(Q))
 }
@@ -209,9 +243,7 @@ fn check_points_are_unequal<F: PrimeField, FC: FieldChip<F>>(
 //  y_3 = lambda (x_1 - x_3) - y_1 mod p
 //  Assumes that P !=Q and Q != (P - Q)
 //
-/// If `is_strict = true`, then this function constrains that `P.x != Q.x`.
-/// If you are calling this with `is_strict = false`, you must ensure that `P.x != Q.x` by some external logic (such
-/// as a mathematical theorem).
+/// See [`AddUnequalMode`] for the different modes of checks done on whether `P.x != Q.x`.
 ///
 /// # Assumptions
 /// * Neither `P` nor `Q` is the point at infinity (undefined behavior otherwise)
@@ -220,19 +252,13 @@ pub fn ec_sub_unequal<F: PrimeField, FC: FieldChip<F>>(
     ctx: &mut Context<F>,
     P: impl Into<ComparableEcPoint<F, FC>>,
     Q: impl Into<ComparableEcPoint<F, FC>>,
-    is_strict: bool,
+    mode: AddUnequalMode<F>,
 ) -> EcPoint<F, FC::FieldPoint> {
-    let (P, Q) = check_points_are_unequal(chip, ctx, P, Q, is_strict);
+    let (P, Q) = check_points_are_unequal(chip, ctx, P, Q, mode);
 
     let dx = chip.sub_no_carry(ctx, &Q.x, &P.x);
-    let dy = chip.add_no_carry(ctx, Q.y, &P.y);
-
-    let lambda = chip.neg_divide_unsafe(ctx, &dy, &dx);
-
-    // (x_2 - x_1) * lambda + y_2 + y_1 = 0 (mod p)
-    let lambda_dx = chip.mul_no_carry(ctx, &lambda, dx);
-    let lambda_dx_plus_dy = chip.add_no_carry(ctx, lambda_dx, dy);
-    chip.check_carry_mod_to_zero(ctx, lambda_dx_plus_dy);
+    let sy = chip.add_no_carry(ctx, Q.y, &P.y);
+    let lambda = chip.neg_divide_unsafe(ctx, sy, dx, mode.into());
 
     //  x_3 = lambda^2 - x_1 - x_2 (mod p)
     let lambda_sq = chip.mul_no_carry(ctx, &lambda, &lambda);
@@ -260,7 +286,7 @@ pub fn ec_sub_strict<F: PrimeField, FC: FieldChip<F>>(
 where
     FC: Selectable<F, FC::FieldPoint>,
 {
-    let mut P = P.into();
+    let P = P.into();
     let Q = Q.into();
     // Compute curr_point - start_point, allowing for output to be identity point
     let x_is_eq = chip.is_equal(ctx, P.x(), Q.x());
@@ -269,18 +295,7 @@ where
     // we ONLY allow x_is_eq = true if y_is_eq is also true; this constrains P != -Q
     ctx.constrain_equal(&x_is_eq, &is_identity);
 
-    // P.x = Q.x and P.y = Q.y
-    // in ec_sub_unequal it will try to do -(P.y + Q.y) / (P.x - Q.x) = -2P.y / 0
-    // this will cause divide_unsafe to panic when P.y != 0
-    // to avoid this, we load a random pair of points and replace P with it *only if* `is_identity == true`
-    // we don't even check (rand_x, rand_y) is on the curve, since we don't care about the output
-    let mut rng = ChaCha20Rng::from_entropy();
-    let [rand_x, rand_y] = [(); 2].map(|_| FC::FieldType::random(&mut rng));
-    let [rand_x, rand_y] = [rand_x, rand_y].map(|x| chip.load_private(ctx, x));
-    let rand_pt = EcPoint::new(rand_x, rand_y);
-    P = ec_select(chip, ctx, rand_pt, P, is_identity);
-
-    let out = ec_sub_unequal(chip, ctx, P, Q, false);
+    let out = ec_sub_unequal(chip, ctx, P, Q, Unsafe(is_identity));
     let zero = chip.load_constant(ctx, FC::FieldType::zero());
     ec_select(chip, ctx, EcPoint::new(zero.clone(), zero), out, is_identity)
 }
@@ -310,7 +325,7 @@ pub fn ec_double<F: PrimeField, FC: FieldChip<F>>(
     let two_y = chip.scalar_mul_no_carry(ctx, &P.y, 2);
     let three_x = chip.scalar_mul_no_carry(ctx, &P.x, 3);
     let three_x_sq = chip.mul_no_carry(ctx, three_x, &P.x);
-    let lambda = chip.divide_unsafe(ctx, three_x_sq, two_y);
+    let lambda = chip.divide_unsafe(ctx, three_x_sq, two_y, None);
 
     // x_3 = lambda^2 - 2 x % p
     let lambda_sq = chip.mul_no_carry(ctx, &lambda, &lambda);
@@ -364,7 +379,7 @@ pub fn ec_double_and_add_unequal<F: PrimeField, FC: FieldChip<F>>(
 
     let dx = chip.sub_no_carry(ctx, &Q.x, &P.x);
     let dy = chip.sub_no_carry(ctx, Q.y, &P.y);
-    let lambda_0 = chip.divide_unsafe(ctx, dy, dx);
+    let lambda_0 = chip.divide_unsafe(ctx, dy, dx, None);
 
     //  x_2 = lambda_0^2 - x_0 - x_1 (mod p)
     let lambda_0_sq = chip.mul_no_carry(ctx, &lambda_0, &lambda_0);
@@ -382,7 +397,7 @@ pub fn ec_double_and_add_unequal<F: PrimeField, FC: FieldChip<F>>(
     // lambda_1 = lambda_0 + 2 * y_0 / (x_2 - x_0)
     let two_y_0 = chip.scalar_mul_no_carry(ctx, &P.y, 2);
     let x_2_minus_x_0 = chip.sub_no_carry(ctx, &x_2, &P.x);
-    let lambda_1_minus_lambda_0 = chip.divide_unsafe(ctx, two_y_0, x_2_minus_x_0);
+    let lambda_1_minus_lambda_0 = chip.divide_unsafe(ctx, two_y_0, x_2_minus_x_0, None);
     let lambda_1_no_carry = chip.add_no_carry(ctx, lambda_0, lambda_1_minus_lambda_0);
 
     // x_res = lambda_1^2 - x_0 - x_2
@@ -486,6 +501,7 @@ where
 /// - The curve has no points of order 2.
 /// - `scalar_i < 2^{max_bits} for all i`
 /// - `max_bits <= modulus::<F>.bits()`, and equality only allowed when the order of `P` equals the modulus of `F`
+/// - If `scalar` is not in range [0, order of `P`), then the circuit may panic due to overconstraints.
 pub fn scalar_multiply<F: PrimeField, FC, C>(
     chip: &FC,
     ctx: &mut Context<F>,
@@ -535,23 +551,22 @@ where
         is_zero_window.push(is_zero);
     }
 
-    let any_point = load_random_point::<F, FC, C>(chip, ctx);
-    // cached_points[idx] stores idx * P, with cached_points[0] = any_point
+    // cached_points[idx] stores idx * P, with cached_points[0] = P
     let cache_size = 1usize << window_bits;
     let mut cached_points = Vec::with_capacity(cache_size);
-    cached_points.push(any_point);
+    cached_points.push(P.clone());
     cached_points.push(P.clone());
     for idx in 2..cache_size {
         if idx == 2 {
             let double = ec_double(chip, ctx, &P);
             cached_points.push(double);
         } else {
-            let new_point = ec_add_unequal(chip, ctx, &cached_points[idx - 1], &P, false);
+            let new_point = ec_add_unequal(chip, ctx, &cached_points[idx - 1], &P, Unchecked);
             cached_points.push(new_point);
         }
     }
 
-    // if all the starting window bits are 0, get start_point = any_point
+    // if all the starting window bits are 0, get start_point = P
     let mut curr_point = ec_select_from_bits(
         chip,
         ctx,
@@ -571,9 +586,10 @@ where
             &rounded_bits
                 [rounded_bitlen - window_bits * (idx + 1)..rounded_bitlen - window_bits * idx],
         );
-        // if is_zero_window[idx] = true, add_point = any_point. We only need any_point to avoid divide by zero in add_unequal
+        // if is_zero_window[idx] = true, add_point = P. We only need any_point to avoid divide by zero in add_unequal
         // if is_zero_window = true and is_started = false, then mult_point = 2^window_bits * any_point. Since window_bits != 0, we have mult_point != +- any_point
-        let mult_and_add = ec_add_unequal(chip, ctx, &mult_point, &add_point, true);
+        let mult_and_add =
+            ec_add_unequal(chip, ctx, &mult_point, &add_point, Conditional(is_zero_window[idx]));
         let is_started_point = ec_select(chip, ctx, mult_point, mult_and_add, is_zero_window[idx]);
 
         curr_point =
@@ -708,7 +724,7 @@ where
             ctx,
             &rand_start_vec[idx],
             &rand_start_vec[idx + window_bits],
-            true, // not necessary if we assume (2^w - 1) * A != +- A, but put in for safety
+            Strict, // not necessary if we assume (2^w - 1) * A != +- A, but put in for safety
         );
         let point = into_strict_point(chip, ctx, point.clone());
         let neg_mult_rand_start = into_strict_point(chip, ctx, neg_mult_rand_start);
@@ -717,7 +733,7 @@ where
         for _ in 0..(cache_size - 1) {
             let prev = cached_points.last().unwrap().clone();
             // adversary could pick `A` so add equal case occurs, so we must use strict add_unequal
-            let mut new_point = ec_add_unequal(chip, ctx, &prev, &point, true);
+            let mut new_point = ec_add_unequal(chip, ctx, &prev, &point, Strict);
             // special case for when P[idx] = O
             new_point = ec_select(chip, ctx, prev.into(), new_point, is_infinity);
             let new_point = into_strict_point(chip, ctx, new_point);
@@ -734,7 +750,7 @@ where
         ctx,
         &rand_start_vec[k],
         &rand_start_vec[0],
-        k >= F::CAPACITY as usize,
+        if k >= F::CAPACITY as usize { Strict } else { Unchecked },
     );
     let mut curr_point = start_point.clone();
 
@@ -754,7 +770,7 @@ where
                     [rounded_bitlen - window_bits * (idx + 1)..rounded_bitlen - window_bits * idx],
             );
             // this all needs strict add_unequal since A can be non-randomly chosen by adversary
-            curr_point = ec_add_unequal(chip, ctx, curr_point, add_point, true);
+            curr_point = ec_add_unequal(chip, ctx, curr_point, add_point, Strict);
         }
     }
     ec_sub_strict(chip, ctx, curr_point, start_point)
@@ -935,28 +951,26 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         EcPoint::new(P.x, self.field_chip.negate(ctx, P.y))
     }
 
-    /// Assumes that P.x != Q.x
-    /// If `is_strict == true`, then actually constrains that `P.x != Q.x`
+    /// See [`ec_add_unequal`] for more details.
     pub fn add_unequal(
         &self,
         ctx: &mut Context<F>,
         P: impl Into<ComparableEcPoint<F, FC>>,
         Q: impl Into<ComparableEcPoint<F, FC>>,
-        is_strict: bool,
+        mode: AddUnequalMode<F>,
     ) -> EcPoint<F, FC::FieldPoint> {
-        ec_add_unequal(self.field_chip, ctx, P, Q, is_strict)
+        ec_add_unequal(self.field_chip, ctx, P, Q, mode)
     }
 
-    /// Assumes that P.x != Q.x
-    /// Otherwise will panic
+    /// See [`ec_sub_unequal`] for more details.
     pub fn sub_unequal(
         &self,
         ctx: &mut Context<F>,
         P: impl Into<ComparableEcPoint<F, FC>>,
         Q: impl Into<ComparableEcPoint<F, FC>>,
-        is_strict: bool,
+        mode: AddUnequalMode<F>,
     ) -> EcPoint<F, FC::FieldPoint> {
-        ec_sub_unequal(self.field_chip, ctx, P, Q, is_strict)
+        ec_sub_unequal(self.field_chip, ctx, P, Q, mode)
     }
 
     pub fn double(
@@ -1002,10 +1016,10 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         let rand_point = into_strict_point(self.field_chip, ctx, rand_point);
         let mut acc = rand_point.clone();
         for point in points {
-            let _acc = self.add_unequal(ctx, acc, point, true);
+            let _acc = self.add_unequal(ctx, acc, point, Strict);
             acc = into_strict_point(self.field_chip, ctx, _acc);
         }
-        self.sub_unequal(ctx, acc, rand_point, true)
+        self.sub_unequal(ctx, acc, rand_point, Strict)
     }
 }
 

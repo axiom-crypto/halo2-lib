@@ -37,9 +37,10 @@ where
     let r_valid = scalar_chip.is_soft_nonzero(ctx, &r);
     let s_valid = scalar_chip.is_soft_nonzero(ctx, &s);
 
+    let s_invalid = scalar_chip.gate().is_zero(ctx, s_valid);
     // compute u1 = m s^{-1} mod n and u2 = r s^{-1} mod n
-    let u1 = scalar_chip.divide_unsafe(ctx, msghash, &s);
-    let u2 = scalar_chip.divide_unsafe(ctx, &r, s);
+    let u1 = scalar_chip.divide_unsafe(ctx, msghash, &s, Some(s_invalid));
+    let u2 = scalar_chip.divide_unsafe(ctx, &r, s, Some(s_invalid));
 
     // compute u1 * G and u2 * pubkey
     let u1_mul = fixed_base::scalar_multiply(

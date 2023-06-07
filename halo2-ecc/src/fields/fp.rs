@@ -14,7 +14,7 @@ use halo2_base::{
     QuantumCell::{Constant, Existing},
 };
 use num_bigint::{BigInt, BigUint};
-use num_traits::One;
+use num_traits::{One, Zero};
 use std::{cmp::max, marker::PhantomData};
 
 pub type BaseFieldChip<'range, C> =
@@ -398,6 +398,23 @@ impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, F
         }
         self.enforce_less_than_p(ctx, a);
         self.enforce_less_than_p(ctx, b);
+    }
+
+    fn select_or_zero(
+        &self,
+        ctx: &mut Context<F>,
+        b: impl Into<CRTInteger<F>>,
+        skip: AssignedValue<F>,
+    ) -> Self::UnsafeFieldPoint {
+        let mut b = b.into();
+        for limb in b.truncation.limbs.iter_mut() {
+            *limb = self.gate().mul_not(ctx, skip, *limb);
+        }
+        b.native = self.gate().mul_not(ctx, skip, b.native);
+        if !skip.value().is_zero_vartime() {
+            b.value = BigInt::zero();
+        }
+        b
     }
 }
 

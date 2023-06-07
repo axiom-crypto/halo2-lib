@@ -86,7 +86,7 @@ impl<'chip, F: PrimeField> Fp12Chip<'chip, F> {
                     res = if z == 1 {
                         self.mul(ctx, &res, a)
                     } else {
-                        self.divide_unsafe(ctx, &res, a)
+                        self.divide_unsafe(ctx, &res, a, None)
                     };
                 } else {
                     assert_eq!(z, 1);
@@ -148,11 +148,11 @@ impl<'chip, F: PrimeField> Fp12Chip<'chip, F> {
         g1_num = fp2_chip.sub_no_carry(ctx, &g1_num, &g3_2);
         // can divide without carrying g1_num or g1_denom (I think)
         let g2_4 = fp2_chip.scalar_mul_no_carry(ctx, &g2, 4);
-        let g1_1 = fp2_chip.divide_unsafe(ctx, &g1_num, &g2_4);
+        let g1_1 = fp2_chip.divide_unsafe(ctx, &g1_num, &g2_4, None);
 
         let g4_g5 = fp2_chip.mul_no_carry(ctx, &g4, &g5);
         let g1_num = fp2_chip.scalar_mul_no_carry(ctx, &g4_g5, 2);
-        let g1_0 = fp2_chip.divide_unsafe(ctx, &g1_num, &g3);
+        let g1_0 = fp2_chip.divide_unsafe(ctx, &g1_num, &g3, None);
 
         let g2_is_zero = fp2_chip.is_zero(ctx, &g2);
         // resulting `g1` is already in "carried" format (witness is in `[0, p)`)
@@ -282,7 +282,7 @@ impl<'chip, F: PrimeField> Fp12Chip<'chip, F> {
                     res = if z == 1 {
                         self.mul(ctx, &res, &a)
                     } else {
-                        self.divide_unsafe(ctx, &res, &a)
+                        self.divide_unsafe(ctx, &res, &a, None)
                     };
                     // compression is free, so it doesn't hurt (except possibly witness generation runtime) to do it
                     // TODO: alternatively we go from small bits to large to avoid this compression
@@ -379,7 +379,7 @@ impl<'chip, F: PrimeField> Fp12Chip<'chip, F> {
     ) -> <Self as FieldChip<F>>::FieldPoint {
         // a^{q^6} = conjugate of a
         let f1 = self.conjugate(ctx, a.clone());
-        let f2 = self.divide_unsafe(ctx, &f1, a);
+        let f2 = self.divide_unsafe(ctx, &f1, a, None);
         let f3 = self.frobenius_map(ctx, &f2, 2);
         self.mul(ctx, &f3, &f2)
     }

@@ -213,35 +213,7 @@ pub trait FieldChip<F: PrimeField>: Clone + Send + Sync {
         let b_is_zero = self.is_zero(ctx, b.clone());
         self.gate().assert_is_const(ctx, &b_is_zero, &F::zero());
 
-        self.divide_unsafe(ctx, a.into(), b)
-    }
-
-    /// Returns `a / b` without constraining `b` to be nonzero.
-    ///
-    /// Warning: undefined behavior when `b` is zero.
-    ///
-    /// `a, b` must be such that `quot * b - a` without carry does not overflow, where `quot` is the output.
-    fn divide_unsafe(
-        &self,
-        ctx: &mut Context<F>,
-        a: impl Into<Self::UnsafeFieldPoint>,
-        b: impl Into<Self::UnsafeFieldPoint>,
-    ) -> Self::FieldPoint {
-        let a = a.into();
-        let b = b.into();
-        let a_val = self.get_assigned_value(&a);
-        let b_val = self.get_assigned_value(&b);
-        let b_inv: Self::FieldType = Option::from(b_val.invert()).unwrap_or_default();
-        let quot_val = a_val * b_inv;
-
-        let quot = self.load_private(ctx, quot_val);
-
-        // constrain quot * b - a = 0 mod p
-        let quot_b = self.mul_no_carry(ctx, quot.clone(), b);
-        let quot_constraint = self.sub_no_carry(ctx, quot_b, a);
-        self.check_carry_mod_to_zero(ctx, quot_constraint);
-
-        quot
+        self.divide_unsafe(ctx, a.into(), b, None)
     }
 
     /// Constrains that `b` is nonzero as a field element and then returns `-a / b`.
@@ -255,33 +227,122 @@ pub trait FieldChip<F: PrimeField>: Clone + Send + Sync {
         let b_is_zero = self.is_zero(ctx, b.clone());
         self.gate().assert_is_const(ctx, &b_is_zero, &F::zero());
 
-        self.neg_divide_unsafe(ctx, a.into(), b)
+        self.neg_divide_unsafe(ctx, a.into(), b, None)
     }
 
-    // Returns `-a / b` without constraining `b` to be nonzero.
-    // this is usually cheaper constraint-wise than computing -a and then (-a) / b separately
+    /// Returns `out := a / b` without constraining `b` to be nonzero.
+    ///
+    /// `a, b` must be such that `quot * b - a` without carry does not overflow, where `quot` is the output.
+    ///
+    /// If `cond` is None, it will constrain that
+    /// ```ignore
+    /// out * b = a (mod p)
+    /// ```
+    /// Note in the `0 / 0` case any `out` will be accepted. In the case `a != 0, b = 0`, the constraint will be unsatisfiable.
+    ///
+    /// If `skip = Some(skip)`, then it will constrain that
+    /// ```ignore
+    /// (1 - skip) * (out * b - a) = 0 (mod p)
+    /// ```
+    /// where it is **assumed** that `skip` is a boolean value.
+    /// In other words, if `skip = 0`, the behavior is the same as above.
+    /// If `skip = 1`, then nothing is constrained.
+    fn divide_unsafe(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<Self::UnsafeFieldPoint>,
+        b: impl Into<Self::UnsafeFieldPoint>,
+        skip: Option<AssignedValue<F>>,
+    ) -> Self::FieldPoint {
+        self.signed_divide_unsafe(ctx, a, b, skip, false)
+    }
+
+    /// Returns `out := -a / b` without constraining `b` to be nonzero.
+    ///
+    /// `a, b` must be such that `quot * b + a` without carry does not overflow, where `quot` is the output.
+    ///
+    /// If `skip` is None, it will constrain that
+    /// ```ignore
+    /// out * b = -a (mod p)
+    /// ```
+    /// Note in the `0 / 0` case any `out` will be accepted. In the case `a != 0, b = 0`, the constraint will be unsatisfiable.
+    ///
+    /// If `skip = Some(skip)`, then it will constrain that
+    /// ```ignore
+    /// (1 - skip) * (out * b + a) = 0 (mod p)
+    /// ```
+    /// where it is **assumed** that `skip` is a boolean value.
+    /// In other words, if `skip = 0`, the behavior is the same as above.
+    /// If `skip = 1`, then nothing is constrained.
     fn neg_divide_unsafe(
         &self,
         ctx: &mut Context<F>,
         a: impl Into<Self::UnsafeFieldPoint>,
         b: impl Into<Self::UnsafeFieldPoint>,
+        skip: Option<AssignedValue<F>>,
+    ) -> Self::FieldPoint {
+        self.signed_divide_unsafe(ctx, a, b, skip, true)
+    }
+
+    /// Returns `out := (-1)^sgn * (a / b)` without constraining `b` to be nonzero.
+    ///
+    /// `a, b` must be such that `quot * b +- a` without carry does not overflow, where `quot` is the output.
+    ///
+    /// If `skip` is None, it will constrain that
+    /// ```ignore
+    /// out * b = (-1)^sgn a (mod p)
+    /// ```
+    /// Note in the `0 / 0` case any `out` will be accepted. In the case `a != 0, b = 0`, the constraint will be unsatisfiable.
+    ///
+    /// If `skip = Some(skip)`, then it will constrain that
+    /// ```ignore
+    /// (1 - skip) * (out * b - (-1)^sgn a) = 0 (mod p)
+    /// ```
+    /// where it is **assumed** that `skip` is a boolean value.
+    /// In other words, if `skip = 0`, the behavior is the same as above.
+    /// If `skip = 1`, then nothing is constrained.
+    fn signed_divide_unsafe(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<Self::UnsafeFieldPoint>,
+        b: impl Into<Self::UnsafeFieldPoint>,
+        skip: Option<AssignedValue<F>>,
+        sgn: bool,
     ) -> Self::FieldPoint {
         let a = a.into();
         let b = b.into();
         let a_val = self.get_assigned_value(&a);
         let b_val = self.get_assigned_value(&b);
         let b_inv: Self::FieldType = Option::from(b_val.invert()).unwrap_or_default();
-        let quot_val = -a_val * b_inv;
+        let mut quot_val = a_val * b_inv;
+        if sgn {
+            quot_val = -quot_val;
+        }
 
         let quot = self.load_private(ctx, quot_val);
 
-        // constrain quot * b + a = 0 mod p
+        // constrain quot * b - (-1)^sgn a = 0 mod p
         let quot_b = self.mul_no_carry(ctx, quot.clone(), b);
-        let quot_constraint = self.add_no_carry(ctx, quot_b, a);
+        let mut quot_constraint =
+            if sgn { self.add_no_carry(ctx, quot_b, a) } else { self.sub_no_carry(ctx, quot_b, a) };
+        if let Some(skip) = skip {
+            quot_constraint = self.select_or_zero(ctx, quot_constraint, skip);
+        }
         self.check_carry_mod_to_zero(ctx, quot_constraint);
 
         quot
     }
+
+    /// Returns `b` if `skip == 0` or `0` otherwise.
+    ///
+    /// # Assumptions
+    /// * `skip` is either 0 or 1
+    fn select_or_zero(
+        &self,
+        ctx: &mut Context<F>,
+        b: impl Into<Self::UnsafeFieldPoint>,
+        skip: AssignedValue<F>,
+    ) -> Self::UnsafeFieldPoint;
 }
 
 pub trait Selectable<F: ScalarField, Pt> {

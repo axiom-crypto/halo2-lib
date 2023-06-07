@@ -344,6 +344,18 @@ where
             self.fp_chip.assert_equal(ctx, a_coeff, b_coeff)
         }
     }
+
+    pub fn select_or_zero<A>(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl IntoIterator<Item = A>,
+        skip: AssignedValue<F>,
+    ) -> FieldVector<FpChip::UnsafeFieldPoint>
+    where
+        A: Into<FpChip::UnsafeFieldPoint>,
+    {
+        FieldVector(a.into_iter().map(|a| self.fp_chip.select_or_zero(ctx, a, skip)).collect())
+    }
 }
 
 #[macro_export]
@@ -490,6 +502,15 @@ macro_rules! impl_field_ext_chip_common {
             let a = a.into();
             let b = b.into();
             self.0.assert_equal(ctx, a, b)
+        }
+
+        fn select_or_zero(
+            &self,
+            ctx: &mut Context<F>,
+            a: impl Into<Self::UnsafeFieldPoint>,
+            skip: AssignedValue<F>,
+        ) -> Self::UnsafeFieldPoint {
+            self.0.select_or_zero(ctx, a.into(), skip)
         }
     };
 }

@@ -37,7 +37,9 @@ fn basic_g1_tests<F: PrimeField>(
     // test add_unequal
     chip.field_chip.enforce_less_than(ctx, P_assigned.x().clone());
     chip.field_chip.enforce_less_than(ctx, Q_assigned.x().clone());
-    let sum = chip.add_unequal(ctx, &P_assigned, &Q_assigned, false);
+    let zero = ctx.load_zero();
+    let sum = chip.add_unequal(ctx, &P_assigned, &Q_assigned, AddUnequalMode::Unchecked);
+    let sum = chip.add_unequal(ctx, &P_assigned, &Q_assigned, AddUnequalMode::Conditional(zero));
     assert_eq!(sum.x.0.truncation.to_bigint(limb_bits), sum.x.0.value);
     assert_eq!(sum.y.0.truncation.to_bigint(limb_bits), sum.y.0.value);
     {

@@ -5,7 +5,7 @@ use crate::halo2_proofs::halo2curves::bn256::{
     G1Affine, G2Affine, FROBENIUS_COEFF_FQ12_C1, SIX_U_PLUS_2_NAF,
 };
 use crate::{
-    ecc::{EcPoint, EccChip},
+    ecc::{AddUnequalMode::Unchecked, EcPoint, EccChip},
     fields::fp12::mul_no_carry_w6,
     fields::{FieldChip, PrimeField},
 };
@@ -268,7 +268,7 @@ pub fn miller_loop_BN<F: PrimeField>(
                 (&R, sign_Q),
                 P,
             );
-            R = ecc_chip.add_unequal(ctx, &R, sign_Q, false);
+            R = ecc_chip.add_unequal(ctx, &R, sign_Q, Unchecked);
         }
         if i == 0 {
             break;
@@ -286,7 +286,7 @@ pub fn miller_loop_BN<F: PrimeField>(
     let Q_1 = twisted_frobenius::<F>(ecc_chip, ctx, Q, &c2, &c3);
     let neg_Q_2 = neg_twisted_frobenius::<F>(ecc_chip, ctx, &Q_1, &c2, &c3);
     f = fp12_multiply_with_line_unequal::<F>(ecc_chip.field_chip(), ctx, &f, (&R, &Q_1), P);
-    R = ecc_chip.add_unequal(ctx, &R, &Q_1, false);
+    R = ecc_chip.add_unequal(ctx, &R, &Q_1, Unchecked);
     f = fp12_multiply_with_line_unequal::<F>(ecc_chip.field_chip(), ctx, &f, (&R, &neg_Q_2), P);
 
     f
@@ -363,7 +363,7 @@ pub fn multi_miller_loop_BN<F: PrimeField>(
                     (r, sign_b),
                     a,
                 );
-                *r = ecc_chip.add_unequal(ctx, r.clone(), sign_b, false);
+                *r = ecc_chip.add_unequal(ctx, r.clone(), sign_b, Unchecked);
             }
         }
         if i == 0 {
@@ -384,7 +384,7 @@ pub fn multi_miller_loop_BN<F: PrimeField>(
         let b_1 = twisted_frobenius(ecc_chip, ctx, b, &c2, &c3);
         let neg_b_2 = neg_twisted_frobenius(ecc_chip, ctx, &b_1, &c2, &c3);
         f = fp12_multiply_with_line_unequal(ecc_chip.field_chip(), ctx, &f, (r, &b_1), a);
-        *r = ecc_chip.add_unequal(ctx, r.clone(), b_1, false);
+        *r = ecc_chip.add_unequal(ctx, r.clone(), b_1, Unchecked);
         f = fp12_multiply_with_line_unequal::<F>(ecc_chip.field_chip(), ctx, &f, (r, &neg_b_2), a);
     }
     f

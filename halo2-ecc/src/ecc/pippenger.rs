@@ -1,6 +1,6 @@
 use super::{
     ec_add_unequal, ec_double, ec_select, ec_sub_unequal, into_strict_point, load_random_point,
-    strict_ec_select_from_bits, EcPoint,
+    strict_ec_select_from_bits, AddUnequalMode::Strict, EcPoint,
 };
 use crate::{
     ecc::ec_sub_strict,
@@ -284,7 +284,7 @@ where
                 let point = into_strict_point(chip, ctx, point.clone());
 
                 for j in 0..(1 << i) {
-                    let mut new_point = ec_add_unequal(chip, ctx, &bucket[j], &point, true);
+                    let mut new_point = ec_add_unequal(chip, ctx, &bucket[j], &point, Strict);
                     // if points[i] is point at infinity, do nothing
                     new_point = ec_select(chip, ctx, (&bucket[j]).into(), new_point, is_infinity);
                     let new_point = into_strict_point(chip, ctx, new_point);
@@ -309,7 +309,7 @@ where
     let mut agg = parallelize_in(phase, builder, (0..scalar_bits).collect(), |ctx, i| {
         let mut acc = multi_prods[0][i].clone();
         for multi_prod in multi_prods.iter().skip(1) {
-            let _acc = ec_add_unequal(chip, ctx, &acc, &multi_prod[i], true);
+            let _acc = ec_add_unequal(chip, ctx, &acc, &multi_prod[i], Strict);
             acc = into_strict_point(chip, ctx, _acc);
         }
         acc
@@ -321,7 +321,7 @@ where
     // let any_point = (2^num_rounds - 1) * any_base
     // TODO: can we remove all these random point operations somehow?
     let mut any_point = ec_double(chip, ctx, any_points.last().unwrap());
-    any_point = ec_sub_unequal(chip, ctx, any_point, &any_points[0], true);
+    any_point = ec_sub_unequal(chip, ctx, any_point, &any_points[0], Strict);
 
     // compute sum_{k=0..scalar_bits} agg[k] * 2^k - (sum_{k=0..scalar_bits} 2^k) * rand_point
     // (sum_{k=0..scalar_bits} 2^k) = (2^scalar_bits - 1)
@@ -331,11 +331,11 @@ where
         any_sum = ec_double(chip, ctx, any_sum);
         // cannot use ec_double_and_add_unequal because you cannot guarantee that `sum != g`
         sum = ec_double(chip, ctx, sum);
-        sum = ec_add_unequal(chip, ctx, sum, g, true);
+        sum = ec_add_unequal(chip, ctx, sum, g, Strict);
     }
 
     any_sum = ec_double(chip, ctx, any_sum);
-    any_sum = ec_sub_unequal(chip, ctx, any_sum, any_point, true);
+    any_sum = ec_sub_unequal(chip, ctx, any_sum, any_point, Strict);
 
     ec_sub_strict(chip, ctx, sum, any_sum)
 }
