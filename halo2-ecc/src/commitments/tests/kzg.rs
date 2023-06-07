@@ -129,10 +129,15 @@ fn random_kzg_multi_circuit(
     let openings: Vec<u64> = (0..n_openings as u64).collect();
     let dummy_data: Vec<Fr> = (0..blob_len).map(|_| Fr::from(OsRng.next_u64())).collect();
 
+    println!("check 0");
     let pp = Blob::mock_trusted_setup(tau, blob_len, n_openings);
+    println!("check 1");
     let blob = Blob::new(dummy_data.clone(), pp.clone(), kzg_k);
+    println!("check 2");
     let p_bar = blob.commit_vector();
+    println!("check 3");
     let q_bar = blob.open_prf(&openings);
+    println!("check 4");
 
     let selected_root = root_of_unity(kzg_k as u32);
     let open_idxs =
@@ -172,7 +177,7 @@ fn test_kzg() {
     )
     .unwrap();
 
-    let circuit = random_kzg_multi_circuit(params, CircuitBuilderStage::Mock, None, 4, 2);
+    let circuit = random_kzg_multi_circuit(params, CircuitBuilderStage::Mock, None, 16, 4);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 

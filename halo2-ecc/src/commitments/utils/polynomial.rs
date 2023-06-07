@@ -1,10 +1,10 @@
 /*
- * For doing core operations of polynomials defined over finite fields. Used 
+ * For doing core operations of polynomials defined over finite fields. Used
  * custom implementation here because we needed Euclidean division.
  * Inspired by https://applied-math-coding.medium.com/implementing-polynomial-division-rust-ca2a59370003
  */
 use halo2_base::halo2_proofs::{
-    arithmetic::{lagrange_interpolate, CurveExt},
+    arithmetic::{best_fft, lagrange_interpolate, CurveExt},
     halo2curves::FieldExt,
 };
 use std::ops::{Add, AddAssign, Mul, Neg, Sub};
@@ -16,7 +16,7 @@ impl<F: FieldExt> Neg for Polynomial<F> {
     type Output = Self;
 
     /*
-     * Negating the polynomial. 
+     * Negating the polynomial.
      */
     fn neg(self) -> Self::Output {
         Polynomial(self.0.iter().map(|a| a.neg()).collect())
@@ -57,7 +57,7 @@ impl<F: FieldExt> Mul for Polynomial<F> {
     type Output = Self;
 
     /*
-     * Multiplying a polynomial on the right. 
+     * Multiplying a polynomial on the right.
      */
     fn mul(self, rhs: Self) -> Self::Output {
         let [n, m] = [self.deg(), rhs.deg()];
@@ -82,16 +82,32 @@ impl<F: FieldExt> Polynomial<F> {
     }
 
     /*
+     * Uses inverse FFT to find the lowest degree polynomial that passes through
+     * (w_i, eval_i) for all i in [0, n). Assumes that evals is of length 
+     * 2^k and w is a 2^k-th root of unity in F. 
+     */
+    pub fn from_points_ifft(evals: Vec<F>, w: F, k: u32) -> Self {
+        let mut coeffs = evals.clone();
+        best_fft(&mut coeffs, w.invert().unwrap(), k);
+        coeffs = coeffs
+            .into_iter()
+            .map(|x| x * F::from(evals.len() as u64).invert().unwrap())
+            .collect::<Vec<F>>();
+        Self::new(coeffs)
+    }
+
+    /*
      * Uses lagrange interpolation to find the lowest degree polynomial that
      * passes through (points, evals).
      */
-    pub fn from_points(points: &[F], evals: &[F]) -> Self {
+    pub fn from_points_lagrange(points: &[F], evals: &[F]) -> Self {
+        // let tmp = best_fft(&mut evals, w.invert(), k);
         Self::new(lagrange_interpolate(points, evals))
     }
 
     /*
-     * Computes the vanishing polynomial z(X) = Σ X - z_i for a vector of 
-     * indices. 
+     * Computes the vanishing polynomial z(X) = Σ X - z_i for a vector of
+     * indices.
      */
     pub fn vanishing(openings: &[F]) -> Self {
         if openings.is_empty() {
@@ -105,8 +121,8 @@ impl<F: FieldExt> Polynomial<F> {
     }
 
     /*
-     * Evaluates this polynomial at f(τ) using powers tau [G * τ^0, G * τ^1, 
-     * ..., G * τ^i]. 
+     * Evaluates this polynomial at f(τ) using powers tau [G * τ^0, G * τ^1,
+     * ..., G * τ^i].
      */
     pub fn eval_ptau<G: CurveExt + Mul<F, Output = G> + AddAssign>(&self, ptau: &[G]) -> G {
         if self.0.is_empty() {
@@ -123,14 +139,14 @@ impl<F: FieldExt> Polynomial<F> {
     }
 
     /*
-     * Accessor function to get the coefficients of this polynomial. 
+     * Accessor function to get the coefficients of this polynomial.
      */
     pub fn get_coeffs(&self) -> Vec<F> {
         self.0.clone()
     }
 
     /*
-     * Get the degree of this polynomial. 
+     * Get the degree of this polynomial.
      */
     fn deg(&self) -> usize {
         self.0
@@ -143,7 +159,7 @@ impl<F: FieldExt> Polynomial<F> {
     }
 
     /*
-     * Checks whether this is a zero polynomial. 
+     * Checks whether this is a zero polynomial.
      */
     pub fn is_zero(&self) -> bool {
         for coeff in &self.0 {
@@ -162,8 +178,8 @@ impl<F: FieldExt> Polynomial<F> {
     }
 
     /*
-     * Euclidean division for two polynomials, with f(X) as the dividend and 
-     * g(X) as the divisor. Returns (quotient, remainder). 
+     * Euclidean division for two polynomials, with f(X) as the dividend and
+     * g(X) as the divisor. Returns (quotient, remainder).
      */
     pub fn div_euclid(f: &Self, g: &Self) -> (Self, Self) {
         let [n, m] = [f.deg(), g.deg()];
@@ -173,10 +189,7 @@ impl<F: FieldExt> Polynomial<F> {
             if *g.0.get(0).unwrap_or(&F::zero()) == F::zero() {
                 panic!("Cannot divide by 0!");
             }
-            (
-                Polynomial(vec![f.0[0] * g.0[0].invert().unwrap()]),
-                Self::zero(),
-            )
+            (Polynomial(vec![f.0[0] * g.0[0].invert().unwrap()]), Self::zero())
         } else {
             let [a_n, b_m] = [f.0[n], g.0[m]];
             let mut q_1 = Polynomial(vec![F::zero(); n - m + 1]);

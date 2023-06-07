@@ -1,10 +1,13 @@
 /*
  * Test utilities for committing to data blobs with KZG
  */
-use ff::PrimeField;
-use halo2_base::halo2_proofs::halo2curves::{bn256::{Fr, G1Affine, G2, G1}, FieldExt};
-use serde::{Deserialize, Serialize};
 use super::polynomial::Polynomial;
+use ff::PrimeField;
+use halo2_base::halo2_proofs::halo2curves::{
+    bn256::{Fr, G1Affine, G1, G2},
+    FieldExt,
+};
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[allow(non_camel_case_types)]
@@ -17,7 +20,7 @@ pub struct pp {
 /// Provides an easy interface to commit and open to data blobs
 /// ```
 /// use rand::rngs::OsRng;
-/// 
+///
 /// let pp = Blob::mock_trusted_setup(Fr::random(&mut OsRng));
 /// let k = 4;
 /// let data = vec![Fr::random(OsRng); 2u64.pow(k) as usize];
@@ -26,7 +29,7 @@ pub struct pp {
 /// let open_points = vec![1, 2];
 /// let quotient = blob.open_prf(&open_points);
 /// ```
-/// 
+///
 pub struct Blob {
     pub k: u32,
     pub pp: pp,
@@ -56,14 +59,14 @@ impl Blob {
         for _ in 1..2u32.pow(k) as usize {
             idxs.push(idxs.last().unwrap() * w);
         }
-        let p = Polynomial::from_points(&idxs, &data);
+        let p = Polynomial::from_points_ifft(data.clone(), w, k);
         Blob { k, pp, data, p }
     }
 
     /*
-    * Convenience function for running a mock setup() for the commitment
-    * scheme. This is not secure.
-    */
+     * Convenience function for running a mock setup() for the commitment
+     * scheme. This is not secure.
+     */
     pub fn mock_trusted_setup(tau: Fr, blob_len: usize, n_openings: usize) -> pp {
         let tau_fr: Fr = Fr::from(tau);
 
@@ -83,34 +86,31 @@ impl Blob {
     }
 
     /*
-    * Creates vector commitment by interpolating a polynomial p(X) and evaluating
-    * at p(τ).
-    */
+     * Creates vector commitment by interpolating a polynomial p(X) and evaluating
+     * at p(τ).
+     */
     pub fn commit_vector(&self) -> G1Affine {
         let selected_root = self.root_of_unity();
         let mut idxs = vec![Fr::one()];
         for _ in 1..self.data.len() {
             idxs.push(idxs.last().unwrap() * selected_root);
         }
-        let p = Polynomial::from_points(&idxs, &self.data);
+        let p = Polynomial::from_points_ifft(self.data.clone(), selected_root, self.k);
         let p_bar = G1Affine::from(p.eval_ptau(&self.pp.ptau_g1));
         p_bar
     }
 
     /*
-    * Computes multi-open proof. Done by computing a quotient polynomial
-    * q(X) = [p(X) - r(X)]/z(X). Opening proof is q(τ).
-    */
-    pub fn open_prf(
-        &self,
-        idxs: &Vec<u64>,
-    ) -> G1Affine {
-
+     * Computes multi-open proof. Done by computing a quotient polynomial
+     * q(X) = [p(X) - r(X)]/z(X). Opening proof is q(τ).
+     */
+    pub fn open_prf(&self, idxs: &Vec<u64>) -> G1Affine {
         let selected_root = self.root_of_unity();
-        let idxs_fr: Vec<Fr> = idxs.iter().map(|idx| selected_root.pow(&[*idx as u64, 0, 0, 0])).collect();
+        let idxs_fr: Vec<Fr> =
+            idxs.iter().map(|idx| selected_root.pow(&[*idx as u64, 0, 0, 0])).collect();
         let vals: Vec<Fr> = idxs.iter().map(|idx| self.data[*idx as usize]).collect();
 
-        let r: Polynomial<Fr> = Polynomial::from_points(&idxs_fr, &vals);
+        let r: Polynomial<Fr> = Polynomial::from_points_lagrange(&idxs_fr, &vals);
         let z: Polynomial<Fr> = Polynomial::vanishing(&idxs_fr);
 
         let (q, rem) = Polynomial::div_euclid(&(self.p.clone() - r.clone()), &z);

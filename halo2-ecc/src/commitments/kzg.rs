@@ -125,7 +125,7 @@ impl<'a, F: PrimeField> KZGChip<'a, F> {
             .map(|x| self.poly_chip.fr_chip.get_assigned_value(&CRTInteger::from(x)))
             .collect::<Vec<_>>();
 
-        let r_coeffs = Poly::from_points(&free_open_idxs, &free_open_vals).get_coeffs();
+        let r_coeffs = Poly::from_points_lagrange(&free_open_idxs, &free_open_vals).get_coeffs();
         let z_coeffs = Poly::vanishing(&free_open_idxs).get_coeffs();
 
         let mut load_fr = |x: Vec<Fr>| {
