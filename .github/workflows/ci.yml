@@ -27,11 +27,12 @@ jobs:
           cd halo2-ecc
           cargo test -- --test-threads=1 test_fp
           cargo test -- test_ecc
-          cargo test -- test_secp256k1_ecdsa
+          cargo test -- test_secp
           cargo test -- test_ecdsa
           cargo test -- test_ec_add
-          cargo test -- test_fixed_base_msm
+          cargo test -- test_fixed
           cargo test -- test_msm
+          cargo test -- test_fb
           cargo test -- test_pairing
           cd ..
       - name: Run halo2-ecc tests real prover
