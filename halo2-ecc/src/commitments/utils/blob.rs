@@ -22,9 +22,9 @@ pub struct pp {
 /// let k = 4;
 /// let data = vec![Fr::random(OsRng); 2u64.pow(k) as usize];
 /// let blob = Blob::new(&data, pp, k);
-/// let (p, cm) = blob.commit_vector();
+/// let cm = blob.commit_vector();
 /// let open_points = vec![1, 2];
-/// let (quotient, z, r) = blob.open_prf(&p, &open_points);
+/// let quotient = blob.open_prf(&open_points);
 /// ```
 /// 
 pub struct Blob {
@@ -99,13 +99,12 @@ impl Blob {
 
     /*
     * Computes multi-open proof. Done by computing a quotient polynomial
-    * q(X) = [p(X) - r(X)]/z(X). Opening proof is q(τ). Also saves the coefficients
-    * of z(X) and r(X) to avoid having to recompute within the circuit.
+    * q(X) = [p(X) - r(X)]/z(X). Opening proof is q(τ).
     */
     pub fn open_prf(
         &self,
         idxs: &Vec<u64>,
-    ) -> (G1Affine, Vec<Fr>, Vec<Fr>) {
+    ) -> G1Affine {
 
         let selected_root = self.root_of_unity();
         let idxs_fr: Vec<Fr> = idxs.iter().map(|idx| selected_root.pow(&[*idx as u64, 0, 0, 0])).collect();
@@ -119,7 +118,6 @@ impl Blob {
             panic!("p(X) - r(X) is not divisible by z(X). Cannot compute q(X)");
         }
 
-        let q_bar: G1Affine = G1Affine::from(q.eval_ptau(&self.pp.ptau_g1));
-        (q_bar, z.get_coeffs(), r.get_coeffs())
+        G1Affine::from(q.eval_ptau(&self.pp.ptau_g1))
     }
 }

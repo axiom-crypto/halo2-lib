@@ -2,11 +2,7 @@
 use super::{Fp12Chip, Fp2Chip, FpChip, FpPoint, Fq, FqPoint};
 use crate::fields::vector::{FieldVector, FieldVectorChip};
 use crate::halo2_proofs::halo2curves::bn256::{
-<<<<<<< HEAD
-    Fq12, G1Affine, G2Affine, FROBENIUS_COEFF_FQ12_C1, SIX_U_PLUS_2_NAF
-=======
     Fq12, G1Affine, G2Affine, FROBENIUS_COEFF_FQ12_C1, SIX_U_PLUS_2_NAF,
->>>>>>> community-edition
 };
 use crate::{
     ecc::{EcPoint, EccChip},
@@ -448,7 +444,6 @@ pub fn neg_twisted_frobenius<F: PrimeField>(
 }
 
 // To avoid issues with mutably borrowing twice (not allowed in Rust), we only store fp_chip and construct g2_chip and fp12_chip in scope when needed for temporary mutable borrows
-#[derive(Clone, Debug)]
 pub struct PairingChip<'chip, F: PrimeField> {
     pub fp_chip: &'chip FpChip<'chip, F>,
 }

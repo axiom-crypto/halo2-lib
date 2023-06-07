@@ -93,7 +93,7 @@ impl<F: FieldExt> Polynomial<F> {
      * Computes the vanishing polynomial z(X) = Σ X - z_i for a vector of 
      * indices. 
      */
-    pub fn vanishing(openings: &Vec<F>) -> Self {
+    pub fn vanishing(openings: &[F]) -> Self {
         if openings.is_empty() {
             panic!("Cannot compute a vanishing polynomial for 0 openings.");
         }

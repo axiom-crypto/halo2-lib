@@ -8,7 +8,6 @@ use crate::halo2_proofs::halo2curves::bn256::{Fq, Fq12, Fq2};
 pub mod final_exp;
 pub mod pairing;
 
-pub type FrChip<'range, F> = fp::FpChip<'range, F, Fr>;
 pub type FpChip<'range, F> = fp::FpChip<'range, F, Fq>;
 pub type FpPoint<F> = ProperCrtUint<F>;
 pub type FqPoint<F> = FieldVector<FpPoint<F>>;

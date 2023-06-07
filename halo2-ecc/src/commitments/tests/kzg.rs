@@ -1,25 +1,33 @@
+use crate::commitments::FrChip;
 /*
  * Test suite for KZGChip.
  */
-use std::fs::File;
-use rand_core::OsRng;
+use crate::commitments::utils::blob::{root_of_unity, Blob};
+use crate::fields::poly::PolyChip;
 use crate::{
-    bn254::{pairing::PairingChip, Fp2Chip, FpChip, FrChip},
-    commitments::{kzg::KZGChip, poly::PolyChip},
+    bn254::{pairing::PairingChip, Fp2Chip, FpChip},
+    commitments::{kzg::KZGChip},
     ecc::EccChip,
-    fields::{FpStrategy, FieldChip},
+    fields::{FieldChip, FpStrategy},
     halo2_proofs::halo2curves::bn256::{Fr, G1Affine, G1, G2},
 };
 use halo2_base::{
     gates::{
-        builder::{CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints, RangeCircuitBuilder},
+        builder::{
+            CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
+            RangeCircuitBuilder,
+        },
         RangeChip,
     },
-    halo2_proofs::{halo2curves::{bn256::G2Affine, FieldExt}, dev::MockProver},
+    halo2_proofs::{
+        dev::MockProver,
+        halo2curves::{bn256::G2Affine, FieldExt},
+    },
 };
-use rand_core::{RngCore};
+use rand_core::OsRng;
+use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
-use crate::commitments::utils::blob::{Blob, root_of_unity};
+use std::fs::File;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 struct KZGCircuitParams {
@@ -39,14 +47,12 @@ struct KZGCircuitParams {
 fn kzg_multi_test(
     builder: &mut GateThreadBuilder<Fr>,
     params: KZGCircuitParams,
-    q_bar: G1Affine,
     p_bar: G1Affine,
+    open_idxs: Vec<Fr>,
+    open_vals: Vec<Fr>,
+    q_bar: G1Affine,
     ptau_g1: Vec<G1>,
     ptau_g2: Vec<G2>,
-    z_coeffs: Vec<Fr>,
-    r_coeffs: Vec<Fr>,
-    open_idxs: Vec<Fr>,
-    open_vals: Vec<Fr>
 ) {
     let ctx = builder.main(0);
     std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
@@ -66,26 +72,26 @@ fn kzg_multi_test(
     let assigned_p_bar = g1_chip.assign_point(ctx, p_bar);
 
     // Load vectors
-    let ptau_g1_loaded = 
+    let ptau_g1_loaded =
         ptau_g1.iter().map(|x| g1_chip.assign_point(ctx, G1Affine::from(x))).collect::<Vec<_>>();
-    let ptau_g2_loaded = 
+    let ptau_g2_loaded =
         ptau_g2.iter().map(|x| g2_chip.assign_point(ctx, G2Affine::from(x))).collect::<Vec<_>>();
 
-    let mut load_fr = |x: Vec<Fr>| x.into_iter().map(|c| fr_chip.load_private(ctx, c)).collect::<Vec<_>>();
+    let mut load_fr =
+        |x: Vec<Fr>| x.into_iter().map(|c| fr_chip.load_private(ctx, c)).collect::<Vec<_>>();
     let open_idxs_loaded = load_fr(open_idxs);
     let open_vals_loaded = load_fr(open_vals);
 
     // Test chip
     let kzg_chip = KZGChip::new(&poly_chip, &pairing_chip, &g1_chip, &g2_chip);
-
     kzg_chip.opening_assert(
         builder,
-        &ptau_g1_loaded[..],
-        &ptau_g2_loaded[..],
+        assigned_p_bar,
         &open_idxs_loaded,
         &open_vals_loaded,
-        assigned_p_bar,
         assigned_q_bar,
+        &ptau_g1_loaded[..],
+        &ptau_g2_loaded[..],
     );
 }
 
@@ -114,21 +120,22 @@ fn random_kzg_multi_circuit(
     let pp = Blob::mock_trusted_setup(tau, blob_len, n_openings);
     let blob = Blob::new(dummy_data.clone(), pp.clone(), kzg_k);
     let p_bar = blob.commit_vector();
-    let (q_bar, z_coeffs, r_coeffs) = blob.open_prf(&openings);
-    
+    let q_bar = blob.open_prf(&openings);
+
     let selected_root = root_of_unity(kzg_k as u32);
+    let open_idxs =
+        openings.iter().map(|op| selected_root.pow(&[op.clone() as u64, 0, 0, 0])).collect();
+    let open_vals = openings.iter().map(|op| dummy_data[op.clone() as usize]).collect();
 
     kzg_multi_test(
         &mut builder,
         params,
-        q_bar,
         p_bar,
+        open_idxs,
+        open_vals,
+        q_bar,
         pp.ptau_g1[..n_openings].to_vec(),
         pp.ptau_g2[..=n_openings].to_vec(),
-        z_coeffs,
-        r_coeffs,
-        openings.iter().map(|op| selected_root.pow(&[op.clone() as u64, 0, 0, 0])).collect(),
-        openings.iter().map(|op| dummy_data[op.clone() as usize]).collect()
     );
 
     let circuit = match stage {
@@ -156,3 +163,4 @@ fn test_kzg() {
     let circuit = random_kzg_multi_circuit(params, CircuitBuilderStage::Mock, None);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
+
