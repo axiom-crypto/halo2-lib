@@ -1,5 +1,3 @@
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-
 use crate::bigint::ProperCrtUint;
 use crate::fields::vector::FieldVector;
 use crate::fields::{fp, fp12, fp2};
