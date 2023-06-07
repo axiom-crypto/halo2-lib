@@ -41,10 +41,10 @@ use utils::ScalarField;
 
 /// Module that contains the main API for creating and working with circuits.
 pub mod gates;
-/// Utility functions for converting between different types of field elements.
-pub mod utils;
 /// Module for SafeType which enforce value range and realted functions.
 pub mod safe_types;
+/// Utility functions for converting between different types of field elements.
+pub mod utils;
 
 /// Constant representing whether the Layouter calls `synthesize` once just to get region shape.
 #[cfg(feature = "halo2-axiom")]
