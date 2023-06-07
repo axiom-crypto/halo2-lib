@@ -107,7 +107,8 @@ fn kzg_multi_test(
 }
 
 /*
- * Commits to a random vector and proves a multi-open.
+ * Commits to a random vector and proves a multi-open. blob_len must be a power
+ * of 2. 
  */
 fn random_kzg_multi_circuit(
     params: KZGCircuitParams,
@@ -124,7 +125,7 @@ fn random_kzg_multi_circuit(
     };
 
     let tau: Fr = Fr::from(111);
-    let kzg_k: u32 = 2;
+    let kzg_k: u32 = blob_len.ilog2();
     let openings: Vec<u64> = (0..n_openings as u64).collect();
     let dummy_data: Vec<Fr> = (0..blob_len).map(|_| Fr::from(OsRng.next_u64())).collect();
 
@@ -186,7 +187,7 @@ fn bench_kzg() {
     let k = bench_params.degree;
     let params = gen_srs(k);
 
-    let circuit = random_kzg_multi_circuit(bench_params, CircuitBuilderStage::Mock, None, 4, 2);
+    let circuit = random_kzg_multi_circuit(bench_params, CircuitBuilderStage::Mock, None, 4096, 64);
 
     let vk_time = start_timer!(|| "Generating vkey");
     let vk = keygen_vk(&params, &circuit).unwrap();
