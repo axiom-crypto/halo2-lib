@@ -345,6 +345,10 @@ where
         }
     }
 
+    /// Returns `b` if `skip == 0` or the vector of all zeros otherwise.
+    ///
+    /// # Assumptions
+    /// * `skip` is either 0 or 1
     pub fn select_or_zero<A>(
         &self,
         ctx: &mut Context<F>,
@@ -504,6 +508,10 @@ macro_rules! impl_field_ext_chip_common {
             self.0.assert_equal(ctx, a, b)
         }
 
+        /// Returns `b` if `skip == 0` or `0` otherwise.
+        ///
+        /// # Assumptions
+        /// * `skip` is either 0 or 1
         fn select_or_zero(
             &self,
             ctx: &mut Context<F>,

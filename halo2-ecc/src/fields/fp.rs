@@ -400,6 +400,10 @@ impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, F
         self.enforce_less_than_p(ctx, b);
     }
 
+    /// Returns `b` if `skip == 0` or `0` otherwise.
+    ///
+    /// # Assumptions
+    /// * `skip` is either 0 or 1
     fn select_or_zero(
         &self,
         ctx: &mut Context<F>,

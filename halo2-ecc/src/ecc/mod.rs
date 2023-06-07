@@ -136,19 +136,21 @@ impl<F: PrimeField, FC: FieldChip<F>> From<ComparableEcPoint<F, FC>>
 }
 
 /// Enum to pass to [`ec_add_unequal`] for different methods of checking/handling
-/// when `P == +- Q` (equivalently, `P.x == Q.y`) for Weierstrass curves
+/// when `P == +- Q` (equivalently, `P.x == Q.x`) for Weierstrass curves
 #[derive(Clone, Copy, Debug)]
 pub enum AddUnequalMode<F: ScalarField> {
     /// No checks are done. **Be very careful when using this.**
     Unchecked,
-    /// Checks that `P.x != Q.x` and constraints the check
+    /// Checks that `P.x != Q.x` and constrains the check
     Strict,
     /// Assumes that `Conditional(skip)` has boolean `skip`. Constrains `P.x != Q.x` if `skip == 0`.
     /// Otherwise if `skip == 1` does not do the check but ensures that no panic or overconstraint occurs.
     /// The output in this case is undefined.
     Conditional(AssignedValue<F>),
-    /// Assumes that `Unsafe(skip)` has boolean `skip`. Does no checks and passes `skip` to
+    /// Assumes that `Unsafe(skip)` has boolean `skip`.
+    /// Does no checks on `P.x` and `Q.x` and passes `skip` to
     /// `divide_unsafe` as a conditional on whether to skip division checks as well.
+    /// If the case `skip == 1`, the output is undefined.
     Unsafe(AssignedValue<F>),
 }
 
@@ -586,8 +588,7 @@ where
             &rounded_bits
                 [rounded_bitlen - window_bits * (idx + 1)..rounded_bitlen - window_bits * idx],
         );
-        // if is_zero_window[idx] = true, add_point = P. We only need any_point to avoid divide by zero in add_unequal
-        // if is_zero_window = true and is_started = false, then mult_point = 2^window_bits * any_point. Since window_bits != 0, we have mult_point != +- any_point
+        // if is_zero_window[idx] = true, add_point = P. We use `Conditional` in `ec_add_unequal` to avoid divide by zero issues.
         let mult_and_add =
             ec_add_unequal(chip, ctx, &mult_point, &add_point, Conditional(is_zero_window[idx]));
         let is_started_point = ec_select(chip, ctx, mult_point, mult_and_add, is_zero_window[idx]);

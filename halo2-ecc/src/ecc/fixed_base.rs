@@ -197,7 +197,9 @@ where
                 })
                 .collect::<Vec<_>>();
             let bit_window_rev = bits.chunks(window_bits).rev();
+            // As an optimization to avoid first assigning an identity point, we start `curr_point = None` and populate it with the first point we want to add.
             let mut curr_point = None;
+            // We keep a boolean flag `is_identity` to track whether the current point is meant to represent the identity point.
             let mut is_identity = one;
             for (cached_point_window, bit_window) in cached_point_window_rev.zip(bit_window_rev) {
                 let is_zero_window = {
