@@ -27,3 +27,4 @@ pub mod msm;
 pub mod pairing;
 pub mod msm_sum_infinity;
 pub mod msm_sum_infinity_fixed_base;
+pub mod sm_unsafe_scalars;
