@@ -1,16 +1,11 @@
+/*
+ * Chip for constraining common polynomial operations.
+ */
+use crate::fields::{FieldChip, PrimeField};
+use halo2_base::Context;
 use std::marker::PhantomData;
 
-/*
- * Chip for constraining common polynomial operations. 
- */
-use crate::{fields::{FieldChip, PrimeField}};
-
-use halo2_base::Context;
-use num_bigint::BigUint;
-use num_traits::Zero;
-
-pub struct PolyChip<'a, F: PrimeField, FC: FieldChip<F>> where
-{
+pub struct PolyChip<'a, F: PrimeField, FC: FieldChip<F>> {
     pub fr_chip: &'a FC,
     pub phantom_data: PhantomData<F>,
 }

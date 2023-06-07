@@ -6,11 +6,22 @@ use crate::commitments::utils::blob::{root_of_unity, Blob};
 use crate::fields::poly::PolyChip;
 use crate::{
     bn254::{pairing::PairingChip, Fp2Chip, FpChip},
-    commitments::{kzg::KZGChip},
+    commitments::kzg::KZGChip,
     ecc::EccChip,
     fields::{FieldChip, FpStrategy},
     halo2_proofs::halo2curves::bn256::{Fr, G1Affine, G1, G2},
 };
+use ark_std::{end_timer, start_timer};
+use halo2_base::halo2_proofs::halo2curves::bn256::Bn256;
+use halo2_base::halo2_proofs::plonk::{create_proof, keygen_pk, keygen_vk, verify_proof};
+use halo2_base::halo2_proofs::poly::commitment::ParamsProver;
+use halo2_base::halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+use halo2_base::halo2_proofs::poly::kzg::multiopen::{ProverGWC, VerifierGWC};
+use halo2_base::halo2_proofs::poly::kzg::strategy::SingleStrategy;
+use halo2_base::halo2_proofs::transcript::{
+    Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
+};
+use halo2_base::utils::fs::gen_srs;
 use halo2_base::{
     gates::{
         builder::{
@@ -102,6 +113,8 @@ fn random_kzg_multi_circuit(
     params: KZGCircuitParams,
     stage: CircuitBuilderStage,
     break_points: Option<MultiPhaseThreadBreakPoints>,
+    blob_len: usize,
+    n_openings: usize
 ) -> RangeCircuitBuilder<Fr> {
     let k = params.degree as usize;
     let mut builder = match stage {
@@ -112,9 +125,7 @@ fn random_kzg_multi_circuit(
 
     let tau: Fr = Fr::from(111);
     let kzg_k: u32 = 2;
-    let blob_len = 4;
-    let openings: Vec<u64> = vec![2, 3];
-    let n_openings = openings.len();
+    let openings: Vec<u64> = (0..n_openings as u64).collect();
     let dummy_data: Vec<Fr> = (0..blob_len).map(|_| Fr::from(OsRng.next_u64())).collect();
 
     let pp = Blob::mock_trusted_setup(tau, blob_len, n_openings);
@@ -160,7 +171,56 @@ fn test_kzg() {
     )
     .unwrap();
 
-    let circuit = random_kzg_multi_circuit(params, CircuitBuilderStage::Mock, None);
+    let circuit = random_kzg_multi_circuit(params, CircuitBuilderStage::Mock, None, 4, 2);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
+#[test]
+fn bench_kzg() {
+    let rng = OsRng;
+    let path = "configs/commitments/kzg_circuit.config";
+    let bench_params: KZGCircuitParams = serde_json::from_reader(
+        File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
+    )
+    .unwrap();
+    let k = bench_params.degree;
+    let params = gen_srs(k);
+
+    let circuit = random_kzg_multi_circuit(bench_params, CircuitBuilderStage::Mock, None, 4, 2);
+
+    let vk_time = start_timer!(|| "Generating vkey");
+    let vk = keygen_vk(&params, &circuit).unwrap();
+    end_timer!(vk_time);
+
+    let pk_time = start_timer!(|| "Generating pkey");
+    let pk = keygen_pk(&params, vk, &circuit).unwrap();
+    end_timer!(pk_time);
+
+    let proof_time = start_timer!(|| "Proving time");
+    let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+    create_proof::<
+        KZGCommitmentScheme<Bn256>,
+        ProverGWC<'_, Bn256>,
+        Challenge255<G1Affine>,
+        _,
+        Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
+        _,
+    >(&params, &pk, &[circuit], &[&[]], rng, &mut transcript)
+    .unwrap();
+    let proof = transcript.finalize();
+    end_timer!(proof_time);
+
+    let verify_time = start_timer!(|| "Verify time");
+    let verifier_params = params.verifier_params();
+    let strategy = SingleStrategy::new(&params);
+    let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+    verify_proof::<
+        KZGCommitmentScheme<Bn256>,
+        VerifierGWC<'_, Bn256>,
+        Challenge255<G1Affine>,
+        Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
+        SingleStrategy<'_, Bn256>,
+    >(verifier_params, pk.get_vk(), strategy, &[&[]], &mut transcript)
+    .unwrap();
+    end_timer!(verify_time);
+}
