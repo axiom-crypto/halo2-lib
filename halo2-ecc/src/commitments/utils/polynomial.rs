@@ -101,7 +101,6 @@ impl<F: FieldExt> Polynomial<F> {
      * passes through (points, evals).
      */
     pub fn from_points_lagrange(points: &[F], evals: &[F]) -> Self {
-        // let tmp = best_fft(&mut evals, w.invert(), k);
         Self::new(lagrange_interpolate(points, evals))
     }
 
