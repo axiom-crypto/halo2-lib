@@ -181,6 +181,11 @@ fn test_kzg() {
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
+/*
+ * May need to increase thread stack size to run this test. Euclidean div has a 
+ * deep recursion tree. Can do this by 
+ * setting `RUST_MIN_STACK=104857600 cargo test ...`
+ */ 
 #[test]
 fn bench_kzg() {
     let rng = OsRng;
