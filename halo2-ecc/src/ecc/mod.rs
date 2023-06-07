@@ -3,10 +3,9 @@ use crate::fields::{fp::FpChip, FieldChip, PrimeField, Selectable};
 use crate::halo2_proofs::arithmetic::CurveAffine;
 use group::{Curve, Group};
 use halo2_base::gates::builder::GateThreadBuilder;
-use halo2_base::utils::modulus;
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
-    utils::CurveAffineExt,
+    utils::{modulus, CurveAffineExt},
     AssignedValue, Context,
 };
 use itertools::Itertools;
@@ -260,7 +259,7 @@ pub fn ec_sub_strict<F: PrimeField, FC: FieldChip<F>>(
 where
     FC: Selectable<F, FC::FieldPoint>,
 {
-    let mut P = P.into();
+    let P = P.into();
     let Q = Q.into();
     // Compute curr_point - start_point, allowing for output to be identity point
     let x_is_eq = chip.is_equal(ctx, P.x(), Q.x());
@@ -268,17 +267,6 @@ where
     let is_identity = chip.gate().and(ctx, x_is_eq, y_is_eq);
     // we ONLY allow x_is_eq = true if y_is_eq is also true; this constrains P != -Q
     ctx.constrain_equal(&x_is_eq, &is_identity);
-
-    // P.x = Q.x and P.y = Q.y
-    // in ec_sub_unequal it will try to do -(P.y + Q.y) / (P.x - Q.x) = -2P.y / 0
-    // this will cause divide_unsafe to panic when P.y != 0
-    // to avoid this, we load a random pair of points and replace P with it *only if* `is_identity == true`
-    // we don't even check (rand_x, rand_y) is on the curve, since we don't care about the output
-    let mut rng = ChaCha20Rng::from_entropy();
-    let [rand_x, rand_y] = [(); 2].map(|_| FC::FieldType::random(&mut rng));
-    let [rand_x, rand_y] = [rand_x, rand_y].map(|x| chip.load_private(ctx, x));
-    let rand_pt = EcPoint::new(rand_x, rand_y);
-    P = ec_select(chip, ctx, rand_pt, P, is_identity);
 
     let out = ec_sub_unequal(chip, ctx, P, Q, false);
     let zero = chip.load_constant(ctx, FC::FieldType::zero());
@@ -481,26 +469,26 @@ where
 /// - an array of length > 1 is needed when `scalar` exceeds the modulus of scalar field `F`
 ///
 /// # Assumptions
-/// - `window_bits != 0`
-/// - The order of `P` is at least `2^{window_bits}` (in particular, `P` is not the point at infinity)
-/// - The curve has no points of order 2.
+/// - `P` is not the point at infinity
+/// - `scalar > 0`
+/// - If `scalar_is_safe == true`, then we assume the integer `scalar` is in range [1, order of `P`)
+/// - Even if `scalar_is_safe == false`, some constraints may still fail if `scalar` is not in range [1, order of `P`)
 /// - `scalar_i < 2^{max_bits} for all i`
 /// - `max_bits <= modulus::<F>.bits()`, and equality only allowed when the order of `P` equals the modulus of `F`
-pub fn scalar_multiply<F: PrimeField, FC, C>(
+pub fn scalar_multiply<F: PrimeField, FC>(
     chip: &FC,
     ctx: &mut Context<F>,
     P: EcPoint<F, FC::FieldPoint>,
     scalar: Vec<AssignedValue<F>>,
     max_bits: usize,
     window_bits: usize,
+    scalar_is_safe: bool,
 ) -> EcPoint<F, FC::FieldPoint>
 where
     FC: FieldChip<F> + Selectable<F, FC::FieldPoint>,
-    C: CurveAffineExt<Base = FC::FieldType>,
 {
     assert!(!scalar.is_empty());
     assert!((max_bits as u64) <= modulus::<F>().bits());
-    assert!(window_bits != 0);
 
     let total_bits = max_bits * scalar.len();
     let num_windows = (total_bits + window_bits - 1) / window_bits;
@@ -518,7 +506,7 @@ where
     // is_started[idx] holds whether there is a 1 in bits with index at least (rounded_bitlen - idx)
     let mut is_started = Vec::with_capacity(rounded_bitlen);
     is_started.resize(rounded_bitlen - total_bits + 1, zero_cell);
-    for idx in 1..=total_bits {
+    for idx in 1..total_bits {
         let or = chip.gate().or(ctx, *is_started.last().unwrap(), rounded_bits[total_bits - idx]);
         is_started.push(or);
     }
@@ -535,23 +523,22 @@ where
         is_zero_window.push(is_zero);
     }
 
-    let any_point = load_random_point::<F, FC, C>(chip, ctx);
-    // cached_points[idx] stores idx * P, with cached_points[0] = any_point
+    // cached_points[idx] stores idx * P, with cached_points[0] = P
     let cache_size = 1usize << window_bits;
     let mut cached_points = Vec::with_capacity(cache_size);
-    cached_points.push(any_point);
+    cached_points.push(P.clone());
     cached_points.push(P.clone());
     for idx in 2..cache_size {
         if idx == 2 {
             let double = ec_double(chip, ctx, &P);
             cached_points.push(double);
         } else {
-            let new_point = ec_add_unequal(chip, ctx, &cached_points[idx - 1], &P, false);
+            let new_point = ec_add_unequal(chip, ctx, &cached_points[idx - 1], &P, !scalar_is_safe);
             cached_points.push(new_point);
         }
     }
 
-    // if all the starting window bits are 0, get start_point = any_point
+    // if all the starting window bits are 0, get start_point = P
     let mut curr_point = ec_select_from_bits(
         chip,
         ctx,
@@ -571,17 +558,13 @@ where
             &rounded_bits
                 [rounded_bitlen - window_bits * (idx + 1)..rounded_bitlen - window_bits * idx],
         );
-        // if is_zero_window[idx] = true, add_point = any_point. We only need any_point to avoid divide by zero in add_unequal
-        // if is_zero_window = true and is_started = false, then mult_point = 2^window_bits * any_point. Since window_bits != 0, we have mult_point != +- any_point
-        let mult_and_add = ec_add_unequal(chip, ctx, &mult_point, &add_point, true);
+        let mult_and_add = ec_add_unequal(chip, ctx, &mult_point, &add_point, !scalar_is_safe);
         let is_started_point = ec_select(chip, ctx, mult_point, mult_and_add, is_zero_window[idx]);
 
         curr_point =
             ec_select(chip, ctx, is_started_point, add_point, is_started[window_bits * idx]);
     }
-    // if at the end, return identity point (0,0) if still not started
-    let zero = chip.load_constant(ctx, FC::FieldType::zero());
-    ec_select(chip, ctx, curr_point, EcPoint::new(zero.clone(), zero), *is_started.last().unwrap())
+    curr_point
 }
 
 /// Checks that `P` is indeed a point on the elliptic curve `C`.
@@ -1024,18 +1007,24 @@ where
     }
 
     /// See [`scalar_multiply`] for more details.
-    pub fn scalar_mult<C>(
+    pub fn scalar_mult(
         &self,
         ctx: &mut Context<F>,
         P: EcPoint<F, FC::FieldPoint>,
         scalar: Vec<AssignedValue<F>>,
         max_bits: usize,
         window_bits: usize,
-    ) -> EcPoint<F, FC::FieldPoint>
-    where
-        C: CurveAffineExt<Base = FC::FieldType>,
-    {
-        scalar_multiply::<F, FC, C>(self.field_chip, ctx, P, scalar, max_bits, window_bits)
+        scalar_is_safe: bool,
+    ) -> EcPoint<F, FC::FieldPoint> {
+        scalar_multiply::<F, FC>(
+            self.field_chip,
+            ctx,
+            P,
+            scalar,
+            max_bits,
+            window_bits,
+            scalar_is_safe,
+        )
     }
 
     // default for most purposes
@@ -1049,13 +1038,14 @@ where
     ) -> EcPoint<F, FC::FieldPoint>
     where
         C: CurveAffineExt<Base = FC::FieldType>,
+        C::Base: ff::PrimeField,
         FC: Selectable<F, FC::ReducedFieldPoint>,
     {
         // window_bits = 4 is optimal from empirical observations
         self.variable_base_msm_in::<C>(thread_pool, P, scalars, max_bits, 4, 0)
     }
 
-    // TODO: add asserts to validate input assumptions described in docs
+    // TODO: put a check in place that scalar is < modulus of C::Scalar
     pub fn variable_base_msm_in<C>(
         &self,
         builder: &mut GateThreadBuilder<F>,
@@ -1067,6 +1057,7 @@ where
     ) -> EcPoint<F, FC::FieldPoint>
     where
         C: CurveAffineExt<Base = FC::FieldType>,
+        C::Base: ff::PrimeField,
         FC: Selectable<F, FC::ReducedFieldPoint>,
     {
         #[cfg(feature = "display")]
@@ -1113,6 +1104,7 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         scalar: Vec<AssignedValue<F>>,
         max_bits: usize,
         window_bits: usize,
+        scalar_is_safe: bool,
     ) -> EcPoint<F, FC::FieldPoint>
     where
         C: CurveAffineExt,
@@ -1125,6 +1117,7 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
             scalar,
             max_bits,
             window_bits,
+            scalar_is_safe,
         )
     }
 

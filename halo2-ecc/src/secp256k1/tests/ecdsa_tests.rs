@@ -1,4 +1,5 @@
 #![allow(non_snake_case)]
+use crate::fields::FpStrategy;
 use crate::halo2_proofs::{
     arithmetic::CurveAffine,
     dev::MockProver,
@@ -20,10 +21,21 @@ use halo2_base::utils::{biguint_to_fe, fe_to_biguint, modulus};
 use halo2_base::Context;
 use rand::random;
 use rand_core::OsRng;
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 use test_case::test_case;
 
-use super::CircuitParams;
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+struct CircuitParams {
+    strategy: FpStrategy,
+    degree: u32,
+    num_advice: usize,
+    num_lookup_advice: usize,
+    num_fixed: usize,
+    lookup_bits: usize,
+    limb_bits: usize,
+    num_limbs: usize,
+}
 
 fn ecdsa_test<F: PrimeField>(
     ctx: &mut Context<F>,

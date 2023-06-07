@@ -23,7 +23,7 @@ use itertools::Itertools;
 use rand_core::OsRng;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-struct FixedMSMCircuitParams {
+struct MSMCircuitParams {
     strategy: FpStrategy,
     degree: u32,
     num_advice: usize,
@@ -39,7 +39,7 @@ struct FixedMSMCircuitParams {
 
 fn fixed_base_msm_test(
     builder: &mut GateThreadBuilder<Fr>,
-    params: FixedMSMCircuitParams,
+    params: MSMCircuitParams,
     bases: Vec<G1Affine>,
     scalars: Vec<Fr>,
 ) {
@@ -68,7 +68,7 @@ fn fixed_base_msm_test(
 }
 
 fn random_fixed_base_msm_circuit(
-    params: FixedMSMCircuitParams,
+    params: MSMCircuitParams,
     bases: Vec<G1Affine>, // bases are fixed in vkey so don't randomly generate
     stage: CircuitBuilderStage,
     break_points: Option<MultiPhaseThreadBreakPoints>,
@@ -102,30 +102,13 @@ fn random_fixed_base_msm_circuit(
 #[test]
 fn test_fixed_base_msm() {
     let path = "configs/bn254/fixed_msm_circuit.config";
-    let params: FixedMSMCircuitParams = serde_json::from_reader(
+    let params: MSMCircuitParams = serde_json::from_reader(
         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
     )
     .unwrap();
 
     let bases = (0..params.batch_size).map(|_| G1Affine::random(OsRng)).collect_vec();
     let circuit = random_fixed_base_msm_circuit(params, bases, CircuitBuilderStage::Mock, None);
-    MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
-}
-
-#[test]
-fn test_fixed_msm_minus_1() {
-    let path = "configs/bn254/fixed_msm_circuit.config";
-    let params: FixedMSMCircuitParams = serde_json::from_reader(
-        File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
-    )
-    .unwrap();
-    let base = G1Affine::random(OsRng);
-    let k = params.degree as usize;
-    let mut builder = GateThreadBuilder::mock();
-    fixed_base_msm_test(&mut builder, params, vec![base], vec![-Fr::one()]);
-
-    builder.config(k, Some(20));
-    let circuit = RangeCircuitBuilder::mock(builder);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
@@ -143,8 +126,7 @@ fn bench_fixed_base_msm() -> Result<(), Box<dyn std::error::Error>> {
 
     let bench_params_reader = BufReader::new(bench_params_file);
     for line in bench_params_reader.lines() {
-        let bench_params: FixedMSMCircuitParams =
-            serde_json::from_str(line.unwrap().as_str()).unwrap();
+        let bench_params: MSMCircuitParams = serde_json::from_str(line.unwrap().as_str()).unwrap();
         let k = bench_params.degree;
         println!("---------------------- degree = {k} ------------------------------",);
         let rng = OsRng;
