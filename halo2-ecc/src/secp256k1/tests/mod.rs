@@ -160,3 +160,4 @@ fn test_secp_sm_0_1() {
     let circuit = sm_circuit(params, CircuitBuilderStage::Mock, None, base, s);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
+pub mod sm_unsafe_scalars;
