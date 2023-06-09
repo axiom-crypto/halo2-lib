@@ -32,6 +32,7 @@ jobs:
           cargo test -- test_ec_add
           cargo test -- test_fixed
           cargo test -- test_msm
+          cargo test -- test_sm
           cargo test -- test_fb
           cargo test -- test_pairing
           cd ..

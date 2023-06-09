@@ -38,7 +38,7 @@ fn scalar_multiply_test(params: SMCircuitParams, point: Secp256k1Affine, scalar:
     let ctx = builder.main(0);
     let scalar_assigned = vec![ctx.load_witness(scalar)];
 
-    let sm = scalar_multiply(
+    let _sm = scalar_multiply(
         ecc_chip.field_chip(),
         ctx,
         &point,
@@ -61,7 +61,7 @@ fn test_sm1() {
 
     let scalar = GROUP_ORDER;
 
-    println!("the scalar is {:?}", scalar);
+    println!("the scalar is {scalar:?}");
     scalar_multiply_test(params, generator_point, scalar);
 }
 
@@ -76,7 +76,7 @@ fn test_sm2() {
 
     let scalar = GROUP_ORDER - Fp::one();
 
-    println!("the scalar is {:?}", scalar);
+    println!("the scalar is {scalar:?}");
     scalar_multiply_test(params, generator_point, scalar);
 }
 
@@ -91,7 +91,7 @@ fn test_sm3() {
 
     let scalar = GROUP_ORDER - Fp::one();
 
-    println!("the scalar is {:?}", scalar);
+    println!("the scalar is {scalar:?}");
     scalar_multiply_test(params, generator_point, scalar);
 }
 
@@ -106,7 +106,7 @@ fn test_sm4() {
 
     let scalar = GROUP_ORDER - Fp::from(2);
 
-    println!("the scalar is {:?}", scalar);
+    println!("the scalar is {scalar:?}");
     scalar_multiply_test(params, generator_point, scalar);
 }
 
@@ -121,7 +121,7 @@ fn test_sm5() {
 
     let scalar = GROUP_ORDER + Fp::one();
 
-    println!("the scalar is {:?}", scalar);
+    println!("the scalar is {scalar:?}");
     scalar_multiply_test(params, generator_point, scalar);
 }
 
@@ -136,6 +136,6 @@ fn test_sm6() {
 
     let scalar = GROUP_ORDER + Fp::from(2);
 
-    println!("the scalar is {:?}", scalar);
+    println!("the scalar is {scalar:?}");
     scalar_multiply_test(params, generator_point, scalar);
 }
