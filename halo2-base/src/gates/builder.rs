@@ -223,58 +223,62 @@ impl<F: ScalarField> GateThreadBuilder<F> {
             let mut gate_index = 0;
             let mut row_offset = 0;
             for ctx in threads {
-                let mut basic_gate = config.basic_gates[phase]
+                if !ctx.advice.is_empty() {
+                    let mut basic_gate = config.basic_gates[phase]
                         .get(gate_index)
                         .unwrap_or_else(|| panic!("NOT ENOUGH ADVICE COLUMNS IN PHASE {phase}. Perhaps blinding factors were not taken into account. The max non-poisoned rows is {max_rows}"));
-                assert_eq!(ctx.selector.len(), ctx.advice.len());
+                    assert_eq!(ctx.selector.len(), ctx.advice.len());
 
-                for (i, (advice, &q)) in ctx.advice.iter().zip(ctx.selector.iter()).enumerate() {
-                    let column = basic_gate.value;
-                    let value = if use_unknown { Value::unknown() } else { Value::known(advice) };
-                    #[cfg(feature = "halo2-axiom")]
-                    let cell = *region.assign_advice(column, row_offset, value).cell();
-                    #[cfg(not(feature = "halo2-axiom"))]
-                    let cell = region
-                        .assign_advice(|| "", column, row_offset, || value.map(|v| *v))
-                        .unwrap()
-                        .cell();
-                    assigned_advices.insert((ctx.context_id, i), (cell, row_offset));
-
-                    // If selector enabled and row_offset is valid add break point to Keygen Assignments, account for break point overlap, and enforce equality constraint for gate outputs.
-                    if (q && row_offset + 4 > max_rows) || row_offset >= max_rows - 1 {
-                        break_point.push(row_offset);
-                        row_offset = 0;
-                        gate_index += 1;
-
-                        // when there is a break point, because we may have two gates that overlap at the current cell, we must copy the current cell to the next column for safety
-                        basic_gate = config.basic_gates[phase]
-                        .get(gate_index)
-                        .unwrap_or_else(|| panic!("NOT ENOUGH ADVICE COLUMNS IN PHASE {phase}. Perhaps blinding factors were not taken into account. The max non-poisoned rows is {max_rows}"));
+                    for (i, (advice, &q)) in ctx.advice.iter().zip(ctx.selector.iter()).enumerate()
+                    {
                         let column = basic_gate.value;
-
+                        let value =
+                            if use_unknown { Value::unknown() } else { Value::known(advice) };
                         #[cfg(feature = "halo2-axiom")]
-                        {
-                            let ncell = region.assign_advice(column, row_offset, value);
-                            region.constrain_equal(ncell.cell(), &cell);
-                        }
+                        let cell = *region.assign_advice(column, row_offset, value).cell();
                         #[cfg(not(feature = "halo2-axiom"))]
-                        {
-                            let ncell = region
-                                .assign_advice(|| "", column, row_offset, || value.map(|v| *v))
-                                .unwrap()
-                                .cell();
-                            region.constrain_equal(ncell, cell).unwrap();
+                        let cell = region
+                            .assign_advice(|| "", column, row_offset, || value.map(|v| *v))
+                            .unwrap()
+                            .cell();
+                        assigned_advices.insert((ctx.context_id, i), (cell, row_offset));
+
+                        // If selector enabled and row_offset is valid add break point to Keygen Assignments, account for break point overlap, and enforce equality constraint for gate outputs.
+                        if (q && row_offset + 4 > max_rows) || row_offset >= max_rows - 1 {
+                            break_point.push(row_offset);
+                            row_offset = 0;
+                            gate_index += 1;
+
+                            // when there is a break point, because we may have two gates that overlap at the current cell, we must copy the current cell to the next column for safety
+                            basic_gate = config.basic_gates[phase]
+                        .get(gate_index)
+                        .unwrap_or_else(|| panic!("NOT ENOUGH ADVICE COLUMNS IN PHASE {phase}. Perhaps blinding factors were not taken into account. The max non-poisoned rows is {max_rows}"));
+                            let column = basic_gate.value;
+
+                            #[cfg(feature = "halo2-axiom")]
+                            {
+                                let ncell = region.assign_advice(column, row_offset, value);
+                                region.constrain_equal(ncell.cell(), &cell);
+                            }
+                            #[cfg(not(feature = "halo2-axiom"))]
+                            {
+                                let ncell = region
+                                    .assign_advice(|| "", column, row_offset, || value.map(|v| *v))
+                                    .unwrap()
+                                    .cell();
+                                region.constrain_equal(ncell, cell).unwrap();
+                            }
                         }
-                    }
 
-                    if q {
-                        basic_gate
-                            .q_enable
-                            .enable(region, row_offset)
-                            .expect("enable selector should not fail");
-                    }
+                        if q {
+                            basic_gate
+                                .q_enable
+                                .enable(region, row_offset)
+                                .expect("enable selector should not fail");
+                        }
 
-                    row_offset += 1;
+                        row_offset += 1;
+                    }
                 }
                 // Assign fixed cells
                 for (c, _) in ctx.constant_equality_constraints.iter() {
@@ -386,7 +390,11 @@ pub fn assign_threads_in<F: ScalarField>(
     break_points: ThreadBreakPoints,
 ) {
     if config.basic_gates[phase].is_empty() {
-        assert!(threads.is_empty(), "Trying to assign threads in a phase with no columns");
+        assert_eq!(
+            threads.iter().map(|ctx| ctx.advice.len()).sum::<usize>(),
+            0,
+            "Trying to assign threads in a phase with no columns"
+        );
         return;
     }
 
