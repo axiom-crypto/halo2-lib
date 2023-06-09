@@ -736,7 +736,7 @@ where
         ctx,
         &rand_start_vec[k],
         &rand_start_vec[0],
-        k >= F::CAPACITY as usize,
+        true, // k >= F::CAPACITY as usize, // this assumed random points on `C` were of prime order equal to modulus of `F`. Since this is easily missed, we turn on strict mode always
     );
     let mut curr_point = start_point.clone();
 
