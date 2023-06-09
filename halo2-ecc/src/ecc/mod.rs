@@ -251,6 +251,9 @@ pub fn ec_sub_unequal<F: PrimeField, FC: FieldChip<F>>(
 
 /// Constrains `P != -Q` but allows `P == Q`, in which case output is (0,0).
 /// For Weierstrass curves only.
+///
+/// Assumptions
+/// # Neither P or Q is the point at infinity
 pub fn ec_sub_strict<F: PrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
