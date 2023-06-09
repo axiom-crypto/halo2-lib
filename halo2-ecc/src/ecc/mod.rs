@@ -501,7 +501,8 @@ where
     assert!(!scalar.is_empty());
     assert!((max_bits as u64) <= modulus::<F>().bits());
     assert!(window_bits != 0);
-
+    multi_scalar_multiply::<F, FC, C>(chip, ctx, &[P], vec![scalar], max_bits, window_bits)
+    /*
     let total_bits = max_bits * scalar.len();
     let num_windows = (total_bits + window_bits - 1) / window_bits;
     let rounded_bitlen = num_windows * window_bits;
@@ -582,6 +583,7 @@ where
     // if at the end, return identity point (0,0) if still not started
     let zero = chip.load_constant(ctx, FC::FieldType::zero());
     ec_select(chip, ctx, curr_point, EcPoint::new(zero.clone(), zero), *is_started.last().unwrap())
+    */
 }
 
 /// Checks that `P` is indeed a point on the elliptic curve `C`.
