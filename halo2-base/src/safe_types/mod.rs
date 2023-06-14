@@ -80,7 +80,7 @@ pub type SafeUint160<F> = CompactSafeType<F, 160>;
 /// SafeType for uint256.
 pub type SafeUint256<F> = CompactSafeType<F, 256>;
 /// SafeType for Address.
-pub type SafeAddress<F> = SafeType<F, 1, 128>;
+pub type SafeAddress<F> = SafeType<F, 1, 160>;
 /// SafeType for bytes32.
 pub type SafeBytes32<F> = SafeType<F, 1, 256>;
 
