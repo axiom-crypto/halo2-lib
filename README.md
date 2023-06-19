@@ -130,7 +130,7 @@ The test config file locations are (relative to `halo2-ecc` directory):
 | `test_msm` | `src/bn254/configs/msm_circuit.config` |
 | `test_pairing` | `src/bn254/configs/pairing_circuit.config` |
 
-### Benchmarks
+## Benchmarks
 
 We have tests that are actually benchmarks using the production Halo2 prover.
 As mentioned [above](#Configurable-Circuits), there are different configurations for each circuit that lead to _very_ different proving times. The following benchmarks will take a list of possible configurations and benchmark each one. The results are saved in a file in the `results` directory. We currently supply the configuration lists, which should provide optimal configurations for a given circuit degree `k` (however you can check versus the stdout suggestions to see if they really are optimal!).
@@ -172,15 +172,7 @@ cargo bench --bench fp_mul
 
 This run the same proof generation over 10 runs and collect the average. Each circuit has a fixed configuration chosen for optimal speed. These benchmarks are mostly for use in performance optimization.
 
-<<<<<<< HEAD
-
-## Secp256k1 ECDSA
-
-=======
-
 ### Secp256k1 ECDSA
-
-> > > > > > > main
 
 We provide benchmarks for ECDSA signature verification for the Secp256k1 curve on several different machines. All machines only use CPUs.
 
@@ -223,15 +215,7 @@ The other columns provide information about the [PLONKish arithmetization](https
 
 The r6a has a higher clock speed than the r6g.
 
-<<<<<<< HEAD
-
-## BN254 Pairing
-
-=======
-
 ### BN254 Pairing
-
-> > > > > > > main
 
 We provide benchmarks of the optimal Ate pairing for BN254 on several different machines. All machines only use CPUs.
 
@@ -274,15 +258,7 @@ The other columns provide information about the [PLONKish arithmetization](https
 
 The r6a has a higher clock speed than the r6g. We hypothesize that the Apple Silicon integrated memory leads to the faster performance on the M2 Max.
 
-<<<<<<< HEAD
-
-## BN254 MSM
-
-=======
-
 ### BN254 MSM
-
-> > > > > > > main
 
 We provide benchmarks of multi-scalar multiplication (MSM, multi-exp) with a batch size of `100` for BN254.
 
@@ -300,8 +276,6 @@ cargo test --release --no-default-features --features "halo2-axiom, mimalloc" --
 | 20  | 11         | 2                 | 1         | 41.3s               |
 | 21  | 6          | 1                 | 1         | 51.9s               |
 
-# <<<<<<< HEAD
-
 ## Projects built with `halo2-lib`
 
 - [Axiom](https://github.com/axiom-crypto/axiom-eth) -- Prove facts about Ethereum on-chain data via aggregate block header, account, and storage proofs.
@@ -315,4 +289,3 @@ cargo test --release --no-default-features --features "halo2-axiom, mimalloc" --
 - [zkevm tx-circuit](https://github.com/scroll-tech/zkevm-circuits/tree/develop/zkevm-circuits/src/tx_circuit)
 - [webauthn-halo2](https://github.com/zkwebauthn/webauthn-halo2) -- Proving and verifying WebAuthn with halo2.
 - [Fixed Point Arithmetic](https://github.com/DCMMC/halo2-scaffold/tree/main/src/gadget) -- Fixed point arithmetic library in halo2.
-  > > > > > > > main
