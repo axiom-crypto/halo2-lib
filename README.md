@@ -130,15 +130,7 @@ The test config file locations are (relative to `halo2-ecc` directory):
 | `test_msm` | `src/bn254/configs/msm_circuit.config` |
 | `test_pairing` | `src/bn254/configs/pairing_circuit.config` |
 
-<<<<<<< HEAD
-
 ### Benchmarks
-
-=======
-
-## Benchmarks
-
-> > > > > > > main
 
 We have tests that are actually benchmarks using the production Halo2 prover.
 As mentioned [above](#Configurable-Circuits), there are different configurations for each circuit that lead to _very_ different proving times. The following benchmarks will take a list of possible configurations and benchmark each one. The results are saved in a file in the `results` directory. We currently supply the configuration lists, which should provide optimal configurations for a given circuit degree `k` (however you can check versus the stdout suggestions to see if they really are optimal!).
