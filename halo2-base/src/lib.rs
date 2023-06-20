@@ -1,16 +1,19 @@
+//! Base library to build Halo2 circuits.
 #![feature(stmt_expr_attributes)]
 #![feature(trait_alias)]
 #![deny(clippy::perf)]
 #![allow(clippy::too_many_arguments)]
+#![warn(clippy::default_numeric_fallback)]
+#![warn(missing_docs)]
 
-// different memory allocator options:
-// mimalloc is fastest on Mac M2
+// Different memory allocator options:
 #[cfg(feature = "jemallocator")]
 use jemallocator::Jemalloc;
 #[cfg(feature = "jemallocator")]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
+// mimalloc is fastest on Mac M2
 #[cfg(feature = "mimalloc")]
 use mimalloc::MiMalloc;
 #[cfg(feature = "mimalloc")]
@@ -24,552 +27,385 @@ compile_error!(
 #[cfg(not(any(feature = "halo2-pse", feature = "halo2-axiom")))]
 compile_error!("Must enable exactly one of \"halo2-pse\" or \"halo2-axiom\" features to choose which halo2_proofs crate to use.");
 
-use gates::flex_gate::MAX_PHASE;
+// use gates::flex_gate::MAX_PHASE;
 #[cfg(feature = "halo2-pse")]
 pub use halo2_proofs;
 #[cfg(feature = "halo2-axiom")]
 pub use halo2_proofs_axiom as halo2_proofs;
 
-use halo2_proofs::{
-    circuit::{AssignedCell, Cell, Region, Value},
-    plonk::{Advice, Assigned, Column, Fixed},
-};
-use rustc_hash::FxHashMap;
-#[cfg(feature = "halo2-pse")]
-use std::marker::PhantomData;
-use std::{cell::RefCell, rc::Rc};
+use halo2_proofs::plonk::Assigned;
 use utils::ScalarField;
 
+/// Module that contains the main API for creating and working with circuits.
 pub mod gates;
-// pub mod hashes;
+/// Utility functions for converting between different types of field elements.
 pub mod utils;
 
+/// Constant representing whether the Layouter calls `synthesize` once just to get region shape.
 #[cfg(feature = "halo2-axiom")]
 pub const SKIP_FIRST_PASS: bool = false;
+/// Constant representing whether the Layouter calls `synthesize` once just to get region shape.
 #[cfg(feature = "halo2-pse")]
 pub const SKIP_FIRST_PASS: bool = true;
 
-#[derive(Clone, Debug)]
-pub enum QuantumCell<'a, 'b: 'a, F: ScalarField> {
-    Existing(&'a AssignedValue<'b, F>),
-    ExistingOwned(AssignedValue<'b, F>), // this is similar to the Cow enum
-    Witness(Value<F>),
-    WitnessFraction(Value<Assigned<F>>),
+/// Convenience Enum which abstracts the scenarios under a value is added to an advice column.
+#[derive(Clone, Copy, Debug)]
+pub enum QuantumCell<F: ScalarField> {
+    /// An [AssignedValue] already existing in the advice column (e.g., a witness value that was already assigned in a previous cell in the column).
+    /// * Assigns a new cell into the advice column with value equal to the value of a.
+    /// * Imposes an equality constraint between the new cell and the cell of a so the Verifier guarantees that these two cells are always equal.
+    Existing(AssignedValue<F>),
+    // This is a guard for witness values assigned after pkey generation. We do not use `Value` api anymore.
+    /// A non-existing witness [ScalarField] value (e.g. private input) to add to an advice column.
+    Witness(F),
+    /// A non-existing witness [ScalarField] marked as a fraction for optimization in batch inversion later.
+    WitnessFraction(Assigned<F>),
+    /// A known constant value added as a witness value to the advice column and added to the "Fixed" column during circuit creation time.
+    /// * Visible to both the Prover and the Verifier.
+    /// * Imposes an equality constraint between the two corresponding cells in the advice and fixed columns.
     Constant(F),
 }
 
-impl<F: ScalarField> QuantumCell<'_, '_, F> {
-    pub fn value(&self) -> Value<&F> {
+impl<F: ScalarField> From<AssignedValue<F>> for QuantumCell<F> {
+    /// Converts an [AssignedValue<F>] into a [QuantumCell<F>] of [type Existing(AssignedValue<F>)]
+    fn from(a: AssignedValue<F>) -> Self {
+        Self::Existing(a)
+    }
+}
+
+impl<F: ScalarField> QuantumCell<F> {
+    /// Returns an immutable reference to the underlying [ScalarField] value of a QuantumCell<F>.
+    ///
+    /// Panics if the QuantumCell<F> is of type WitnessFraction.
+    pub fn value(&self) -> &F {
         match self {
             Self::Existing(a) => a.value(),
-            Self::ExistingOwned(a) => a.value(),
-            Self::Witness(a) => a.as_ref(),
+            Self::Witness(a) => a,
             Self::WitnessFraction(_) => {
                 panic!("Trying to get value of a fraction before batch inversion")
             }
-            Self::Constant(a) => Value::known(a),
+            Self::Constant(a) => a,
         }
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct AssignedValue<'a, F: ScalarField> {
-    #[cfg(feature = "halo2-axiom")]
-    pub cell: AssignedCell<&'a Assigned<F>, F>,
-
-    #[cfg(feature = "halo2-pse")]
-    pub cell: Cell,
-    #[cfg(feature = "halo2-pse")]
-    pub value: Value<F>,
-    #[cfg(feature = "halo2-pse")]
-    pub row_offset: usize,
-    #[cfg(feature = "halo2-pse")]
-    pub _marker: PhantomData<&'a F>,
-
-    #[cfg(feature = "display")]
+/// Pointer to the position of a cell at `offset` in an advice column within a [Context] of `context_id`.
+#[derive(Clone, Copy, Debug)]
+pub struct ContextCell {
+    /// Identifier of the [Context] that this cell belongs to.
     pub context_id: usize,
+    /// Relative offset of the cell within this [Context] advice column.
+    pub offset: usize,
 }
 
-impl<'a, F: ScalarField> AssignedValue<'a, F> {
-    #[cfg(feature = "display")]
-    pub fn context_id(&self) -> usize {
-        self.context_id
-    }
-
-    pub fn row(&self) -> usize {
-        #[cfg(feature = "halo2-axiom")]
-        {
-            self.cell.row_offset()
-        }
-
-        #[cfg(feature = "halo2-pse")]
-        {
-            self.row_offset
-        }
-    }
-
-    #[cfg(feature = "halo2-axiom")]
-    pub fn cell(&self) -> &Cell {
-        self.cell.cell()
-    }
-    #[cfg(feature = "halo2-pse")]
-    pub fn cell(&self) -> Cell {
-        self.cell
-    }
-
-    pub fn value(&self) -> Value<&F> {
-        #[cfg(feature = "halo2-axiom")]
-        {
-            self.cell.value().map(|a| match *a {
-                Assigned::Trivial(a) => a,
-                _ => unreachable!(),
-            })
-        }
-        #[cfg(feature = "halo2-pse")]
-        {
-            self.value.as_ref()
-        }
-    }
-
-    #[cfg(feature = "halo2-axiom")]
-    pub fn copy_advice<'v>(
-        &'a self,
-        region: &mut Region<'_, F>,
-        column: Column<Advice>,
-        offset: usize,
-    ) -> AssignedCell<&'v Assigned<F>, F> {
-        let assigned_cell = region
-            .assign_advice(column, offset, self.cell.value().map(|v| **v))
-            .unwrap_or_else(|err| panic!("{err:?}"));
-        region.constrain_equal(assigned_cell.cell(), self.cell());
-
-        assigned_cell
-    }
-
-    #[cfg(feature = "halo2-pse")]
-    pub fn copy_advice(
-        &'a self,
-        region: &mut Region<'_, F>,
-        column: Column<Advice>,
-        offset: usize,
-    ) -> Cell {
-        let cell = region
-            .assign_advice(|| "", column, offset, || self.value)
-            .expect("assign copy advice should not fail")
-            .cell();
-        region.constrain_equal(cell, self.cell()).expect("constrain equal should not fail");
-
-        cell
-    }
+/// Pointer containing cell value and location within [Context].
+///
+/// Note: Performs a copy of the value, should only be used when you are about to assign the value again elsewhere.
+#[derive(Clone, Copy, Debug)]
+pub struct AssignedValue<F: ScalarField> {
+    /// Value of the cell.
+    pub value: Assigned<F>, // we don't use reference to avoid issues with lifetimes (you can't safely borrow from vector and push to it at the same time).
+    // only needed during vkey, pkey gen to fetch the actual cell from the relevant context
+    /// [ContextCell] pointer to the cell the value is assigned to within an advice column of a [Context].
+    pub cell: Option<ContextCell>,
 }
 
-// The reason we have a `Context` is that we will need to mutably borrow `advice_rows` (etc.) to update row count
-// The `Circuit` trait takes in `Config` as an input that is NOT mutable, so we must pass around &mut Context everywhere for function calls
-// We follow halo2wrong's convention of having `Context` also include the `Region` to be passed around, instead of a `Layouter`, so that everything happens within a single `layouter.assign_region` call. This allows us to circumvent the Halo2 layouter and use our own "pseudo-layouter", which is more specialized (and hence faster) for our specific gates
-#[derive(Debug)]
-pub struct Context<'a, F: ScalarField> {
-    pub region: Region<'a, F>, // I don't see a reason to use Box<Region<'a, F>> since we will pass mutable reference of `Context` anyways
-
-    pub max_rows: usize,
-
-    // Assigning advice in a "horizontal" first fashion requires getting the column with min rows used each time `assign_region` is called, which takes a toll on witness generation speed, so instead we will just assigned a column all the way down until it reaches `max_rows` and then increment the column index
-    //
-    /// `advice_alloc[context_id] = (index, offset)` where `index` contains the current column index corresponding to `context_id`, and `offset` contains the current row offset within column `index`
+impl<F: ScalarField> AssignedValue<F> {
+    /// Returns an immutable reference to the underlying value of an AssignedValue<F>.
     ///
-    /// This assumes the phase is `ctx.current_phase()` to enforce the design pattern that advice should be assigned one phase at a time.
-    pub advice_alloc: Vec<(usize, usize)>, // [Vec<(usize, usize)>; MAX_PHASE],
+    /// Panics if the AssignedValue<F> is of type WitnessFraction.
+    pub fn value(&self) -> &F {
+        match &self.value {
+            Assigned::Trivial(a) => a,
+            _ => unreachable!(), // if trying to fetch an un-evaluated fraction, you will have to do something manual
+        }
+    }
+}
 
-    #[cfg(feature = "display")]
-    pub total_advice: usize,
+/// Represents a single thread of an execution trace.
+/// * We keep the naming [Context] for historical reasons.
+#[derive(Clone, Debug)]
+pub struct Context<F: ScalarField> {
+    /// Flag to determine whether only witness generation or proving and verification key generation is being performed.
+    /// * If witness gen is performed many operations can be skipped for optimization.
+    witness_gen_only: bool,
+
+    /// Identifier to reference cells from this [Context].
+    pub context_id: usize,
+
+    /// Single column of advice cells.
+    pub advice: Vec<Assigned<F>>,
+
+    /// [Vec] tracking all cells that lookup is enabled for.
+    /// * When there is more than 1 advice column all `advice` cells will be copied to a single lookup enabled column to perform lookups.
+    pub cells_to_lookup: Vec<AssignedValue<F>>,
+
+    /// Cell that represents the zero value as AssignedValue<F>
+    pub zero_cell: Option<AssignedValue<F>>,
 
     // To save time from re-allocating new temporary vectors that get quickly dropped (e.g., for some range checks), we keep a vector with high capacity around that we `clear` before use each time
+    // This is NOT THREAD SAFE
     // Need to use RefCell to avoid borrow rules
     // Need to use Rc to borrow this and mutably borrow self at same time
-    preallocated_vec_to_assign: Rc<RefCell<Vec<AssignedValue<'a, F>>>>,
+    // preallocated_vec_to_assign: Rc<RefCell<Vec<AssignedValue<'a, F>>>>,
 
-    // `assigned_constants` is a HashMap keeping track of all constants that we use throughout
-    // we assign them to fixed columns as we go, re-using a fixed cell if the constant value has been assigned previously
-    fixed_columns: Vec<Column<Fixed>>,
-    fixed_col: usize,
-    fixed_offset: usize,
-    // fxhash is faster than normal HashMap: https://nnethercote.github.io/perf-book/hashing.html
-    #[cfg(feature = "halo2-axiom")]
-    pub assigned_constants: FxHashMap<F, Cell>,
-    // PSE's halo2curves does not derive Hash
-    #[cfg(feature = "halo2-pse")]
-    pub assigned_constants: FxHashMap<Vec<u8>, Cell>,
+    // ========================================
+    // General principle: we don't need to optimize anything specific to `witness_gen_only == false` because it is only done during keygen
+    // If `witness_gen_only == false`:
+    /// [Vec] representing the selector column of this [Context] accompanying each `advice` column
+    /// * Assumed to have the same length as `advice`
+    pub selector: Vec<bool>,
 
-    pub zero_cell: Option<AssignedValue<'a, F>>,
+    // TODO: gates that use fixed columns as selectors?
+    /// A [Vec] tracking equality constraints between pairs of [Context] `advice` cells.
+    ///
+    /// Assumes both `advice` cells are in the same [Context].
+    pub advice_equality_constraints: Vec<(ContextCell, ContextCell)>,
 
-    // `cells_to_lookup` is a vector keeping track of all cells that we want to enable lookup for. When there is more than 1 advice column we will copy_advice all of these cells to the single lookup enabled column and do lookups there
-    pub cells_to_lookup: Vec<AssignedValue<'a, F>>,
-
-    current_phase: usize,
-
-    #[cfg(feature = "display")]
-    pub op_count: FxHashMap<String, usize>,
-    #[cfg(feature = "display")]
-    pub advice_alloc_cache: [Vec<(usize, usize)>; MAX_PHASE],
-    #[cfg(feature = "display")]
-    pub total_lookup_cells: [usize; MAX_PHASE],
-    #[cfg(feature = "display")]
-    pub total_fixed: usize,
+    /// A [Vec] tracking pairs equality constraints between Fixed values and [Context] `advice` cells.
+    ///
+    /// Assumes the constant and `advice` cell are in the same [Context].
+    pub constant_equality_constraints: Vec<(F, ContextCell)>,
 }
 
-//impl<'a, F: ScalarField> std::ops::Drop for Context<'a, F> {
-//    fn drop(&mut self) {
-//        assert!(
-//            self.cells_to_lookup.is_empty(),
-//            "THERE ARE STILL ADVICE CELLS THAT NEED TO BE LOOKED UP"
-//        );
-//    }
-//}
-
-impl<'a, F: ScalarField> std::fmt::Display for Context<'a, F> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:#?}")
-    }
-}
-
-// a single struct to package any configuration parameters we will need for constructing a new `Context`
-#[derive(Clone, Debug)]
-pub struct ContextParams {
-    pub max_rows: usize,
-    /// `num_advice[context_id][phase]` contains the number of advice columns that context `context_id` keeps track of in phase `phase`
-    pub num_context_ids: usize,
-    pub fixed_columns: Vec<Column<Fixed>>,
-}
-
-impl<'a, F: ScalarField> Context<'a, F> {
-    pub fn new(region: Region<'a, F>, params: ContextParams) -> Self {
-        let advice_alloc = vec![(0, 0); params.num_context_ids];
-
+impl<F: ScalarField> Context<F> {
+    /// Creates a new [Context] with the given `context_id` and witness generation enabled/disabled by the `witness_gen_only` flag.
+    /// * `witness_gen_only`: flag to determine whether public key generation or only witness generation is being performed.
+    /// * `context_id`: identifier to reference advice cells from this [Context] later.
+    pub fn new(witness_gen_only: bool, context_id: usize) -> Self {
         Self {
-            region,
-            max_rows: params.max_rows,
-            advice_alloc,
-            #[cfg(feature = "display")]
-            total_advice: 0,
-            preallocated_vec_to_assign: Rc::new(RefCell::new(Vec::with_capacity(256))),
-            fixed_columns: params.fixed_columns,
-            fixed_col: 0,
-            fixed_offset: 0,
-            assigned_constants: FxHashMap::default(),
-            zero_cell: None,
+            witness_gen_only,
+            context_id,
+            advice: Vec::new(),
             cells_to_lookup: Vec::new(),
-            current_phase: 0,
-            #[cfg(feature = "display")]
-            op_count: FxHashMap::default(),
-            #[cfg(feature = "display")]
-            advice_alloc_cache: [(); MAX_PHASE].map(|_| vec![]),
-            #[cfg(feature = "display")]
-            total_lookup_cells: [0; MAX_PHASE],
-            #[cfg(feature = "display")]
-            total_fixed: 0,
+            zero_cell: None,
+            selector: Vec::new(),
+            advice_equality_constraints: Vec::new(),
+            constant_equality_constraints: Vec::new(),
         }
     }
 
-    pub fn preallocated_vec_to_assign(&self) -> Rc<RefCell<Vec<AssignedValue<'a, F>>>> {
-        Rc::clone(&self.preallocated_vec_to_assign)
+    /// Returns the `witness_gen_only` flag of the [Context]
+    pub fn witness_gen_only(&self) -> bool {
+        self.witness_gen_only
     }
 
-    pub fn next_phase(&mut self) {
-        assert!(
-            self.cells_to_lookup.is_empty(),
-            "THERE ARE STILL ADVICE CELLS THAT NEED TO BE LOOKED UP"
-        );
-        #[cfg(feature = "display")]
-        {
-            self.advice_alloc_cache[self.current_phase] = self.advice_alloc.clone();
-        }
-        #[cfg(feature = "halo2-axiom")]
-        self.region.next_phase();
-        self.current_phase += 1;
-        for advice_alloc in self.advice_alloc.iter_mut() {
-            *advice_alloc = (0, 0);
-        }
-        assert!(self.current_phase < MAX_PHASE);
-    }
-
-    pub fn current_phase(&self) -> usize {
-        self.current_phase
-    }
-
-    #[cfg(feature = "display")]
-    /// Returns (number of fixed columns used, total fixed cells used)
-    pub fn fixed_stats(&self) -> (usize, usize) {
-        // heuristic, fixed cells don't need to worry about blinding factors
-        ((self.total_fixed + self.max_rows - 1) / self.max_rows, self.total_fixed)
-    }
-
-    #[cfg(feature = "halo2-axiom")]
-    pub fn assign_fixed(&mut self, c: F) -> Cell {
-        let fixed = self.assigned_constants.get(&c);
-        if let Some(cell) = fixed {
-            *cell
-        } else {
-            let cell = self.assign_fixed_without_caching(c);
-            self.assigned_constants.insert(c, cell);
-            cell
-        }
-    }
-    #[cfg(feature = "halo2-pse")]
-    pub fn assign_fixed(&mut self, c: F) -> Cell {
-        let fixed = self.assigned_constants.get(c.to_repr().as_ref());
-        if let Some(cell) = fixed {
-            *cell
-        } else {
-            let cell = self.assign_fixed_without_caching(c);
-            self.assigned_constants.insert(c.to_repr().as_ref().to_vec(), cell);
-            cell
-        }
-    }
-
-    /// Saving the assigned constant to the hashmap takes time.
-    ///
-    /// In situations where you don't expect to reuse the value, you can assign the fixed value directly using this function.
-    pub fn assign_fixed_without_caching(&mut self, c: F) -> Cell {
-        #[cfg(feature = "halo2-axiom")]
-        let cell = self.region.assign_fixed(
-            self.fixed_columns[self.fixed_col],
-            self.fixed_offset,
-            Assigned::Trivial(c),
-        );
-        #[cfg(feature = "halo2-pse")]
-        let cell = self
-            .region
-            .assign_fixed(
-                || "",
-                self.fixed_columns[self.fixed_col],
-                self.fixed_offset,
-                || Value::known(c),
-            )
-            .expect("assign fixed should not fail")
-            .cell();
-        #[cfg(feature = "display")]
-        {
-            self.total_fixed += 1;
-        }
-        self.fixed_col += 1;
-        if self.fixed_col == self.fixed_columns.len() {
-            self.fixed_col = 0;
-            self.fixed_offset += 1;
-        }
-        cell
-    }
-
-    /// Assuming that this is only called if ctx.region is not in shape mode!
-    #[cfg(feature = "halo2-axiom")]
-    pub fn assign_cell<'v>(
-        &mut self,
-        input: QuantumCell<'_, 'v, F>,
-        column: Column<Advice>,
-        #[cfg(feature = "display")] context_id: usize,
-        row_offset: usize,
-    ) -> AssignedValue<'v, F> {
-        match input {
+    /// Pushes a [QuantumCell<F>] to the end of the `advice` column ([Vec] of advice cells) in this [Context].
+    /// * `input`: the cell to be assigned.
+    pub fn assign_cell(&mut self, input: impl Into<QuantumCell<F>>) {
+        // Determine the type of the cell and push it to the relevant vector
+        match input.into() {
             QuantumCell::Existing(acell) => {
-                AssignedValue {
-                    cell: acell.copy_advice(
-                        // || "gate: copy advice",
-                        &mut self.region,
-                        column,
-                        row_offset,
-                    ),
-                    #[cfg(feature = "display")]
-                    context_id,
+                self.advice.push(acell.value);
+                // If witness generation is not performed, enforce equality constraints between the existing cell and the new cell
+                if !self.witness_gen_only {
+                    let new_cell =
+                        ContextCell { context_id: self.context_id, offset: self.advice.len() - 1 };
+                    self.advice_equality_constraints.push((new_cell, acell.cell.unwrap()));
                 }
             }
-            QuantumCell::ExistingOwned(acell) => {
-                AssignedValue {
-                    cell: acell.copy_advice(
-                        // || "gate: copy advice",
-                        &mut self.region,
-                        column,
-                        row_offset,
-                    ),
-                    #[cfg(feature = "display")]
-                    context_id,
-                }
+            QuantumCell::Witness(val) => {
+                self.advice.push(Assigned::Trivial(val));
             }
-            QuantumCell::Witness(val) => AssignedValue {
-                cell: self
-                    .region
-                    .assign_advice(column, row_offset, val.map(Assigned::Trivial))
-                    .expect("assign advice should not fail"),
-                #[cfg(feature = "display")]
-                context_id,
-            },
-            QuantumCell::WitnessFraction(val) => AssignedValue {
-                cell: self
-                    .region
-                    .assign_advice(column, row_offset, val)
-                    .expect("assign advice should not fail"),
-                #[cfg(feature = "display")]
-                context_id,
-            },
+            QuantumCell::WitnessFraction(val) => {
+                self.advice.push(val);
+            }
             QuantumCell::Constant(c) => {
-                let acell = self
-                    .region
-                    .assign_advice(column, row_offset, Value::known(Assigned::Trivial(c)))
-                    .expect("assign fixed advice should not fail");
-                let c_cell = self.assign_fixed(c);
-                self.region.constrain_equal(acell.cell(), &c_cell);
-                AssignedValue {
-                    cell: acell,
-                    #[cfg(feature = "display")]
-                    context_id,
+                self.advice.push(Assigned::Trivial(c));
+                // If witness generation is not performed, enforce equality constraints between the existing cell and the new cell
+                if !self.witness_gen_only {
+                    let new_cell =
+                        ContextCell { context_id: self.context_id, offset: self.advice.len() - 1 };
+                    self.constant_equality_constraints.push((c, new_cell));
                 }
             }
         }
     }
 
-    #[cfg(feature = "halo2-pse")]
-    pub fn assign_cell<'v>(
-        &mut self,
-        input: QuantumCell<'_, 'v, F>,
-        column: Column<Advice>,
-        #[cfg(feature = "display")] context_id: usize,
-        row_offset: usize,
-        phase: u8,
-    ) -> AssignedValue<'v, F> {
-        match input {
-            QuantumCell::Existing(acell) => {
-                AssignedValue {
-                    cell: acell.copy_advice(
-                        // || "gate: copy advice",
-                        &mut self.region,
-                        column,
-                        row_offset,
-                    ),
-                    value: acell.value,
-                    row_offset,
-                    _marker: PhantomData,
-                    #[cfg(feature = "display")]
-                    context_id,
-                }
-            }
-            QuantumCell::ExistingOwned(acell) => {
-                AssignedValue {
-                    cell: acell.copy_advice(
-                        // || "gate: copy advice",
-                        &mut self.region,
-                        column,
-                        row_offset,
-                    ),
-                    value: acell.value,
-                    row_offset,
-                    _marker: PhantomData,
-                    #[cfg(feature = "display")]
-                    context_id,
-                }
-            }
-            QuantumCell::Witness(value) => AssignedValue {
-                cell: self
-                    .region
-                    .assign_advice(|| "", column, row_offset, || value)
-                    .expect("assign advice should not fail")
-                    .cell(),
-                value,
-                row_offset,
-                _marker: PhantomData,
-                #[cfg(feature = "display")]
-                context_id,
-            },
-            QuantumCell::WitnessFraction(val) => AssignedValue {
-                cell: self
-                    .region
-                    .assign_advice(|| "", column, row_offset, || val)
-                    .expect("assign advice should not fail")
-                    .cell(),
-                value: Value::unknown(),
-                row_offset,
-                _marker: PhantomData,
-                #[cfg(feature = "display")]
-                context_id,
-            },
-            QuantumCell::Constant(c) => {
-                let acell = self
-                    .region
-                    .assign_advice(|| "", column, row_offset, || Value::known(c))
-                    .expect("assign fixed advice should not fail")
-                    .cell();
-                let c_cell = self.assign_fixed(c);
-                self.region.constrain_equal(acell, c_cell).unwrap();
-                AssignedValue {
-                    cell: acell,
-                    value: Value::known(c),
-                    row_offset,
-                    _marker: PhantomData,
-                    #[cfg(feature = "display")]
-                    context_id,
-                }
-            }
-        }
+    /// Returns the [AssignedValue] of the last cell in the `advice` column of [Context] or [None] if `advice` is empty
+    pub fn last(&self) -> Option<AssignedValue<F>> {
+        self.advice.last().map(|v| {
+            let cell = (!self.witness_gen_only).then_some(ContextCell {
+                context_id: self.context_id,
+                offset: self.advice.len() - 1,
+            });
+            AssignedValue { value: *v, cell }
+        })
     }
 
-    // convenience function to deal with rust warnings
+    /// Returns the [AssignedValue] of the cell at the given `offset` in the `advice` column of [Context]
+    /// * `offset`: the offset of the cell to be fetched
+    ///     * `offset` may be negative indexing from the end of the column (e.g., `-1` is the last cell)
+    /// * Assumes `offset` is a valid index in `advice`;
+    ///     * `0` <= `offset` < `advice.len()` (or `advice.len() + offset >= 0` if `offset` is negative)
+    pub fn get(&self, offset: isize) -> AssignedValue<F> {
+        let offset = if offset < 0 {
+            self.advice.len().wrapping_add_signed(offset)
+        } else {
+            offset as usize
+        };
+        assert!(offset < self.advice.len());
+        let cell =
+            (!self.witness_gen_only).then_some(ContextCell { context_id: self.context_id, offset });
+        AssignedValue { value: self.advice[offset], cell }
+    }
+
+    /// Creates an equality constraint between two `advice` cells.
+    /// * `a`: the first `advice` cell to be constrained equal
+    /// * `b`: the second `advice` cell to be constrained equal
+    /// * Assumes both cells are `advice` cells
     pub fn constrain_equal(&mut self, a: &AssignedValue<F>, b: &AssignedValue<F>) {
-        #[cfg(feature = "halo2-axiom")]
-        self.region.constrain_equal(a.cell(), b.cell());
-        #[cfg(not(feature = "halo2-axiom"))]
-        self.region.constrain_equal(a.cell(), b.cell()).unwrap();
+        if !self.witness_gen_only {
+            self.advice_equality_constraints.push((a.cell.unwrap(), b.cell.unwrap()));
+        }
     }
 
-    /// Call this at the end of a phase
+    /// Pushes multiple advice cells to the `advice` column of [Context] and enables them by enabling the corresponding selector specified in `gate_offset`.
     ///
-    /// assumes self.region is not in shape mode
-    pub fn copy_and_lookup_cells(&mut self, lookup_advice: Vec<Column<Advice>>) -> usize {
-        let total_cells = self.cells_to_lookup.len();
-        let mut cells_to_lookup = self.cells_to_lookup.iter().peekable();
-        for column in lookup_advice.into_iter() {
-            let mut offset = 0;
-            while offset < self.max_rows && cells_to_lookup.peek().is_some() {
-                let acell = cells_to_lookup.next().unwrap();
-                acell.copy_advice(&mut self.region, column, offset);
-                offset += 1;
+    /// * `inputs`: Iterator that specifies the cells to be assigned
+    /// * `gate_offsets`: specifies relative offset from current position to enable selector for the gate (e.g., `0` is inputs[0]).
+    ///     * `offset` may be negative indexing from the end of the column (e.g., `-1` is the last previously assigned cell)
+    pub fn assign_region<Q>(
+        &mut self,
+        inputs: impl IntoIterator<Item = Q>,
+        gate_offsets: impl IntoIterator<Item = isize>,
+    ) where
+        Q: Into<QuantumCell<F>>,
+    {
+        if self.witness_gen_only {
+            for input in inputs {
+                self.assign_cell(input);
+            }
+        } else {
+            let row_offset = self.advice.len();
+            // note: row_offset may not equal self.selector.len() at this point if we previously used `load_constant` or `load_witness`
+            for input in inputs {
+                self.assign_cell(input);
+            }
+            self.selector.resize(self.advice.len(), false);
+            for offset in gate_offsets {
+                *self
+                    .selector
+                    .get_mut(row_offset.checked_add_signed(offset).expect("Invalid gate offset"))
+                    .expect("Invalid selector offset") = true;
             }
         }
-        if cells_to_lookup.peek().is_some() {
-            panic!("NOT ENOUGH ADVICE COLUMNS WITH LOOKUP ENABLED");
-        }
-        self.cells_to_lookup.clear();
-        #[cfg(feature = "display")]
-        {
-            self.total_lookup_cells[self.current_phase] = total_cells;
-        }
-        total_cells
     }
 
-    #[cfg(feature = "display")]
-    pub fn print_stats(&mut self, context_names: &[&str]) {
-        let curr_phase = self.current_phase();
-        self.advice_alloc_cache[curr_phase] = self.advice_alloc.clone();
-        for phase in 0..=curr_phase {
-            for (context_name, alloc) in
-                context_names.iter().zip(self.advice_alloc_cache[phase].iter())
-            {
-                println!("Context \"{context_name}\" used {} advice columns and {} total advice cells in phase {phase}", alloc.0 + 1, alloc.0 * self.max_rows + alloc.1);
+    /// Pushes multiple advice cells to the `advice` column of [Context] and enables them by enabling the corresponding selector specified in `gate_offset` and returns the last assigned cell.
+    ///
+    /// Assumes `gate_offsets` is the same length as `inputs`
+    ///
+    /// Returns the last assigned cell
+    /// * `inputs`: Iterator that specifies the cells to be assigned
+    /// * `gate_offsets`: specifies indices to enable selector for the gate; assume `gate_offsets` is sorted in increasing order
+    ///     * `offset` may be negative indexing from the end of the column (e.g., `-1` is the last cell)
+    pub fn assign_region_last<Q>(
+        &mut self,
+        inputs: impl IntoIterator<Item = Q>,
+        gate_offsets: impl IntoIterator<Item = isize>,
+    ) -> AssignedValue<F>
+    where
+        Q: Into<QuantumCell<F>>,
+    {
+        self.assign_region(inputs, gate_offsets);
+        self.last().unwrap()
+    }
+
+    /// Pushes multiple advice cells to the `advice` column of [Context] and enables them by enabling the corresponding selector specified in `gate_offset`.
+    ///
+    /// Allows for the specification of equality constraints between cells at `equality_offsets` within the `advice` column and external advice cells specified in `external_equality` (e.g, Fixed column).
+    /// * `gate_offsets`: specifies indices to enable selector for the gate;
+    ///     * `offset` may be negative indexing from the end of the column (e.g., `-1` is the last cell)
+    /// * `equality_offsets`: specifies pairs of indices to constrain equality
+    /// * `external_equality`: specifies an existing cell to constrain equality with the cell at a certain index
+    pub fn assign_region_smart<Q>(
+        &mut self,
+        inputs: impl IntoIterator<Item = Q>,
+        gate_offsets: impl IntoIterator<Item = isize>,
+        equality_offsets: impl IntoIterator<Item = (isize, isize)>,
+        external_equality: impl IntoIterator<Item = (Option<ContextCell>, isize)>,
+    ) where
+        Q: Into<QuantumCell<F>>,
+    {
+        let row_offset = self.advice.len();
+        self.assign_region(inputs, gate_offsets);
+
+        // note: row_offset may not equal self.selector.len() at this point if we previously used `load_constant` or `load_witness`
+        // If not in witness generation mode, add equality constraints.
+        if !self.witness_gen_only {
+            // Add equality constraints between cells in the advice column.
+            for (offset1, offset2) in equality_offsets {
+                self.advice_equality_constraints.push((
+                    ContextCell {
+                        context_id: self.context_id,
+                        offset: row_offset.wrapping_add_signed(offset1),
+                    },
+                    ContextCell {
+                        context_id: self.context_id,
+                        offset: row_offset.wrapping_add_signed(offset2),
+                    },
+                ));
             }
-            let num_lookup_advice_cells = self.total_lookup_cells[phase];
-            println!("Special lookup advice cells: optimal columns: {}, total {num_lookup_advice_cells} cells used in phase {phase}.",  (num_lookup_advice_cells + self.max_rows - 1)/self.max_rows);
+            // Add equality constraints between cells in the advice column and external cells (Fixed column).
+            for (cell, offset) in external_equality {
+                self.advice_equality_constraints.push((
+                    cell.unwrap(),
+                    ContextCell {
+                        context_id: self.context_id,
+                        offset: row_offset.wrapping_add_signed(offset),
+                    },
+                ));
+            }
         }
-        let (fixed_cols, total_fixed) = self.fixed_stats();
-        println!("Fixed columns: {fixed_cols}, Total fixed cells: {total_fixed}");
     }
-}
 
-#[derive(Clone, Debug)]
-pub struct AssignedPrimitive<'a, T: Into<u64> + Copy, F: ScalarField> {
-    pub value: Value<T>,
+    /// Assigns a region of witness cells in an iterator and returns a [Vec] of assigned cells.
+    /// * `witnesses`: Iterator that specifies the cells to be assigned
+    pub fn assign_witnesses(
+        &mut self,
+        witnesses: impl IntoIterator<Item = F>,
+    ) -> Vec<AssignedValue<F>> {
+        let row_offset = self.advice.len();
+        self.assign_region(witnesses.into_iter().map(QuantumCell::Witness), []);
+        self.advice[row_offset..]
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                let cell = (!self.witness_gen_only)
+                    .then_some(ContextCell { context_id: self.context_id, offset: row_offset + i });
+                AssignedValue { value: *v, cell }
+            })
+            .collect()
+    }
 
-    #[cfg(feature = "halo2-axiom")]
-    pub cell: AssignedCell<&'a Assigned<F>, F>,
+    /// Assigns a witness value and returns the corresponding assigned cell.
+    /// * `witness`: the witness value to be assigned
+    pub fn load_witness(&mut self, witness: F) -> AssignedValue<F> {
+        self.assign_cell(QuantumCell::Witness(witness));
+        if !self.witness_gen_only {
+            self.selector.resize(self.advice.len(), false);
+        }
+        self.last().unwrap()
+    }
 
-    #[cfg(feature = "halo2-pse")]
-    pub cell: Cell,
-    #[cfg(feature = "halo2-pse")]
-    row_offset: usize,
-    #[cfg(feature = "halo2-pse")]
-    _marker: PhantomData<&'a F>,
+    /// Assigns a constant value and returns the corresponding assigned cell.
+    /// * `c`: the constant value to be assigned
+    pub fn load_constant(&mut self, c: F) -> AssignedValue<F> {
+        self.assign_cell(QuantumCell::Constant(c));
+        if !self.witness_gen_only {
+            self.selector.resize(self.advice.len(), false);
+        }
+        self.last().unwrap()
+    }
+
+    /// Assigns the 0 value to a new cell or returns a previously assigned zero cell from `zero_cell`.
+    pub fn load_zero(&mut self) -> AssignedValue<F> {
+        if let Some(zcell) = &self.zero_cell {
+            return *zcell;
+        }
+        let zero_cell = self.load_constant(F::zero());
+        self.zero_cell = Some(zero_cell);
+        zero_cell
+    }
 }

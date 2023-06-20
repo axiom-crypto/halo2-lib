@@ -1,49 +1,47 @@
 use super::{CRTInteger, OverflowInteger};
 use halo2_base::{
     gates::GateInstructions,
-    utils::{log2_ceil, PrimeField},
+    utils::{log2_ceil, ScalarField},
     Context,
-    QuantumCell::{Constant, Existing, Witness},
+    QuantumCell::Constant,
 };
+use itertools::Itertools;
 use std::cmp::max;
 
 /// compute a * c + b = b + a * c
+///
+/// # Assumptions
+/// * `a, b` have same number of limbs
+/// * Number of limbs is nonzero
+/// * `c_log2_ceil = log2_ceil(c)` where `c` is the BigUint value of `c_f`
 // this is uniquely suited for our simple gate
-pub fn assign<'v, F: PrimeField>(
+pub fn assign<F: ScalarField>(
     gate: &impl GateInstructions<F>,
-    ctx: &mut Context<'_, F>,
-    a: &OverflowInteger<'v, F>,
-    b: &OverflowInteger<'v, F>,
+    ctx: &mut Context<F>,
+    a: OverflowInteger<F>,
+    b: OverflowInteger<F>,
     c_f: F,
     c_log2_ceil: usize,
-) -> OverflowInteger<'v, F> {
-    assert_eq!(a.limbs.len(), b.limbs.len());
-
+) -> OverflowInteger<F> {
     let out_limbs = a
         .limbs
-        .iter()
-        .zip(b.limbs.iter())
-        .map(|(a_limb, b_limb)| {
-            let out_val = a_limb.value().zip(b_limb.value()).map(|(a, b)| c_f * a + b);
-            gate.assign_region_last(
-                ctx,
-                vec![Existing(b_limb), Existing(a_limb), Constant(c_f), Witness(out_val)],
-                vec![(0, None)],
-            )
-        })
+        .into_iter()
+        .zip_eq(b.limbs)
+        .map(|(a_limb, b_limb)| gate.mul_add(ctx, a_limb, Constant(c_f), b_limb))
         .collect();
 
-    OverflowInteger::construct(out_limbs, max(a.max_limb_bits + c_log2_ceil, b.max_limb_bits) + 1)
+    OverflowInteger::new(out_limbs, max(a.max_limb_bits + c_log2_ceil, b.max_limb_bits) + 1)
 }
 
-pub fn crt<'v, F: PrimeField>(
+/// compute a * c + b = b + a * c
+pub fn crt<F: ScalarField>(
     gate: &impl GateInstructions<F>,
-    ctx: &mut Context<'_, F>,
-    a: &CRTInteger<'v, F>,
-    b: &CRTInteger<'v, F>,
+    ctx: &mut Context<F>,
+    a: CRTInteger<F>,
+    b: CRTInteger<F>,
     c: i64,
-) -> CRTInteger<'v, F> {
-    assert_eq!(a.truncation.limbs.len(), b.truncation.limbs.len());
+) -> CRTInteger<F> {
+    debug_assert_eq!(a.truncation.limbs.len(), b.truncation.limbs.len());
 
     let (c_f, c_abs) = if c >= 0 {
         let c_abs = u64::try_from(c).unwrap();
@@ -53,15 +51,8 @@ pub fn crt<'v, F: PrimeField>(
         (-F::from(c_abs), c_abs)
     };
 
-    let out_trunc = assign::<F>(gate, ctx, &a.truncation, &b.truncation, c_f, log2_ceil(c_abs));
-    let out_native = {
-        let out_val = b.native.value().zip(a.native.value()).map(|(b, a)| c_f * a + b);
-        gate.assign_region_last(
-            ctx,
-            vec![Existing(&b.native), Existing(&a.native), Constant(c_f), Witness(out_val)],
-            vec![(0, None)],
-        )
-    };
-    let out_val = a.value.as_ref().zip(b.value.as_ref()).map(|(a, b)| a * c + b);
-    CRTInteger::construct(out_trunc, out_native, out_val)
+    let out_trunc = assign(gate, ctx, a.truncation, b.truncation, c_f, log2_ceil(c_abs));
+    let out_native = gate.mul_add(ctx, a.native, Constant(c_f), b.native);
+    let out_val = a.value * c + b.value;
+    CRTInteger::new(out_trunc, out_native, out_val)
 }

@@ -1,166 +1,93 @@
-use criterion::{criterion_group, criterion_main};
-use criterion::{BenchmarkId, Criterion};
-
-#[allow(unused_imports)]
-use ff::PrimeField as _;
-use halo2_base::utils::modulus;
-use pprof::criterion::{Output, PProfProfiler};
-
 use ark_std::{end_timer, start_timer};
-use halo2_base::SKIP_FIRST_PASS;
-use rand_core::OsRng;
-use serde::{Deserialize, Serialize};
-use std::marker::PhantomData;
-
+use halo2_base::gates::{
+    builder::{
+        CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints, RangeCircuitBuilder,
+    },
+    RangeChip,
+};
 use halo2_base::halo2_proofs::{
     arithmetic::Field,
-    circuit::{Layouter, SimpleFloorPlanner, Value},
-    halo2curves::bn256::{Bn256, Fq, Fr, G1Affine},
+    halo2curves::bn256::{Bn256, Fr, G1Affine},
     plonk::*,
     poly::kzg::{
         commitment::{KZGCommitmentScheme, ParamsKZG},
         multiopen::ProverSHPLONK,
     },
-    transcript::TranscriptWriterBuffer,
-    transcript::{Blake2bWrite, Challenge255},
+    transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer},
 };
-use halo2_base::{gates::GateInstructions, utils::PrimeField};
-use halo2_ecc::{
-    ecc::EccChip,
-    fields::fp::{FpConfig, FpStrategy},
-};
+use halo2_ecc::{bn254::FpChip, ecc::EccChip, fields::PrimeField};
+use rand::rngs::OsRng;
 
-type FpChip<F> = FpConfig<F, Fq>;
+use criterion::{criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion};
 
-#[derive(Serialize, Deserialize, Debug)]
+use pprof::criterion::{Output, PProfProfiler};
+// Thanks to the example provided by @jebbow in his article
+// https://www.jibbow.com/posts/criterion-flamegraphs/
+
+#[derive(Clone, Copy, Debug)]
 struct MSMCircuitParams {
-    strategy: FpStrategy,
     degree: u32,
-    num_advice: usize,
-    num_lookup_advice: usize,
-    num_fixed: usize,
     lookup_bits: usize,
     limb_bits: usize,
     num_limbs: usize,
     batch_size: usize,
-    radix: usize,
-    clump_factor: usize,
 }
 
-const BEST_100_CONFIG: MSMCircuitParams = MSMCircuitParams {
-    strategy: FpStrategy::Simple,
-    degree: 20,
-    num_advice: 10,
-    num_lookup_advice: 1,
-    num_fixed: 1,
-    lookup_bits: 19,
-    limb_bits: 88,
-    num_limbs: 3,
-    batch_size: 100,
-    radix: 0,
-    clump_factor: 4,
-};
+const BEST_100_CONFIG: MSMCircuitParams =
+    MSMCircuitParams { degree: 20, lookup_bits: 19, limb_bits: 88, num_limbs: 3, batch_size: 100 };
 
 const TEST_CONFIG: MSMCircuitParams = BEST_100_CONFIG;
 
-#[derive(Clone, Debug)]
-struct MSMConfig<F: PrimeField> {
-    fp_chip: FpChip<F>,
-    clump_factor: usize,
-}
-
-impl<F: PrimeField> MSMConfig<F> {
-    #[allow(clippy::too_many_arguments)]
-    pub fn configure(meta: &mut ConstraintSystem<F>, params: MSMCircuitParams) -> Self {
-        let fp_chip = FpChip::<F>::configure(
-            meta,
-            params.strategy,
-            &[params.num_advice],
-            &[params.num_lookup_advice],
-            params.num_fixed,
-            params.lookup_bits,
-            params.limb_bits,
-            params.num_limbs,
-            modulus::<Fq>(),
-            0,
-            params.degree as usize,
-        );
-        MSMConfig { fp_chip, clump_factor: params.clump_factor }
-    }
-}
-
-struct MSMCircuit<F: PrimeField> {
+fn fixed_base_msm_bench(
+    builder: &mut GateThreadBuilder<Fr>,
+    params: MSMCircuitParams,
     bases: Vec<G1Affine>,
-    scalars: Vec<Option<Fr>>,
-    _marker: PhantomData<F>,
+    scalars: Vec<Fr>,
+) {
+    std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
+    let range = RangeChip::<Fr>::default(params.lookup_bits);
+    let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
+    let ecc_chip = EccChip::new(&fp_chip);
+
+    let scalars_assigned = scalars
+        .iter()
+        .map(|scalar| vec![builder.main(0).load_witness(*scalar)])
+        .collect::<Vec<_>>();
+
+    ecc_chip.fixed_base_msm(builder, &bases, scalars_assigned, Fr::NUM_BITS as usize);
 }
 
-impl Circuit<Fr> for MSMCircuit<Fr> {
-    type Config = MSMConfig<Fr>;
-    type FloorPlanner = SimpleFloorPlanner;
+fn fixed_base_msm_circuit(
+    params: MSMCircuitParams,
+    stage: CircuitBuilderStage,
+    bases: Vec<G1Affine>,
+    scalars: Vec<Fr>,
+    break_points: Option<MultiPhaseThreadBreakPoints>,
+) -> RangeCircuitBuilder<Fr> {
+    let k = params.degree as usize;
+    let mut builder = match stage {
+        CircuitBuilderStage::Mock => GateThreadBuilder::mock(),
+        CircuitBuilderStage::Prover => GateThreadBuilder::prover(),
+        CircuitBuilderStage::Keygen => GateThreadBuilder::keygen(),
+    };
 
-    fn without_witnesses(&self) -> Self {
-        Self {
-            bases: self.bases.clone(),
-            scalars: vec![None; self.scalars.len()],
-            _marker: PhantomData,
+    let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
+    fixed_base_msm_bench(&mut builder, params, bases, scalars);
+
+    let circuit = match stage {
+        CircuitBuilderStage::Mock => {
+            builder.config(k, Some(20));
+            RangeCircuitBuilder::mock(builder)
         }
-    }
-
-    fn configure(meta: &mut ConstraintSystem<Fr>) -> Self::Config {
-        let params = TEST_CONFIG;
-
-        MSMConfig::<Fr>::configure(meta, params)
-    }
-
-    fn synthesize(
-        &self,
-        config: Self::Config,
-        mut layouter: impl Layouter<Fr>,
-    ) -> Result<(), Error> {
-        config.fp_chip.load_lookup_table(&mut layouter)?;
-
-        let mut first_pass = SKIP_FIRST_PASS;
-        layouter.assign_region(
-            || "fixed base msm",
-            |region| {
-                if first_pass {
-                    first_pass = false;
-                    return Ok(());
-                }
-
-                let mut aux = config.fp_chip.new_context(region);
-                let ctx = &mut aux;
-
-                let witness_time = start_timer!(|| "Witness generation");
-                let mut scalars_assigned = Vec::new();
-                for scalar in &self.scalars {
-                    let assignment = config
-                        .fp_chip
-                        .range
-                        .gate
-                        .assign_witnesses(ctx, vec![scalar.map_or(Value::unknown(), Value::known)]);
-                    scalars_assigned.push(assignment);
-                }
-
-                let ecc_chip = EccChip::construct(config.fp_chip.clone());
-
-                let _msm = ecc_chip.fixed_base_msm::<G1Affine>(
-                    ctx,
-                    &self.bases,
-                    &scalars_assigned,
-                    Fr::NUM_BITS as usize,
-                    0,
-                    config.clump_factor,
-                );
-
-                config.fp_chip.finalize(ctx);
-                end_timer!(witness_time);
-
-                Ok(())
-            },
-        )
-    }
+        CircuitBuilderStage::Keygen => {
+            builder.config(k, Some(20));
+            RangeCircuitBuilder::keygen(builder)
+        }
+        CircuitBuilderStage::Prover => RangeCircuitBuilder::prover(builder, break_points.unwrap()),
+    };
+    end_timer!(start0);
+    circuit
 }
 
 fn bench(c: &mut Criterion) {
@@ -168,39 +95,36 @@ fn bench(c: &mut Criterion) {
 
     let k = config.degree;
     let mut rng = OsRng;
-    let mut bases = Vec::new();
-    let mut scalars = Vec::new();
-    for _ in 0..config.batch_size {
-        let new_pt = G1Affine::random(&mut rng);
-        bases.push(new_pt);
-
-        let new_scalar = Some(Fr::random(&mut rng));
-        scalars.push(new_scalar);
-    }
-    let circuit = MSMCircuit::<Fr> { bases, scalars, _marker: PhantomData };
+    let circuit = fixed_base_msm_circuit(
+        config,
+        CircuitBuilderStage::Keygen,
+        vec![G1Affine::generator(); config.batch_size],
+        vec![Fr::zero(); config.batch_size],
+        None,
+    );
 
     let params = ParamsKZG::<Bn256>::setup(k, &mut rng);
     let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
     let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
+    let break_points = circuit.0.break_points.take();
+    drop(circuit);
 
+    let (bases, scalars): (Vec<_>, Vec<_>) =
+        (0..config.batch_size).map(|_| (G1Affine::random(&mut rng), Fr::random(&mut rng))).unzip();
     let mut group = c.benchmark_group("plonk-prover");
     group.sample_size(10);
     group.bench_with_input(
         BenchmarkId::new("fixed base msm", k),
-        &(&params, &pk),
-        |b, &(params, pk)| {
+        &(&params, &pk, &bases, &scalars),
+        |b, &(params, pk, bases, scalars)| {
             b.iter(|| {
-                let mut bases = Vec::new();
-                let mut scalars = Vec::new();
-                for _ in 0..config.batch_size {
-                    let new_pt = G1Affine::random(&mut rng);
-                    bases.push(new_pt);
-
-                    let new_scalar = Some(Fr::random(&mut rng));
-                    scalars.push(new_scalar);
-                }
-
-                let circuit = MSMCircuit::<Fr> { bases, scalars, _marker: PhantomData };
+                let circuit = fixed_base_msm_circuit(
+                    config,
+                    CircuitBuilderStage::Prover,
+                    bases.clone(),
+                    scalars.clone(),
+                    Some(break_points.clone()),
+                );
 
                 let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
                 create_proof::<

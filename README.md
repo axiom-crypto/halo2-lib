@@ -1,6 +1,6 @@
 # halo2-lib
 
-This repository aims to provide basic primitives for writing zero-knowledge proof circuits using the [Halo 2](https://zcash.github.io/halo2/) proving stack.  To discuss or collaborate, join our community on [Telegram](https://t.me/halo2lib). 
+This repository aims to provide basic primitives for writing zero-knowledge proof circuits using the [Halo 2](https://zcash.github.io/halo2/) proving stack. To discuss or collaborate, join our community on [Telegram](https://t.me/halo2lib).
 
 ## Getting Started
 
@@ -278,14 +278,14 @@ cargo test --release --no-default-features --features "halo2-axiom, mimalloc" --
 
 ## Projects built with `halo2-lib`
 
-* [Axiom](https://github.com/axiom-crypto/axiom-eth) -- Prove facts about Ethereum on-chain data via aggregate block header, account, and storage proofs.
-* [Proof of Email](https://github.com/zkemail/) -- Prove facts about emails with the same trust assumption as the email domain.
-  * [halo2-regex](https://github.com/zkemail/halo2-regex)
-  * [halo2-zk-email](https://github.com/zkemail/halo2-zk-email)
-  * [halo2-base64](https://github.com/zkemail/halo2-base64)
-  * [halo2-rsa](https://github.com/zkemail/halo2-rsa/tree/feat/new_bigint)
-* [halo2-fri-gadget](https://github.com/maxgillett/halo2-fri-gadget) -- FRI verifier in halo2.
-* [eth-voice-recovery](https://github.com/SoraSuegami/voice_recovery_circuit)
-* [zkevm tx-circuit](https://github.com/scroll-tech/zkevm-circuits/tree/develop/zkevm-circuits/src/tx_circuit)
-* [webauthn-halo2](https://github.com/zkwebauthn/webauthn-halo2) -- Proving and verifying WebAuthn with halo2.
-* [Fixed Point Arithmetic](https://github.com/DCMMC/halo2-scaffold/tree/main/src/gadget) -- Fixed point arithmetic library in halo2.
+- [Axiom](https://github.com/axiom-crypto/axiom-eth) -- Prove facts about Ethereum on-chain data via aggregate block header, account, and storage proofs.
+- [Proof of Email](https://github.com/zkemail/) -- Prove facts about emails with the same trust assumption as the email domain.
+  - [halo2-regex](https://github.com/zkemail/halo2-regex)
+  - [halo2-zk-email](https://github.com/zkemail/halo2-zk-email)
+  - [halo2-base64](https://github.com/zkemail/halo2-base64)
+  - [halo2-rsa](https://github.com/zkemail/halo2-rsa/tree/feat/new_bigint)
+- [halo2-fri-gadget](https://github.com/maxgillett/halo2-fri-gadget) -- FRI verifier in halo2.
+- [eth-voice-recovery](https://github.com/SoraSuegami/voice_recovery_circuit)
+- [zkevm tx-circuit](https://github.com/scroll-tech/zkevm-circuits/tree/develop/zkevm-circuits/src/tx_circuit)
+- [webauthn-halo2](https://github.com/zkwebauthn/webauthn-halo2) -- Proving and verifying WebAuthn with halo2.
+- [Fixed Point Arithmetic](https://github.com/DCMMC/halo2-scaffold/tree/main/src/gadget) -- Fixed point arithmetic library in halo2.

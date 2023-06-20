@@ -1,57 +1,56 @@
-use super::{
-    AssignedValue, Context, GateInstructions,
-    QuantumCell::{self, Constant, Existing, Witness},
-};
-use crate::halo2_proofs::{
-    circuit::Value,
-    plonk::{
-        Advice, Assigned, Column, ConstraintSystem, FirstPhase, Fixed, SecondPhase, Selector,
-        ThirdPhase,
+use crate::{
+    halo2_proofs::{
+        plonk::{
+            Advice, Assigned, Column, ConstraintSystem, FirstPhase, Fixed, SecondPhase, Selector,
+            ThirdPhase,
+        },
+        poly::Rotation,
     },
-    poly::Rotation,
+    utils::ScalarField,
+    AssignedValue, Context,
+    QuantumCell::{self, Constant, Existing, Witness, WitnessFraction},
 };
-use crate::utils::ScalarField;
-use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use std::{
-    iter::{self, once},
+    iter::{self},
     marker::PhantomData,
 };
 
-/// The maximum number of phases halo2 currently supports
+/// The maximum number of phases in halo2.
 pub const MAX_PHASE: usize = 3;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// Specifies the gate strategy for the gate chip
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum GateStrategy {
+    /// # Vertical Gate Strategy:
+    /// `q_0 * (a + b * c - d) = 0`
+    /// where
+    /// * a = value[0], b = value[1], c = value[2], d = value[3]
+    /// * q = q_enable[0]
+    /// * q is either 0 or 1 so this is just a simple selector
+    /// We chose `a + b * c` instead of `a * b + c` to allow "chaining" of gates, i.e., the output of one gate because `a` in the next gate.
     Vertical,
-    PlonkPlus,
 }
 
+/// A configuration for a basic gate chip describing the selector, and advice column values.
 #[derive(Clone, Debug)]
 pub struct BasicGateConfig<F: ScalarField> {
+    /// [Selector] column that stores selector values that are used to activate gates in the advice column.
     // `q_enable` will have either length 1 or 2, depending on the strategy
-
-    // If strategy is Vertical, then this is the basic vertical gate
-    // `q_0 * (a + b * c - d) = 0`
-    // where
-    // * a = value[0], b = value[1], c = value[2], d = value[3]
-    // * q = q_enable[0]
-    // * q_i is either 0 or 1 so this is just a simple selector
-    // We chose `a + b * c` instead of `a * b + c` to allow "chaining" of gates, i.e., the output of one gate because `a` in the next gate
-
-    // If strategy is PlonkPlus, then this is a slightly extended version of the vanilla plonk (vertical) gate
-    // `q_io * (a + q_left * b + q_right * c + q_mul * b * c - d)`
-    // where
-    // * a = value[0], b = value[1], c = value[2], d = value[3]
-    // * the q_{} can be any fixed values in F, placed in two fixed columns
-    // * it is crucial that q_io goes in its own selector column! we need it to be 0, 1 to turn on/off the gate
     pub q_enable: Selector,
-    pub q_enable_plus: Vec<Column<Fixed>>,
-    // one column to store the inputs and outputs of the gate
+    /// [Column] that stores the advice values of the gate.
     pub value: Column<Advice>,
+    /// Marker for the field type.
     _marker: PhantomData<F>,
 }
 
 impl<F: ScalarField> BasicGateConfig<F> {
+    /// Instantiates a new [BasicGateConfig].
+    ///
+    /// Assumes `phase` is in the range [0, MAX_PHASE).
+    /// * `meta`: [ConstraintSystem] used for the gate
+    /// * `strategy`: The [GateStrategy] to use for the gate
+    /// * `phase`: The phase to add the gate to
     pub fn configure(meta: &mut ConstraintSystem<F>, strategy: GateStrategy, phase: u8) -> Self {
         let value = match phase {
             0 => meta.advice_column_in(FirstPhase),
@@ -65,22 +64,17 @@ impl<F: ScalarField> BasicGateConfig<F> {
 
         match strategy {
             GateStrategy::Vertical => {
-                let config = Self { q_enable, q_enable_plus: vec![], value, _marker: PhantomData };
+                let config = Self { q_enable, value, _marker: PhantomData };
                 config.create_gate(meta);
-                config
-            }
-            GateStrategy::PlonkPlus => {
-                let q_aux = meta.fixed_column();
-                let config =
-                    Self { q_enable, q_enable_plus: vec![q_aux], value, _marker: PhantomData };
-                config.create_plonk_gate(meta);
                 config
             }
         }
     }
 
+    /// Wrapper for [ConstraintSystem].create_gate(name, meta) creates a gate form [q * (a + b * c - out)].
+    /// * `meta`: [ConstraintSystem] used for the gate
     fn create_gate(&self, meta: &mut ConstraintSystem<F>) {
-        meta.create_gate("1 column a * b + c = out", |meta| {
+        meta.create_gate("1 column a + b * c = out", |meta| {
             let q = meta.query_selector(self.q_enable);
 
             let a = meta.query_advice(self.value, Rotation::cur());
@@ -91,53 +85,41 @@ impl<F: ScalarField> BasicGateConfig<F> {
             vec![q * (a + b * c - out)]
         })
     }
-
-    fn create_plonk_gate(&self, meta: &mut ConstraintSystem<F>) {
-        meta.create_gate("plonk plus", |meta| {
-            // q_io * (a + q_left * b + q_right * c + q_mul * b * c - d)
-            // the gate is turned "off" as long as q_io = 0
-            let q_io = meta.query_selector(self.q_enable);
-
-            let q_mul = meta.query_fixed(self.q_enable_plus[0], Rotation::cur());
-            let q_left = meta.query_fixed(self.q_enable_plus[0], Rotation::next());
-            let q_right = meta.query_fixed(self.q_enable_plus[0], Rotation(2));
-
-            let a = meta.query_advice(self.value, Rotation::cur());
-            let b = meta.query_advice(self.value, Rotation::next());
-            let c = meta.query_advice(self.value, Rotation(2));
-            let d = meta.query_advice(self.value, Rotation(3));
-
-            vec![q_io * (a + q_left * b.clone() + q_right * c.clone() + q_mul * b * c - d)]
-        })
-    }
 }
 
+/// Defines a configuration for a flex gate chip describing the selector, and advice column values for the chip.
 #[derive(Clone, Debug)]
 pub struct FlexGateConfig<F: ScalarField> {
+    /// A [Vec] of [BasicGateConfig] that define gates for each halo2 phase.
     pub basic_gates: [Vec<BasicGateConfig<F>>; MAX_PHASE],
-    // `constants` is a vector of fixed columns for allocating constant values
+    /// A [Vec] of [Fixed] [Column]s for allocating constant values.
     pub constants: Vec<Column<Fixed>>,
+    /// Number of advice columns for each halo2 phase.
     pub num_advice: [usize; MAX_PHASE],
-    strategy: GateStrategy,
-    gate_len: usize,
-    pub context_id: usize,
+    /// [GateStrategy] for the flex gate.
+    _strategy: GateStrategy,
+    /// Max number of rows in flex gate.
     pub max_rows: usize,
-
-    pub pow_of_two: Vec<F>,
-    /// To avoid Montgomery conversion in `F::from` for common small numbers, we keep a cache of field elements
-    pub field_element_cache: Vec<F>,
 }
 
 impl<F: ScalarField> FlexGateConfig<F> {
+    /// Generates a new [FlexGateConfig]
+    ///
+    /// Assumes `num_advice` is a [Vec] of length [MAX_PHASE]
+    /// * `meta`: [ConstraintSystem] of the circuit
+    /// * `strategy`: [GateStrategy] of the flex gate
+    /// * `num_advice`: Number of [Advice] [Column]s in each phase
+    /// * `num_fixed`: Number of [Fixed] [Column]s in each phase
+    /// * `circuit_degree`: Degree that expresses the size of circuit (i.e., 2^<sup>circuit_degree</sup> is the number of rows in the circuit)
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         strategy: GateStrategy,
         num_advice: &[usize],
         num_fixed: usize,
-        context_id: usize,
         // log2_ceil(# rows in circuit)
         circuit_degree: usize,
     ) -> Self {
+        // create fixed (constant) columns and enable equality constraints
         let mut constants = Vec::with_capacity(num_fixed);
         for _i in 0..num_fixed {
             let c = meta.fixed_column();
@@ -145,17 +127,9 @@ impl<F: ScalarField> FlexGateConfig<F> {
             // meta.enable_constant(c);
             constants.push(c);
         }
-        let mut pow_of_two = Vec::with_capacity(F::NUM_BITS as usize);
-        let two = F::from(2);
-        pow_of_two.push(F::one());
-        pow_of_two.push(two);
-        for _ in 2..F::NUM_BITS {
-            pow_of_two.push(two * pow_of_two.last().unwrap());
-        }
-        let field_element_cache = (0..1024).map(|i| F::from(i)).collect();
 
         match strategy {
-            GateStrategy::Vertical | GateStrategy::PlonkPlus => {
+            GateStrategy::Vertical => {
                 let mut basic_gates = [(); MAX_PHASE].map(|_| vec![]);
                 let mut num_advice_array = [0usize; MAX_PHASE];
                 for ((phase, &num_columns), gates) in
@@ -170,166 +144,770 @@ impl<F: ScalarField> FlexGateConfig<F> {
                     basic_gates,
                     constants,
                     num_advice: num_advice_array,
-                    strategy,
-                    gate_len: 4,
-                    context_id,
+                    _strategy: strategy,
                     /// Warning: this needs to be updated if you create more advice columns after this `FlexGateConfig` is created
                     max_rows: (1 << circuit_degree) - meta.minimum_rows(),
-                    pow_of_two,
-                    field_element_cache,
                 }
             }
-        }
-    }
-
-    pub fn inner_product_simple<'a, 'b: 'a>(
-        &self,
-        ctx: &mut Context<'_, F>,
-        a: impl IntoIterator<Item = QuantumCell<'a, 'b, F>>,
-        b: impl IntoIterator<Item = QuantumCell<'a, 'b, F>>,
-    ) -> AssignedValue<'b, F> {
-        let mut sum;
-        let mut a = a.into_iter();
-        let mut b = b.into_iter().peekable();
-
-        let cells = if matches!(b.peek(), Some(Constant(c)) if c == &F::one()) {
-            b.next();
-            let start_a = a.next().unwrap();
-            sum = start_a.value().copied();
-            iter::once(start_a)
-        } else {
-            sum = Value::known(F::zero());
-            iter::once(Constant(F::zero()))
-        }
-        .chain(a.zip(b).flat_map(|(a, b)| {
-            sum = sum + a.value().zip(b.value()).map(|(a, b)| *a * b);
-            [a, b, Witness(sum)]
-        }));
-
-        let (lo, hi) = cells.size_hint();
-        debug_assert_eq!(Some(lo), hi);
-        let len = lo / 3;
-        let gate_offsets = (0..len).map(|i| (3 * i as isize, None));
-        self.assign_region_last(ctx, cells, gate_offsets)
-    }
-
-    pub fn inner_product_simple_with_assignments<'a, 'b: 'a>(
-        &self,
-        ctx: &mut Context<'_, F>,
-        a: impl IntoIterator<Item = QuantumCell<'a, 'b, F>>,
-        b: impl IntoIterator<Item = QuantumCell<'a, 'b, F>>,
-    ) -> (Vec<AssignedValue<'b, F>>, AssignedValue<'b, F>) {
-        let mut sum;
-        let mut a = a.into_iter();
-        let mut b = b.into_iter().peekable();
-
-        let cells = if matches!(b.peek(), Some(Constant(c)) if c == &F::one()) {
-            b.next();
-            let start_a = a.next().unwrap();
-            sum = start_a.value().copied();
-            iter::once(start_a)
-        } else {
-            sum = Value::known(F::zero());
-            iter::once(Constant(F::zero()))
-        }
-        .chain(a.zip(b).flat_map(|(a, b)| {
-            sum = sum + a.value().zip(b.value()).map(|(a, b)| *a * b);
-            [a, b, Witness(sum)]
-        }));
-
-        let (lo, hi) = cells.size_hint();
-        debug_assert_eq!(Some(lo), hi);
-        let len = lo / 3;
-        let gate_offsets = (0..len).map(|i| (3 * i as isize, None));
-        let mut assignments = self.assign_region(ctx, cells, gate_offsets);
-        let last = assignments.pop().unwrap();
-        (assignments, last)
-    }
-
-    fn inner_product_with_assignments<'a, 'b: 'a>(
-        &self,
-        ctx: &mut Context<'_, F>,
-        a: impl IntoIterator<Item = QuantumCell<'a, 'b, F>>,
-        b: impl IntoIterator<Item = QuantumCell<'a, 'b, F>>,
-    ) -> (Vec<AssignedValue<'b, F>>, AssignedValue<'b, F>) {
-        // we will do special handling of the cases where one of the vectors is all constants
-        match self.strategy {
-            GateStrategy::PlonkPlus => {
-                let vec_a = a.into_iter().collect::<Vec<_>>();
-                let vec_b = b.into_iter().collect::<Vec<_>>();
-                if vec_b.iter().all(|b| matches!(b, Constant(_))) {
-                    let vec_b: Vec<F> = vec_b
-                        .into_iter()
-                        .map(|b| if let Constant(c) = b { c } else { unreachable!() })
-                        .collect();
-                    let k = vec_a.len();
-                    let gate_segment = self.gate_len - 2;
-
-                    // Say a = [a0, .., a4] for example
-                    // Then to compute <a, b> we use transpose of
-                    // | 0  | a0 | a1 | x | a2 | a3 | y | a4 | 0 | <a,b> |
-                    // while letting q_enable equal transpose of
-                    // | *  |    |    | * |    |    | * |    |   |       |
-                    // | 0  | b0 | b1 | 0 | b2 | b3 | 0 | b4 | 0 |
-
-                    // we effect a small optimization if we know the constant b0 == 1: then instead of starting from 0 we can start from a0
-                    // this is a peculiarity of our plonk-plus gate
-                    let start_ida: usize = (vec_b[0] == F::one()).into();
-                    if start_ida == 1 && k == 1 {
-                        // this is just a0 * 1 = a0; you're doing nothing, why are you calling this function?
-                        return (vec![], self.assign_region_last(ctx, vec_a, vec![]));
-                    }
-                    let k_chunks = (k - start_ida + gate_segment - 1) / gate_segment;
-                    let mut cells = Vec::with_capacity(1 + (gate_segment + 1) * k_chunks);
-                    let mut gate_offsets = Vec::with_capacity(k_chunks);
-                    let mut running_sum =
-                        if start_ida == 1 { vec_a[0].clone() } else { Constant(F::zero()) };
-                    cells.push(running_sum.clone());
-                    for i in 0..k_chunks {
-                        let window = (start_ida + i * gate_segment)
-                            ..std::cmp::min(k, start_ida + (i + 1) * gate_segment);
-                        // we add a 0 at the start for q_mul = 0
-                        let mut c_window = [&[F::zero()], &vec_b[window.clone()]].concat();
-                        c_window.extend((c_window.len()..(gate_segment + 1)).map(|_| F::zero()));
-                        // c_window should have length gate_segment + 1
-                        gate_offsets.push((
-                            (i * (gate_segment + 1)) as isize,
-                            Some(c_window.try_into().expect("q_coeff should be correct len")),
-                        ));
-
-                        cells.extend(window.clone().map(|j| vec_a[j].clone()));
-                        cells.extend((window.len()..gate_segment).map(|_| Constant(F::zero())));
-                        running_sum = Witness(
-                            window.into_iter().fold(running_sum.value().copied(), |sum, j| {
-                                sum + Value::known(vec_b[j]) * vec_a[j].value()
-                            }),
-                        );
-                        cells.push(running_sum.clone());
-                    }
-                    let mut assignments = self.assign_region(ctx, cells, gate_offsets);
-                    let last = assignments.pop().unwrap();
-                    (assignments, last)
-                } else if vec_a.iter().all(|a| matches!(a, Constant(_))) {
-                    self.inner_product_with_assignments(ctx, vec_b, vec_a)
-                } else {
-                    self.inner_product_simple_with_assignments(ctx, vec_a, vec_b)
-                }
-            }
-            _ => self.inner_product_simple_with_assignments(ctx, a, b),
         }
     }
 }
 
-impl<F: ScalarField> GateInstructions<F> for FlexGateConfig<F> {
+/// Trait that defines basic arithmetic operations for a gate.
+pub trait GateInstructions<F: ScalarField> {
+    /// Returns the [GateStrategy] for the gate.
+    fn strategy(&self) -> GateStrategy;
+
+    /// Returns a slice of the [ScalarField] field elements 2^i for i in 0..F::NUM_BITS.
+    fn pow_of_two(&self) -> &[F];
+
+    /// Converts a [u64] into a scalar field element [ScalarField].
+    fn get_field_element(&self, n: u64) -> F;
+
+    /// Constrains and returns `a + b * 1 = out`.
+    ///
+    /// Defines a vertical gate of form | a | b | 1 | a + b | where (a + b) = out.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: [QuantumCell] value
+    /// * `b`: [QuantumCell] value to add to 'a`
+    fn add(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+    ) -> AssignedValue<F> {
+        let a = a.into();
+        let b = b.into();
+        let out_val = *a.value() + b.value();
+        ctx.assign_region_last([a, b, Constant(F::one()), Witness(out_val)], [0])
+    }
+
+    /// Constrains and returns `a + b * (-1) = out`.
+    ///
+    /// Defines a vertical gate of form | a - b | b | 1 | a |, where (a - b) = out.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: [QuantumCell] value
+    /// * `b`: [QuantumCell] value to subtract from 'a'
+    fn sub(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+    ) -> AssignedValue<F> {
+        let a = a.into();
+        let b = b.into();
+        let out_val = *a.value() - b.value();
+        // slightly better to not have to compute -F::one() since F::one() is cached
+        ctx.assign_region([Witness(out_val), b, Constant(F::one()), a], [0]);
+        ctx.get(-4)
+    }
+
+    /// Constrains and returns `a * (-1) = out`.
+    ///
+    /// Defines a vertical gate of form | a | -a | 1 | 0 |, where (-a) = out.
+    /// * `ctx`: the [Context] to add the constraints to
+    /// * `a`: [QuantumCell] value to negate
+    fn neg(&self, ctx: &mut Context<F>, a: impl Into<QuantumCell<F>>) -> AssignedValue<F> {
+        let a = a.into();
+        let out_val = -*a.value();
+        ctx.assign_region([a, Witness(out_val), Constant(F::one()), Constant(F::zero())], [0]);
+        ctx.get(-3)
+    }
+
+    /// Constrains and returns  `0 + a * b = out`.
+    ///
+    /// Defines a vertical gate of form | 0 | a | b | a * b |, where (a * b) = out.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: [QuantumCell] value
+    /// * `b`: [QuantumCell] value to multiply 'a' by
+    fn mul(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+    ) -> AssignedValue<F> {
+        let a = a.into();
+        let b = b.into();
+        let out_val = *a.value() * b.value();
+        ctx.assign_region_last([Constant(F::zero()), a, b, Witness(out_val)], [0])
+    }
+
+    /// Constrains and returns  `a * b + c = out`.
+    ///
+    /// Defines a vertical gate of form | c | a | b | a * b + c |, where (a * b + c) = out.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: [QuantumCell] value
+    /// * `b`: [QuantumCell] value to multiply 'a' by
+    /// * `c`: [QuantumCell] value to add to 'a * b'
+    fn mul_add(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+        c: impl Into<QuantumCell<F>>,
+    ) -> AssignedValue<F> {
+        let a = a.into();
+        let b = b.into();
+        let c = c.into();
+        let out_val = *a.value() * b.value() + c.value();
+        ctx.assign_region_last([c, a, b, Witness(out_val)], [0])
+    }
+
+    /// Constrains and returns `(1 - a) * b = b - a * b`.
+    ///
+    /// Defines a vertical gate of form | (1 - a) * b | a | b | b |, where (1 - a) * b = out.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: [QuantumCell] value
+    /// * `b`: [QuantumCell] value to multiply 'a' by
+    fn mul_not(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+    ) -> AssignedValue<F> {
+        let a = a.into();
+        let b = b.into();
+        let out_val = (F::one() - a.value()) * b.value();
+        ctx.assign_region_smart([Witness(out_val), a, b, b], [0], [(2, 3)], []);
+        ctx.get(-4)
+    }
+
+    /// Constrains that x is boolean (e.g. 0 or 1).
+    ///
+    /// Defines a vertical gate of form | 0 | x | x | x |.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `x`: [QuantumCell] value to constrain
+    fn assert_bit(&self, ctx: &mut Context<F>, x: AssignedValue<F>) {
+        ctx.assign_region([Constant(F::zero()), Existing(x), Existing(x), Existing(x)], [0]);
+    }
+
+    /// Constrains and returns a / b = 0.
+    ///
+    /// Defines a vertical gate of form | 0 | b^1 * a | b | a |, where b^1 * a = out.
+    ///
+    /// Assumes `b != 0`.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: [QuantumCell] value
+    /// * `b`: [QuantumCell] value to divide 'a' by
+    fn div_unsafe(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+    ) -> AssignedValue<F> {
+        let a = a.into();
+        let b = b.into();
+        // TODO: if really necessary, make `c` of type `Assigned<F>`
+        // this would require the API using `Assigned<F>` instead of `F` everywhere, so leave as last resort
+        let c = b.value().invert().unwrap() * a.value();
+        ctx.assign_region([Constant(F::zero()), Witness(c), b, a], [0]);
+        ctx.get(-3)
+    }
+
+    /// Constrains that `a` is equal to `constant` value.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: [QuantumCell] value
+    /// * `constant`: constant value to constrain `a` to be equal to
+    fn assert_is_const(&self, ctx: &mut Context<F>, a: &AssignedValue<F>, constant: &F) {
+        if !ctx.witness_gen_only {
+            ctx.constant_equality_constraints.push((*constant, a.cell.unwrap()));
+        }
+    }
+
+    /// Constrains and returns the inner product of `<a, b>`.
+    ///
+    /// Assumes 'a' and 'b' are the same length.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: Iterator of [QuantumCell] values
+    /// * `b`: Iterator of [QuantumCell] values to take inner product of `a` by
+    fn inner_product<QA>(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl IntoIterator<Item = QA>,
+        b: impl IntoIterator<Item = QuantumCell<F>>,
+    ) -> AssignedValue<F>
+    where
+        QA: Into<QuantumCell<F>>;
+
+    /// Returns the inner product of `<a, b>` and the last element of `a` now assigned, i.e. `(inner_product_<a, b>, last_element_a)`.
+    ///
+    /// Assumes 'a' and 'b' are the same length.
+    /// * `ctx`: [Context] of the circuit
+    /// * `a`: Iterator of [QuantumCell]s
+    /// * `b`: Iterator of [QuantumCell]s to take inner product of `a` by
+    fn inner_product_left_last<QA>(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl IntoIterator<Item = QA>,
+        b: impl IntoIterator<Item = QuantumCell<F>>,
+    ) -> (AssignedValue<F>, AssignedValue<F>)
+    where
+        QA: Into<QuantumCell<F>>;
+
+    /// Calculates and constrains the inner product.
+    ///
+    /// Returns the assignment trace where `output[i]` has the running sum `sum_{j=0..=i} a[j] * b[j]`.
+    ///
+    /// Assumes 'a' and 'b' are the same length.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: Iterator of [QuantumCell] values
+    /// * `b`: Iterator of [QuantumCell] values to calculate the partial sums of the inner product of `a` by.
+    fn inner_product_with_sums<'thread, QA>(
+        &self,
+        ctx: &'thread mut Context<F>,
+        a: impl IntoIterator<Item = QA>,
+        b: impl IntoIterator<Item = QuantumCell<F>>,
+    ) -> Box<dyn Iterator<Item = AssignedValue<F>> + 'thread>
+    where
+        QA: Into<QuantumCell<F>>;
+
+    /// Constrains and returns the sum of [QuantumCell]'s in iterator `a`.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: Iterator of [QuantumCell] values to sum
+    fn sum<Q>(&self, ctx: &mut Context<F>, a: impl IntoIterator<Item = Q>) -> AssignedValue<F>
+    where
+        Q: Into<QuantumCell<F>>,
+    {
+        let mut a = a.into_iter().peekable();
+        let start = a.next();
+        if start.is_none() {
+            return ctx.load_zero();
+        }
+        let start = start.unwrap().into();
+        if a.peek().is_none() {
+            return ctx.assign_region_last([start], []);
+        }
+        let (len, hi) = a.size_hint();
+        assert_eq!(Some(len), hi);
+
+        let mut sum = *start.value();
+        let cells = iter::once(start).chain(a.flat_map(|a| {
+            let a = a.into();
+            sum += a.value();
+            [a, Constant(F::one()), Witness(sum)]
+        }));
+        ctx.assign_region_last(cells, (0..len).map(|i| 3 * i as isize))
+    }
+
+    /// Calculates and constrains the sum of the elements of `a`.
+    ///
+    /// Returns the assignment trace where `output[i]` has the running sum `sum_{j=0..=i} a[j]`.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: Iterator of [QuantumCell] values to sum
+    fn partial_sums<'thread, Q>(
+        &self,
+        ctx: &'thread mut Context<F>,
+        a: impl IntoIterator<Item = Q>,
+    ) -> Box<dyn Iterator<Item = AssignedValue<F>> + 'thread>
+    where
+        Q: Into<QuantumCell<F>>,
+    {
+        let mut a = a.into_iter().peekable();
+        let start = a.next();
+        if start.is_none() {
+            return Box::new(iter::once(ctx.load_zero()));
+        }
+        let start = start.unwrap().into();
+        if a.peek().is_none() {
+            return Box::new(iter::once(ctx.assign_region_last([start], [])));
+        }
+        let (len, hi) = a.size_hint();
+        assert_eq!(Some(len), hi);
+
+        let mut sum = *start.value();
+        let cells = iter::once(start).chain(a.flat_map(|a| {
+            let a = a.into();
+            sum += a.value();
+            [a, Constant(F::one()), Witness(sum)]
+        }));
+        ctx.assign_region(cells, (0..len).map(|i| 3 * i as isize));
+        Box::new((0..=len).rev().map(|i| ctx.get(-1 - 3 * (i as isize))))
+    }
+
+    /// Calculates and constrains the accumulated product of 'a' and 'b' i.e. `x_i = b_1 * (a_1...a_{i - 1})
+    ///     + b_2 * (a_2...a_{i - 1})
+    ///     + ...
+    ///     + b_i`
+    ///
+    /// Returns the assignment trace where `output[i]` is the running accumulated product x_i.
+    ///
+    /// Assumes 'a' and 'b' are the same length.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: Iterator of [QuantumCell] values
+    /// * `b`: Iterator of [QuantumCell] values to take the accumulated product of `a` by
+    fn accumulated_product<QA, QB>(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl IntoIterator<Item = QA>,
+        b: impl IntoIterator<Item = QB>,
+    ) -> Vec<AssignedValue<F>>
+    where
+        QA: Into<QuantumCell<F>>,
+        QB: Into<QuantumCell<F>>,
+    {
+        let mut b = b.into_iter();
+        let mut a = a.into_iter();
+        let b_first = b.next();
+        if let Some(b_first) = b_first {
+            let b_first = ctx.assign_region_last([b_first], []);
+            std::iter::successors(Some(b_first), |x| {
+                a.next().zip(b.next()).map(|(a, b)| self.mul_add(ctx, Existing(*x), a, b))
+            })
+            .collect()
+        } else {
+            vec![]
+        }
+    }
+
+    /// Constrains and returns the sum of products of `coeff * (a * b)` defined in `values` plus a variable `var` e.g.
+    /// `x = var + values[0].0 * (values[0].1 * values[0].2) + values[1].0 * (values[1].1 * values[1].2) + ... + values[n].0 * (values[n].1 * values[n].2)`.
+    /// * `ctx`: [Context] to add the constraints to.
+    /// * `values`: Iterator of tuples `(coeff, a, b)` where `coeff` is a field element, `a` and `b` are [QuantumCell]'s.
+    /// * `var`: [QuantumCell] that represents the value of a variable added to the sum.
+    fn sum_products_with_coeff_and_var(
+        &self,
+        ctx: &mut Context<F>,
+        values: impl IntoIterator<Item = (F, QuantumCell<F>, QuantumCell<F>)>,
+        var: QuantumCell<F>,
+    ) -> AssignedValue<F>;
+
+    /// Constrains and returns `a || b`, assuming `a` and `b` are boolean.
+    ///
+    /// Defines a vertical gate of form `| 1 - b | 1 | b | 1 | b | a | 1 - b | out |`, where `out = a + b - a * b`.
+    /// * `ctx`: [Context] to add the constraints to.
+    /// * `a`: [QuantumCell] that contains a boolean value.
+    /// * `b`: [QuantumCell] that contains a boolean value.
+    fn or(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+    ) -> AssignedValue<F> {
+        let a = a.into();
+        let b = b.into();
+        let not_b_val = F::one() - b.value();
+        let out_val = *a.value() + b.value() - *a.value() * b.value();
+        let cells = [
+            Witness(not_b_val),
+            Constant(F::one()),
+            b,
+            Constant(F::one()),
+            b,
+            a,
+            Witness(not_b_val),
+            Witness(out_val),
+        ];
+        ctx.assign_region_smart(cells, [0, 4], [(0, 6), (2, 4)], []);
+        ctx.last().unwrap()
+    }
+
+    /// Constrains and returns `a & b`, assumeing `a` and `b` are boolean.
+    ///
+    /// Defines a vertical gate of form | 0 | a | b | out |, where out = a * b.
+    /// * `ctx`: [Context] to add the constraints to.
+    /// * `a`: [QuantumCell] that contains a boolean value.
+    /// * `b`: [QuantumCell] that contains a boolean value.
+    fn and(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+    ) -> AssignedValue<F> {
+        self.mul(ctx, a, b)
+    }
+
+    /// Constrains and returns `!a` assumeing `a` is boolean.
+    ///
+    /// Defines a vertical gate of form | 1 - a | a | 1 | 1 |, where 1 - a = out.
+    /// * `ctx`: [Context] to add the constraints to.
+    /// * `a`: [QuantumCell] that contains a boolean value.
+    fn not(&self, ctx: &mut Context<F>, a: impl Into<QuantumCell<F>>) -> AssignedValue<F> {
+        self.sub(ctx, Constant(F::one()), a)
+    }
+
+    /// Constrains and returns `sel ? a : b` assuming `sel` is boolean.
+    ///
+    /// Defines a vertical gate of form `| 1 - sel | sel | 1 | a | 1 - sel | sel | 1 | b | out |`, where out = sel * a + (1 - sel) * b.
+    /// * `ctx`: [Context] to add the constraints to.
+    /// * `a`: [QuantumCell] that contains a boolean value.
+    /// * `b`: [QuantumCell] that contains a boolean value.
+    /// * `sel`: [QuantumCell] that contains a boolean value.
+    fn select(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+        sel: impl Into<QuantumCell<F>>,
+    ) -> AssignedValue<F>;
+
+    /// Constains and returns `a || (b && c)`, assuming `a`, `b` and `c` are boolean.
+    ///
+    /// Defines a vertical gate of form `| 1 - b c | b | c | 1 | a - 1 | 1 - b c | out | a - 1 | 1 | 1 | a |`, where out = a + b * c - a * b * c.
+    /// * `ctx`: [Context] to add the constraints to.
+    /// * `a`: [QuantumCell] that contains a boolean value.
+    /// * `b`: [QuantumCell] that contains a boolean value.
+    /// * `c`: [QuantumCell] that contains a boolean value.
+    fn or_and(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+        c: impl Into<QuantumCell<F>>,
+    ) -> AssignedValue<F>;
+
+    /// Constrains and returns an indicator vector from a slice of boolean values, where `output[idx] = 1` iff idx = (the number represented by `bits` in binary little endian), otherwise `output[idx] = 0`.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `bits`: slice of [QuantumCell]'s that contains boolean values
+    ///
+    /// # Assumptions
+    /// * `bits` is non-empty
+    fn bits_to_indicator(
+        &self,
+        ctx: &mut Context<F>,
+        bits: &[AssignedValue<F>],
+    ) -> Vec<AssignedValue<F>> {
+        let k = bits.len();
+        assert!(k > 0, "bits_to_indicator: bits must be non-empty");
+
+        // (inv_last_bit, last_bit) = (1, 0) if bits[k - 1] = 0
+        let (inv_last_bit, last_bit) = {
+            ctx.assign_region(
+                [
+                    Witness(F::one() - bits[k - 1].value()),
+                    Existing(bits[k - 1]),
+                    Constant(F::one()),
+                    Constant(F::one()),
+                ],
+                [0],
+            );
+            (ctx.get(-4), ctx.get(-3))
+        };
+        let mut indicator = Vec::with_capacity(2 * (1 << k) - 2);
+        let mut offset = 0;
+        indicator.push(inv_last_bit);
+        indicator.push(last_bit);
+        for (idx, bit) in bits.iter().rev().enumerate().skip(1) {
+            for old_idx in 0..(1 << idx) {
+                // inv_prod_val = (1 - bit) * indicator[offset + old_idx]
+                let inv_prod_val = (F::one() - bit.value()) * indicator[offset + old_idx].value();
+                ctx.assign_region(
+                    [
+                        Witness(inv_prod_val),
+                        Existing(indicator[offset + old_idx]),
+                        Existing(*bit),
+                        Existing(indicator[offset + old_idx]),
+                    ],
+                    [0],
+                );
+                indicator.push(ctx.get(-4));
+
+                // prod = bit * indicator[offset + old_idx]
+                let prod = self.mul(ctx, Existing(indicator[offset + old_idx]), Existing(*bit));
+                indicator.push(prod);
+            }
+            offset += 1 << idx;
+        }
+        indicator.split_off((1 << k) - 2)
+    }
+
+    /// Constrains and returns a [Vec] `indicator` of length `len`, where `indicator[i] == 1 if i == idx otherwise 0`, if `idx >= len` then `indicator` is all zeros.
+    ///
+    /// Assumes `len` is greater than 0.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `idx`: [QuantumCell]  index of the indicator vector to be set to 1
+    /// * `len`: length of the `indicator` vector
+    fn idx_to_indicator(
+        &self,
+        ctx: &mut Context<F>,
+        idx: impl Into<QuantumCell<F>>,
+        len: usize,
+    ) -> Vec<AssignedValue<F>> {
+        let mut idx = idx.into();
+        (0..len)
+            .map(|i| {
+                // need to use assigned idx after i > 0 so equality constraint holds
+                if i == 0 {
+                    // unroll `is_zero` to make sure if `idx == Witness(_)` it is replaced by `Existing(_)` in later iterations
+                    let x = idx.value();
+                    let (is_zero, inv) = if x.is_zero_vartime() {
+                        (F::one(), Assigned::Trivial(F::one()))
+                    } else {
+                        (F::zero(), Assigned::Rational(F::one(), *x))
+                    };
+                    let cells = [
+                        Witness(is_zero),
+                        idx,
+                        WitnessFraction(inv),
+                        Constant(F::one()),
+                        Constant(F::zero()),
+                        idx,
+                        Witness(is_zero),
+                        Constant(F::zero()),
+                    ];
+                    ctx.assign_region_smart(cells, [0, 4], [(0, 6), (1, 5)], []); // note the two `idx` need to be constrained equal: (1, 5)
+                    idx = Existing(ctx.get(-3)); // replacing `idx` with Existing cell so future loop iterations constrain equality of all `idx`s
+                    ctx.get(-2)
+                } else {
+                    self.is_equal(ctx, idx, Constant(self.get_field_element(i as u64)))
+                }
+            })
+            .collect()
+    }
+
+    /// Constrains the inner product of `a` and `indicator` and returns `a[idx]` (e.g. the value of `a` at `idx`).
+    ///
+    /// Assumes that `a` and `indicator` are non-empty iterators of the same length, the values of `indicator` are boolean,
+    /// and that `indicator` has at most one `1` bit.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: Iterator of [QuantumCell]'s that contains field elements
+    /// * `indicator`: Iterator of [AssignedValue]'s where indicator[i] == 1 if i == `idx`, otherwise 0
+    fn select_by_indicator<Q>(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl IntoIterator<Item = Q>,
+        indicator: impl IntoIterator<Item = AssignedValue<F>>,
+    ) -> AssignedValue<F>
+    where
+        Q: Into<QuantumCell<F>>,
+    {
+        let mut sum = F::zero();
+        let a = a.into_iter();
+        let (len, hi) = a.size_hint();
+        assert_eq!(Some(len), hi);
+
+        let cells = std::iter::once(Constant(F::zero())).chain(
+            a.zip(indicator.into_iter()).flat_map(|(a, ind)| {
+                let a = a.into();
+                sum = if ind.value().is_zero_vartime() { sum } else { *a.value() };
+                [a, Existing(ind), Witness(sum)]
+            }),
+        );
+        ctx.assign_region_last(cells, (0..len).map(|i| 3 * i as isize))
+    }
+
+    /// Constrains and returns `cells[idx]` if `idx < cells.len()`, otherwise return 0.
+    ///
+    /// Assumes that `cells` and `idx` are non-empty iterators of the same length.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `cells`: Iterator of [QuantumCell]s to select from
+    /// * `idx`: [QuantumCell] with value `idx` where `idx` is the index of the cell to be selected
+    fn select_from_idx<Q>(
+        &self,
+        ctx: &mut Context<F>,
+        cells: impl IntoIterator<Item = Q>,
+        idx: impl Into<QuantumCell<F>>,
+    ) -> AssignedValue<F>
+    where
+        Q: Into<QuantumCell<F>>,
+    {
+        let cells = cells.into_iter();
+        let (len, hi) = cells.size_hint();
+        assert_eq!(Some(len), hi);
+
+        let ind = self.idx_to_indicator(ctx, idx, len);
+        self.select_by_indicator(ctx, cells, ind)
+    }
+
+    /// Constrains that a cell is equal to 0 and returns `1` if `a = 0`, otherwise `0`.
+    ///
+    /// Defines a vertical gate of form `| out | a | inv | 1 | 0 | a | out | 0 |`, where out = 1 if a = 0, otherwise out = 0.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: [QuantumCell] value to be constrained
+    fn is_zero(&self, ctx: &mut Context<F>, a: AssignedValue<F>) -> AssignedValue<F> {
+        let x = a.value();
+        let (is_zero, inv) = if x.is_zero_vartime() {
+            (F::one(), Assigned::Trivial(F::one()))
+        } else {
+            (F::zero(), Assigned::Rational(F::one(), *x))
+        };
+
+        let cells = [
+            Witness(is_zero),
+            Existing(a),
+            WitnessFraction(inv),
+            Constant(F::one()),
+            Constant(F::zero()),
+            Existing(a),
+            Witness(is_zero),
+            Constant(F::zero()),
+        ];
+        ctx.assign_region_smart(cells, [0, 4], [(0, 6)], []);
+        ctx.get(-2)
+    }
+
+    /// Constrains that the value of two cells are equal: b - a = 0, returns `1` if `a = b`, otherwise `0`.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: [QuantumCell] value
+    /// * `b`: [QuantumCell] value to compare to `a`
+    fn is_equal(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+    ) -> AssignedValue<F> {
+        let diff = self.sub(ctx, a, b);
+        self.is_zero(ctx, diff)
+    }
+
+    /// Constrains and returns little-endian bit vector representation of `a`.
+    ///
+    /// Assumes `range_bits <= number of bits in a`.
+    /// * `a`: [QuantumCell] of the value to convert
+    /// * `range_bits`: range of bits needed to represent `a`
+    fn num_to_bits(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+        range_bits: usize,
+    ) -> Vec<AssignedValue<F>>;
+
+    /// Performs and constrains Lagrange interpolation on `coords` and evaluates the resulting polynomial at `x`.
+    ///
+    /// Given pairs `coords[i] = (x_i, y_i)`, let `f` be the unique degree `len(coords) - 1` polynomial such that `f(x_i) = y_i` for all `i`.
+    ///
+    /// Returns:
+    /// (f(x), Prod_i(x - x_i))
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `coords`: immutable reference to a slice of tuples of [AssignedValue]s representing the points to interpolate over such that `coords[i] = (x_i, y_i)`
+    /// * `x`: x-coordinate of the point to evaluate `f` at
+    ///
+    /// # Assumptions
+    /// * `coords` is non-empty
+    fn lagrange_and_eval(
+        &self,
+        ctx: &mut Context<F>,
+        coords: &[(AssignedValue<F>, AssignedValue<F>)],
+        x: AssignedValue<F>,
+    ) -> (AssignedValue<F>, AssignedValue<F>) {
+        assert!(!coords.is_empty(), "coords should not be empty");
+        let mut z = self.sub(ctx, Existing(x), Existing(coords[0].0));
+        for coord in coords.iter().skip(1) {
+            let sub = self.sub(ctx, Existing(x), Existing(coord.0));
+            z = self.mul(ctx, Existing(z), Existing(sub));
+        }
+        let mut eval = None;
+        for i in 0..coords.len() {
+            // compute (x - x_i) * Prod_{j != i} (x_i - x_j)
+            let mut denom = self.sub(ctx, Existing(x), Existing(coords[i].0));
+            for j in 0..coords.len() {
+                if i == j {
+                    continue;
+                }
+                let sub = self.sub(ctx, coords[i].0, coords[j].0);
+                denom = self.mul(ctx, denom, sub);
+            }
+            // TODO: batch inversion
+            let is_zero = self.is_zero(ctx, denom);
+            self.assert_is_const(ctx, &is_zero, &F::zero());
+
+            // y_i / denom
+            let quot = self.div_unsafe(ctx, coords[i].1, denom);
+            eval = if let Some(eval) = eval {
+                let eval = self.add(ctx, eval, quot);
+                Some(eval)
+            } else {
+                Some(quot)
+            };
+        }
+        let out = self.mul(ctx, eval.unwrap(), z);
+        (out, z)
+    }
+}
+
+/// A chip that implements the [GateInstructions] trait supporting basic arithmetic operations.
+#[derive(Clone, Debug)]
+pub struct GateChip<F: ScalarField> {
+    /// The [GateStrategy] used when declaring gates.
+    strategy: GateStrategy,
+    /// The field elements 2^i for i in 0..F::NUM_BITS.
+    pub pow_of_two: Vec<F>,
+    /// To avoid Montgomery conversion in `F::from` for common small numbers, we keep a cache of field elements.
+    pub field_element_cache: Vec<F>,
+}
+
+impl<F: ScalarField> Default for GateChip<F> {
+    fn default() -> Self {
+        Self::new(GateStrategy::Vertical)
+    }
+}
+
+impl<F: ScalarField> GateChip<F> {
+    /// Returns a new [GateChip] with the given [GateStrategy].
+    pub fn new(strategy: GateStrategy) -> Self {
+        let mut pow_of_two = Vec::with_capacity(F::NUM_BITS as usize);
+        let two = F::from(2);
+        pow_of_two.push(F::one());
+        pow_of_two.push(two);
+        for _ in 2..F::NUM_BITS {
+            pow_of_two.push(two * pow_of_two.last().unwrap());
+        }
+        let field_element_cache = (0..1024).map(|i| F::from(i)).collect();
+
+        Self { strategy, pow_of_two, field_element_cache }
+    }
+
+    /// Calculates and constrains the inner product of `<a, b>`.
+    ///
+    /// Returns `true` if `b` start with `Constant(F::one())`, and `false` otherwise.
+    ///
+    /// Assumes `a` and `b` are the same length.
+    /// * `ctx`: [Context] of the circuit
+    /// * `a`: Iterator of [QuantumCell] values
+    /// * `b`: Iterator of [QuantumCell] values to take inner product of `a` by
+    fn inner_product_simple<QA>(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl IntoIterator<Item = QA>,
+        b: impl IntoIterator<Item = QuantumCell<F>>,
+    ) -> bool
+    where
+        QA: Into<QuantumCell<F>>,
+    {
+        let mut sum;
+        let mut a = a.into_iter();
+        let mut b = b.into_iter().peekable();
+
+        let b_starts_with_one = matches!(b.peek(), Some(Constant(c)) if c == &F::one());
+        let cells = if b_starts_with_one {
+            b.next();
+            let start_a = a.next().unwrap().into();
+            sum = *start_a.value();
+            iter::once(start_a)
+        } else {
+            sum = F::zero();
+            iter::once(Constant(F::zero()))
+        }
+        .chain(a.zip(b).flat_map(|(a, b)| {
+            let a = a.into();
+            sum += *a.value() * b.value();
+            [a, b, Witness(sum)]
+        }));
+
+        if ctx.witness_gen_only() {
+            ctx.assign_region(cells, vec![]);
+        } else {
+            let cells = cells.collect::<Vec<_>>();
+            let lo = cells.len();
+            let len = lo / 3;
+            ctx.assign_region(cells, (0..len).map(|i| 3 * i as isize));
+        };
+        b_starts_with_one
+    }
+}
+
+impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
+    /// Returns the [GateStrategy] the [GateChip].
     fn strategy(&self) -> GateStrategy {
         self.strategy
     }
-    fn context_id(&self) -> usize {
-        self.context_id
-    }
+
+    /// Returns a slice of the [ScalarField] elements 2<sup>i</sup> for i in 0..F::NUM_BITS.
     fn pow_of_two(&self) -> &[F] {
         &self.pow_of_two
     }
+
+    /// Returns the the value of `n` as a [ScalarField] element.
+    /// * `n`: the [u64] value to convert
     fn get_field_element(&self, n: u64) -> F {
         let get = self.field_element_cache.get(n as usize);
         if let Some(fe) = get {
@@ -338,360 +916,107 @@ impl<F: ScalarField> GateInstructions<F> for FlexGateConfig<F> {
             F::from(n)
         }
     }
-    /// All indices in `gate_offsets` are with respect to `inputs` indices
-    /// * `gate_offsets` specifies indices to enable selector for the gate
-    /// * `gate_offsets` specifies (index, Option<[q_left, q_right, q_mul, q_const, q_out]>)
-    /// * second coordinate should only be set if using strategy PlonkPlus; if not set, default to [1, 0, 0]
-    /// * allow the index in `gate_offsets` to be negative in case we want to do advanced overlapping
-    /// * gate_index can either be set if you know the specific column you want to assign to, or None if you want to auto-select index
-    /// * only selects from advice columns in `ctx.current_phase`
-    // same as `assign_region` except you can specify the `phase` to assign in
-    fn assign_region_in<'a, 'b: 'a>(
+
+    /// Constrains and returns the inner product of `<a, b>`.
+    ///
+    /// Assumes 'a' and 'b' are the same length.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: Iterator of [QuantumCell] values
+    /// * `b`: Iterator of [QuantumCell] values to take inner product of `a` by
+    fn inner_product<QA>(
         &self,
-        ctx: &mut Context<'_, F>,
-        inputs: impl IntoIterator<Item = QuantumCell<'a, 'b, F>>,
-        gate_offsets: impl IntoIterator<Item = (isize, Option<[F; 3]>)>,
-        phase: usize,
-    ) -> Vec<AssignedValue<'b, F>> {
-        // We enforce the pattern that you should assign everything in current phase at once and then move onto next phase
-        debug_assert_eq!(phase, ctx.current_phase());
+        ctx: &mut Context<F>,
+        a: impl IntoIterator<Item = QA>,
+        b: impl IntoIterator<Item = QuantumCell<F>>,
+    ) -> AssignedValue<F>
+    where
+        QA: Into<QuantumCell<F>>,
+    {
+        self.inner_product_simple(ctx, a, b);
+        ctx.last().unwrap()
+    }
 
-        let inputs = inputs.into_iter();
-        let (len, hi) = inputs.size_hint();
-        debug_assert_eq!(Some(len), hi);
-        // we index into `advice_alloc` twice so this assert should save a bound check
-        assert!(self.context_id < ctx.advice_alloc.len(), "context id out of bounds");
-
-        let (gate_index, row_offset) = {
-            let alloc = ctx.advice_alloc.get_mut(self.context_id).unwrap();
-
-            if alloc.1 + len >= ctx.max_rows {
-                alloc.1 = 0;
-                alloc.0 += 1;
+    /// Returns the inner product of `<a, b>` and returns a tuple of the last item of `a` after it is assigned and the item to its left `(left_a, last_a)`.
+    ///
+    /// Assumes 'a' and 'b' are the same length.
+    /// * `ctx`: [Context] of the circuit
+    /// * `a`: Iterator of [QuantumCell]s
+    /// * `b`: Iterator of [QuantumCell]s to take inner product of `a` by
+    fn inner_product_left_last<QA>(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl IntoIterator<Item = QA>,
+        b: impl IntoIterator<Item = QuantumCell<F>>,
+    ) -> (AssignedValue<F>, AssignedValue<F>)
+    where
+        QA: Into<QuantumCell<F>>,
+    {
+        let a = a.into_iter();
+        let (len, hi) = a.size_hint();
+        assert_eq!(Some(len), hi);
+        let row_offset = ctx.advice.len();
+        let b_starts_with_one = self.inner_product_simple(ctx, a, b);
+        let a_last = if b_starts_with_one {
+            if len == 1 {
+                ctx.get(row_offset as isize)
+            } else {
+                ctx.get((row_offset + 1 + 3 * (len - 2)) as isize)
             }
-            *alloc
+        } else {
+            ctx.get((row_offset + 1 + 3 * (len - 1)) as isize)
         };
-
-        let basic_gate = self.basic_gates[phase]
-            .get(gate_index)
-            .unwrap_or_else(|| panic!("NOT ENOUGH ADVICE COLUMNS IN PHASE {phase}"));
-        let column = basic_gate.value;
-        let assignments = inputs
-            .enumerate()
-            .map(|(i, input)| {
-                ctx.assign_cell(
-                    input,
-                    column,
-                    #[cfg(feature = "display")]
-                    self.context_id,
-                    row_offset + i,
-                    #[cfg(feature = "halo2-pse")]
-                    (phase as u8),
-                )
-            })
-            .collect::<Vec<_>>();
-
-        for (i, q_coeff) in gate_offsets.into_iter() {
-            basic_gate
-                .q_enable
-                .enable(&mut ctx.region, (row_offset as isize + i) as usize)
-                .expect("enable selector should not fail");
-
-            if self.strategy == GateStrategy::PlonkPlus {
-                let q_coeff = q_coeff.unwrap_or([F::one(), F::zero(), F::zero()]);
-                for (j, q_coeff) in q_coeff.into_iter().enumerate() {
-                    #[cfg(feature = "halo2-axiom")]
-                    {
-                        ctx.region.assign_fixed(
-                            basic_gate.q_enable_plus[0],
-                            ((row_offset as isize) + i) as usize + j,
-                            Assigned::Trivial(q_coeff),
-                        );
-                    }
-                    #[cfg(feature = "halo2-pse")]
-                    {
-                        ctx.region
-                            .assign_fixed(
-                                || "",
-                                basic_gate.q_enable_plus[0],
-                                ((row_offset as isize) + i) as usize + j,
-                                || Value::known(q_coeff),
-                            )
-                            .unwrap();
-                    }
-                }
-            }
-        }
-
-        ctx.advice_alloc[self.context_id].1 += assignments.len();
-
-        #[cfg(feature = "display")]
-        {
-            ctx.total_advice += assignments.len();
-        }
-
-        assignments
+        (ctx.last().unwrap(), a_last)
     }
 
-    fn assign_region_last_in<'a, 'b: 'a>(
+    /// Calculates and constrains the inner product.
+    ///
+    /// Returns the assignment trace where `output[i]` has the running sum `sum_{j=0..=i} a[j] * b[j]`.
+    ///
+    /// Assumes 'a' and 'b' are the same length.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: Iterator of [QuantumCell] values
+    /// * `b`: Iterator of [QuantumCell] values to calculate the partial sums of the inner product of `a` by
+    fn inner_product_with_sums<'thread, QA>(
         &self,
-        ctx: &mut Context<'_, F>,
-        inputs: impl IntoIterator<Item = QuantumCell<'a, 'b, F>>,
-        gate_offsets: impl IntoIterator<Item = (isize, Option<[F; 3]>)>,
-        phase: usize,
-    ) -> AssignedValue<'b, F> {
-        // We enforce the pattern that you should assign everything in current phase at once and then move onto next phase
-        debug_assert_eq!(phase, ctx.current_phase());
-
-        let inputs = inputs.into_iter();
-        let (len, hi) = inputs.size_hint();
-        debug_assert_eq!(hi, Some(len));
-        debug_assert_ne!(len, 0);
-        // we index into `advice_alloc` twice so this assert should save a bound check
-        assert!(self.context_id < ctx.advice_alloc.len(), "context id out of bounds");
-
-        let (gate_index, row_offset) = {
-            let alloc = ctx.advice_alloc.get_mut(self.context_id).unwrap();
-
-            if alloc.1 + len >= ctx.max_rows {
-                alloc.1 = 0;
-                alloc.0 += 1;
-            }
-            *alloc
-        };
-
-        let basic_gate = self.basic_gates[phase]
-            .get(gate_index)
-            .unwrap_or_else(|| panic!("NOT ENOUGH ADVICE COLUMNS IN PHASE {phase}"));
-        let column = basic_gate.value;
-        let mut out = None;
-        for (i, input) in inputs.enumerate() {
-            out = Some(ctx.assign_cell(
-                input,
-                column,
-                #[cfg(feature = "display")]
-                self.context_id,
-                row_offset + i,
-                #[cfg(feature = "halo2-pse")]
-                (phase as u8),
-            ));
-        }
-
-        for (i, q_coeff) in gate_offsets.into_iter() {
-            basic_gate
-                .q_enable
-                .enable(&mut ctx.region, (row_offset as isize + i) as usize)
-                .expect("selector enable should not fail");
-
-            if self.strategy == GateStrategy::PlonkPlus {
-                let q_coeff = q_coeff.unwrap_or([F::one(), F::zero(), F::zero()]);
-                for (j, q_coeff) in q_coeff.into_iter().enumerate() {
-                    #[cfg(feature = "halo2-axiom")]
-                    {
-                        ctx.region.assign_fixed(
-                            basic_gate.q_enable_plus[0],
-                            ((row_offset as isize) + i) as usize + j,
-                            Assigned::Trivial(q_coeff),
-                        );
-                    }
-                    #[cfg(feature = "halo2-pse")]
-                    {
-                        ctx.region
-                            .assign_fixed(
-                                || "",
-                                basic_gate.q_enable_plus[0],
-                                ((row_offset as isize) + i) as usize + j,
-                                || Value::known(q_coeff),
-                            )
-                            .unwrap();
-                    }
-                }
-            }
-        }
-
-        ctx.advice_alloc[self.context_id].1 += len;
-
-        #[cfg(feature = "display")]
-        {
-            ctx.total_advice += len;
-        }
-
-        out.unwrap()
-    }
-
-    // Takes two vectors of `QuantumCell` and constrains a witness output to the inner product of `<vec_a, vec_b>`
-    // outputs are (assignments except last, out_cell)
-    // Currently the only places `assignments` is used are: `num_to_bits, range_check, carry_mod, check_carry_mod_to_zero`
-    fn inner_product<'a, 'b: 'a>(
-        &self,
-        ctx: &mut Context<'_, F>,
-        a: impl IntoIterator<Item = QuantumCell<'a, 'b, F>>,
-        b: impl IntoIterator<Item = QuantumCell<'a, 'b, F>>,
-    ) -> AssignedValue<'b, F> {
-        // we will do special handling of the cases where one of the vectors is all constants
-        match self.strategy {
-            GateStrategy::PlonkPlus => {
-                let (_, out) = self.inner_product_with_assignments(ctx, a, b);
-                out
-            }
-            _ => self.inner_product_simple(ctx, a, b),
-        }
-    }
-
-    fn inner_product_with_sums<'a, 'b: 'a>(
-        &self,
-        ctx: &mut Context<'_, F>,
-        a: impl IntoIterator<Item = QuantumCell<'a, 'b, F>>,
-        b: impl IntoIterator<Item = QuantumCell<'a, 'b, F>>,
-    ) -> Box<dyn Iterator<Item = AssignedValue<'b, F>> + 'b> {
-        let mut b = b.into_iter().peekable();
-        let flag = matches!(b.peek(), Some(&Constant(c)) if c == F::one());
-        let (assignments_without_last, last) =
-            self.inner_product_simple_with_assignments(ctx, a, b);
-        if flag {
-            Box::new(assignments_without_last.into_iter().step_by(3).chain(once(last)))
+        ctx: &'thread mut Context<F>,
+        a: impl IntoIterator<Item = QA>,
+        b: impl IntoIterator<Item = QuantumCell<F>>,
+    ) -> Box<dyn Iterator<Item = AssignedValue<F>> + 'thread>
+    where
+        QA: Into<QuantumCell<F>>,
+    {
+        let row_offset = ctx.advice.len();
+        let b_starts_with_one = self.inner_product_simple(ctx, a, b);
+        if b_starts_with_one {
+            Box::new((row_offset..ctx.advice.len()).step_by(3).map(|i| ctx.get(i as isize)))
         } else {
             // in this case the first assignment is 0 so we skip it
-            Box::new(assignments_without_last.into_iter().step_by(3).skip(1).chain(once(last)))
+            Box::new((row_offset..ctx.advice.len()).step_by(3).skip(1).map(|i| ctx.get(i as isize)))
         }
     }
 
-    fn inner_product_left<'a, 'b: 'a>(
+    /// Constrains and returns the sum of products of `coeff * (a * b)` defined in `values` plus a variable `var` e.g.
+    /// `x = var + values[0].0 * (values[0].1 * values[0].2) + values[1].0 * (values[1].1 * values[1].2) + ... + values[n].0 * (values[n].1 * values[n].2)`.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `values`: Iterator of tuples `(coeff, a, b)` where `coeff` is a field element, `a` and `b` are [QuantumCell]'s
+    /// * `var`: [QuantumCell] that represents the value of a variable added to the sum
+    fn sum_products_with_coeff_and_var(
         &self,
-        ctx: &mut Context<'_, F>,
-        a: impl IntoIterator<Item = QuantumCell<'a, 'b, F>>,
-        b: impl IntoIterator<Item = QuantumCell<'a, 'b, F>>,
-        a_assigned: &mut Vec<AssignedValue<'b, F>>,
-    ) -> AssignedValue<'b, F> {
+        ctx: &mut Context<F>,
+        values: impl IntoIterator<Item = (F, QuantumCell<F>, QuantumCell<F>)>,
+        var: QuantumCell<F>,
+    ) -> AssignedValue<F> {
+        // TODO: optimizer
         match self.strategy {
-            GateStrategy::PlonkPlus => {
-                let a = a.into_iter();
-                let (len, _) = a.size_hint();
-                let (assignments, acc) = self.inner_product_with_assignments(ctx, a, b);
-                let mut assignments = assignments.into_iter();
-                a_assigned.clear();
-                assert!(a_assigned.capacity() >= len);
-                a_assigned.extend(
-                    iter::once(assignments.next().unwrap())
-                        .chain(
-                            assignments
-                                .chunks(3)
-                                .into_iter()
-                                .flat_map(|chunk| chunk.into_iter().take(2)),
-                        )
-                        .take(len),
-                );
-                acc
-            }
-            _ => {
-                let mut a = a.into_iter();
-                let mut b = b.into_iter().peekable();
-                let (len, hi) = b.size_hint();
-                debug_assert_eq!(Some(len), hi);
-                // we do not use `assign_region` and implement directly to avoid `collect`ing the vector of assignments
-                let phase = ctx.current_phase();
-                assert!(self.context_id < ctx.advice_alloc.len(), "context id out of bounds");
-
-                let (gate_index, mut row_offset) = {
-                    let alloc = ctx.advice_alloc.get_mut(self.context_id).unwrap();
-                    if alloc.1 + 3 * len + 1 >= ctx.max_rows {
-                        alloc.1 = 0;
-                        alloc.0 += 1;
-                    }
-                    *alloc
-                };
-                let basic_gate = self.basic_gates[phase]
-                    .get(gate_index)
-                    .unwrap_or_else(|| panic!("NOT ENOUGH ADVICE COLUMNS IN PHASE {phase}"));
-                let column = basic_gate.value;
-                let q_enable = basic_gate.q_enable;
-
-                let mut right_one = false;
-                let start = ctx.assign_cell(
-                    if matches!(b.peek(), Some(&Constant(x)) if x == F::one()) {
-                        right_one = true;
-                        b.next();
-                        a.next().unwrap()
-                    } else {
-                        Constant(F::zero())
-                    },
-                    column,
-                    #[cfg(feature = "display")]
-                    self.context_id,
-                    row_offset,
-                    #[cfg(feature = "halo2-pse")]
-                    (phase as u8),
-                );
-
-                row_offset += 1;
-                let mut acc = start.value().copied();
-                a_assigned.clear();
-                assert!(a_assigned.capacity() >= len);
-                if right_one {
-                    a_assigned.push(start);
-                }
-                let mut last = None;
-
-                for (a, b) in a.zip(b) {
-                    q_enable
-                        .enable(&mut ctx.region, row_offset - 1)
-                        .expect("enable selector should not fail");
-
-                    acc = acc + a.value().zip(b.value()).map(|(a, b)| *a * b);
-                    let [a, _, c] = [(a, 0), (b, 1), (Witness(acc), 2)].map(|(qcell, idx)| {
-                        ctx.assign_cell(
-                            qcell,
-                            column,
-                            #[cfg(feature = "display")]
-                            self.context_id,
-                            row_offset + idx,
-                            #[cfg(feature = "halo2-pse")]
-                            (phase as u8),
-                        )
-                    });
-                    last = Some(c);
-                    row_offset += 3;
-                    a_assigned.push(a);
-                }
-                ctx.advice_alloc[self.context_id].1 = row_offset;
-
-                #[cfg(feature = "display")]
-                {
-                    ctx.total_advice += 3 * (len - usize::from(right_one)) + 1;
-                }
-                last.unwrap_or_else(|| a_assigned[0].clone())
-            }
-        }
-    }
-
-    fn sum_products_with_coeff_and_var<'a, 'b: 'a>(
-        &self,
-        ctx: &mut Context<'_, F>,
-        values: impl IntoIterator<Item = (F, QuantumCell<'a, 'b, F>, QuantumCell<'a, 'b, F>)>,
-        var: QuantumCell<'a, 'b, F>,
-    ) -> AssignedValue<'b, F> {
-        // TODO: optimize
-        match self.strategy {
-            GateStrategy::PlonkPlus => {
-                let mut cells = Vec::new();
-                let mut gate_offsets = Vec::new();
-                let mut acc = var.value().copied();
-                cells.push(var);
-                for (i, (c, a, b)) in values.into_iter().enumerate() {
-                    acc = acc + Value::known(c) * a.value() * b.value();
-                    cells.append(&mut vec![a, b, Witness(acc)]);
-                    gate_offsets.push((3 * i as isize, Some([c, F::zero(), F::zero()])));
-                }
-                self.assign_region_last(ctx, cells, gate_offsets)
-            }
             GateStrategy::Vertical => {
+                // Create an iterator starting with `var` and
                 let (a, b): (Vec<_>, Vec<_>) = std::iter::once((var, Constant(F::one())))
                     .chain(values.into_iter().filter_map(|(c, va, vb)| {
                         if c == F::one() {
                             Some((va, vb))
                         } else if c != F::zero() {
                             let prod = self.mul(ctx, va, vb);
-                            Some((QuantumCell::ExistingOwned(prod), Constant(c)))
+                            Some((QuantumCell::Existing(prod), Constant(c)))
                         } else {
                             None
                         }
@@ -702,74 +1027,67 @@ impl<F: ScalarField> GateInstructions<F> for FlexGateConfig<F> {
         }
     }
 
-    /// assumes sel is boolean
-    /// returns
-    ///   a * sel + b * (1 - sel)
-    fn select<'v>(
+    /// Constrains and returns `sel ? a : b` assuming `sel` is boolean.
+    ///
+    /// Defines a vertical gate of form `| 1 - sel | sel | 1 | a | 1 - sel | sel | 1 | b | out |`, where out = sel * a + (1 - sel) * b.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: [QuantumCell] that contains a boolean value
+    /// * `b`: [QuantumCell] that contains a boolean value
+    /// * `sel`: [QuantumCell] that contains a boolean value
+    fn select(
         &self,
-        ctx: &mut Context<'_, F>,
-        a: QuantumCell<'_, 'v, F>,
-        b: QuantumCell<'_, 'v, F>,
-        sel: QuantumCell<'_, 'v, F>,
-    ) -> AssignedValue<'v, F> {
-        let diff_val: Value<F> = a.value().zip(b.value()).map(|(a, b)| *a - b);
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+        sel: impl Into<QuantumCell<F>>,
+    ) -> AssignedValue<F> {
+        let a = a.into();
+        let b = b.into();
+        let sel = sel.into();
+        let diff_val = *a.value() - b.value();
         let out_val = diff_val * sel.value() + b.value();
         match self.strategy {
             // | a - b | 1 | b | a |
             // | b | sel | a - b | out |
             GateStrategy::Vertical => {
-                let cells = vec![
+                let cells = [
                     Witness(diff_val),
                     Constant(F::one()),
-                    b.clone(),
+                    b,
                     a,
                     b,
                     sel,
                     Witness(diff_val),
                     Witness(out_val),
                 ];
-                let mut assigned_cells =
-                    self.assign_region_smart(ctx, cells, vec![0, 4], vec![(0, 6), (2, 4)], vec![]);
-                assigned_cells.pop().unwrap()
-            }
-            // | 0 | a | a - b | b | sel | a - b | out |
-            // selectors
-            // | 1 | 0 | 0     | 1 | 0   | 0
-            // | 0 | 1 | -1    | 1 | 0   | 0
-            GateStrategy::PlonkPlus => {
-                let mut assignments = self.assign_region(
-                    ctx,
-                    vec![
-                        Constant(F::zero()),
-                        a,
-                        Witness(diff_val),
-                        b,
-                        sel,
-                        Witness(diff_val),
-                        Witness(out_val),
-                    ],
-                    vec![(0, Some([F::zero(), F::one(), -F::one()])), (3, None)],
-                );
-                ctx.region.constrain_equal(assignments[2].cell(), assignments[5].cell());
-                assignments.pop().unwrap()
+                ctx.assign_region_smart(cells, [0, 4], [(0, 6), (2, 4)], []);
+                ctx.last().unwrap()
             }
         }
     }
 
-    /// returns: a || (b && c)
-    // | 1 - b c | b | c | 1 | a - 1 | 1 - b c | out | a - 1 | 1 | 1 | a |
-    fn or_and<'v>(
+    /// Constains and returns `a || (b && c)`, assuming `a`, `b` and `c` are boolean.
+    ///
+    /// Defines a vertical gate of form `| 1 - b c | b | c | 1 | a - 1 | 1 - b c | out | a - 1 | 1 | 1 | a |`, where out = a + b * c - a * b * c.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: [QuantumCell] that contains a boolean value
+    /// * `b`: [QuantumCell] that contains a boolean value
+    /// * `c`: [QuantumCell] that contains a boolean value
+    fn or_and(
         &self,
-        ctx: &mut Context<'_, F>,
-        a: QuantumCell<'_, 'v, F>,
-        b: QuantumCell<'_, 'v, F>,
-        c: QuantumCell<'_, 'v, F>,
-    ) -> AssignedValue<'v, F> {
-        let bc_val = b.value().zip(c.value()).map(|(b, c)| *b * c);
-        let not_bc_val = bc_val.map(|x| F::one() - x);
-        let not_a_val = a.value().map(|x| *x - F::one());
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+        c: impl Into<QuantumCell<F>>,
+    ) -> AssignedValue<F> {
+        let a = a.into();
+        let b = b.into();
+        let c = c.into();
+        let bc_val = *b.value() * c.value();
+        let not_bc_val = F::one() - bc_val;
+        let not_a_val = *a.value() - F::one();
         let out_val = bc_val + a.value() - bc_val * a.value();
-        let cells = vec![
+        let cells = [
             Witness(not_bc_val),
             b,
             c,
@@ -782,52 +1100,39 @@ impl<F: ScalarField> GateInstructions<F> for FlexGateConfig<F> {
             Constant(F::one()),
             a,
         ];
-        let assigned_cells =
-            self.assign_region_smart(ctx, cells, vec![0, 3, 7], vec![(4, 7), (0, 5)], vec![]);
-        assigned_cells.into_iter().nth(6).unwrap()
+        ctx.assign_region_smart(cells, [0, 3, 7], [(4, 7), (0, 5)], []);
+        ctx.get(-5)
     }
 
-    // returns little-endian bit vectors
-    fn num_to_bits<'v>(
+    /// Constrains and returns little-endian bit vector representation of `a`.
+    ///
+    /// Assumes `range_bits >= number of bits in a`.
+    /// * `a`: [QuantumCell] of the value to convert
+    /// * `range_bits`: range of bits needed to represent `a`. Assumes `range_bits > 0`.
+    fn num_to_bits(
         &self,
-        ctx: &mut Context<'_, F>,
-        a: &AssignedValue<'v, F>,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
         range_bits: usize,
-    ) -> Vec<AssignedValue<'v, F>> {
-        let bits = a
-            .value()
-            .map(|a| {
-                a.to_repr()
-                    .as_ref()
-                    .iter()
-                    .flat_map(|byte| (0..8).map(|i| (*byte as u64 >> i) & 1))
-                    .take(range_bits)
-                    .map(|x| F::from(x))
-                    .collect::<Vec<_>>()
-            })
-            .transpose_vec(range_bits);
+    ) -> Vec<AssignedValue<F>> {
+        let bits = a.value().to_u64_limbs(range_bits, 1).into_iter().map(|x| Witness(F::from(x)));
 
         let mut bit_cells = Vec::with_capacity(range_bits);
-
-        let acc = self.inner_product_left(
+        let row_offset = ctx.advice.len();
+        let acc = self.inner_product(
             ctx,
-            bits.into_iter().map(|x| Witness(x)),
+            bits,
             self.pow_of_two[..range_bits].iter().map(|c| Constant(*c)),
-            &mut bit_cells,
         );
-        ctx.region.constrain_equal(a.cell(), acc.cell());
+        ctx.constrain_equal(&a, &acc);
+        debug_assert!(range_bits > 0);
+        bit_cells.push(ctx.get(row_offset as isize));
+        for i in 1..range_bits {
+            bit_cells.push(ctx.get((row_offset + 1 + 3 * (i - 1)) as isize));
+        }
 
         for bit_cell in &bit_cells {
-            self.assign_region(
-                ctx,
-                vec![
-                    Constant(F::zero()),
-                    Existing(bit_cell),
-                    Existing(bit_cell),
-                    Existing(bit_cell),
-                ],
-                vec![(0, None)],
-            );
+            self.assert_bit(ctx, *bit_cell);
         }
         bit_cells
     }

@@ -71,7 +71,7 @@ impl<F: Field> ToScalar<F> for U256 {
     fn to_scalar(&self) -> Option<F> {
         let mut bytes = [0u8; 32];
         self.to_little_endian(&mut bytes);
-        F::from_repr(bytes).into()
+        Some(F::from_bytes_le(&bytes))
     }
 }
 
@@ -113,7 +113,7 @@ impl<F: Field> ToScalar<F> for Address {
         let mut bytes = [0u8; 32];
         bytes[32 - Self::len_bytes()..].copy_from_slice(self.as_bytes());
         bytes.reverse();
-        F::from_repr(bytes).into()
+        Some(F::from_bytes_le(&bytes))
     }
 }
 

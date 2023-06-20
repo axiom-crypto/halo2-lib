@@ -1,13 +1,5 @@
 use crate::{
-    gates::{
-        flex_gate::{FlexGateConfig, GateStrategy, MAX_PHASE},
-        GateInstructions,
-    },
-    utils::{decompose_fe_to_u64_limbs, value_to_option, ScalarField},
-    AssignedValue,
-    QuantumCell::{self, Constant, Existing, Witness},
-};
-use crate::{
+    gates::flex_gate::{FlexGateConfig, GateInstructions, GateStrategy, MAX_PHASE},
     halo2_proofs::{
         circuit::{Layouter, Value},
         plonk::{
@@ -15,44 +7,70 @@ use crate::{
         },
         poly::Rotation,
     },
-    utils::PrimeField,
+    utils::{
+        biguint_to_fe, bit_length, decompose_fe_to_u64_limbs, fe_to_biguint, BigPrimeField,
+        ScalarField,
+    },
+    AssignedValue, Context,
+    QuantumCell::{self, Constant, Existing, Witness},
 };
-use std::cmp::Ordering;
+use num_bigint::BigUint;
+use num_integer::Integer;
+use num_traits::One;
+use std::{cmp::Ordering, ops::Shl};
 
-use super::{Context, RangeInstructions};
+use super::flex_gate::GateChip;
 
+/// Specifies the gate strategy for the range chip
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RangeStrategy {
+    /// # Vertical Gate Strategy:
+    /// `q_0 * (a + b * c - d) = 0`
+    /// where
+    /// * a = value[0], b = value[1], c = value[2], d = value[3]
+    /// * q = q_lookup[0]
+    /// * q is either 0 or 1 so this is just a simple selector
+    ///
+    /// Using `a + b * c` instead of `a * b + c` allows for "chaining" of gates, i.e., the output of one gate becomes `a` in the next gate.
     Vertical, // vanilla implementation with vertical basic gate(s)
-    // CustomVerticalShort, // vertical basic gate(s) and vertical custom range gates of length 2,3
-    PlonkPlus,
-    // CustomHorizontal, // vertical basic gate and dedicated horizontal custom gate
 }
 
+/// Configuration for Range Chip
 #[derive(Clone, Debug)]
 pub struct RangeConfig<F: ScalarField> {
-    // `lookup_advice` are special advice columns only used for lookups
-    //
-    // If `strategy` is `Vertical` or `CustomVertical`:
-    // * If `gate` has only 1 advice column, enable lookups for that column, in which case `lookup_advice` is empty
-    // * Otherwise, add some user-specified number of `lookup_advice` columns
-    //   * In this case, we don't even need a selector so `q_lookup` is empty
-    // If `strategy` is `CustomHorizontal`:
-    // * TODO
-    pub lookup_advice: [Vec<Column<Advice>>; MAX_PHASE],
-    pub q_lookup: Vec<Option<Selector>>,
-    pub lookup: TableColumn,
-    pub lookup_bits: usize,
-    pub limb_bases: Vec<QuantumCell<'static, 'static, F>>,
-    // selector for custom range gate
-    // `q_range[k][i]` stores the selector for a custom range gate of length `k`
-    // pub q_range: HashMap<usize, Vec<Selector>>,
+    /// Underlying Gate Configuration
     pub gate: FlexGateConfig<F>,
-    strategy: RangeStrategy,
-    pub context_id: usize,
+    /// Special advice (witness) Columns used only for lookup tables.
+    ///
+    /// Each phase of a halo2 circuit has a distinct lookup_advice column.
+    ///
+    /// * If `gate` has only 1 advice column, lookups are enabled for that column, in which case `lookup_advice` is empty
+    /// * If `gate` has more than 1 advice column some number of user-specified `lookup_advice` columns are added
+    ///     * In this case, we don't need a selector so `q_lookup` is empty
+    pub lookup_advice: [Vec<Column<Advice>>; MAX_PHASE],
+    /// Selector values for the lookup table.
+    pub q_lookup: Vec<Option<Selector>>,
+    /// Column for lookup table values.
+    pub lookup: TableColumn,
+    /// Defines the number of bits represented in the lookup table [0,2^<sup>lookup_bits</sup>).
+    lookup_bits: usize,
+    /// Gate Strategy used for specifying advice values.
+    _strategy: RangeStrategy,
 }
 
 impl<F: ScalarField> RangeConfig<F> {
+    /// Generates a new [RangeConfig] with the specified parameters.
+    ///
+    /// If `num_columns` is 0, then we assume you do not want to perform any lookups in that phase.
+    ///
+    /// Panics if `lookup_bits` > 28.
+    /// * `meta`: [ConstraintSystem] of the circuit
+    /// * `range_strategy`: [GateStrategy] of the range chip
+    /// * `num_advice`: Number of [Advice] [Column]s without lookup enabled in each phase
+    /// * `num_lookup_advice`: Number of `lookup_advice` [Column]s in each phase
+    /// * `num_fixed`: Number of fixed [Column]s in each phase
+    /// * `lookup_bits`: Number of bits represented in the LookUp table [0,2^lookup_bits)
+    /// * `circuit_degree`: Degree that expresses the size of circuit (i.e., 2^<sup>circuit_degree</sup> is the number of rows in the circuit)
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         range_strategy: RangeStrategy,
@@ -60,7 +78,6 @@ impl<F: ScalarField> RangeConfig<F> {
         num_lookup_advice: &[usize],
         num_fixed: usize,
         lookup_bits: usize,
-        context_id: usize,
         // params.k()
         circuit_degree: usize,
     ) -> Self {
@@ -71,11 +88,9 @@ impl<F: ScalarField> RangeConfig<F> {
             meta,
             match range_strategy {
                 RangeStrategy::Vertical => GateStrategy::Vertical,
-                RangeStrategy::PlonkPlus => GateStrategy::PlonkPlus,
             },
             num_advice,
             num_fixed,
-            context_id,
             circuit_degree,
         );
 
@@ -101,31 +116,29 @@ impl<F: ScalarField> RangeConfig<F> {
             }
         }
 
-        let limb_base = F::from(1u64 << lookup_bits);
-        let mut running_base = limb_base;
-        let num_bases = F::NUM_BITS as usize / lookup_bits;
-        let mut limb_bases = Vec::with_capacity(num_bases + 1);
-        limb_bases.extend([Constant(F::one()), Constant(running_base)]);
-        for _ in 2..=num_bases {
-            running_base *= &limb_base;
-            limb_bases.push(Constant(running_base));
-        }
+        let mut config =
+            Self { lookup_advice, q_lookup, lookup, lookup_bits, gate, _strategy: range_strategy };
 
-        let config = Self {
-            lookup_advice,
-            q_lookup,
-            lookup,
-            lookup_bits,
-            limb_bases,
-            gate,
-            strategy: range_strategy,
-            context_id,
-        };
-        config.create_lookup(meta);
+        // sanity check: only create lookup table if there are lookup_advice columns
+        if !num_lookup_advice.is_empty() {
+            config.create_lookup(meta);
+        }
+        config.gate.max_rows = (1 << circuit_degree) - meta.minimum_rows();
+        assert!(
+            (1 << lookup_bits) <= config.gate.max_rows,
+            "lookup table is too large for the circuit degree plus blinding factors!"
+        );
 
         config
     }
 
+    /// Returns the number of bits represented in the lookup table [0,2^<sup>lookup_bits</sup>).
+    pub fn lookup_bits(&self) -> usize {
+        self.lookup_bits
+    }
+
+    /// Instantiates the lookup table of the circuit.
+    /// * `meta`: [ConstraintSystem] of the circuit
     fn create_lookup(&self, meta: &mut ConstraintSystem<F>) {
         for (phase, q_l) in self.q_lookup.iter().enumerate() {
             if let Some(q) = q_l {
@@ -138,6 +151,7 @@ impl<F: ScalarField> RangeConfig<F> {
                 });
             }
         }
+        //if multiple columns
         for la in self.lookup_advice.iter().flat_map(|advices| advices.iter()) {
             meta.lookup("lookup wo selector", |meta| {
                 let a = meta.query_advice(*la, Rotation::cur());
@@ -146,6 +160,8 @@ impl<F: ScalarField> RangeConfig<F> {
         }
     }
 
+    /// Loads the lookup table into the circuit using the provided `layouter`.
+    /// * `layouter`: layouter for the circuit
     pub fn load_lookup_table(&self, layouter: &mut impl Layouter<F>) -> Result<(), Error> {
         layouter.assign_table(
             || format!("{} bit lookup", self.lookup_bits),
@@ -163,71 +179,355 @@ impl<F: ScalarField> RangeConfig<F> {
         )?;
         Ok(())
     }
+}
 
-    /// Call this at the end of a phase to assign cells to special columns for lookup arguments
+/// Trait that implements methods to constrain a field element number `x` is within a range of bits.
+pub trait RangeInstructions<F: ScalarField> {
+    /// The type of Gate used within the instructions.
+    type Gate: GateInstructions<F>;
+
+    /// Returns the type of gate used.
+    fn gate(&self) -> &Self::Gate;
+
+    /// Returns the [GateStrategy] for this range.
+    fn strategy(&self) -> RangeStrategy;
+
+    /// Returns the number of bits the lookup table represents.
+    fn lookup_bits(&self) -> usize;
+
+    /// Checks and constrains that `a` lies in the range [0, 2<sup>range_bits</sup>).
     ///
-    /// returns total number of lookup cells assigned
-    pub fn finalize(&self, ctx: &mut Context<'_, F>) -> usize {
-        ctx.copy_and_lookup_cells(self.lookup_advice[ctx.current_phase].clone())
-    }
+    /// Assumes that both `a`<= `range_bits` bits.
+    /// * a: [AssignedValue] value to be range checked
+    /// * range_bits: number of bits to represent the range
+    fn range_check(&self, ctx: &mut Context<F>, a: AssignedValue<F>, range_bits: usize);
 
-    /// assuming this is called when ctx.region is not in shape mode
-    /// `offset` is the offset of the cell in `ctx.region`
-    /// `offset` is only used if there is a single advice column
-    fn enable_lookup<'a>(&self, ctx: &mut Context<'a, F>, acell: AssignedValue<'a, F>) {
-        let phase = ctx.current_phase();
-        if let Some(q) = &self.q_lookup[phase] {
-            q.enable(&mut ctx.region, acell.row()).expect("enable selector should not fail");
-        } else {
-            ctx.cells_to_lookup.push(acell);
-        }
-    }
-
-    // returns the limbs
-    fn range_check_simple<'a>(
+    /// Constrains that 'a' is less than 'b'.
+    ///
+    /// Assumes that `a` and `b` have bit length <= num_bits bits.
+    ///
+    /// Note: This may fail silently if a or b have more than num_bits.
+    /// * a: [QuantumCell] value to check
+    /// * b: upper bound expressed as a [QuantumCell]
+    /// * num_bits: number of bits used to represent the values of `a` and `b`
+    fn check_less_than(
         &self,
-        ctx: &mut Context<'a, F>,
-        a: &AssignedValue<'a, F>,
-        range_bits: usize,
-        limbs_assigned: &mut Vec<AssignedValue<'a, F>>,
-    ) {
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+        num_bits: usize,
+    );
+
+    /// Performs a range check that `a` has at most `bit_length(b)` bits and then constrains that `a` is less than `b`.
+    ///
+    /// * a: [AssignedValue] value to check
+    /// * b: upper bound expressed as a [u64] value
+    fn check_less_than_safe(&self, ctx: &mut Context<F>, a: AssignedValue<F>, b: u64) {
+        let range_bits =
+            (bit_length(b) + self.lookup_bits() - 1) / self.lookup_bits() * self.lookup_bits();
+
+        self.range_check(ctx, a, range_bits);
+        self.check_less_than(ctx, a, Constant(self.gate().get_field_element(b)), range_bits)
+    }
+
+    /// Performs a range check that `a` has at most `bit_length(b)` bits and then constrains that `a` is less than `b`.
+    ///
+    /// * a: [AssignedValue] value to check
+    /// * b: upper bound expressed as a [BigUint] value
+    fn check_big_less_than_safe(&self, ctx: &mut Context<F>, a: AssignedValue<F>, b: BigUint)
+    where
+        F: BigPrimeField,
+    {
+        let range_bits =
+            (b.bits() as usize + self.lookup_bits() - 1) / self.lookup_bits() * self.lookup_bits();
+
+        self.range_check(ctx, a, range_bits);
+        self.check_less_than(ctx, a, Constant(biguint_to_fe(&b)), range_bits)
+    }
+
+    /// Constrains whether `a` is in `[0, b)`, and returns 1 if `a` < `b`, otherwise 0.
+    ///
+    /// Assumes that`a` and `b` are known to have <= num_bits bits.
+    /// * a: first [QuantumCell] to compare
+    /// * b: second [QuantumCell] to compare
+    /// * num_bits: number of bits to represent the values
+    fn is_less_than(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+        num_bits: usize,
+    ) -> AssignedValue<F>;
+
+    /// Performs a range check that `a` has at most `ceil(bit_length(b) / lookup_bits) * lookup_bits` and then constrains that `a` is in `[0,b)`.
+    ///
+    /// Returns 1 if `a` < `b`, otherwise 0.
+    ///
+    /// * a: [AssignedValue] value to check
+    /// * b: upper bound as [u64] value
+    fn is_less_than_safe(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+        b: u64,
+    ) -> AssignedValue<F> {
+        let range_bits =
+            (bit_length(b) + self.lookup_bits() - 1) / self.lookup_bits() * self.lookup_bits();
+
+        self.range_check(ctx, a, range_bits);
+        self.is_less_than(ctx, a, Constant(self.gate().get_field_element(b)), range_bits)
+    }
+
+    /// Performs a range check that `a` has at most `ceil(b.bits() / lookup_bits) * lookup_bits` bits and then constrains that `a` is in `[0,b)`.
+    ///
+    /// Returns 1 if `a` < `b`, otherwise 0.
+    ///
+    /// * a: [AssignedValue] value to check
+    /// * b: upper bound as [BigUint] value
+    ///
+    /// For the current implementation using [`is_less_than`], we require `ceil(b.bits() / lookup_bits) + 1 < F::NUM_BITS / lookup_bits`
+    fn is_big_less_than_safe(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+        b: BigUint,
+    ) -> AssignedValue<F>
+    where
+        F: BigPrimeField,
+    {
+        let range_bits =
+            (b.bits() as usize + self.lookup_bits() - 1) / self.lookup_bits() * self.lookup_bits();
+
+        self.range_check(ctx, a, range_bits);
+        self.is_less_than(ctx, a, Constant(biguint_to_fe(&b)), range_bits)
+    }
+
+    /// Constrains and returns `(c, r)` such that `a = b * c + r`.
+    ///
+    /// Assumes that `b != 0` and that `a` has <= `a_num_bits` bits.
+    /// * a: [QuantumCell] value to divide
+    /// * b: [BigUint] value to divide by
+    /// * a_num_bits: number of bits needed to represent the value of `a`
+    fn div_mod(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<BigUint>,
+        a_num_bits: usize,
+    ) -> (AssignedValue<F>, AssignedValue<F>)
+    where
+        F: BigPrimeField,
+    {
+        let a = a.into();
+        let b = b.into();
+        let a_val = fe_to_biguint(a.value());
+        let (div, rem) = a_val.div_mod_floor(&b);
+        let [div, rem] = [div, rem].map(|v| biguint_to_fe(&v));
+        ctx.assign_region([Witness(rem), Constant(biguint_to_fe(&b)), Witness(div), a], [0]);
+        let rem = ctx.get(-4);
+        let div = ctx.get(-2);
+        // Constrain that a_num_bits fulfills `div < 2 ** a_num_bits / b`.
+        self.check_big_less_than_safe(
+            ctx,
+            div,
+            BigUint::one().shl(a_num_bits as u32) / &b + BigUint::one(),
+        );
+        // Constrain that remainder is less than divisor (i.e. `r < b`).
+        self.check_big_less_than_safe(ctx, rem, b);
+        (div, rem)
+    }
+
+    /// Constrains and returns `(c, r)` such that `a = b * c + r`.
+    ///
+    /// Assumes:
+    /// that `b != 0`.
+    /// that `a` has <= `a_num_bits` bits.
+    /// that `b` has <= `b_num_bits` bits.
+    ///
+    /// Note:
+    /// Let `X = 2 ** b_num_bits`
+    /// Write `a = a1 * X + a0` and `c = c1 * X + c0`
+    /// If we write `b * c0 + r = d1 * X + d0` then
+    ///     `b * c + r = (b * c1 + d1) * X + d0`
+    /// * a: [QuantumCell] value to divide
+    /// * b: [QuantumCell] value to divide by
+    /// * a_num_bits: number of bits needed to represent the value of `a`
+    /// * b_num_bits: number of bits needed to represent the value of `b`
+    ///
+    fn div_mod_var(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+        a_num_bits: usize,
+        b_num_bits: usize,
+    ) -> (AssignedValue<F>, AssignedValue<F>)
+    where
+        F: BigPrimeField,
+    {
+        let a = a.into();
+        let b = b.into();
+        let a_val = fe_to_biguint(a.value());
+        let b_val = fe_to_biguint(b.value());
+        let (div, rem) = a_val.div_mod_floor(&b_val);
+        let x = BigUint::one().shl(b_num_bits as u32);
+        let (div_hi, div_lo) = div.div_mod_floor(&x);
+
+        let x_fe = self.gate().pow_of_two()[b_num_bits];
+        let [div, div_hi, div_lo, rem] = [div, div_hi, div_lo, rem].map(|v| biguint_to_fe(&v));
+        ctx.assign_region(
+            [Witness(div_lo), Witness(div_hi), Constant(x_fe), Witness(div), Witness(rem)],
+            [0],
+        );
+        let [div_lo, div_hi, div, rem] = [-5, -4, -2, -1].map(|i| ctx.get(i));
+        self.range_check(ctx, div_lo, b_num_bits);
+        if a_num_bits <= b_num_bits {
+            self.gate().assert_is_const(ctx, &div_hi, &F::zero());
+        } else {
+            self.range_check(ctx, div_hi, a_num_bits - b_num_bits);
+        }
+
+        let (bcr0_hi, bcr0_lo) = {
+            let bcr0 = self.gate().mul_add(ctx, b, Existing(div_lo), Existing(rem));
+            self.div_mod(ctx, Existing(bcr0), x.clone(), a_num_bits)
+        };
+        let bcr_hi = self.gate().mul_add(ctx, b, Existing(div_hi), Existing(bcr0_hi));
+
+        let (a_hi, a_lo) = self.div_mod(ctx, a, x, a_num_bits);
+        ctx.constrain_equal(&bcr_hi, &a_hi);
+        ctx.constrain_equal(&bcr0_lo, &a_lo);
+
+        self.range_check(ctx, rem, b_num_bits);
+        self.check_less_than(ctx, Existing(rem), b, b_num_bits);
+        (div, rem)
+    }
+
+    /// Constrains and returns the last bit of the value of `a`.
+    ///
+    /// Assume `a` has been range checked already to `limb_bits` bits.
+    /// * a: [AssignedValue] value to get the last bit of
+    /// * limb_bits: number of bits in a limb
+    fn get_last_bit(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+        limb_bits: usize,
+    ) -> AssignedValue<F> {
+        let a_big = fe_to_biguint(a.value());
+        let bit_v = F::from(a_big.bit(0));
+        let two = self.gate().get_field_element(2u64);
+        let h_v = F::from_bytes_le(&(a_big >> 1usize).to_bytes_le());
+
+        ctx.assign_region([Witness(bit_v), Witness(h_v), Constant(two), Existing(a)], [0]);
+        let half = ctx.get(-3);
+        let bit = ctx.get(-4);
+
+        self.range_check(ctx, half, limb_bits - 1);
+        self.gate().assert_bit(ctx, bit);
+        bit
+    }
+}
+
+/// A chip that implements RangeInstructions which provides methods to constrain a field element `x` is within a range of bits.
+#[derive(Clone, Debug)]
+pub struct RangeChip<F: ScalarField> {
+    /// # RangeChip
+    /// Provides methods to constrain a field element `x` is within a range of  bits.
+    /// Declares a lookup table of [0, 2<sup>lookup_bits</sup>) and constrains whether a field element appears in this table.
+
+    /// [GateStrategy] for advice values in this chip.
+    strategy: RangeStrategy,
+    /// Underlying [GateChip] for this chip.
+    pub gate: GateChip<F>,
+    /// Defines the number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>).
+    pub lookup_bits: usize,
+    /// [Vec] of powers of `2 ** lookup_bits` represented as [QuantumCell::Constant].
+    /// These are precomputed and cached as a performance optimization for later limb decompositions. We precompute up to the higher power that fits in `F`, which is `2 ** ((F::CAPACITY / lookup_bits) * lookup_bits)`.
+    pub limb_bases: Vec<QuantumCell<F>>,
+}
+
+impl<F: ScalarField> RangeChip<F> {
+    /// Creates a new [RangeChip] with the given strategy and lookup_bits.
+    /// * strategy: [GateStrategy] for advice values in this chip
+    /// * lookup_bits: number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>)
+    pub fn new(strategy: RangeStrategy, lookup_bits: usize) -> Self {
+        let limb_base = F::from(1u64 << lookup_bits);
+        let mut running_base = limb_base;
+        let num_bases = F::CAPACITY as usize / lookup_bits;
+        let mut limb_bases = Vec::with_capacity(num_bases + 1);
+        limb_bases.extend([Constant(F::one()), Constant(running_base)]);
+        for _ in 2..=num_bases {
+            running_base *= &limb_base;
+            limb_bases.push(Constant(running_base));
+        }
+        let gate = GateChip::new(match strategy {
+            RangeStrategy::Vertical => GateStrategy::Vertical,
+        });
+
+        Self { strategy, gate, lookup_bits, limb_bases }
+    }
+
+    /// Creates a new [RangeChip] with the default strategy and provided lookup_bits.
+    /// * lookup_bits: number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>)
+    pub fn default(lookup_bits: usize) -> Self {
+        Self::new(RangeStrategy::Vertical, lookup_bits)
+    }
+}
+
+impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
+    type Gate = GateChip<F>;
+
+    /// The type of Gate used in this chip.
+    fn gate(&self) -> &Self::Gate {
+        &self.gate
+    }
+
+    /// Returns the [GateStrategy] for this range.
+    fn strategy(&self) -> RangeStrategy {
+        self.strategy
+    }
+
+    /// Defines the number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>).
+    fn lookup_bits(&self) -> usize {
+        self.lookup_bits
+    }
+
+    /// Checks and constrains that `a` lies in the range [0, 2<sup>range_bits</sup>).
+    ///
+    /// This is done by decomposing `a` into `k` limbs, where `k = ceil(range_bits / lookup_bits)`.
+    /// Each limb is constrained to be within the range [0, 2<sup>lookup_bits</sup>).
+    /// The limbs are then combined to form `a` again with the last limb having `rem_bits` number of bits.
+    ///
+    /// * `a`: [AssignedValue] value to be range checked
+    /// * `range_bits`: number of bits in the range
+    /// * `lookup_bits`: number of bits in the lookup table
+    ///
+    /// # Assumptions
+    /// * `ceil(range_bits / lookup_bits) * lookup_bits <= F::CAPACITY`
+    fn range_check(&self, ctx: &mut Context<F>, a: AssignedValue<F>, range_bits: usize) {
+        // the number of limbs
         let k = (range_bits + self.lookup_bits - 1) / self.lookup_bits;
         // println!("range check {} bits {} len", range_bits, k);
         let rem_bits = range_bits % self.lookup_bits;
 
-        assert!(self.limb_bases.len() >= k);
-        if k == 1 {
-            limbs_assigned.clear();
-            limbs_assigned.push(a.clone())
-        } else {
-            let acc = match value_to_option(a.value()) {
-                Some(a) => {
-                    let limbs = decompose_fe_to_u64_limbs(a, k, self.lookup_bits)
-                        .into_iter()
-                        .map(|x| Witness(Value::known(F::from(x))));
-                    self.gate.inner_product_left(
-                        ctx,
-                        limbs,
-                        self.limb_bases[..k].iter().cloned(),
-                        limbs_assigned,
-                    )
-                }
-                _ => self.gate.inner_product_left(
-                    ctx,
-                    vec![Witness(Value::unknown()); k],
-                    self.limb_bases[..k].iter().cloned(),
-                    limbs_assigned,
-                ),
-            };
-            // the inner product above must equal `a`
-            ctx.region.constrain_equal(a.cell(), acc.cell());
-        };
-        assert_eq!(limbs_assigned.len(), k);
+        debug_assert!(self.limb_bases.len() >= k);
 
-        // range check all the limbs
-        for limb in limbs_assigned.iter() {
-            self.enable_lookup(ctx, limb.clone());
-        }
+        if k == 1 {
+            ctx.cells_to_lookup.push(a);
+        } else {
+            let limbs = decompose_fe_to_u64_limbs(a.value(), k, self.lookup_bits)
+                .into_iter()
+                .map(|x| Witness(F::from(x)));
+            let row_offset = ctx.advice.len() as isize;
+            let acc = self.gate.inner_product(ctx, limbs, self.limb_bases[..k].to_vec());
+            // the inner product above must equal `a`
+            ctx.constrain_equal(&a, &acc);
+            // we fetch the cells to lookup by getting the indices where `limbs` were assigned in `inner_product`. Because `limb_bases[0]` is 1, the progression of indices is 0,1,4,...,4+3*i
+            ctx.cells_to_lookup.push(ctx.get(row_offset));
+            for i in 0..k - 1 {
+                ctx.cells_to_lookup.push(ctx.get(row_offset + 1 + 3 * i as isize));
+            }
+        };
 
         // additional constraints for the last limb if rem_bits != 0
         match rem_bits.cmp(&1) {
@@ -235,122 +535,41 @@ impl<F: ScalarField> RangeConfig<F> {
             // we constrain x*(x-1) = 0 + x * x - x == 0
             // | 0 | x | x | x |
             Ordering::Equal => {
-                self.gate.assert_bit(ctx, &limbs_assigned[k - 1]);
+                self.gate.assert_bit(ctx, *ctx.cells_to_lookup.last().unwrap());
             }
             Ordering::Greater => {
-                let mult_val = self.gate.get_field_element(1u64 << (self.lookup_bits - rem_bits));
-                let check = self.gate.assign_region_last(
-                    ctx,
-                    vec![
-                        Constant(F::zero()),
-                        Existing(&limbs_assigned[k - 1]),
-                        Constant(mult_val),
-                        Witness(limbs_assigned[k - 1].value().map(|limb| mult_val * limb)),
-                    ],
-                    vec![(0, None)],
-                );
-                self.enable_lookup(ctx, check);
+                let mult_val = self.gate.pow_of_two[self.lookup_bits - rem_bits];
+                let check =
+                    self.gate.mul(ctx, *ctx.cells_to_lookup.last().unwrap(), Constant(mult_val));
+                ctx.cells_to_lookup.push(check);
             }
             _ => {}
         }
     }
 
-    /// breaks up `a` into smaller pieces to lookup and stores them in `limbs_assigned`
+    /// Constrains that 'a' is less than 'b'.
     ///
-    /// this is an internal function to avoid memory re-allocation of `limbs_assigned`
-    pub fn range_check_limbs<'a>(
+    /// Assumes that`a` and `b` are known to have <= num_bits bits.
+    ///
+    /// Note: This may fail silently if a or b have more than num_bits
+    /// * a: [QuantumCell] value to check
+    /// * b: upper bound expressed as a [QuantumCell]
+    /// * num_bits: number of bits to represent the values
+    fn check_less_than(
         &self,
-        ctx: &mut Context<'a, F>,
-        a: &AssignedValue<'a, F>,
-        range_bits: usize,
-        limbs_assigned: &mut Vec<AssignedValue<'a, F>>,
-    ) {
-        assert_ne!(range_bits, 0);
-        #[cfg(feature = "display")]
-        {
-            let key = format!(
-                "range check length {}",
-                (range_bits + self.lookup_bits - 1) / self.lookup_bits
-            );
-            let count = ctx.op_count.entry(key).or_insert(0);
-            *count += 1;
-        }
-        match self.strategy {
-            RangeStrategy::Vertical | RangeStrategy::PlonkPlus => {
-                self.range_check_simple(ctx, a, range_bits, limbs_assigned)
-            }
-        }
-    }
-
-    /// assume `a` has been range checked already to `limb_bits` bits
-    pub fn get_last_bit<'a>(
-        &self,
-        ctx: &mut Context<'a, F>,
-        a: &AssignedValue<'a, F>,
-        limb_bits: usize,
-    ) -> AssignedValue<'a, F> {
-        let a_v = a.value();
-        let bit_v = a_v.map(|a| {
-            let a = a.get_lower_32();
-            if a ^ 1 == 0 {
-                F::zero()
-            } else {
-                F::one()
-            }
-        });
-        let two = self.gate.get_field_element(2u64);
-        let h_v = a.value().zip(bit_v).map(|(a, b)| (*a - b) * two.invert().unwrap());
-        let assignments = self.gate.assign_region_smart(
-            ctx,
-            vec![Witness(bit_v), Witness(h_v), Constant(two), Existing(a)],
-            vec![0],
-            vec![],
-            vec![],
-        );
-
-        self.range_check(ctx, &assignments[1], limb_bits - 1);
-        assignments.into_iter().next().unwrap()
-    }
-}
-
-impl<F: ScalarField> RangeInstructions<F> for RangeConfig<F> {
-    type Gate = FlexGateConfig<F>;
-
-    fn gate(&self) -> &Self::Gate {
-        &self.gate
-    }
-    fn strategy(&self) -> RangeStrategy {
-        self.strategy
-    }
-
-    fn lookup_bits(&self) -> usize {
-        self.lookup_bits
-    }
-
-    fn range_check<'a>(
-        &self,
-        ctx: &mut Context<'a, F>,
-        a: &AssignedValue<'a, F>,
-        range_bits: usize,
-    ) {
-        let tmp = ctx.preallocated_vec_to_assign();
-        self.range_check_limbs(ctx, a, range_bits, &mut tmp.as_ref().borrow_mut());
-    }
-
-    /// Warning: This may fail silently if a or b have more than num_bits
-    fn check_less_than<'a>(
-        &self,
-        ctx: &mut Context<'a, F>,
-        a: QuantumCell<'_, 'a, F>,
-        b: QuantumCell<'_, 'a, F>,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
         num_bits: usize,
     ) {
+        let a = a.into();
+        let b = b.into();
         let pow_of_two = self.gate.pow_of_two[num_bits];
         let check_cell = match self.strategy {
             RangeStrategy::Vertical => {
-                let shift_a_val = a.value().map(|av| pow_of_two + av);
+                let shift_a_val = pow_of_two + a.value();
                 // | a + 2^(num_bits) - b | b | 1 | a + 2^(num_bits) | - 2^(num_bits) | 1 | a |
-                let cells = vec![
+                let cells = [
                     Witness(shift_a_val - b.value()),
                     b,
                     Constant(F::one()),
@@ -359,48 +578,47 @@ impl<F: ScalarField> RangeInstructions<F> for RangeConfig<F> {
                     Constant(F::one()),
                     a,
                 ];
-                let assigned_cells =
-                    self.gate.assign_region(ctx, cells, vec![(0, None), (3, None)]);
-                assigned_cells.into_iter().next().unwrap()
-            }
-            RangeStrategy::PlonkPlus => {
-                // | a | 1 | b | a + 2^{num_bits} - b |
-                // selectors:
-                // | 1 | 0 | 0 |
-                // | 0 | 2^{num_bits} | -1 |
-                let out_val = Value::known(pow_of_two) + a.value() - b.value();
-                let assigned_cells = self.gate.assign_region(
-                    ctx,
-                    vec![a, Constant(F::one()), b, Witness(out_val)],
-                    vec![(0, Some([F::zero(), pow_of_two, -F::one()]))],
-                );
-                assigned_cells.into_iter().nth(3).unwrap()
+                ctx.assign_region(cells, [0, 3]);
+                ctx.get(-7)
             }
         };
 
-        self.range_check(ctx, &check_cell, num_bits);
+        self.range_check(ctx, check_cell, num_bits);
     }
 
-    /// Warning: This may fail silently if a or b have more than num_bits
-    fn is_less_than<'a>(
+    /// Constrains whether `a` is in `[0, b)`, and returns 1 if `a` < `b`, otherwise 0.
+    ///
+    /// * a: first [QuantumCell] to compare
+    /// * b: second [QuantumCell] to compare
+    /// * num_bits: number of bits to represent the values
+    ///
+    /// # Assumptions
+    /// * `a` and `b` are known to have `<= num_bits` bits.
+    /// * (`ceil(num_bits / lookup_bits) + 1) * lookup_bits <= F::CAPACITY`
+    fn is_less_than(
         &self,
-        ctx: &mut Context<'a, F>,
-        a: QuantumCell<'_, 'a, F>,
-        b: QuantumCell<'_, 'a, F>,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
         num_bits: usize,
-    ) -> AssignedValue<'a, F> {
-        // TODO: optimize this for PlonkPlus strategy
+    ) -> AssignedValue<F> {
+        let a = a.into();
+        let b = b.into();
+
         let k = (num_bits + self.lookup_bits - 1) / self.lookup_bits;
         let padded_bits = k * self.lookup_bits;
+        debug_assert!(
+            padded_bits + self.lookup_bits <= F::CAPACITY as usize,
+            "num_bits is too large for this is_less_than implementation"
+        );
         let pow_padded = self.gate.pow_of_two[padded_bits];
 
-        let shift_a_val = a.value().map(|av| pow_padded + av);
+        let shift_a_val = pow_padded + a.value();
         let shifted_val = shift_a_val - b.value();
         let shifted_cell = match self.strategy {
             RangeStrategy::Vertical => {
-                let assignments = self.gate.assign_region_smart(
-                    ctx,
-                    vec![
+                ctx.assign_region(
+                    [
                         Witness(shifted_val),
                         b,
                         Constant(F::one()),
@@ -409,29 +627,16 @@ impl<F: ScalarField> RangeInstructions<F> for RangeConfig<F> {
                         Constant(F::one()),
                         a,
                     ],
-                    vec![0, 3],
-                    vec![],
-                    vec![],
+                    [0, 3],
                 );
-                assignments.into_iter().next().unwrap()
+                ctx.get(-7)
             }
-            RangeStrategy::PlonkPlus => self.gate.assign_region_last(
-                ctx,
-                vec![a, Constant(pow_padded), b, Witness(shifted_val)],
-                vec![(0, Some([F::zero(), F::one(), -F::one()]))],
-            ),
         };
 
         // check whether a - b + 2^padded_bits < 2^padded_bits ?
         // since assuming a, b < 2^padded_bits we are guaranteed a - b + 2^padded_bits < 2^{padded_bits + 1}
-        let limbs = ctx.preallocated_vec_to_assign();
-        self.range_check_limbs(
-            ctx,
-            &shifted_cell,
-            padded_bits + self.lookup_bits,
-            &mut limbs.borrow_mut(),
-        );
-        let res = self.gate().is_zero(ctx, limbs.borrow().get(k).unwrap());
-        res
+        self.range_check(ctx, shifted_cell, padded_bits + self.lookup_bits);
+        // ctx.cells_to_lookup.last() will have the (k + 1)-th limb of `a - b + 2^{k * limb_bits}`, which is zero iff `a < b`
+        self.gate.is_zero(ctx, *ctx.cells_to_lookup.last().unwrap())
     }
 }
