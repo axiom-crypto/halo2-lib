@@ -1,8 +1,9 @@
 use super::{check_carry_to_zero, CRTInteger, OverflowInteger};
+use crate::fields::PrimeField;
 use crate::halo2_proofs::circuit::Value;
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
-    utils::{biguint_to_fe, decompose_bigint_option, value_to_option, PrimeField},
+    utils::{biguint_to_fe, decompose_bigint_option, value_to_option},
     AssignedValue, Context,
     QuantumCell::{Constant, Existing, Witness},
 };
@@ -14,11 +15,11 @@ use std::{cmp::max, iter};
 // same as carry_mod::crt but `out = 0` so no need to range check
 //
 // Assumption: the leading two bits (in big endian) are 1, and `a.max_size <= 2^{n * k - 1 + F::NUM_BITS - 2}` (A weaker assumption is also enough)
-pub fn crt<'a, F: PrimeField>(
+pub fn crt<F: PrimeField>(
     range: &impl RangeInstructions<F>,
     // chip: &BigIntConfig<F>,
-    ctx: &mut Context<'a, F>,
-    a: &CRTInteger<'a, F>,
+    ctx: &mut Context<F>,
+    a: &CRTInteger<F>,
     k_bits: usize, // = a.len().bits()
     modulus: &BigInt,
     mod_vec: &[F],
@@ -89,7 +90,7 @@ pub fn crt<'a, F: PrimeField>(
         let (quot_cell, check_cell) = {
             let prod = range.gate().inner_product_left(
                 ctx,
-                quot_assigned.iter().map(Existing).chain(iter::once(Witness(quot_v))),
+                quot_assigned.iter().copied().map(Existing).chain(iter::once(Witness(quot_v))),
                 mod_vec[0..=i].iter().rev().map(|c| Constant(*c)),
                 &mut tmp_assigned,
             );
@@ -105,13 +106,13 @@ pub fn crt<'a, F: PrimeField>(
                 // edge case, we need to copy the last `prod` cell
                 alloc.1 = 0;
                 alloc.0 += 1;
-                range.gate().assign_region_last(ctx, vec![Existing(&prod)], vec![]);
+                range.gate().assign_region_last(ctx, vec![Existing(prod)], vec![]);
             }
 
             let check_val = prod.value().zip(a_limb.value()).map(|(prod, a)| *prod - a);
             let check_cell = range.gate().assign_region_last(
                 ctx,
-                vec![Constant(-F::one()), Existing(a_limb), Witness(check_val)],
+                vec![Constant(-F::one()), Existing(*a_limb), Witness(check_val)],
                 vec![(-1, None)],
             );
 
@@ -140,7 +141,7 @@ pub fn crt<'a, F: PrimeField>(
             range.gate().assign_region_last(
                 ctx,
                 vec![
-                    Existing(quot_cell),
+                    Existing(*quot_cell),
                     Constant(limb_base),
                     Constant(F::one()),
                     Witness(out_val),
@@ -181,8 +182,8 @@ pub fn crt<'a, F: PrimeField>(
         vec![
             Constant(F::zero()),
             Constant(mod_native),
-            Existing(&quot_native_assigned),
-            Existing(&a.native),
+            Existing(quot_native_assigned),
+            Existing(a.native),
         ],
         vec![(0, None)],
     );

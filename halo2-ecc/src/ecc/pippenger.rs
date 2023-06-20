@@ -2,12 +2,9 @@ use super::{
     ec_add_unequal, ec_double, ec_select, ec_select_from_bits, ec_sub_unequal, load_random_point,
     EcPoint,
 };
+use crate::fields::PrimeField;
 use crate::fields::{FieldChip, Selectable};
-use halo2_base::{
-    gates::GateInstructions,
-    utils::{CurveAffineExt, PrimeField},
-    AssignedValue, Context,
-};
+use halo2_base::{gates::GateInstructions, utils::CurveAffineExt, AssignedValue, Context};
 
 // Reference: https://jbootle.github.io/Misc/pippenger.pdf
 
@@ -15,14 +12,14 @@ use halo2_base::{
 // Output:
 // * new_points: length `points.len() * radix`
 // * new_bool_scalars: 2d array `ceil(scalar_bits / radix)` by `points.len() * radix`
-pub fn decompose<'v, F, FC>(
+pub fn decompose<F, FC>(
     chip: &FC,
-    ctx: &mut Context<'v, F>,
-    points: &[EcPoint<F, FC::FieldPoint<'v>>],
-    scalars: &[Vec<AssignedValue<'v, F>>],
+    ctx: &mut Context<F>,
+    points: &[EcPoint<F, FC::FieldPoint>],
+    scalars: &[Vec<AssignedValue<F>>],
     max_scalar_bits_per_cell: usize,
     radix: usize,
-) -> (Vec<EcPoint<F, FC::FieldPoint<'v>>>, Vec<Vec<AssignedValue<'v, F>>>)
+) -> (Vec<EcPoint<F, FC::FieldPoint>>, Vec<Vec<AssignedValue<F>>>)
 where
     F: PrimeField,
     FC: FieldChip<F>,
@@ -37,7 +34,7 @@ where
     let zero_cell = chip.gate().load_zero(ctx);
     for (point, scalar) in points.iter().zip(scalars.iter()) {
         assert_eq!(scalars[0].len(), scalar.len());
-        let mut g = point.clone();
+        let mut g = (*point).clone();
         new_points.push(g);
         for _ in 1..radix {
             // if radix > 1, this does not work if `points` contains identity point
@@ -62,15 +59,15 @@ where
 // Given points[i] and bool_scalars[j][i],
 // compute G'[j] = sum_{i=0..points.len()} points[i] * bool_scalars[j][i]
 // output is [ G'[j] + rand_point ]_{j=0..bool_scalars.len()}, rand_point
-pub fn multi_product<'v, F: PrimeField, FC, C>(
+pub fn multi_product<F: PrimeField, FC, C>(
     chip: &FC,
-    ctx: &mut Context<'v, F>,
-    points: &[EcPoint<F, FC::FieldPoint<'v>>],
-    bool_scalars: &[Vec<AssignedValue<'v, F>>],
+    ctx: &mut Context<F>,
+    points: &[EcPoint<F, FC::FieldPoint>],
+    bool_scalars: &[Vec<AssignedValue<F>>],
     clumping_factor: usize,
-) -> (Vec<EcPoint<F, FC::FieldPoint<'v>>>, EcPoint<F, FC::FieldPoint<'v>>)
+) -> (Vec<EcPoint<F, FC::FieldPoint>>, EcPoint<F, FC::FieldPoint>)
 where
-    FC: FieldChip<F> + Selectable<F, Point<'v> = FC::FieldPoint<'v>>,
+    FC: FieldChip<F> + Selectable<F, Point = FC::FieldPoint>,
     C: CurveAffineExt<Base = FC::FieldType>,
 {
     let c = clumping_factor; // this is `b` in Section 3 of Bootle
@@ -138,17 +135,17 @@ where
     (acc, rand_point)
 }
 
-pub fn multi_exp<'v, F: PrimeField, FC, C>(
+pub fn multi_exp<F: PrimeField, FC, C>(
     chip: &FC,
-    ctx: &mut Context<'v, F>,
-    points: &[EcPoint<F, FC::FieldPoint<'v>>],
-    scalars: &[Vec<AssignedValue<'v, F>>],
+    ctx: &mut Context<F>,
+    points: &[EcPoint<F, FC::FieldPoint>],
+    scalars: &[Vec<AssignedValue<F>>],
     max_scalar_bits_per_cell: usize,
     radix: usize,
     clump_factor: usize,
-) -> EcPoint<F, FC::FieldPoint<'v>>
+) -> EcPoint<F, FC::FieldPoint>
 where
-    FC: FieldChip<F> + Selectable<F, Point<'v> = FC::FieldPoint<'v>>,
+    FC: FieldChip<F> + Selectable<F, Point = FC::FieldPoint>,
     C: CurveAffineExt<Base = FC::FieldType>,
 {
     let (points, bool_scalars) =

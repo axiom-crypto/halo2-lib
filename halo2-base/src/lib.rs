@@ -50,19 +50,17 @@ pub const SKIP_FIRST_PASS: bool = false;
 pub const SKIP_FIRST_PASS: bool = true;
 
 #[derive(Clone, Debug)]
-pub enum QuantumCell<'a, 'b: 'a, F: ScalarField> {
-    Existing(&'a AssignedValue<'b, F>),
-    ExistingOwned(AssignedValue<'b, F>), // this is similar to the Cow enum
+pub enum QuantumCell<F: ScalarField> {
+    Existing(AssignedValue<F>),
     Witness(Value<F>),
     WitnessFraction(Value<Assigned<F>>),
     Constant(F),
 }
 
-impl<F: ScalarField> QuantumCell<'_, '_, F> {
+impl<F: ScalarField> QuantumCell<F> {
     pub fn value(&self) -> Value<&F> {
         match self {
             Self::Existing(a) => a.value(),
-            Self::ExistingOwned(a) => a.value(),
             Self::Witness(a) => a.as_ref(),
             Self::WitnessFraction(_) => {
                 panic!("Trying to get value of a fraction before batch inversion")
@@ -72,8 +70,8 @@ impl<F: ScalarField> QuantumCell<'_, '_, F> {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct AssignedValue<'a, F: ScalarField> {
+#[derive(Clone, Debug, Copy)]
+pub struct AssignedValue<F: ScalarField> {
     #[cfg(feature = "halo2-axiom")]
     pub cell: AssignedCell<&'a Assigned<F>, F>,
 
@@ -83,14 +81,12 @@ pub struct AssignedValue<'a, F: ScalarField> {
     pub value: Value<F>,
     #[cfg(feature = "halo2-pse")]
     pub row_offset: usize,
-    #[cfg(feature = "halo2-pse")]
-    pub _marker: PhantomData<&'a F>,
 
     #[cfg(feature = "display")]
     pub context_id: usize,
 }
 
-impl<'a, F: ScalarField> AssignedValue<'a, F> {
+impl<'a, F: ScalarField> AssignedValue<F> {
     #[cfg(feature = "display")]
     pub fn context_id(&self) -> usize {
         self.context_id
@@ -148,7 +144,7 @@ impl<'a, F: ScalarField> AssignedValue<'a, F> {
 
     #[cfg(feature = "halo2-pse")]
     pub fn copy_advice(
-        &'a self,
+        &self,
         region: &mut Region<'_, F>,
         column: Column<Advice>,
         offset: usize,
@@ -185,7 +181,7 @@ pub struct Context<'a, F: ScalarField> {
     // To save time from re-allocating new temporary vectors that get quickly dropped (e.g., for some range checks), we keep a vector with high capacity around that we `clear` before use each time
     // Need to use RefCell to avoid borrow rules
     // Need to use Rc to borrow this and mutably borrow self at same time
-    preallocated_vec_to_assign: Rc<RefCell<Vec<AssignedValue<'a, F>>>>,
+    preallocated_vec_to_assign: Rc<RefCell<Vec<AssignedValue<F>>>>,
 
     // `assigned_constants` is a HashMap keeping track of all constants that we use throughout
     // we assign them to fixed columns as we go, re-using a fixed cell if the constant value has been assigned previously
@@ -199,10 +195,10 @@ pub struct Context<'a, F: ScalarField> {
     #[cfg(feature = "halo2-pse")]
     pub assigned_constants: FxHashMap<Vec<u8>, Cell>,
 
-    pub zero_cell: Option<AssignedValue<'a, F>>,
+    pub zero_cell: Option<AssignedValue<F>>,
 
     // `cells_to_lookup` is a vector keeping track of all cells that we want to enable lookup for. When there is more than 1 advice column we will copy_advice all of these cells to the single lookup enabled column and do lookups there
-    pub cells_to_lookup: Vec<AssignedValue<'a, F>>,
+    pub cells_to_lookup: Vec<AssignedValue<F>>,
 
     current_phase: usize,
 
@@ -269,7 +265,7 @@ impl<'a, F: ScalarField> Context<'a, F> {
         }
     }
 
-    pub fn preallocated_vec_to_assign(&self) -> Rc<RefCell<Vec<AssignedValue<'a, F>>>> {
+    pub fn preallocated_vec_to_assign(&self) -> Rc<RefCell<Vec<AssignedValue<F>>>> {
         Rc::clone(&self.preallocated_vec_to_assign)
     }
 
@@ -366,7 +362,7 @@ impl<'a, F: ScalarField> Context<'a, F> {
         column: Column<Advice>,
         #[cfg(feature = "display")] context_id: usize,
         row_offset: usize,
-    ) -> AssignedValue<'v, F> {
+    ) -> AssignedValue<F> {
         match input {
             QuantumCell::Existing(acell) => {
                 AssignedValue {
@@ -425,14 +421,14 @@ impl<'a, F: ScalarField> Context<'a, F> {
     }
 
     #[cfg(feature = "halo2-pse")]
-    pub fn assign_cell<'v>(
+    pub fn assign_cell(
         &mut self,
-        input: QuantumCell<'_, 'v, F>,
+        input: QuantumCell<F>,
         column: Column<Advice>,
         #[cfg(feature = "display")] context_id: usize,
         row_offset: usize,
         phase: u8,
-    ) -> AssignedValue<'v, F> {
+    ) -> AssignedValue<F> {
         match input {
             QuantumCell::Existing(acell) => {
                 AssignedValue {
@@ -444,22 +440,6 @@ impl<'a, F: ScalarField> Context<'a, F> {
                     ),
                     value: acell.value,
                     row_offset,
-                    _marker: PhantomData,
-                    #[cfg(feature = "display")]
-                    context_id,
-                }
-            }
-            QuantumCell::ExistingOwned(acell) => {
-                AssignedValue {
-                    cell: acell.copy_advice(
-                        // || "gate: copy advice",
-                        &mut self.region,
-                        column,
-                        row_offset,
-                    ),
-                    value: acell.value,
-                    row_offset,
-                    _marker: PhantomData,
                     #[cfg(feature = "display")]
                     context_id,
                 }
@@ -472,7 +452,6 @@ impl<'a, F: ScalarField> Context<'a, F> {
                     .cell(),
                 value,
                 row_offset,
-                _marker: PhantomData,
                 #[cfg(feature = "display")]
                 context_id,
             },
@@ -484,7 +463,6 @@ impl<'a, F: ScalarField> Context<'a, F> {
                     .cell(),
                 value: Value::unknown(),
                 row_offset,
-                _marker: PhantomData,
                 #[cfg(feature = "display")]
                 context_id,
             },
@@ -500,7 +478,6 @@ impl<'a, F: ScalarField> Context<'a, F> {
                     cell: acell,
                     value: Value::known(c),
                     row_offset,
-                    _marker: PhantomData,
                     #[cfg(feature = "display")]
                     context_id,
                 }

@@ -75,17 +75,17 @@ impl Circuit<Fr> for MyCircuit<Fr> {
 
                 // test add
                 {
-                    config.add(ctx, Existing(&a_cell), Existing(&b_cell));
+                    config.add(ctx, Existing(a_cell), Existing(b_cell));
                 }
 
                 // test sub
                 {
-                    config.sub(ctx, Existing(&a_cell), Existing(&b_cell));
+                    config.sub(ctx, Existing(a_cell), Existing(b_cell));
                 }
 
                 // test multiply
                 {
-                    config.mul(ctx, Existing(&c_cell), Existing(&b_cell));
+                    config.mul(ctx, Existing(c_cell), Existing(b_cell));
                 }
 
                 // test idx_to_indicator
@@ -243,16 +243,16 @@ impl Circuit<Fr> for RangeTestCircuit<Fr> {
                     config.range_check(ctx, &a, self.range_bits);
                 }
                 {
-                    config.check_less_than(ctx, Existing(&a), Existing(&b), self.lt_bits);
+                    config.check_less_than(ctx, Existing(a), Existing(b), self.lt_bits);
                 }
                 {
-                    config.is_less_than(ctx, Existing(&a), Existing(&b), self.lt_bits);
+                    config.is_less_than(ctx, Existing(a), Existing(b), self.lt_bits);
                 }
                 {
-                    config.is_less_than(ctx, Existing(&b), Existing(&a), self.lt_bits);
+                    config.is_less_than(ctx, Existing(b), Existing(a), self.lt_bits);
                 }
                 {
-                    config.gate().is_equal(ctx, Existing(&b), Existing(&a));
+                    config.gate().is_equal(ctx, Existing(b), Existing(a));
                 }
                 {
                     config.gate().is_zero(ctx, &a);
@@ -386,7 +386,7 @@ mod lagrange {
                     config.lagrange_and_eval(
                         ctx,
                         &x.into_iter().zip(y.into_iter()).collect::<Vec<_>>(),
-                        &a,
+                        a,
                     );
 
                     #[cfg(feature = "display")]

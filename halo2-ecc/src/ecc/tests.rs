@@ -2,6 +2,7 @@
 use super::*;
 use crate::fields::fp::{FpConfig, FpStrategy};
 use crate::fields::fp2::Fp2Chip;
+use crate::fields::PrimeField;
 use crate::halo2_proofs::{
     circuit::*,
     dev::MockProver,
@@ -11,9 +12,7 @@ use crate::halo2_proofs::{
 use group::Group;
 use halo2_base::utils::bigint_to_fe;
 use halo2_base::SKIP_FIRST_PASS;
-use halo2_base::{
-    gates::range::RangeStrategy, utils::value_to_option, utils::PrimeField, ContextParams,
-};
+use halo2_base::{gates::range::RangeStrategy, utils::value_to_option, ContextParams};
 use num_bigint::{BigInt, RandBigInt};
 use std::marker::PhantomData;
 use std::ops::Neg;

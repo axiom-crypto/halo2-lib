@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 use super::{ec_add_unequal, ec_select, ec_select_from_bits, EcPoint, EccChip};
+use crate::fields::PrimeField;
 use crate::halo2_proofs::arithmetic::CurveAffine;
 use crate::{
     bigint::{CRTInteger, FixedCRTInteger},
@@ -8,7 +9,7 @@ use crate::{
 use group::Curve;
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
-    utils::{fe_to_biguint, CurveAffineExt, PrimeField},
+    utils::{fe_to_biguint, CurveAffineExt},
     AssignedValue, Context,
     QuantumCell::Existing,
 };
@@ -42,11 +43,11 @@ where
     pub fn assign<'v, FC>(
         self,
         chip: &FC,
-        ctx: &mut Context<'_, F>,
+        ctx: &mut Context<F>,
         native_modulus: &BigUint,
-    ) -> EcPoint<F, FC::FieldPoint<'v>>
+    ) -> EcPoint<F, FC::FieldPoint>
     where
-        FC: PrimeFieldChip<F, FieldType = C::Base, FieldPoint<'v> = CRTInteger<'v, F>>,
+        FC: PrimeFieldChip<F, FieldType = C::Base, FieldPoint = CRTInteger<F>>,
     {
         let assigned_x = self.x.assign(chip.range().gate(), ctx, chip.limb_bits(), native_modulus);
         let assigned_y = self.y.assign(chip.range().gate(), ctx, chip.limb_bits(), native_modulus);
@@ -56,11 +57,11 @@ where
     pub fn assign_without_caching<'v, FC>(
         self,
         chip: &FC,
-        ctx: &mut Context<'_, F>,
+        ctx: &mut Context<F>,
         native_modulus: &BigUint,
-    ) -> EcPoint<F, FC::FieldPoint<'v>>
+    ) -> EcPoint<F, FC::FieldPoint>
     where
-        FC: PrimeFieldChip<F, FieldType = C::Base, FieldPoint<'v> = CRTInteger<'v, F>>,
+        FC: PrimeFieldChip<F, FieldType = C::Base, FieldPoint = CRTInteger<F>>,
     {
         let assigned_x = self.x.assign_without_caching(
             chip.range().gate(),
@@ -86,20 +87,20 @@ where
 // - `scalar_i < 2^{max_bits} for all i` (constrained by num_to_bits)
 // - `max_bits <= modulus::<F>.bits()`
 
-pub fn scalar_multiply<'v, F, FC, C>(
+pub fn scalar_multiply<F, FC, C>(
     chip: &FC,
-    ctx: &mut Context<'v, F>,
+    ctx: &mut Context<F>,
     point: &C,
-    scalar: &[AssignedValue<'v, F>],
+    scalar: &[AssignedValue<F>],
     max_bits: usize,
     window_bits: usize,
-) -> EcPoint<F, FC::FieldPoint<'v>>
+) -> EcPoint<F, FC::FieldPoint>
 where
     F: PrimeField,
     C: CurveAffineExt,
     C::Base: PrimeField,
-    FC: PrimeFieldChip<F, FieldType = C::Base, FieldPoint<'v> = CRTInteger<'v, F>>
-        + Selectable<F, Point<'v> = FC::FieldPoint<'v>>,
+    FC: PrimeFieldChip<F, FieldType = C::Base, FieldPoint = CRTInteger<F>>
+        + Selectable<F, Point = FC::FieldPoint>,
 {
     if point.is_identity().into() {
         let point = FixedEcPoint::from_curve(*point, chip.num_limbs(), chip.limb_bits());
@@ -157,7 +158,7 @@ where
     // `is_started` is just a way to deal with if `curr_point` is actually identity
     let mut is_started = chip.gate().load_zero(ctx);
     for (cached_point_window, bit_window) in cached_point_window_rev.zip(bit_window_rev) {
-        let bit_sum = chip.gate().sum(ctx, bit_window.iter().map(Existing));
+        let bit_sum = chip.gate().sum(ctx, bit_window.iter().copied().map(Existing));
         // are we just adding a window of all 0s? if so, skip
         let is_zero_window = chip.gate().is_zero(ctx, &bit_sum);
         let add_point = ec_select_from_bits::<F, _>(chip, ctx, cached_point_window, bit_window);
@@ -171,12 +172,12 @@ where
         is_started = {
             // is_started || !is_zero_window
             // (a || !b) = (1-b) + a*b
-            let not_zero_window = chip.gate().not(ctx, Existing(&is_zero_window));
+            let not_zero_window = chip.gate().not(ctx, Existing(is_zero_window));
             chip.gate().mul_add(
                 ctx,
-                Existing(&is_started),
-                Existing(&is_zero_window),
-                Existing(&not_zero_window),
+                Existing(is_started),
+                Existing(is_zero_window),
+                Existing(not_zero_window),
             )
         };
     }
@@ -185,20 +186,20 @@ where
 
 // basically just adding up individual fixed_base::scalar_multiply except that we do all batched normalization of cached points at once to further save inversion time during witness generation
 // we also use the random accumulator for some extra efficiency (which also works in scalar multiply case but that is TODO)
-pub fn msm<'v, F, FC, C>(
+pub fn msm<F, FC, C>(
     chip: &EccChip<F, FC>,
-    ctx: &mut Context<'v, F>,
+    ctx: &mut Context<F>,
     points: &[C],
-    scalars: &[Vec<AssignedValue<'v, F>>],
+    scalars: &[Vec<AssignedValue<F>>],
     max_scalar_bits_per_cell: usize,
     window_bits: usize,
-) -> EcPoint<F, FC::FieldPoint<'v>>
+) -> EcPoint<F, FC::FieldPoint>
 where
     F: PrimeField,
     C: CurveAffineExt,
     C::Base: PrimeField,
-    FC: PrimeFieldChip<F, FieldType = C::Base, FieldPoint<'v> = CRTInteger<'v, F>>
-        + Selectable<F, Point<'v> = FC::FieldPoint<'v>>,
+    FC: PrimeFieldChip<F, FieldType = C::Base, FieldPoint = CRTInteger<F>>
+        + Selectable<F, Point = FC::FieldPoint>,
 {
     assert!((max_scalar_bits_per_cell as u32) <= F::NUM_BITS);
     let scalar_len = scalars[0].len();
@@ -263,15 +264,14 @@ where
         .chunks(cached_points.len() / points.len())
         .zip(bits.chunks(total_bits))
         .map(|(cached_points, bits)| {
-            let cached_point_window_rev =
-                cached_points.chunks(1usize << window_bits).rev();
+            let cached_point_window_rev = cached_points.chunks(1usize << window_bits).rev();
             let bit_window_rev = bits.chunks(window_bits).rev();
             let mut curr_point = None;
             // `is_started` is just a way to deal with if `curr_point` is actually identity
             let mut is_started = field_chip.gate().load_zero(ctx);
             for (cached_point_window, bit_window) in cached_point_window_rev.zip(bit_window_rev) {
                 let is_zero_window = {
-                    let sum = field_chip.gate().sum(ctx, bit_window.iter().map(Existing));
+                    let sum = field_chip.gate().sum(ctx, bit_window.iter().copied().map(Existing));
                     field_chip.gate().is_zero(ctx, &sum)
                 };
                 let add_point =
@@ -287,17 +287,17 @@ where
                     // is_started || !is_zero_window
                     // (a || !b) = (1-b) + a*b
                     let not_zero_window =
-                        field_chip.range().gate().not(ctx, Existing(&is_zero_window));
+                        field_chip.range().gate().not(ctx, Existing(is_zero_window));
                     field_chip.range().gate().mul_add(
                         ctx,
-                        Existing(&is_started),
-                        Existing(&is_zero_window),
-                        Existing(&not_zero_window),
+                        Existing(is_started),
+                        Existing(is_zero_window),
+                        Existing(not_zero_window),
                     )
                 };
             }
             curr_point.unwrap()
         })
         .collect_vec();
-    chip.sum::<C>(ctx, sm.iter())
+    chip.sum::<C>(ctx, sm.iter().cloned())
 }

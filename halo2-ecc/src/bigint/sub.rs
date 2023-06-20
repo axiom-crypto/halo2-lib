@@ -1,20 +1,20 @@
 use super::{CRTInteger, OverflowInteger};
+use crate::fields::PrimeField;
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
-    utils::PrimeField,
     AssignedValue, Context,
     QuantumCell::{Constant, Existing, Witness},
 };
 
 /// Should only be called on integers a, b in proper representation with all limbs having at most `limb_bits` number of bits
-pub fn assign<'a, F: PrimeField>(
+pub fn assign<F: PrimeField>(
     range: &impl RangeInstructions<F>,
-    ctx: &mut Context<'a, F>,
-    a: &OverflowInteger<'a, F>,
-    b: &OverflowInteger<'a, F>,
+    ctx: &mut Context<F>,
+    a: &OverflowInteger<F>,
+    b: &OverflowInteger<F>,
     limb_bits: usize,
     limb_base: F,
-) -> (OverflowInteger<'a, F>, AssignedValue<'a, F>) {
+) -> (OverflowInteger<F>, AssignedValue<F>) {
     assert!(a.max_limb_bits <= limb_bits);
     assert!(b.max_limb_bits <= limb_bits);
     assert_eq!(a.limbs.len(), b.limbs.len());
@@ -25,15 +25,15 @@ pub fn assign<'a, F: PrimeField>(
     for (a_limb, b_limb) in a.limbs.iter().zip(b.limbs.iter()) {
         let (bottom, lt) = match borrow {
             None => {
-                let lt = range.is_less_than(ctx, Existing(a_limb), Existing(b_limb), limb_bits);
+                let lt = range.is_less_than(ctx, Existing(*a_limb), Existing(*b_limb), limb_bits);
                 (b_limb.clone(), lt)
             }
             Some(borrow) => {
-                let b_plus_borrow = range.gate().add(ctx, Existing(b_limb), Existing(&borrow));
+                let b_plus_borrow = range.gate().add(ctx, Existing(*b_limb), Existing(borrow));
                 let lt = range.is_less_than(
                     ctx,
-                    Existing(a_limb),
-                    Existing(&b_plus_borrow),
+                    Existing(*a_limb),
+                    Existing(b_plus_borrow),
                     limb_bits + 1,
                 );
                 (b_plus_borrow, lt)
@@ -47,12 +47,12 @@ pub fn assign<'a, F: PrimeField>(
             range.gate().assign_region_last(
                 ctx,
                 vec![
-                    Existing(a_limb),
-                    Existing(&lt),
+                    Existing(*a_limb),
+                    Existing(lt),
                     Constant(limb_base),
                     Witness(a_with_borrow_val),
                     Constant(-F::one()),
-                    Existing(&bottom),
+                    Existing(bottom),
                     Witness(out_val),
                 ],
                 vec![(0, None), (3, None)],
@@ -65,17 +65,17 @@ pub fn assign<'a, F: PrimeField>(
 }
 
 // returns (a-b, underflow), where underflow is nonzero iff a < b
-pub fn crt<'a, F: PrimeField>(
+pub fn crt<F: PrimeField>(
     range: &impl RangeInstructions<F>,
-    ctx: &mut Context<'a, F>,
-    a: &CRTInteger<'a, F>,
-    b: &CRTInteger<'a, F>,
+    ctx: &mut Context<F>,
+    a: &CRTInteger<F>,
+    b: &CRTInteger<F>,
     limb_bits: usize,
     limb_base: F,
-) -> (CRTInteger<'a, F>, AssignedValue<'a, F>) {
+) -> (CRTInteger<F>, AssignedValue<F>) {
     let (out_trunc, underflow) =
         assign::<F>(range, ctx, &a.truncation, &b.truncation, limb_bits, limb_base);
-    let out_native = range.gate().sub(ctx, Existing(&a.native), Existing(&b.native));
+    let out_native = range.gate().sub(ctx, Existing(a.native), Existing(b.native));
     let out_val = a.value.as_ref().zip(b.value.as_ref()).map(|(a, b)| a - b);
     (CRTInteger::construct(out_trunc, out_native, out_val), underflow)
 }

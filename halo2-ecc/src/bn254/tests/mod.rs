@@ -7,6 +7,7 @@ use std::marker::PhantomData;
 
 use super::pairing::PairingChip;
 use super::*;
+use crate::fields::PrimeField;
 use crate::halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     dev::MockProver,
@@ -24,7 +25,7 @@ use crate::halo2_proofs::{
 use crate::{ecc::EccChip, fields::fp::FpStrategy};
 use halo2_base::{
     gates::GateInstructions,
-    utils::{biguint_to_fe, fe_to_biguint, value_to_option, PrimeField},
+    utils::{biguint_to_fe, fe_to_biguint, value_to_option},
     QuantumCell::Witness,
 };
 use num_bigint::BigUint;

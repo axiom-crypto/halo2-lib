@@ -1,8 +1,9 @@
 use super::{check_carry_to_zero, CRTInteger, OverflowInteger};
+use crate::fields::PrimeField;
 use crate::halo2_proofs::circuit::Value;
 use halo2_base::{
     gates::{range::RangeStrategy, GateInstructions, RangeInstructions},
-    utils::{biguint_to_fe, decompose_bigint_option, value_to_option, PrimeField},
+    utils::{biguint_to_fe, decompose_bigint_option, value_to_option},
     AssignedValue, Context,
     QuantumCell::{Constant, Existing, Witness},
 };
@@ -20,11 +21,11 @@ use std::{cmp::max, iter};
 // We constrain `a = out + modulus * quotient` and range check `out` and `quotient`
 //
 // Assumption: the leading two bits (in big endian) are 1, and `abs(a) <= 2^{n * k - 1 + F::NUM_BITS - 2}` (A weaker assumption is also enough, but this is good enough for forseeable use cases)
-pub fn crt<'a, F: PrimeField>(
+pub fn crt<F: PrimeField>(
     range: &impl RangeInstructions<F>,
     // chip: &BigIntConfig<F>,
-    ctx: &mut Context<'a, F>,
-    a: &CRTInteger<'a, F>,
+    ctx: &mut Context<F>,
+    a: &CRTInteger<F>,
     k_bits: usize, // = a.len().bits()
     modulus: &BigInt,
     mod_vec: &[F],
@@ -32,7 +33,7 @@ pub fn crt<'a, F: PrimeField>(
     limb_bits: usize,
     limb_bases: &[F],
     limb_base_big: &BigInt,
-) -> CRTInteger<'a, F> {
+) -> CRTInteger<F> {
     let n = limb_bits;
     let k = a.truncation.limbs.len();
     let trunc_len = n * k;
@@ -118,7 +119,7 @@ pub fn crt<'a, F: PrimeField>(
         let (quot_cell, out_cell, check_cell) = {
             let prod = range.gate().inner_product_left(
                 ctx,
-                quot_assigned.iter().map(|a| Existing(a)).chain(iter::once(Witness(quot_v))),
+                quot_assigned.iter().map(|a| Existing(*a)).chain(iter::once(Witness(quot_v))),
                 mod_vec[..=i].iter().rev().map(|c| Constant(*c)),
                 &mut tmp_assigned,
             );
@@ -138,7 +139,7 @@ pub fn crt<'a, F: PrimeField>(
                 // dbg!(*alloc);
                 alloc.1 = 0;
                 alloc.0 += 1;
-                range.gate().assign_region_last(ctx, [Existing(&prod)], []);
+                range.gate().assign_region_last(ctx, [Existing(prod)], []);
             }
             match range.strategy() {
                 RangeStrategy::Vertical => {
@@ -149,7 +150,7 @@ pub fn crt<'a, F: PrimeField>(
                         ctx,
                         [
                             Constant(-F::one()),
-                            Existing(a_limb),
+                            Existing(*a_limb),
                             Witness(temp1),
                             Constant(F::one()),
                             Witness(out_v),
@@ -167,7 +168,7 @@ pub fn crt<'a, F: PrimeField>(
                     // | 0    | -1| 1   |
                     let mut assignments = range.gate().assign_region(
                         ctx,
-                        [Existing(a_limb), Witness(out_v), Witness(check_val)],
+                        [Existing(*a_limb), Witness(out_v), Witness(check_val)],
                         [(-1, Some([F::zero(), -F::one(), F::one()]))],
                     );
                     check_cell = assignments.pop().unwrap();
@@ -204,7 +205,7 @@ pub fn crt<'a, F: PrimeField>(
             // | quot_cell | 2^n | 1 | quot_cell + 2^n |
             range.gate().assign_region_last(
                 ctx,
-                [Existing(quot_cell), Constant(limb_base), Constant(F::one()), Witness(out_val)],
+                [Existing(*quot_cell), Constant(limb_base), Constant(F::one()), Witness(out_val)],
                 [(0, None)],
             )
         };
@@ -249,10 +250,10 @@ pub fn crt<'a, F: PrimeField>(
     let _native_computation = range.gate().assign_region_last(
         ctx,
         [
-            Existing(&out_native_assigned),
+            Existing(out_native_assigned),
             Constant(mod_native),
-            Existing(&quot_native_assigned),
-            Existing(&a.native),
+            Existing(quot_native_assigned),
+            Existing(a.native),
         ],
         [(0, None)],
     );

@@ -116,7 +116,7 @@ impl Circuit<Fr> for EcAddCircuit<Fr> {
         assert_eq!(config.batch_size, self.points.len());
 
         config.fp_chip.load_lookup_table(&mut layouter)?;
-        let fp2_chip = Fp2Chip::<Fr>::construct(&config.fp_chip);
+        let fp2_chip = Fp2Chip::<Fr>::construct(config.fp_chip.clone());
         let g2_chip = EccChip::construct(fp2_chip.clone());
 
         let mut first_pass = SKIP_FIRST_PASS;
@@ -140,7 +140,7 @@ impl Circuit<Fr> for EcAddCircuit<Fr> {
                     })
                     .collect::<Vec<_>>();
 
-                let acc = g2_chip.sum::<G2Affine>(ctx, points.iter());
+                let acc = g2_chip.sum::<G2Affine>(ctx, points.iter().cloned());
 
                 #[cfg(feature = "display")]
                 if display {

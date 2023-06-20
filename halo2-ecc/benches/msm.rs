@@ -24,9 +24,10 @@ use halo2_base::halo2_proofs::{
 };
 use halo2_base::{
     gates::GateInstructions,
-    utils::{biguint_to_fe, fe_to_biguint, PrimeField},
+    utils::{biguint_to_fe, fe_to_biguint},
     QuantumCell::Witness,
 };
+use halo2_ecc::fields::PrimeField;
 use halo2_ecc::{
     ecc::EccChip,
     fields::fp::{FpConfig, FpStrategy},

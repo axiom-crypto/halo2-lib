@@ -387,7 +387,7 @@ pub fn assign_advice_custom<'v, F: Field>(
     column: Column<Advice>,
     offset: usize,
     value: Value<F>,
-) -> AssignedValue<'v, F> {
+) -> AssignedValue<F> {
     #[cfg(feature = "halo2-axiom")]
     {
         AssignedValue {
@@ -1604,7 +1604,7 @@ pub fn keccak_phase1<'v, F: Field>(
     keccak_table: &KeccakTable,
     bytes: &[u8],
     challenge: Value<F>,
-    input_rlcs: &mut Vec<AssignedValue<'v, F>>,
+    input_rlcs: &mut Vec<AssignedValue<F>>,
     offset: &mut usize,
 ) {
     let num_chunks = get_num_keccak_f(bytes.len());
@@ -1967,7 +1967,7 @@ pub fn multi_keccak_phase1<'a, 'v, F: Field>(
     bytes: impl IntoIterator<Item = &'a [u8]>,
     challenge: Value<F>,
     squeeze_digests: Vec<[F; NUM_WORDS_TO_SQUEEZE]>,
-) -> (Vec<AssignedValue<'v, F>>, Vec<AssignedValue<'v, F>>) {
+) -> (Vec<AssignedValue<F>>, Vec<AssignedValue<F>>) {
     let mut input_rlcs = Vec::with_capacity(squeeze_digests.len());
     let mut output_rlcs = Vec::with_capacity(squeeze_digests.len());
 

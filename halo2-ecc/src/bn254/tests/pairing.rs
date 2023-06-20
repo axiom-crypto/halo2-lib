@@ -63,7 +63,7 @@ impl<F: PrimeField> Circuit<F> for PairingCircuit<F> {
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         config.range.load_lookup_table(&mut layouter)?;
-        let chip = PairingChip::<F>::construct(&config);
+        let chip = PairingChip::<F>::construct(config.clone());
 
         let mut first_pass = SKIP_FIRST_PASS;
 
