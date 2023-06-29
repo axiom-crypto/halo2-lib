@@ -545,6 +545,82 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
             }
             _ => {}
         }
+
+        let circuit = ctx;
+        println!("Advice: {:?}", circuit.advice);
+        println!("SELECTOR: {:?}", circuit.selector);
+        println!("SELECTOR CONSTRAINT: {:?}", circuit.advice[2] + circuit.advice[3] * circuit.advice[4]);
+        println!("len: {}", circuit.advice.len());
+        {
+         let cfg = Config::new();
+         let ctx = z3::Context::new(&cfg);
+         let solver = Solver::new(&ctx);
+
+         let mut constraints = Vec::new();
+
+         let mut advice = Vec::new();
+         for i in 0..circuit.advice.len() {
+                advice.push(Int::new_const(&ctx, format!("advice_{}", i)));
+
+                constraints.push(advice[i].ge(&Int::from_u64(&ctx, 0)));
+                println!("ADVICE: {:?}", advice[i].ge(&Int::from_u64(&ctx, 0)));
+                println!("ADVICE: {:?}", advice[i].lt(&Int::from_str(&ctx, "21888242871839275222246405745257275088548364400416034343698204186575808495617").unwrap()));
+                constraints.push(advice[i].lt(&Int::from_str(&ctx, "21888242871839275222246405745257275088548364400416034343698204186575808495617").unwrap()));
+         }
+
+                let lookup_bits: usize = var("LOOKUP_BITS").unwrap().parse().unwrap();
+
+
+               for a in circuit.cells_to_lookup.iter() {
+                   assert!(a.cell.unwrap().context_id == 0);
+                   let i = a.cell.unwrap().offset;
+                   constraints.push(advice[i].ge(&Int::from_u64(&ctx, 0)));
+                   constraints.push(advice[i].lt(&Int::from_u64(&ctx, 1 << lookup_bits)));
+                   println!("CONSTRAINT: {:?}", advice[i].ge(&Int::from_u64(&ctx, 0)));
+                   println!("CONSTRAINT: {:?}", advice[i].lt(&Int::from_u64(&ctx, 1 << lookup_bits)));
+               }
+
+               for (a, b) in circuit.advice_equality_constraints.iter() {
+                   constraints.push(advice[a.offset]._eq(&advice[b.offset]));
+                   println!("EQUALITY: {:?}", advice[a.offset].ge(&advice[b.offset]));
+
+               }
+
+              for (a, b) in circuit.constant_equality_constraints.iter() {
+                   assert!(b.context_id == 0);
+                   let val = BigUint::from_bytes_le(a.to_repr().as_ref());
+
+                   constraints.push(advice[b.offset]._eq(&Int::from_str(&ctx, &format!("{}", val)).unwrap()));
+                  println!("CONSTANT: {:?}", advice[b.offset]._eq(&Int::from_str(&ctx, &format!("{}", val)).unwrap()));
+
+              }
+
+              for i in 0..circuit.advice.len() {
+                    if circuit.selector[i] {
+                        let lhs = Int::add(
+                        &ctx, &[&advice[i],&Int::mul(&ctx,&[&advice[i + 1],&advice[i + 2],])]);
+
+                        constraints.push(lhs._eq(&advice[i + 3]));
+                        constraints.push(lhs.le(&advice[i + 3]));
+                    }
+              }
+
+            assert_eq!(a.cell.unwrap().context_id, 0);
+            let a_idx = a.cell.unwrap().offset;
+
+            let refs = constraints.iter().collect::<Vec<&Bool>>();
+            let all_constraints = Bool::and(&ctx, &refs);
+            println!("ALL CONSTRAINTS: {:?}", all_constraints);
+  
+            let goal = Bool::and(&ctx, &[&advice[a_idx].ge(&Int::from_u64(&ctx, 0)),&advice[a_idx].lt(&Int::from_u64(&ctx, 2<<range_bits))]);
+
+            solver.assert(&all_constraints.implies(&goal).not());
+
+            assert_eq!(solver.check(), SatResult::Unsat);
+
+
+
+            }
     }
 
     /// Constrains that 'a' is less than 'b'.
@@ -584,6 +660,90 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         };
 
         self.range_check(ctx, check_cell, num_bits);
+
+
+        let circuit = ctx;
+       println!("len: {}", circuit.advice.len());
+        {
+         let cfg = Config::new();
+         let ctx = z3::Context::new(&cfg);
+         let solver = Solver::new(&ctx);
+
+         let mut constraints_par = Vec::new();
+
+         let mut advice = Vec::new();
+         for i in 0..circuit.advice.len() {
+                advice.push(Int::new_const(&ctx, format!("advice_{}", i)));
+
+             constraints_par.push(advice[i].ge(&Int::from_u64(&ctx, 0)));
+             println!("ADVICE: {:?}", circuit.advice[i]);
+             constraints_par.push(advice[i].lt(&Int::from_str(&ctx, "21888242871839275222246405745257275088548364400416034343698204186575808495617").unwrap()));
+         }
+
+                let lookup_bits: usize = var("LOOKUP_BITS").unwrap().parse().unwrap();
+                println!("lookup bits: {:?}", lookup_bits);
+                println!("range bits: {:?}", num_bits);
+
+               for a in circuit.cells_to_lookup.iter() {
+                   assert!(a.cell.unwrap().context_id == 0);
+                   let i = a.cell.unwrap().offset;
+                   constraints_par.push(advice[i].ge(&Int::from_u64(&ctx, 0)));
+                   constraints_par.push(advice[i].lt(&Int::from_u64(&ctx, 1 << lookup_bits)));
+               }
+
+               for (a, b) in circuit.advice_equality_constraints.iter() {
+                   if(a.offset == 8){
+                       constraints_par.push(advice[a.offset]._eq(&advice[b.offset]));
+                       println!("EQUALITY: {:?}", advice[a.offset]._eq(&advice[b.offset]));
+ 
+                   }else{
+                       constraints_par.push(advice[a.offset]._eq(&advice[b.offset]));
+                       //println!("EQUALITY: {:?}", advice[a.offset]._eq(&advice[b.offset]));
+
+                   }
+
+                   //constraints.push(advice[a.offset].le(&advice[b.offset]));
+                   //println!("EQUALITY: {:?}", advice[a.offset].ge(&advice[b.offset]));
+
+               }
+
+              for (a, b) in circuit.constant_equality_constraints.iter() {
+                   assert!(b.context_id == 0);
+                   let val_temp = F::from_bytes_le(a.to_repr().as_ref());
+                  let val =  BigUint::from_bytes_le(val_temp.to_bytes_le().as_ref());
+                  println!("VAL: {:?}",val_temp);   // negative is wrapped around
+                  constraints_par.push(advice[b.offset]._eq(&Int::from_str(&ctx, &format!("{}", val)).unwrap()));
+                  //constraints.push(advice[b.offset].le(&Int::from_str(&ctx, &format!("{}", val)).unwrap()));
+                  println!("CONSTANT: {:?}", advice[b.offset]._eq(&Int::from_str(&ctx, &format!("{}", val)).unwrap()));
+              }
+
+              for i in 0..circuit.advice.len() {
+                    if circuit.selector[i] {
+                        if(i == 5){
+                            let lhs = Int::add(
+                                &ctx, &[&advice[i],&Int::mul(&ctx,&[&advice[i + 1],&advice[i + 2],])]);
+
+                            constraints_par.push(lhs._eq(&advice[i + 3]));
+                            println!("ADD {:?}", circuit.advice[i + 3]);
+                            println!("ADD {:?}", circuit.advice[i]+circuit.advice[i+1]*circuit.advice[i+2]);
+                        }
+
+                    }
+              }
+
+            let refs_par = constraints_par.iter().collect::<Vec<&Bool>>();
+            let all_constraints_par = Bool::and(&ctx, &refs_par);
+            println!("ALL CONSTRAINTS: {:?}", all_constraints_par);
+
+            //let goal = Bool::and(&ctx, &[&advice[a_idx].ge(&Int::from_u64(&ctx, 0)),&advice[a_idx].lt(&Int::from_u64(&ctx, 2).power(&range))]);
+            let a_b = Bool::and(&ctx, &[&advice[0].ge(&Int::from_u64(&ctx, 0)),&advice[1].ge(&Int::from_u64(&ctx, 0)),&advice[0].le(&Int::from_str(&ctx, "18446744073709551616").unwrap()),&advice[1].lt(&Int::from_str(&ctx, "18446744073709551616").unwrap())]);
+            solver.assert(&a_b);
+
+            solver.assert(&all_constraints_par);
+
+            assert_eq!(solver.check(), SatResult::Sat);
+
+            }
     }
 
     /// Constrains whether `a` is in `[0, b)`, and returns 1 if `a` < `b`, otherwise 0.
