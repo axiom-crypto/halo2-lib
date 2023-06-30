@@ -20,10 +20,10 @@ use crate::{
         plonk::keygen_pk,
         plonk::{keygen_vk, Assigned},
     },
+    safe_types::*,
 };
 use rand::rngs::OsRng;
 use itertools::Itertools;
-use super::*;
 use std::env;
 
 /// helper function to generate a proof with real prover
