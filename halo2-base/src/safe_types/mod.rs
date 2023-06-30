@@ -106,7 +106,7 @@ pub struct VariableByteArray<F: ScalarField> {
 impl<F: ScalarField> VariableByteArray<F> {
 
     fn new(bytes: Vec<AssignedValue<F>>, var_len: AssignedValue<F>, max_var_len: usize) -> Self {
-        assert!(bytes.len() == max_var_len, "len of value must equal max_var_len");
+        assert!(bytes.len() == max_var_len, "len of bytes must equal max_var_len");
         //Change this to constraint
         Self { bytes, var_len, max_var_len}
     }
