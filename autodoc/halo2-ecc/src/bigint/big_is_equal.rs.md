@@ -1,0 +1,7 @@
+This code defines three functions in the Rust programming language that work with two custom data structures: `OverflowInteger` and `CRTInteger`. These structures are used to represent integers in a specific format, and the functions are designed to compare the equality of these integers. The functions are part of a library that works with the Halo 2 proving system. Here's an explanation of each function:
+
+1. `assign`: This function takes two `OverflowInteger`s `a` and `b`, and checks if they are equal. It does this by comparing their limbs (components) one by one using the `is_equal` function provided by the `gate` object, which is an instance of the `GateInstructions` trait. If all limbs are equal, it returns an `AssignedValue` representing `true`; otherwise, it returns an `AssignedValue` representing `false`.
+
+2. `wrapper`: This function is a simple wrapper for the `assign` function that takes two `CRTInteger`s `a` and `b` as input. It compares the truncations of these integers using the `assign` function and returns the result as an `AssignedValue`.
+
+3. `crt`: This function takes two `CRTInteger`s `a` and `b`, and checks if they are equal in both their truncation and native representations. It first checks the truncation using the `assign` function, then checks the native representation using the `is_equal` function provided by the `gate` object. If both representations are equal, it returns an `AssignedValue` representing `true`; otherwise, it returns an `AssignedValue` representing `false`.
