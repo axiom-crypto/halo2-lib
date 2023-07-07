@@ -15,6 +15,7 @@ use crate::{
 use num_bigint::BigUint;
 use test_case::test_case;
 
+#[test_case(16, 10, Fr::zero(), 0; "range_check() 0 bits")]
 #[test_case(16, 10, Fr::from(100), 8; "range_check() pos")]
 pub fn test_range_check<F: ScalarField>(k: usize, lookup_bits: usize, a_val: F, range_bits: usize) {
     set_var("LOOKUP_BITS", lookup_bits.to_string());
