@@ -505,6 +505,10 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
     /// # Assumptions
     /// * `ceil(range_bits / lookup_bits) * lookup_bits <= F::CAPACITY`
     fn range_check(&self, ctx: &mut Context<F>, a: AssignedValue<F>, range_bits: usize) {
+        if range_bits == 0 {
+            self.gate.assert_is_const(ctx, &a, &F::zero());
+            return;
+        }
         // the number of limbs
         let k = (range_bits + self.lookup_bits - 1) / self.lookup_bits;
         // println!("range check {} bits {} len", range_bits, k);
