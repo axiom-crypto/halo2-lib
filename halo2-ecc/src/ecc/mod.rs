@@ -246,6 +246,9 @@ pub fn ec_sub_unequal<F: PrimeField, FC: FieldChip<F>>(
 
 /// Constrains `P != -Q` but allows `P == Q`, in which case output is (0,0).
 /// For Weierstrass curves only.
+///
+/// Assumptions
+/// # Neither P or Q is the point at infinity
 pub fn ec_sub_strict<F: PrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
@@ -496,7 +499,8 @@ where
     assert!(!scalar.is_empty());
     assert!((max_bits as u64) <= modulus::<F>().bits());
     assert!(window_bits != 0);
-
+    multi_scalar_multiply::<F, FC, C>(chip, ctx, &[P], vec![scalar], max_bits, window_bits)
+    /*
     let total_bits = max_bits * scalar.len();
     let num_windows = (total_bits + window_bits - 1) / window_bits;
     let rounded_bitlen = num_windows * window_bits;
@@ -577,6 +581,7 @@ where
     // if at the end, return identity point (0,0) if still not started
     let zero = chip.load_constant(ctx, FC::FieldType::zero());
     ec_select(chip, ctx, curr_point, EcPoint::new(zero.clone(), zero), *is_started.last().unwrap())
+    */
 }
 
 /// Checks that `P` is indeed a point on the elliptic curve `C`.
@@ -729,7 +734,7 @@ where
         ctx,
         &rand_start_vec[k],
         &rand_start_vec[0],
-        k >= F::CAPACITY as usize,
+        true, // k >= F::CAPACITY as usize, // this assumed random points on `C` were of prime order equal to modulus of `F`. Since this is easily missed, we turn on strict mode always
     );
     let mut curr_point = start_point.clone();
 
