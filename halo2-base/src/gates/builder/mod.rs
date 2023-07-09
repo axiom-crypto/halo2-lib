@@ -1,6 +1,6 @@
 use super::{
     flex_gate::{FlexGateConfig, GateStrategy, MAX_PHASE},
-    range::{RangeConfig, RangeStrategy},
+    range::BaseConfig,
 };
 use crate::{
     halo2_proofs::{
@@ -580,41 +580,6 @@ impl<F: ScalarField> GateCircuitBuilder<F> {
     }
 }
 
-impl<F: ScalarField> Circuit<F> for GateCircuitBuilder<F> {
-    type Config = FlexGateConfig<F>;
-    type FloorPlanner = SimpleFloorPlanner;
-
-    /// Creates a new instance of the circuit without withnesses filled in.
-    fn without_witnesses(&self) -> Self {
-        unimplemented!()
-    }
-
-    /// Configures a new circuit using the the parameters specified [Config].
-    fn configure(meta: &mut ConstraintSystem<F>) -> FlexGateConfig<F> {
-        let BaseConfigParams {
-            strategy,
-            num_advice_per_phase,
-            num_lookup_advice_per_phase: _,
-            num_fixed,
-            k,
-            lookup_bits: _,
-        } = BASE_CONFIG_PARAMS
-            .try_with(|conf| conf.borrow().clone())
-            .expect("You need to call config() to configure the halo2-base circuit shape first");
-        FlexGateConfig::configure(meta, strategy, &num_advice_per_phase, num_fixed, k)
-    }
-
-    /// Performs the actual computation on the circuit (e.g., witness generation), filling in all the advice values for a particular proof.
-    fn synthesize(
-        &self,
-        config: Self::Config,
-        mut layouter: impl Layouter<F>,
-    ) -> Result<(), Error> {
-        self.sub_synthesize(&config, &[], &[], &mut layouter);
-        Ok(())
-    }
-}
-
 /// A wrapper struct to auto-build a circuit from a `GateThreadBuilder`.
 #[derive(Clone, Debug)]
 pub struct RangeCircuitBuilder<F: ScalarField>(pub GateCircuitBuilder<F>);
@@ -640,7 +605,7 @@ impl<F: ScalarField> RangeCircuitBuilder<F> {
 }
 
 impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
-    type Config = RangeConfig<F>;
+    type Config = BaseConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     /// Creates a new instance of the [RangeCircuitBuilder] without witnesses by setting the witness_gen_only flag to false
@@ -650,28 +615,10 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
 
     /// Configures a new circuit using the the parameters specified [Config] and environment variable `LOOKUP_BITS`.
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        let BaseConfigParams {
-            strategy,
-            num_advice_per_phase,
-            num_lookup_advice_per_phase,
-            num_fixed,
-            k,
-            lookup_bits,
-        } = BASE_CONFIG_PARAMS
+        let params = BASE_CONFIG_PARAMS
             .try_with(|config| config.borrow().clone())
             .expect("You need to call config() to configure the halo2-base circuit shape first");
-        let strategy = match strategy {
-            GateStrategy::Vertical => RangeStrategy::Vertical,
-        };
-        RangeConfig::configure(
-            meta,
-            strategy,
-            &num_advice_per_phase,
-            &num_lookup_advice_per_phase,
-            num_fixed,
-            lookup_bits.unwrap_or(0),
-            k,
-        )
+        BaseConfig::configure(meta, params)
     }
 
     /// Performs the actual computation on the circuit (e.g., witness generation), populating the lookup table and filling in all the advice values for a particular proof.
@@ -681,21 +628,24 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         // only load lookup table if we are actually doing lookups
-        if config.lookup_advice.iter().map(|a| a.len()).sum::<usize>() != 0
-            || !config.q_lookup.iter().all(|q| q.is_none())
-        {
+        if let BaseConfig::WithRange(config) = &config {
             config.load_lookup_table(&mut layouter).expect("load lookup table should not fail");
         }
-        self.0.sub_synthesize(&config.gate, &config.lookup_advice, &config.q_lookup, &mut layouter);
+        self.0.sub_synthesize(
+            config.gate(),
+            config.lookup_advice(),
+            config.q_lookup(),
+            &mut layouter,
+        );
         Ok(())
     }
 }
 
-/// Configuration with [`RangeConfig`] and a single public instance column.
+/// Configuration with [`BaseConfig`] and a single public instance column.
 #[derive(Clone, Debug)]
-pub struct RangeWithInstanceConfig<F: ScalarField> {
+pub struct PublicBaseConfig<F: ScalarField> {
     /// The underlying range configuration
-    pub range: RangeConfig<F>,
+    pub base: BaseConfig<F>,
     /// The public instance column
     pub instance: Column<Instance>,
 }
@@ -762,7 +712,7 @@ impl<F: ScalarField> RangeWithInstanceCircuitBuilder<F> {
 }
 
 impl<F: ScalarField> Circuit<F> for RangeWithInstanceCircuitBuilder<F> {
-    type Config = RangeWithInstanceConfig<F>;
+    type Config = PublicBaseConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -770,10 +720,10 @@ impl<F: ScalarField> Circuit<F> for RangeWithInstanceCircuitBuilder<F> {
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        let range = RangeCircuitBuilder::configure(meta);
+        let base = RangeCircuitBuilder::configure(meta);
         let instance = meta.instance_column();
         meta.enable_equality(instance);
-        RangeWithInstanceConfig { range, instance }
+        PublicBaseConfig { base, instance }
     }
 
     fn synthesize(
@@ -782,20 +732,19 @@ impl<F: ScalarField> Circuit<F> for RangeWithInstanceCircuitBuilder<F> {
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         // copied from RangeCircuitBuilder::synthesize but with extra logic to expose public instances
-        let range = config.range;
+        let instance_col = config.instance;
+        let config = config.base;
         let circuit = &self.circuit.0;
         // only load lookup table if we are actually doing lookups
-        if range.lookup_advice.iter().map(|a| a.len()).sum::<usize>() != 0
-            || !range.q_lookup.iter().all(|q| q.is_none())
-        {
-            range.load_lookup_table(&mut layouter).expect("load lookup table should not fail");
+        if let BaseConfig::WithRange(config) = &config {
+            config.load_lookup_table(&mut layouter).expect("load lookup table should not fail");
         }
         // we later `take` the builder, so we need to save this value
         let witness_gen_only = circuit.builder.borrow().witness_gen_only();
         let assigned_advices = circuit.sub_synthesize(
-            &range.gate,
-            &range.lookup_advice,
-            &range.q_lookup,
+            config.gate(),
+            config.lookup_advice(),
+            config.q_lookup(),
             &mut layouter,
         );
 
@@ -807,7 +756,7 @@ impl<F: ScalarField> Circuit<F> for RangeWithInstanceCircuitBuilder<F> {
                 let (cell, _) = assigned_advices
                     .get(&(cell.context_id, cell.offset))
                     .expect("instance not assigned");
-                layouter.constrain_instance(*cell, config.instance, i);
+                layouter.constrain_instance(*cell, instance_col, i);
             }
         }
         Ok(())
