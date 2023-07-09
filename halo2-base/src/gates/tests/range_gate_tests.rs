@@ -1,6 +1,5 @@
-use std::env::set_var;
-
 use super::*;
+use crate::gates::builder::set_lookup_bits;
 use crate::halo2_proofs::dev::MockProver;
 use crate::utils::{biguint_to_fe, ScalarField};
 use crate::QuantumCell::Witness;
@@ -18,7 +17,7 @@ use test_case::test_case;
 #[test_case(16, 10, Fr::zero(), 0; "range_check() 0 bits")]
 #[test_case(16, 10, Fr::from(100), 8; "range_check() pos")]
 pub fn test_range_check<F: ScalarField>(k: usize, lookup_bits: usize, a_val: F, range_bits: usize) {
-    set_var("LOOKUP_BITS", lookup_bits.to_string());
+    set_lookup_bits(lookup_bits);
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = RangeChip::default(lookup_bits);
@@ -39,7 +38,7 @@ pub fn test_check_less_than<F: ScalarField>(
     b: QuantumCell<F>,
     num_bits: usize,
 ) {
-    set_var("LOOKUP_BITS", lookup_bits.to_string());
+    set_lookup_bits(lookup_bits);
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = RangeChip::default(lookup_bits);
@@ -53,7 +52,7 @@ pub fn test_check_less_than<F: ScalarField>(
 
 #[test_case(10, 8, Fr::zero(), 1; "check_less_than_safe() pos")]
 pub fn test_check_less_than_safe<F: ScalarField>(k: usize, lookup_bits: usize, a_val: F, b: u64) {
-    set_var("LOOKUP_BITS", lookup_bits.to_string());
+    set_lookup_bits(lookup_bits);
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = RangeChip::default(lookup_bits);
@@ -73,7 +72,7 @@ pub fn test_check_big_less_than_safe<F: ScalarField + BigPrimeField>(
     a_val: F,
     b: u64,
 ) {
-    set_var("LOOKUP_BITS", lookup_bits.to_string());
+    set_lookup_bits(lookup_bits);
     let mut builder = GateThreadBuilder::mock();
     let ctx = builder.main(0);
     let chip = RangeChip::default(lookup_bits);

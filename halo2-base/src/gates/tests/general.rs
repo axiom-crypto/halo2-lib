@@ -1,5 +1,5 @@
 use crate::gates::{
-    builder::{GateCircuitBuilder, GateThreadBuilder, RangeCircuitBuilder},
+    builder::{set_lookup_bits, GateCircuitBuilder, GateThreadBuilder, RangeCircuitBuilder},
     flex_gate::{GateChip, GateInstructions},
     range::{RangeChip, RangeInstructions},
 };
@@ -105,7 +105,7 @@ fn range_tests<F: BigPrimeField>(
 ) {
     let [a, b]: [_; 2] = ctx.assign_witnesses(inputs).try_into().unwrap();
     let chip = RangeChip::default(lookup_bits);
-    std::env::set_var("LOOKUP_BITS", lookup_bits.to_string());
+    set_lookup_bits(lookup_bits);
 
     chip.range_check(ctx, a, range_bits);
 

@@ -1,15 +1,16 @@
-use std::env::set_var;
-
 use ff::Field;
 use itertools::Itertools;
 use num_bigint::BigUint;
 use proptest::{collection::vec, prelude::*};
 use rand::rngs::OsRng;
 
-use crate::halo2_proofs::{
-    dev::MockProver,
-    halo2curves::{bn256::Fr, FieldExt},
-    plonk::Assigned,
+use crate::{
+    gates::builder::set_lookup_bits,
+    halo2_proofs::{
+        dev::MockProver,
+        halo2curves::{bn256::Fr, FieldExt},
+        plonk::Assigned,
+    },
 };
 use crate::{
     gates::{
@@ -316,7 +317,7 @@ fn neg_test_range_check(k: usize, range_bits: usize, lookup_bits: usize, rand_a:
     gate.range_check(builder.main(0), a_witness, range_bits);
 
     builder.config(k, Some(9));
-    set_var("LOOKUP_BITS", lookup_bits.to_string());
+    set_lookup_bits(lookup_bits);
     let circuit = RangeCircuitBuilder::mock(builder); // no break points
                                                       // Check soundness of witness values
     let correct = fe_to_biguint(&rand_a).bits() <= range_bits as u64;
@@ -343,7 +344,7 @@ fn neg_test_is_less_than_safe(
     ctx.advice[out_idx] = Assigned::Trivial(Fr::from(prank_out));
 
     builder.config(k, Some(9));
-    set_var("LOOKUP_BITS", lookup_bits.to_string());
+    set_lookup_bits(lookup_bits);
     let circuit = RangeCircuitBuilder::mock(builder); // no break points
                                                       // Check soundness of witness values
                                                       // println!("rand_a: {rand_a:?}, b: {b:?}");

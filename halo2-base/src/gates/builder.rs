@@ -14,7 +14,6 @@ use serde::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    env::{set_var, var},
 };
 
 mod parallelize;
@@ -24,6 +23,16 @@ pub use parallelize::*;
 pub type ThreadBreakPoints = Vec<usize>;
 /// Vector of vectors tracking the thread break points across different halo2 phases
 pub type MultiPhaseThreadBreakPoints = Vec<ThreadBreakPoints>;
+
+thread_local! {
+    /// This is used as a thread-safe way to auto-configure a circuit's shape and then pass the configuration to `Circuit::configure`.
+    pub static BASE_CONFIG_PARAMS: RefCell<BaseConfigParams> = RefCell::new(Default::default());
+}
+
+/// Sets the thread-local number of bits to be range checkable via a lookup table with entries [0, 2<sup>lookup_bits</sup>)
+pub fn set_lookup_bits(lookup_bits: usize) {
+    BASE_CONFIG_PARAMS.with(|conf| conf.borrow_mut().lookup_bits = Some(lookup_bits));
+}
 
 /// Stores the cell values loaded during the Keygen phase of a halo2 proof and breakpoints for multi-threading
 #[derive(Clone, Debug, Default)]
@@ -134,7 +143,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
     ///
     /// * `k`: The number of in the circuit (i.e. numeber of rows = 2<sup>k</sup>)
     /// * `minimum_rows`: The minimum number of rows in the circuit that cannot be used for witness assignments and contain random `blinding factors` to ensure zk property, defaults to 0.
-    pub fn config(&self, k: usize, minimum_rows: Option<usize>) -> FlexGateConfigParams {
+    pub fn config(&self, k: usize, minimum_rows: Option<usize>) -> BaseConfigParams {
         let max_rows = (1 << k) - minimum_rows.unwrap_or(0);
         let total_advice_per_phase = self
             .threads
@@ -164,13 +173,18 @@ impl<F: ScalarField> GateThreadBuilder<F> {
         .len();
         let num_fixed = (total_fixed + (1 << k) - 1) >> k;
 
-        let params = FlexGateConfigParams {
+        let mut params = BaseConfigParams {
             strategy: GateStrategy::Vertical,
             num_advice_per_phase,
             num_lookup_advice_per_phase,
             num_fixed,
             k,
+            lookup_bits: None,
         };
+        BASE_CONFIG_PARAMS.with(|conf| {
+            params.lookup_bits = conf.borrow().lookup_bits;
+            *conf.borrow_mut() = params.clone();
+        });
         #[cfg(feature = "display")]
         {
             for phase in 0..MAX_PHASE {
@@ -184,7 +198,6 @@ impl<F: ScalarField> GateThreadBuilder<F> {
             println!("Total {total_fixed} fixed cells");
             log::info!("Auto-calculated config params:\n {params:#?}");
         }
-        set_var("FLEX_GATE_CONFIG_PARAMS", serde_json::to_string(&params).unwrap());
         params
     }
 
@@ -453,9 +466,10 @@ pub fn assign_threads_in<F: ScalarField>(
     }
 }
 
-/// A Config struct defining the parameters for a FlexGate circuit.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct FlexGateConfigParams {
+/// A Config struct defining the parameters for a halo2-base circuit
+/// - this is used to configure either FlexGateConfig or RangeConfig.
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+pub struct BaseConfigParams {
     /// The gate strategy used for the advice column of the circuit and applied at every row.
     pub strategy: GateStrategy,
     /// Security parameter `k` used for the keygen.
@@ -466,6 +480,9 @@ pub struct FlexGateConfigParams {
     pub num_lookup_advice_per_phase: Vec<usize>,
     /// The number of fixed columns per phase
     pub num_fixed: usize,
+    /// The number of bits that can be ranged checked using a special lookup table with values [0, 2<sup>lookup_bits</sup>), if using.
+    /// This is `None` if no lookup table is used.
+    pub lookup_bits: Option<usize>,
 }
 
 /// A wrapper struct to auto-build a circuit from a `GateThreadBuilder`.
@@ -574,13 +591,16 @@ impl<F: ScalarField> Circuit<F> for GateCircuitBuilder<F> {
 
     /// Configures a new circuit using the the parameters specified [Config].
     fn configure(meta: &mut ConstraintSystem<F>) -> FlexGateConfig<F> {
-        let FlexGateConfigParams {
+        let BaseConfigParams {
             strategy,
             num_advice_per_phase,
             num_lookup_advice_per_phase: _,
             num_fixed,
             k,
-        } = serde_json::from_str(&var("FLEX_GATE_CONFIG_PARAMS").unwrap()).unwrap();
+            lookup_bits: _,
+        } = BASE_CONFIG_PARAMS
+            .try_with(|conf| conf.borrow().clone())
+            .expect("You need to call config() to configure the halo2-base circuit shape first");
         FlexGateConfig::configure(meta, strategy, &num_advice_per_phase, num_fixed, k)
     }
 
@@ -630,24 +650,26 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
 
     /// Configures a new circuit using the the parameters specified [Config] and environment variable `LOOKUP_BITS`.
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        let FlexGateConfigParams {
+        let BaseConfigParams {
             strategy,
             num_advice_per_phase,
             num_lookup_advice_per_phase,
             num_fixed,
             k,
-        } = serde_json::from_str(&var("FLEX_GATE_CONFIG_PARAMS").unwrap()).unwrap();
+            lookup_bits,
+        } = BASE_CONFIG_PARAMS
+            .try_with(|config| config.borrow().clone())
+            .expect("You need to call config() to configure the halo2-base circuit shape first");
         let strategy = match strategy {
             GateStrategy::Vertical => RangeStrategy::Vertical,
         };
-        let lookup_bits = var("LOOKUP_BITS").unwrap_or_else(|_| "0".to_string()).parse().unwrap();
         RangeConfig::configure(
             meta,
             strategy,
             &num_advice_per_phase,
             &num_lookup_advice_per_phase,
             num_fixed,
-            lookup_bits,
+            lookup_bits.unwrap_or(0),
             k,
         )
     }
@@ -719,7 +741,7 @@ impl<F: ScalarField> RangeWithInstanceCircuitBuilder<F> {
     }
 
     /// Calls [`GateThreadBuilder::config`]
-    pub fn config(&self, k: u32, minimum_rows: Option<usize>) -> FlexGateConfigParams {
+    pub fn config(&self, k: u32, minimum_rows: Option<usize>) -> BaseConfigParams {
         self.circuit.0.builder.borrow().config(k as usize, minimum_rows)
     }
 

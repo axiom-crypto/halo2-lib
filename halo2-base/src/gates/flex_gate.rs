@@ -20,7 +20,7 @@ use std::{
 pub const MAX_PHASE: usize = 3;
 
 /// Specifies the gate strategy for the gate chip
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub enum GateStrategy {
     /// # Vertical Gate Strategy:
     /// `q_0 * (a + b * c - d) = 0`
@@ -29,6 +29,7 @@ pub enum GateStrategy {
     /// * q = q_enable[0]
     /// * q is either 0 or 1 so this is just a simple selector
     /// We chose `a + b * c` instead of `a * b + c` to allow "chaining" of gates, i.e., the output of one gate because `a` in the next gate.
+    #[default]
     Vertical,
 }
 
