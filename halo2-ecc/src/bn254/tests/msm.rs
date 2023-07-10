@@ -3,7 +3,7 @@ use ff::{Field, PrimeField};
 use halo2_base::{
     gates::{
         builder::{
-            CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
+            set_lookup_bits, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
             RangeCircuitBuilder,
         },
         RangeChip,
@@ -39,7 +39,7 @@ fn msm_test(
     scalars: Vec<Fr>,
     window_bits: usize,
 ) {
-    std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
+    set_lookup_bits(params.lookup_bits);
     let range = RangeChip::<Fr>::default(params.lookup_bits);
     let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
     let ecc_chip = EccChip::new(&fp_chip);

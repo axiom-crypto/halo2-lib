@@ -24,7 +24,8 @@ use crate::{
 };
 use ark_std::{end_timer, start_timer};
 use halo2_base::gates::builder::{
-    CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints, RangeCircuitBuilder,
+    set_lookup_bits, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
+    RangeCircuitBuilder,
 };
 use halo2_base::gates::RangeChip;
 use halo2_base::utils::fs::gen_srs;
@@ -57,7 +58,7 @@ fn ecdsa_test<F: PrimeField>(
     msghash: Fq,
     pk: Secp256k1Affine,
 ) {
-    std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
+    set_lookup_bits(params.lookup_bits);
     let range = RangeChip::<F>::default(params.lookup_bits);
     let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
     let fq_chip = FqChip::<F>::new(&range, params.limb_bits, params.num_limbs);

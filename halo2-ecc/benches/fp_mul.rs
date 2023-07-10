@@ -2,7 +2,7 @@ use ark_std::{end_timer, start_timer};
 use halo2_base::{
     gates::{
         builder::{
-            CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
+            set_lookup_bits, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
             RangeCircuitBuilder,
         },
         RangeChip,
@@ -40,7 +40,7 @@ fn fp_mul_bench<F: PrimeField>(
     _a: Fq,
     _b: Fq,
 ) {
-    std::env::set_var("LOOKUP_BITS", lookup_bits.to_string());
+    set_lookup_bits(lookup_bits);
     let range = RangeChip::<F>::default(lookup_bits);
     let chip = FpChip::<F, Fq>::new(&range, limb_bits, num_limbs);
 

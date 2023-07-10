@@ -6,7 +6,7 @@ use super::*;
 use crate::fields::{FieldChip, FpStrategy};
 use crate::halo2_proofs::halo2curves::bn256::G2Affine;
 use group::cofactor::CofactorCurveAffine;
-use halo2_base::gates::builder::{GateThreadBuilder, RangeCircuitBuilder};
+use halo2_base::gates::builder::{set_lookup_bits, GateThreadBuilder, RangeCircuitBuilder};
 use halo2_base::gates::RangeChip;
 use halo2_base::utils::fs::gen_srs;
 use halo2_base::Context;
@@ -27,7 +27,7 @@ struct CircuitParams {
 }
 
 fn g2_add_test<F: PrimeField>(ctx: &mut Context<F>, params: CircuitParams, _points: Vec<G2Affine>) {
-    std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
+    set_lookup_bits(params.lookup_bits);
     let range = RangeChip::<F>::default(params.lookup_bits);
     let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
     let fp2_chip = Fp2Chip::<F>::new(&fp_chip);

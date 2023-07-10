@@ -9,7 +9,7 @@ use crate::{fields::FpStrategy, halo2_proofs::halo2curves::bn256::G2Affine};
 use halo2_base::{
     gates::{
         builder::{
-            CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
+            set_lookup_bits, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
             RangeCircuitBuilder,
         },
         RangeChip,
@@ -38,7 +38,7 @@ fn pairing_test<F: PrimeField>(
     P: G1Affine,
     Q: G2Affine,
 ) {
-    std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
+    set_lookup_bits(params.lookup_bits);
     let range = RangeChip::<F>::default(params.lookup_bits);
     let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
     let chip = PairingChip::new(&fp_chip);

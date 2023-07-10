@@ -1,5 +1,3 @@
-use std::env::set_var;
-
 use crate::fields::fp::FpChip;
 use crate::fields::{FieldChip, PrimeField};
 use crate::halo2_proofs::{
@@ -7,7 +5,7 @@ use crate::halo2_proofs::{
     halo2curves::bn256::{Fq, Fr},
 };
 
-use halo2_base::gates::builder::{GateThreadBuilder, RangeCircuitBuilder};
+use halo2_base::gates::builder::{set_lookup_bits, GateThreadBuilder, RangeCircuitBuilder};
 use halo2_base::gates::RangeChip;
 use halo2_base::utils::biguint_to_fe;
 use halo2_base::utils::{fe_to_biguint, modulus};
@@ -25,7 +23,7 @@ fn fp_chip_test(
     num_limbs: usize,
     f: impl Fn(&mut Context<Fr>, &FpChip<Fr, Fq>),
 ) {
-    set_var("LOOKUP_BITS", lookup_bits.to_string());
+    set_lookup_bits(lookup_bits);
     let range = RangeChip::<Fr>::default(lookup_bits);
     let chip = FpChip::<Fr, Fq>::new(&range, limb_bits, num_limbs);
 

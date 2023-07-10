@@ -613,7 +613,7 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
         unimplemented!()
     }
 
-    /// Configures a new circuit using the the parameters specified [Config] and environment variable `LOOKUP_BITS`.
+    /// Configures a new circuit using [`BaseConfigParams`]
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         let params = BASE_CONFIG_PARAMS
             .try_with(|config| config.borrow().clone())
