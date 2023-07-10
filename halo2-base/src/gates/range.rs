@@ -76,7 +76,7 @@ impl<F: ScalarField> BaseConfig<F> {
     }
 
     /// Returns the inner [`FlexGateConfig`]
-    pub(crate) fn gate(&self) -> &FlexGateConfig<F> {
+    pub fn gate(&self) -> &FlexGateConfig<F> {
         match self {
             Self::WithoutRange(config) => config,
             Self::WithRange(config) => &config.gate,
@@ -85,7 +85,7 @@ impl<F: ScalarField> BaseConfig<F> {
 
     /// Returns a slice of the special advice columns with lookup enabled, per phase.
     /// Returns empty slice if there are no lookups enabled.
-    pub(crate) fn lookup_advice(&self) -> &[Vec<Column<Advice>>] {
+    pub fn lookup_advice(&self) -> &[Vec<Column<Advice>>] {
         match self {
             Self::WithoutRange(_) => &[],
             Self::WithRange(config) => &config.lookup_advice,
@@ -94,7 +94,7 @@ impl<F: ScalarField> BaseConfig<F> {
 
     /// Returns a slice of the selector column to enable lookup -- this is only in the situation where there is a single advice column of any kind -- per phase
     /// Returns empty slice if there are no lookups enabled.
-    pub(crate) fn q_lookup(&self) -> &[Option<Selector>] {
+    pub fn q_lookup(&self) -> &[Option<Selector>] {
         match self {
             Self::WithoutRange(_) => &[],
             Self::WithRange(config) => &config.q_lookup,
