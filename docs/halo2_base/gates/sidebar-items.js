@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["builder",""],["flex_gate",""],["range",""]]};
+window.SIDEBAR_ITEMS = {"mod":[["builder","Module that helps auto-build circuits"],["flex_gate","Module implementing our simple custom gate and common functions using it"],["range","Module using a single lookup table for range checks"]]};

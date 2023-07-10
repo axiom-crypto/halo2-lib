@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["crt",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["crt","Assumptions"]]};

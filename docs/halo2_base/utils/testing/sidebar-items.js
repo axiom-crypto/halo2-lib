@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["check_proof","helper function to verify a proof"],["gen_proof","helper function to generate a proof with real prover"]]};

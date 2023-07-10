@@ -100,105 +100,109 @@
 <span id="100">100</span>
 <span id="101">101</span>
 <span id="102">102</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::bigint::{big_less_than, CRTInteger};
-<span class="kw">use </span><span class="kw">crate</span>::fields::{fp::FpChip, FieldChip, PrimeField};
-<span class="kw">use </span>halo2_base::{
-    gates::{GateInstructions, RangeInstructions},
-    utils::CurveAffineExt,
-    AssignedValue, Context,
-};
+<span id="103">103</span>
+<span id="104">104</span>
+</pre><pre class="rust"><code><span class="kw">use </span>halo2_base::{gates::GateInstructions, utils::CurveAffineExt, AssignedValue, Context};
 
-<span class="kw">use </span><span class="kw">super</span>::fixed_base;
-<span class="kw">use super</span>::{ec_add_unequal, scalar_multiply, EcPoint};
+<span class="kw">use </span><span class="kw">crate</span>::bigint::{big_is_equal, big_less_than, FixedOverflowInteger, ProperCrtUint};
+<span class="kw">use </span><span class="kw">crate</span>::fields::{fp::FpChip, FieldChip, PrimeField};
+
+<span class="kw">use super</span>::{fixed_base, scalar_multiply, EcPoint, EccChip};
 <span class="comment">// CF is the coordinate field of GA
 // SF is the scalar field of GA
 // p = coordinate field modulus
 // n = scalar field modulus
 // Only valid when p is very close to n in size (e.g. for Secp256k1)
+// Assumes `r, s` are proper CRT integers
+</span><span class="doccomment">/// **WARNING**: Only use this function if `1 / (p - n)` is very small (e.g., &lt; 2&lt;sup&gt;-100&lt;/sup&gt;)
+/// `pubkey` should not be the identity point
 </span><span class="kw">pub fn </span>ecdsa_verify_no_pubkey_check&lt;F: PrimeField, CF: PrimeField, SF: PrimeField, GA&gt;(
-    base_chip: <span class="kw-2">&amp;</span>FpChip&lt;F, CF&gt;,
+    chip: <span class="kw-2">&amp;</span>EccChip&lt;F, FpChip&lt;F, CF&gt;&gt;,
     ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-    pubkey: <span class="kw-2">&amp;</span>EcPoint&lt;F, &lt;FpChip&lt;F, CF&gt; <span class="kw">as </span>FieldChip&lt;F&gt;&gt;::FieldPoint&gt;,
-    r: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
-    s: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
-    msghash: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
+    pubkey: EcPoint&lt;F, &lt;FpChip&lt;F, CF&gt; <span class="kw">as </span>FieldChip&lt;F&gt;&gt;::FieldPoint&gt;,
+    r: ProperCrtUint&lt;F&gt;,
+    s: ProperCrtUint&lt;F&gt;,
+    msghash: ProperCrtUint&lt;F&gt;,
     var_window_bits: usize,
     fixed_window_bits: usize,
 ) -&gt; AssignedValue&lt;F&gt;
 <span class="kw">where
     </span>GA: CurveAffineExt&lt;Base = CF, ScalarExt = SF&gt;,
 {
+    <span class="comment">// Following https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm
+    </span><span class="kw">let </span>base_chip = chip.field_chip;
     <span class="kw">let </span>scalar_chip =
         FpChip::&lt;F, SF&gt;::new(base_chip.range, base_chip.limb_bits, base_chip.num_limbs);
-    <span class="kw">let </span>n = scalar_chip.load_constant(ctx, scalar_chip.p.to_biguint().unwrap());
+    <span class="kw">let </span>n = scalar_chip.p.to_biguint().unwrap();
+    <span class="kw">let </span>n = FixedOverflowInteger::from_native(<span class="kw-2">&amp;</span>n, scalar_chip.num_limbs, scalar_chip.limb_bits);
+    <span class="kw">let </span>n = n.assign(ctx);
 
     <span class="comment">// check r,s are in [1, n - 1]
-    </span><span class="kw">let </span>r_valid = scalar_chip.is_soft_nonzero(ctx, r);
-    <span class="kw">let </span>s_valid = scalar_chip.is_soft_nonzero(ctx, s);
+    </span><span class="kw">let </span>r_valid = scalar_chip.is_soft_nonzero(ctx, <span class="kw-2">&amp;</span>r);
+    <span class="kw">let </span>s_valid = scalar_chip.is_soft_nonzero(ctx, <span class="kw-2">&amp;</span>s);
 
     <span class="comment">// compute u1 = m s^{-1} mod n and u2 = r s^{-1} mod n
-    </span><span class="kw">let </span>u1 = scalar_chip.divide(ctx, msghash, s);
-    <span class="kw">let </span>u2 = scalar_chip.divide(ctx, r, s);
+    </span><span class="kw">let </span>u1 = scalar_chip.divide_unsafe(ctx, msghash, <span class="kw-2">&amp;</span>s);
+    <span class="kw">let </span>u2 = scalar_chip.divide_unsafe(ctx, <span class="kw-2">&amp;</span>r, s);
 
-    <span class="comment">//let r_crt = scalar_chip.to_crt(ctx, r)?;
-
-    // compute u1 * G and u2 * pubkey
-    </span><span class="kw">let </span>u1_mul = fixed_base::scalar_multiply::&lt;F, <span class="kw">_</span>, <span class="kw">_</span>&gt;(
+    <span class="comment">// compute u1 * G and u2 * pubkey
+    </span><span class="kw">let </span>u1_mul = fixed_base::scalar_multiply(
         base_chip,
         ctx,
         <span class="kw-2">&amp;</span>GA::generator(),
-        u1.truncation.limbs.clone(),
+        u1.limbs().to_vec(),
         base_chip.limb_bits,
         fixed_window_bits,
     );
-    <span class="kw">let </span>u2_mul = scalar_multiply::&lt;F, <span class="kw">_</span>&gt;(
+    <span class="kw">let </span>u2_mul = scalar_multiply::&lt;<span class="kw">_</span>, <span class="kw">_</span>, GA&gt;(
         base_chip,
         ctx,
         pubkey,
-        u2.truncation.limbs.clone(),
+        u2.limbs().to_vec(),
         base_chip.limb_bits,
         var_window_bits,
     );
 
-    <span class="comment">// check u1 * G and u2 * pubkey are not negatives and not equal
-    //     TODO: Technically they could be equal for a valid signature, but this happens with vanishing probability
-    //           for an ECDSA signature constructed in a standard way
+    <span class="comment">// check u1 * G != -(u2 * pubkey) but allow u1 * G == u2 * pubkey
+    // check (u1 * G).x != (u2 * pubkey).x or (u1 * G).y == (u2 * pubkey).y
     // coordinates of u1_mul and u2_mul are in proper bigint form, and lie in but are not constrained to [0, n)
     // we therefore need hard inequality here
-    </span><span class="kw">let </span>u1_u2_x_eq = base_chip.is_equal(ctx, <span class="kw-2">&amp;</span>u1_mul.x, <span class="kw-2">&amp;</span>u2_mul.x);
-    <span class="kw">let </span>u1_u2_not_neg = base_chip.range.gate().not(ctx, u1_u2_x_eq);
+    </span><span class="kw">let </span>x_eq = base_chip.is_equal(ctx, <span class="kw-2">&amp;</span>u1_mul.x, <span class="kw-2">&amp;</span>u2_mul.x);
+    <span class="kw">let </span>x_neq = base_chip.gate().not(ctx, x_eq);
+    <span class="kw">let </span>y_eq = base_chip.is_equal(ctx, <span class="kw-2">&amp;</span>u1_mul.y, <span class="kw-2">&amp;</span>u2_mul.y);
+    <span class="kw">let </span>u1g_u2pk_not_neg = base_chip.gate().or(ctx, x_neq, y_eq);
 
     <span class="comment">// compute (x1, y1) = u1 * G + u2 * pubkey and check (r mod n) == x1 as integers
-    // WARNING: For optimization reasons, does not reduce x1 mod n, which is
+    // because it is possible for u1 * G == u2 * pubkey, we must use `EccChip::sum`
+    </span><span class="kw">let </span>sum = chip.sum::&lt;GA&gt;(ctx, [u1_mul, u2_mul]);
+    <span class="comment">// WARNING: For optimization reasons, does not reduce x1 mod n, which is
     //          invalid unless p is very close to n in size.
-    </span>base_chip.enforce_less_than_p(ctx, u1_mul.x());
-    base_chip.enforce_less_than_p(ctx, u2_mul.x());
-    <span class="kw">let </span>sum = ec_add_unequal(base_chip, ctx, <span class="kw-2">&amp;</span>u1_mul, <span class="kw-2">&amp;</span>u2_mul, <span class="bool-val">false</span>);
-    <span class="kw">let </span>equal_check = base_chip.is_equal(ctx, <span class="kw-2">&amp;</span>sum.x, r);
+    // enforce x1 &lt; n
+    </span><span class="kw">let </span>x1 = scalar_chip.enforce_less_than(ctx, sum.x);
+    <span class="kw">let </span>equal_check = big_is_equal::assign(base_chip.gate(), ctx, x1.<span class="number">0</span>, r);
 
-    <span class="comment">// TODO: maybe the big_less_than is optional?
-    </span><span class="kw">let </span>u1_small = big_less_than::assign::&lt;F&gt;(
+    <span class="kw">let </span>u1_small = big_less_than::assign(
         base_chip.range(),
         ctx,
-        <span class="kw-2">&amp;</span>u1.truncation,
-        <span class="kw-2">&amp;</span>n.truncation,
+        u1,
+        n.clone(),
         base_chip.limb_bits,
         base_chip.limb_bases[<span class="number">1</span>],
     );
-    <span class="kw">let </span>u2_small = big_less_than::assign::&lt;F&gt;(
+    <span class="kw">let </span>u2_small = big_less_than::assign(
         base_chip.range(),
         ctx,
-        <span class="kw-2">&amp;</span>u2.truncation,
-        <span class="kw-2">&amp;</span>n.truncation,
+        u2,
+        n,
         base_chip.limb_bits,
         base_chip.limb_bases[<span class="number">1</span>],
     );
 
-    <span class="comment">// check (r in [1, n - 1]) and (s in [1, n - 1]) and (u1_mul != - u2_mul) and (r == x1 mod n)
+    <span class="comment">// check (r in [1, n - 1]) and (s in [1, n - 1]) and (u1 * G != - u2 * pubkey) and (r == x1 mod n)
     </span><span class="kw">let </span>res1 = base_chip.gate().and(ctx, r_valid, s_valid);
     <span class="kw">let </span>res2 = base_chip.gate().and(ctx, res1, u1_small);
     <span class="kw">let </span>res3 = base_chip.gate().and(ctx, res2, u2_small);
-    <span class="kw">let </span>res4 = base_chip.gate().and(ctx, res3, u1_u2_not_neg);
+    <span class="kw">let </span>res4 = base_chip.gate().and(ctx, res3, u1g_u2pk_not_neg);
     <span class="kw">let </span>res5 = base_chip.gate().and(ctx, res4, equal_check);
     res5
 }

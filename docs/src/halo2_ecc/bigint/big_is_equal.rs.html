@@ -27,66 +27,34 @@
 <span id="27">27</span>
 <span id="28">28</span>
 <span id="29">29</span>
-<span id="30">30</span>
-<span id="31">31</span>
-<span id="32">32</span>
-<span id="33">33</span>
-<span id="34">34</span>
-<span id="35">35</span>
-<span id="36">36</span>
-<span id="37">37</span>
-<span id="38">38</span>
-<span id="39">39</span>
-<span id="40">40</span>
-<span id="41">41</span>
-<span id="42">42</span>
-<span id="43">43</span>
-<span id="44">44</span>
-<span id="45">45</span>
-</pre><pre class="rust"><code><span class="kw">use super</span>::{CRTInteger, OverflowInteger};
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::ProperUint;
 <span class="kw">use </span>halo2_base::{gates::GateInstructions, utils::ScalarField, AssignedValue, Context};
+<span class="kw">use </span>itertools::Itertools;
 
-<span class="doccomment">/// Given OverflowInteger&lt;F&gt;&#39;s `a` and `b` of the same shape,
+<span class="doccomment">/// Given [`ProperUint`]s `a` and `b` with the same number of limbs,
 /// returns whether `a == b`.
+///
+/// # Assumptions:
+/// * `a, b` have the same number of limbs.
+/// * The number of limbs is nonzero.
 </span><span class="kw">pub fn </span>assign&lt;F: ScalarField&gt;(
     gate: <span class="kw-2">&amp;</span><span class="kw">impl </span>GateInstructions&lt;F&gt;,
     ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-    a: <span class="kw-2">&amp;</span>OverflowInteger&lt;F&gt;,
-    b: <span class="kw-2">&amp;</span>OverflowInteger&lt;F&gt;,
+    a: <span class="kw">impl </span>Into&lt;ProperUint&lt;F&gt;&gt;,
+    b: <span class="kw">impl </span>Into&lt;ProperUint&lt;F&gt;&gt;,
 ) -&gt; AssignedValue&lt;F&gt; {
-    <span class="kw">let </span>k = a.limbs.len();
-    <span class="macro">debug_assert_eq!</span>(k, b.limbs.len());
-    <span class="macro">debug_assert_ne!</span>(k, <span class="number">0</span>);
+    <span class="kw">let </span>a = a.into();
+    <span class="kw">let </span>b = b.into();
+    <span class="macro">debug_assert!</span>(!a.<span class="number">0</span>.is_empty());
 
-    <span class="kw">let </span><span class="kw-2">mut </span>a_limbs = a.limbs.iter();
-    <span class="kw">let </span><span class="kw-2">mut </span>b_limbs = b.limbs.iter();
-    <span class="kw">let </span><span class="kw-2">mut </span>partial = gate.is_equal(ctx, <span class="kw-2">*</span>a_limbs.next().unwrap(), <span class="kw-2">*</span>b_limbs.next().unwrap());
-    <span class="kw">for </span>(<span class="kw-2">&amp;</span>a_limb, <span class="kw-2">&amp;</span>b_limb) <span class="kw">in </span>a_limbs.zip(b_limbs) {
+    <span class="kw">let </span><span class="kw-2">mut </span>a_limbs = a.<span class="number">0</span>.into_iter();
+    <span class="kw">let </span><span class="kw-2">mut </span>b_limbs = b.<span class="number">0</span>.into_iter();
+    <span class="kw">let </span><span class="kw-2">mut </span>partial = gate.is_equal(ctx, a_limbs.next().unwrap(), b_limbs.next().unwrap());
+    <span class="kw">for </span>(a_limb, b_limb) <span class="kw">in </span>a_limbs.zip_eq(b_limbs) {
         <span class="kw">let </span>eq_limb = gate.is_equal(ctx, a_limb, b_limb);
         partial = gate.and(ctx, eq_limb, partial);
     }
     partial
-}
-
-<span class="kw">pub fn </span>wrapper&lt;F: ScalarField&gt;(
-    gate: <span class="kw-2">&amp;</span><span class="kw">impl </span>GateInstructions&lt;F&gt;,
-    ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-    a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
-    b: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
-) -&gt; AssignedValue&lt;F&gt; {
-    assign(gate, ctx, <span class="kw-2">&amp;</span>a.truncation, <span class="kw-2">&amp;</span>b.truncation)
-}
-
-<span class="kw">pub fn </span>crt&lt;F: ScalarField&gt;(
-    gate: <span class="kw-2">&amp;</span><span class="kw">impl </span>GateInstructions&lt;F&gt;,
-    ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-    a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
-    b: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
-) -&gt; AssignedValue&lt;F&gt; {
-    <span class="macro">debug_assert_eq!</span>(a.value, b.value);
-    <span class="kw">let </span>out_trunc = assign::&lt;F&gt;(gate, ctx, <span class="kw-2">&amp;</span>a.truncation, <span class="kw-2">&amp;</span>b.truncation);
-    <span class="kw">let </span>out_native = gate.is_equal(ctx, a.native, b.native);
-    gate.and(ctx, out_trunc, out_native)
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="halo2_ecc" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (0da281b60 2022-10-27)" ></div></body></html>

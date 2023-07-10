@@ -396,15 +396,91 @@
 <span id="396">396</span>
 <span id="397">397</span>
 <span id="398">398</span>
+<span id="399">399</span>
+<span id="400">400</span>
+<span id="401">401</span>
+<span id="402">402</span>
+<span id="403">403</span>
+<span id="404">404</span>
+<span id="405">405</span>
+<span id="406">406</span>
+<span id="407">407</span>
+<span id="408">408</span>
+<span id="409">409</span>
+<span id="410">410</span>
+<span id="411">411</span>
+<span id="412">412</span>
+<span id="413">413</span>
+<span id="414">414</span>
+<span id="415">415</span>
+<span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
+<span id="419">419</span>
+<span id="420">420</span>
+<span id="421">421</span>
+<span id="422">422</span>
+<span id="423">423</span>
+<span id="424">424</span>
+<span id="425">425</span>
+<span id="426">426</span>
+<span id="427">427</span>
+<span id="428">428</span>
+<span id="429">429</span>
+<span id="430">430</span>
+<span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
+<span id="451">451</span>
+<span id="452">452</span>
+<span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
+<span id="468">468</span>
+<span id="469">469</span>
+<span id="470">470</span>
+<span id="471">471</span>
+<span id="472">472</span>
+<span id="473">473</span>
+<span id="474">474</span>
 </pre><pre class="rust"><code><span class="kw">use super</span>::{FieldChip, PrimeField, PrimeFieldChip, Selectable};
 <span class="kw">use </span><span class="kw">crate</span>::bigint::{
     add_no_carry, big_is_equal, big_is_zero, carry_mod, check_carry_mod_to_zero, mul_no_carry,
     scalar_mul_and_add_no_carry, scalar_mul_no_carry, select, select_by_indicator, sub,
-    sub_no_carry, CRTInteger, FixedCRTInteger, OverflowInteger,
+    sub_no_carry, CRTInteger, FixedCRTInteger, OverflowInteger, ProperCrtUint, ProperUint,
 };
 <span class="kw">use </span><span class="kw">crate</span>::halo2_proofs::halo2curves::CurveAffine;
 <span class="kw">use </span>halo2_base::gates::RangeChip;
-<span class="kw">use </span>halo2_base::utils::decompose_bigint;
+<span class="kw">use </span>halo2_base::utils::ScalarField;
 <span class="kw">use </span>halo2_base::{
     gates::{range::RangeConfig, GateInstructions, RangeInstructions},
     utils::{bigint_to_fe, biguint_to_fe, bit_length, decompose_biguint, fe_to_biguint, modulus},
@@ -413,12 +489,35 @@
 };
 <span class="kw">use </span>num_bigint::{BigInt, BigUint};
 <span class="kw">use </span>num_traits::One;
+<span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::{cmp::max, marker::PhantomData};
 
 <span class="kw">pub type </span>BaseFieldChip&lt;<span class="lifetime">&#39;range</span>, C&gt; =
     FpChip&lt;<span class="lifetime">&#39;range</span>, &lt;C <span class="kw">as </span>CurveAffine&gt;::ScalarExt, &lt;C <span class="kw">as </span>CurveAffine&gt;::Base&gt;;
 
 <span class="kw">pub type </span>FpConfig&lt;F&gt; = RangeConfig&lt;F&gt;;
+
+<span class="doccomment">/// Wrapper around `FieldPoint` to guarantee this is a &quot;reduced&quot; representation of an `Fp` field element.
+/// A reduced representation guarantees that there is a *unique* representation of each field element.
+/// Typically this means Uints that are less than the modulus.
+</span><span class="attribute">#[derive(Clone, Debug)]
+</span><span class="kw">pub struct </span>Reduced&lt;FieldPoint, Fp&gt;(<span class="kw">pub</span>(<span class="kw">crate</span>) FieldPoint, PhantomData&lt;Fp&gt;);
+
+<span class="kw">impl</span>&lt;FieldPoint, Fp&gt; Reduced&lt;FieldPoint, Fp&gt; {
+    <span class="kw">pub fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Reduced&lt;<span class="kw-2">&amp;</span>FieldPoint, Fp&gt; {
+        Reduced(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, PhantomData)
+    }
+
+    <span class="kw">pub fn </span>inner(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>FieldPoint {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
+    </span>}
+}
+
+<span class="kw">impl</span>&lt;F: ScalarField, Fp&gt; From&lt;Reduced&lt;ProperCrtUint&lt;F&gt;, Fp&gt;&gt; <span class="kw">for </span>ProperCrtUint&lt;F&gt; {
+    <span class="kw">fn </span>from(x: Reduced&lt;ProperCrtUint&lt;F&gt;, Fp&gt;) -&gt; <span class="self">Self </span>{
+        x.<span class="number">0
+    </span>}
+}
 
 <span class="comment">// `Fp` always needs to be `BigPrimeField`, we may later want support for `F` being just `ScalarField` but for optimization reasons we&#39;ll assume it&#39;s also `BigPrimeField` for now
 
@@ -445,6 +544,9 @@
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;range</span>, F: PrimeField, Fp: PrimeField&gt; FpChip&lt;<span class="lifetime">&#39;range</span>, F, Fp&gt; {
     <span class="kw">pub fn </span>new(range: <span class="kw-2">&amp;</span><span class="lifetime">&#39;range </span>RangeChip&lt;F&gt;, limb_bits: usize, num_limbs: usize) -&gt; <span class="self">Self </span>{
+        <span class="macro">assert!</span>(limb_bits &gt; <span class="number">0</span>);
+        <span class="macro">assert!</span>(num_limbs &gt; <span class="number">0</span>);
+        <span class="macro">assert!</span>(limb_bits &lt;= F::CAPACITY <span class="kw">as </span>usize);
         <span class="kw">let </span>limb_mask = (BigUint::from(<span class="number">1u64</span>) &lt;&lt; limb_bits) - <span class="number">1usize</span>;
         <span class="kw">let </span>p = modulus::&lt;Fp&gt;();
         <span class="kw">let </span>p_limbs = decompose_biguint(<span class="kw-2">&amp;</span>p, num_limbs, limb_bits);
@@ -475,14 +577,14 @@
         }
     }
 
-    <span class="kw">pub fn </span>enforce_less_than_p(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;) {
+    <span class="kw">pub fn </span>enforce_less_than_p(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: ProperCrtUint&lt;F&gt;) {
         <span class="comment">// a &lt; p iff a - p has underflow
         </span><span class="kw">let </span><span class="kw-2">mut </span>borrow: <span class="prelude-ty">Option</span>&lt;AssignedValue&lt;F&gt;&gt; = <span class="prelude-val">None</span>;
-        <span class="kw">for </span>(<span class="kw-2">&amp;</span>p_limb, <span class="kw-2">&amp;</span>a_limb) <span class="kw">in </span><span class="self">self</span>.p_limbs.iter().zip(a.truncation.limbs.iter()) {
+        <span class="kw">for </span>(<span class="kw-2">&amp;</span>p_limb, a_limb) <span class="kw">in </span><span class="self">self</span>.p_limbs.iter().zip(a.<span class="number">0</span>.truncation.limbs) {
             <span class="kw">let </span>lt = <span class="kw">match </span>borrow {
                 <span class="prelude-val">None </span>=&gt; <span class="self">self</span>.range.is_less_than(ctx, a_limb, Constant(p_limb), <span class="self">self</span>.limb_bits),
                 <span class="prelude-val">Some</span>(borrow) =&gt; {
-                    <span class="kw">let </span>plus_borrow = <span class="self">self</span>.range.gate.add(ctx, Constant(p_limb), borrow);
+                    <span class="kw">let </span>plus_borrow = <span class="self">self</span>.gate().add(ctx, Constant(p_limb), borrow);
                     <span class="self">self</span>.range.is_less_than(
                         ctx,
                         Existing(a_limb),
@@ -493,7 +595,15 @@
             };
             borrow = <span class="prelude-val">Some</span>(lt);
         }
-        <span class="self">self</span>.range.gate.assert_is_const(ctx, <span class="kw-2">&amp;</span>borrow.unwrap(), <span class="kw-2">&amp;</span>F::one());
+        <span class="self">self</span>.gate().assert_is_const(ctx, <span class="kw-2">&amp;</span>borrow.unwrap(), <span class="kw-2">&amp;</span>F::one());
+    }
+
+    <span class="kw">pub fn </span>load_constant_uint(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: BigUint) -&gt; ProperCrtUint&lt;F&gt; {
+        FixedCRTInteger::from_native(a, <span class="self">self</span>.num_limbs, <span class="self">self</span>.limb_bits).assign(
+            ctx,
+            <span class="self">self</span>.limb_bits,
+            <span class="self">self</span>.native_modulus(),
+        )
     }
 }
 
@@ -511,9 +621,9 @@
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;range</span>, F: PrimeField, Fp: PrimeField&gt; FieldChip&lt;F&gt; <span class="kw">for </span>FpChip&lt;<span class="lifetime">&#39;range</span>, F, Fp&gt; {
     <span class="kw">const </span>PRIME_FIELD_NUM_BITS: u32 = Fp::NUM_BITS;
-    <span class="kw">type </span>ConstantType = BigUint;
-    <span class="kw">type </span>WitnessType = BigInt;
-    <span class="kw">type </span>FieldPoint = CRTInteger&lt;F&gt;;
+    <span class="kw">type </span>UnsafeFieldPoint = CRTInteger&lt;F&gt;;
+    <span class="kw">type </span>FieldPoint = ProperCrtUint&lt;F&gt;;
+    <span class="kw">type </span>ReducedFieldPoint = Reduced&lt;ProperCrtUint&lt;F&gt;, Fp&gt;;
     <span class="kw">type </span>FieldType = Fp;
     <span class="kw">type </span>RangeChip = RangeChip&lt;F&gt;;
 
@@ -531,136 +641,111 @@
         bigint_to_fe(<span class="kw-2">&amp;</span>(<span class="kw-2">&amp;</span>x.value % <span class="kw-2">&amp;</span><span class="self">self</span>.p))
     }
 
-    <span class="kw">fn </span>fe_to_constant(x: Fp) -&gt; BigUint {
-        fe_to_biguint(<span class="kw-2">&amp;</span>x)
-    }
-
-    <span class="kw">fn </span>fe_to_witness(x: <span class="kw-2">&amp;</span>Fp) -&gt; BigInt {
-        BigInt::from(fe_to_biguint(x))
-    }
-
-    <span class="kw">fn </span>load_private(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: BigInt) -&gt; CRTInteger&lt;F&gt; {
-        <span class="kw">let </span>a_vec = decompose_bigint::&lt;F&gt;(<span class="kw-2">&amp;</span>a, <span class="self">self</span>.num_limbs, <span class="self">self</span>.limb_bits);
+    <span class="kw">fn </span>load_private(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: Fp) -&gt; ProperCrtUint&lt;F&gt; {
+        <span class="kw">let </span>a = fe_to_biguint(<span class="kw-2">&amp;</span>a);
+        <span class="kw">let </span>a_vec = decompose_biguint::&lt;F&gt;(<span class="kw-2">&amp;</span>a, <span class="self">self</span>.num_limbs, <span class="self">self</span>.limb_bits);
         <span class="kw">let </span>limbs = ctx.assign_witnesses(a_vec);
 
-        <span class="kw">let </span>a_native = OverflowInteger::&lt;F&gt;::evaluate(
-            <span class="self">self</span>.range.gate(),
-            ctx,
-            limbs.iter().copied(),
-            <span class="self">self</span>.limb_bases.iter().copied(),
-        );
-
         <span class="kw">let </span>a_loaded =
-            CRTInteger::construct(OverflowInteger::construct(limbs, <span class="self">self</span>.limb_bits), a_native, a);
+            ProperUint(limbs).into_crt(ctx, <span class="self">self</span>.gate(), a, <span class="kw-2">&amp;</span><span class="self">self</span>.limb_bases, <span class="self">self</span>.limb_bits);
 
-        <span class="comment">// TODO: this range check prevents loading witnesses that are not in &quot;proper&quot; representation form, is that ok?
-        </span><span class="self">self</span>.range_check(ctx, <span class="kw-2">&amp;</span>a_loaded, <span class="self">Self</span>::PRIME_FIELD_NUM_BITS <span class="kw">as </span>usize);
+        <span class="self">self</span>.range_check(ctx, a_loaded.clone(), <span class="self">Self</span>::PRIME_FIELD_NUM_BITS <span class="kw">as </span>usize);
         a_loaded
     }
 
-    <span class="kw">fn </span>load_constant(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: BigUint) -&gt; CRTInteger&lt;F&gt; {
-        <span class="kw">let </span>a_native = ctx.load_constant(biguint_to_fe(<span class="kw-2">&amp;</span>(<span class="kw-2">&amp;</span>a % <span class="self">self</span>.native_modulus())));
-        <span class="kw">let </span>a_limbs = decompose_biguint::&lt;F&gt;(<span class="kw-2">&amp;</span>a, <span class="self">self</span>.num_limbs, <span class="self">self</span>.limb_bits)
-            .into_iter()
-            .map(|c| ctx.load_constant(c))
-            .collect();
-
-        CRTInteger::construct(
-            OverflowInteger::construct(a_limbs, <span class="self">self</span>.limb_bits),
-            a_native,
-            BigInt::from(a),
-        )
+    <span class="kw">fn </span>load_constant(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: Fp) -&gt; ProperCrtUint&lt;F&gt; {
+        <span class="self">self</span>.load_constant_uint(ctx, fe_to_biguint(<span class="kw-2">&amp;</span>a))
     }
 
     <span class="comment">// signed overflow BigInt functions
     </span><span class="kw">fn </span>add_no_carry(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
-        b: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
+        a: <span class="kw">impl </span>Into&lt;CRTInteger&lt;F&gt;&gt;,
+        b: <span class="kw">impl </span>Into&lt;CRTInteger&lt;F&gt;&gt;,
     ) -&gt; CRTInteger&lt;F&gt; {
-        add_no_carry::crt::&lt;F&gt;(<span class="self">self</span>.range.gate(), ctx, a, b)
+        add_no_carry::crt(<span class="self">self</span>.gate(), ctx, a.into(), b.into())
     }
 
     <span class="kw">fn </span>add_constant_no_carry(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
-        c: BigUint,
+        a: <span class="kw">impl </span>Into&lt;CRTInteger&lt;F&gt;&gt;,
+        c: Fp,
     ) -&gt; CRTInteger&lt;F&gt; {
-        <span class="kw">let </span>c = FixedCRTInteger::from_native(c, <span class="self">self</span>.num_limbs, <span class="self">self</span>.limb_bits);
+        <span class="kw">let </span>c = FixedCRTInteger::from_native(fe_to_biguint(<span class="kw-2">&amp;</span>c), <span class="self">self</span>.num_limbs, <span class="self">self</span>.limb_bits);
         <span class="kw">let </span>c_native = biguint_to_fe::&lt;F&gt;(<span class="kw-2">&amp;</span>(<span class="kw-2">&amp;</span>c.value % modulus::&lt;F&gt;()));
+        <span class="kw">let </span>a = a.into();
         <span class="kw">let </span><span class="kw-2">mut </span>limbs = Vec::with_capacity(a.truncation.limbs.len());
-        <span class="kw">for </span>(a_limb, c_limb) <span class="kw">in </span>a.truncation.limbs.iter().zip(c.truncation.limbs.into_iter()) {
-            <span class="kw">let </span>limb = <span class="self">self</span>.range.gate.add(ctx, <span class="kw-2">*</span>a_limb, Constant(c_limb));
+        <span class="kw">for </span>(a_limb, c_limb) <span class="kw">in </span>a.truncation.limbs.into_iter().zip(c.truncation.limbs) {
+            <span class="kw">let </span>limb = <span class="self">self</span>.gate().add(ctx, a_limb, Constant(c_limb));
             limbs.push(limb);
         }
-        <span class="kw">let </span>native = <span class="self">self</span>.range.gate.add(ctx, a.native, Constant(c_native));
+        <span class="kw">let </span>native = <span class="self">self</span>.gate().add(ctx, a.native, Constant(c_native));
         <span class="kw">let </span>trunc =
-            OverflowInteger::construct(limbs, max(a.truncation.max_limb_bits, <span class="self">self</span>.limb_bits) + <span class="number">1</span>);
-        <span class="kw">let </span>value = <span class="kw-2">&amp;</span>a.value + BigInt::from(c.value);
+            OverflowInteger::new(limbs, max(a.truncation.max_limb_bits, <span class="self">self</span>.limb_bits) + <span class="number">1</span>);
+        <span class="kw">let </span>value = a.value + BigInt::from(c.value);
 
-        CRTInteger::construct(trunc, native, value)
+        CRTInteger::new(trunc, native, value)
     }
 
     <span class="kw">fn </span>sub_no_carry(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
-        b: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
+        a: <span class="kw">impl </span>Into&lt;CRTInteger&lt;F&gt;&gt;,
+        b: <span class="kw">impl </span>Into&lt;CRTInteger&lt;F&gt;&gt;,
     ) -&gt; CRTInteger&lt;F&gt; {
-        sub_no_carry::crt::&lt;F&gt;(<span class="self">self</span>.range.gate(), ctx, a, b)
+        sub_no_carry::crt::&lt;F&gt;(<span class="self">self</span>.gate(), ctx, a.into(), b.into())
     }
 
     <span class="comment">// Input: a
     // Output: p - a if a != 0, else a
     // Assume the actual value of `a` equals `a.truncation`
     // Constrains a.truncation &lt;= p using subtraction with carries
-    </span><span class="kw">fn </span>negate(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;) -&gt; CRTInteger&lt;F&gt; {
+    </span><span class="kw">fn </span>negate(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: ProperCrtUint&lt;F&gt;) -&gt; ProperCrtUint&lt;F&gt; {
         <span class="comment">// Compute p - a.truncation using carries
-        </span><span class="kw">let </span>p = <span class="self">self</span>.load_constant(ctx, <span class="self">self</span>.p.to_biguint().unwrap());
+        </span><span class="kw">let </span>p = <span class="self">self</span>.load_constant_uint(ctx, <span class="self">self</span>.p.to_biguint().unwrap());
         <span class="kw">let </span>(out_or_p, underflow) =
-            sub::crt::&lt;F&gt;(<span class="self">self</span>.range(), ctx, <span class="kw-2">&amp;</span>p, a, <span class="self">self</span>.limb_bits, <span class="self">self</span>.limb_bases[<span class="number">1</span>]);
+            sub::crt(<span class="self">self</span>.range(), ctx, p, a.clone(), <span class="self">self</span>.limb_bits, <span class="self">self</span>.limb_bases[<span class="number">1</span>]);
         <span class="comment">// constrain underflow to equal 0
-        </span><span class="self">self</span>.range.gate.assert_is_const(ctx, <span class="kw-2">&amp;</span>underflow, <span class="kw-2">&amp;</span>F::zero());
+        </span><span class="self">self</span>.gate().assert_is_const(ctx, <span class="kw-2">&amp;</span>underflow, <span class="kw-2">&amp;</span>F::zero());
 
-        <span class="kw">let </span>a_is_zero = big_is_zero::assign::&lt;F&gt;(<span class="self">self</span>.gate(), ctx, <span class="kw-2">&amp;</span>a.truncation);
-        select::crt::&lt;F&gt;(<span class="self">self</span>.range.gate(), ctx, a, <span class="kw-2">&amp;</span>out_or_p, a_is_zero)
+        <span class="kw">let </span>a_is_zero = big_is_zero::positive(<span class="self">self</span>.gate(), ctx, a.<span class="number">0</span>.truncation.clone());
+        ProperCrtUint(select::crt(<span class="self">self</span>.gate(), ctx, a.<span class="number">0</span>, out_or_p, a_is_zero))
     }
 
     <span class="kw">fn </span>scalar_mul_no_carry(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
+        a: <span class="kw">impl </span>Into&lt;CRTInteger&lt;F&gt;&gt;,
         c: i64,
     ) -&gt; CRTInteger&lt;F&gt; {
-        scalar_mul_no_carry::crt::&lt;F&gt;(<span class="self">self</span>.range.gate(), ctx, a, c)
+        scalar_mul_no_carry::crt(<span class="self">self</span>.gate(), ctx, a.into(), c)
     }
 
     <span class="kw">fn </span>scalar_mul_and_add_no_carry(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
-        b: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
+        a: <span class="kw">impl </span>Into&lt;CRTInteger&lt;F&gt;&gt;,
+        b: <span class="kw">impl </span>Into&lt;CRTInteger&lt;F&gt;&gt;,
         c: i64,
     ) -&gt; CRTInteger&lt;F&gt; {
-        scalar_mul_and_add_no_carry::crt::&lt;F&gt;(<span class="self">self</span>.range.gate(), ctx, a, b, c)
+        scalar_mul_and_add_no_carry::crt(<span class="self">self</span>.gate(), ctx, a.into(), b.into(), c)
     }
 
     <span class="kw">fn </span>mul_no_carry(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
-        b: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
+        a: <span class="kw">impl </span>Into&lt;CRTInteger&lt;F&gt;&gt;,
+        b: <span class="kw">impl </span>Into&lt;CRTInteger&lt;F&gt;&gt;,
     ) -&gt; CRTInteger&lt;F&gt; {
-        mul_no_carry::crt::&lt;F&gt;(<span class="self">self</span>.range.gate(), ctx, a, b, <span class="self">self</span>.num_limbs_log2_ceil)
+        mul_no_carry::crt(<span class="self">self</span>.gate(), ctx, a.into(), b.into(), <span class="self">self</span>.num_limbs_log2_ceil)
     }
 
-    <span class="kw">fn </span>check_carry_mod_to_zero(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;) {
+    <span class="kw">fn </span>check_carry_mod_to_zero(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: CRTInteger&lt;F&gt;) {
         check_carry_mod_to_zero::crt::&lt;F&gt;(
             <span class="self">self</span>.range(),
-            <span class="comment">// &amp;self.bigint_chip,
-            </span>ctx,
+            ctx,
             a,
             <span class="self">self</span>.num_limbs_bits,
             <span class="kw-2">&amp;</span><span class="self">self</span>.p,
@@ -672,11 +757,10 @@
         )
     }
 
-    <span class="kw">fn </span>carry_mod(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;) -&gt; CRTInteger&lt;F&gt; {
+    <span class="kw">fn </span>carry_mod(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: CRTInteger&lt;F&gt;) -&gt; ProperCrtUint&lt;F&gt; {
         carry_mod::crt::&lt;F&gt;(
             <span class="self">self</span>.range(),
-            <span class="comment">// &amp;self.bigint_chip,
-            </span>ctx,
+            ctx,
             a,
             <span class="self">self</span>.num_limbs_bits,
             <span class="kw-2">&amp;</span><span class="self">self</span>.p,
@@ -688,110 +772,178 @@
         )
     }
 
-    <span class="kw">fn </span>range_check(
+    <span class="doccomment">/// # Assumptions
+    /// * `max_bits &lt;= n * k` where `n = self.limb_bits` and `k = self.num_limbs`
+    /// * `a.truncation.limbs.len() = self.num_limbs`
+    </span><span class="kw">fn </span>range_check(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
+        a: <span class="kw">impl </span>Into&lt;CRTInteger&lt;F&gt;&gt;,
         max_bits: usize, <span class="comment">// the maximum bits that a.value could take
     </span>) {
         <span class="kw">let </span>n = <span class="self">self</span>.limb_bits;
-        <span class="kw">let </span>k = a.truncation.limbs.len();
-        <span class="macro">debug_assert!</span>(max_bits &gt; n * (k - <span class="number">1</span>) &amp;&amp; max_bits &lt;= n * k);
-        <span class="kw">let </span>last_limb_bits = max_bits - n * (k - <span class="number">1</span>);
+        <span class="kw">let </span>a = a.into();
+        <span class="kw">let </span><span class="kw-2">mut </span>remaining_bits = max_bits;
 
-        <span class="attribute">#[cfg(debug_assertions)]
-        </span><span class="macro">debug_assert!</span>(a.value.bits() <span class="kw">as </span>usize &lt;= max_bits);
+        <span class="macro">debug_assert!</span>(a.value.bits() <span class="kw">as </span>usize &lt;= max_bits);
 
         <span class="comment">// range check limbs of `a` are in [0, 2^n) except last limb should be in [0, 2^last_limb_bits)
-        </span><span class="kw">for </span>(i, cell) <span class="kw">in </span>a.truncation.limbs.iter().enumerate() {
-            <span class="kw">let </span>limb_bits = <span class="kw">if </span>i == k - <span class="number">1 </span>{ last_limb_bits } <span class="kw">else </span>{ n };
-            <span class="self">self</span>.range.range_check(ctx, <span class="kw-2">*</span>cell, limb_bits);
+        </span><span class="kw">for </span>cell <span class="kw">in </span>a.truncation.limbs {
+            <span class="kw">let </span>limb_bits = cmp::min(n, remaining_bits);
+            remaining_bits -= limb_bits;
+            <span class="self">self</span>.range.range_check(ctx, cell, limb_bits);
         }
     }
 
-    <span class="kw">fn </span>enforce_less_than(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint) {
-        <span class="self">self</span>.enforce_less_than_p(ctx, a)
+    <span class="kw">fn </span>enforce_less_than(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        a: ProperCrtUint&lt;F&gt;,
+    ) -&gt; Reduced&lt;ProperCrtUint&lt;F&gt;, Fp&gt; {
+        <span class="self">self</span>.enforce_less_than_p(ctx, a.clone());
+        Reduced(a, PhantomData)
     }
 
-    <span class="kw">fn </span>is_soft_zero(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;) -&gt; AssignedValue&lt;F&gt; {
-        big_is_zero::crt::&lt;F&gt;(<span class="self">self</span>.gate(), ctx, a)
+    <span class="doccomment">/// Returns 1 iff `a` is 0 as a BigUint. This means that even if `a` is 0 modulo `p`, this may return 0.
+    </span><span class="kw">fn </span>is_soft_zero(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        a: <span class="kw">impl </span>Into&lt;ProperCrtUint&lt;F&gt;&gt;,
+    ) -&gt; AssignedValue&lt;F&gt; {
+        <span class="kw">let </span>a = a.into();
+        big_is_zero::positive(<span class="self">self</span>.gate(), ctx, a.<span class="number">0</span>.truncation)
+    }
 
-        <span class="comment">// CHECK: I don&#39;t think this is necessary:
-        // underflow != 0 iff carry &lt; p
-        // let p = self.load_constant(ctx, self.p.to_biguint().unwrap());
-        // let (_, underflow) =
-        //     sub::crt::&lt;F&gt;(self.range(), ctx, a, &amp;p, self.limb_bits, self.limb_bases[1]);
-        // let is_underflow_zero = self.gate().is_zero(ctx, &amp;underflow);
-        // let range_check = self.gate().not(ctx, Existing(&amp;is_underflow_zero));
-
-        // self.gate().and(ctx, is_zero, range_check)
-    </span>}
-
-    <span class="kw">fn </span>is_soft_nonzero(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;) -&gt; AssignedValue&lt;F&gt; {
-        <span class="kw">let </span>is_zero = big_is_zero::crt::&lt;F&gt;(<span class="self">self</span>.gate(), ctx, a);
+    <span class="doccomment">/// Given proper CRT integer `a`, returns 1 iff `a &lt; modulus::&lt;F&gt;()` and `a != 0` as integers
+    ///
+    /// # Assumptions
+    /// * `a` is proper representation of BigUint
+    </span><span class="kw">fn </span>is_soft_nonzero(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        a: <span class="kw">impl </span>Into&lt;ProperCrtUint&lt;F&gt;&gt;,
+    ) -&gt; AssignedValue&lt;F&gt; {
+        <span class="kw">let </span>a = a.into();
+        <span class="kw">let </span>is_zero = big_is_zero::positive(<span class="self">self</span>.gate(), ctx, a.<span class="number">0</span>.truncation.clone());
         <span class="kw">let </span>is_nonzero = <span class="self">self</span>.gate().not(ctx, is_zero);
 
         <span class="comment">// underflow != 0 iff carry &lt; p
-        </span><span class="kw">let </span>p = <span class="self">self</span>.load_constant(ctx, <span class="self">self</span>.p.to_biguint().unwrap());
+        </span><span class="kw">let </span>p = <span class="self">self</span>.load_constant_uint(ctx, <span class="self">self</span>.p.to_biguint().unwrap());
         <span class="kw">let </span>(<span class="kw">_</span>, underflow) =
-            sub::crt::&lt;F&gt;(<span class="self">self</span>.range(), ctx, a, <span class="kw-2">&amp;</span>p, <span class="self">self</span>.limb_bits, <span class="self">self</span>.limb_bases[<span class="number">1</span>]);
+            sub::crt::&lt;F&gt;(<span class="self">self</span>.range(), ctx, a, p, <span class="self">self</span>.limb_bits, <span class="self">self</span>.limb_bases[<span class="number">1</span>]);
         <span class="kw">let </span>is_underflow_zero = <span class="self">self</span>.gate().is_zero(ctx, underflow);
-        <span class="kw">let </span>range_check = <span class="self">self</span>.gate().not(ctx, is_underflow_zero);
+        <span class="kw">let </span>no_underflow = <span class="self">self</span>.gate().not(ctx, is_underflow_zero);
 
-        <span class="self">self</span>.gate().and(ctx, is_nonzero, range_check)
+        <span class="self">self</span>.gate().and(ctx, is_nonzero, no_underflow)
     }
 
     <span class="comment">// assuming `a` has been range checked to be a proper BigInt
     // constrain the witness `a` to be `&lt; p`
     // then check if `a` is 0
-    </span><span class="kw">fn </span>is_zero(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;) -&gt; AssignedValue&lt;F&gt; {
-        <span class="self">self</span>.enforce_less_than_p(ctx, a);
+    </span><span class="kw">fn </span>is_zero(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw">impl </span>Into&lt;ProperCrtUint&lt;F&gt;&gt;) -&gt; AssignedValue&lt;F&gt; {
+        <span class="kw">let </span>a = a.into();
+        <span class="self">self</span>.enforce_less_than_p(ctx, a.clone());
         <span class="comment">// just check truncated limbs are all 0 since they determine the native value
-        </span>big_is_zero::positive::&lt;F&gt;(<span class="self">self</span>.gate(), ctx, <span class="kw-2">&amp;</span>a.truncation)
+        </span>big_is_zero::positive(<span class="self">self</span>.gate(), ctx, a.<span class="number">0</span>.truncation)
     }
 
     <span class="kw">fn </span>is_equal_unenforced(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
-        b: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
+        a: Reduced&lt;ProperCrtUint&lt;F&gt;, Fp&gt;,
+        b: Reduced&lt;ProperCrtUint&lt;F&gt;, Fp&gt;,
     ) -&gt; AssignedValue&lt;F&gt; {
-        big_is_equal::assign::&lt;F&gt;(<span class="self">self</span>.gate(), ctx, <span class="kw-2">&amp;</span>a.truncation, <span class="kw-2">&amp;</span>b.truncation)
+        big_is_equal::assign::&lt;F&gt;(<span class="self">self</span>.gate(), ctx, a.<span class="number">0</span>, b.<span class="number">0</span>)
     }
 
     <span class="comment">// assuming `a, b` have been range checked to be a proper BigInt
     // constrain the witnesses `a, b` to be `&lt; p`
     // then assert `a == b` as BigInts
-    </span><span class="kw">fn </span>assert_equal(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint, b: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint) {
-        <span class="self">self</span>.enforce_less_than_p(ctx, a);
-        <span class="self">self</span>.enforce_less_than_p(ctx, b);
+    </span><span class="kw">fn </span>assert_equal(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        a: <span class="kw">impl </span>Into&lt;ProperCrtUint&lt;F&gt;&gt;,
+        b: <span class="kw">impl </span>Into&lt;ProperCrtUint&lt;F&gt;&gt;,
+    ) {
+        <span class="kw">let </span>a = a.into();
+        <span class="kw">let </span>b = b.into();
         <span class="comment">// a.native and b.native are derived from `a.truncation, b.truncation`, so no need to check if they&#39;re equal
-        </span><span class="kw">for </span>(limb_a, limb_b) <span class="kw">in </span>a.truncation.limbs.iter().zip(a.truncation.limbs.iter()) {
+        </span><span class="kw">for </span>(limb_a, limb_b) <span class="kw">in </span>a.limbs().iter().zip(b.limbs().iter()) {
             ctx.constrain_equal(limb_a, limb_b);
         }
+        <span class="self">self</span>.enforce_less_than_p(ctx, a);
+        <span class="self">self</span>.enforce_less_than_p(ctx, b);
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;range</span>, F: PrimeField, Fp: PrimeField&gt; Selectable&lt;F&gt; <span class="kw">for </span>FpChip&lt;<span class="lifetime">&#39;range</span>, F, Fp&gt; {
-    <span class="kw">type </span>Point = CRTInteger&lt;F&gt;;
-
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;range</span>, F: PrimeField, Fp: PrimeField&gt; Selectable&lt;F, CRTInteger&lt;F&gt;&gt; <span class="kw">for </span>FpChip&lt;<span class="lifetime">&#39;range</span>, F, Fp&gt; {
     <span class="kw">fn </span>select(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
-        b: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
+        a: CRTInteger&lt;F&gt;,
+        b: CRTInteger&lt;F&gt;,
         sel: AssignedValue&lt;F&gt;,
     ) -&gt; CRTInteger&lt;F&gt; {
-        select::crt::&lt;F&gt;(<span class="self">self</span>.range.gate(), ctx, a, b, sel)
+        select::crt(<span class="self">self</span>.gate(), ctx, a, b, sel)
     }
 
     <span class="kw">fn </span>select_by_indicator(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span>[CRTInteger&lt;F&gt;],
+        a: <span class="kw-2">&amp;</span><span class="kw">impl </span>AsRef&lt;[CRTInteger&lt;F&gt;]&gt;,
         coeffs: <span class="kw-2">&amp;</span>[AssignedValue&lt;F&gt;],
     ) -&gt; CRTInteger&lt;F&gt; {
-        select_by_indicator::crt::&lt;F&gt;(<span class="self">self</span>.range.gate(), ctx, a, coeffs, <span class="kw-2">&amp;</span><span class="self">self</span>.limb_bases)
+        select_by_indicator::crt(<span class="self">self</span>.gate(), ctx, a.as_ref(), coeffs, <span class="kw-2">&amp;</span><span class="self">self</span>.limb_bases)
+    }
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;range</span>, F: PrimeField, Fp: PrimeField&gt; Selectable&lt;F, ProperCrtUint&lt;F&gt;&gt;
+    <span class="kw">for </span>FpChip&lt;<span class="lifetime">&#39;range</span>, F, Fp&gt;
+{
+    <span class="kw">fn </span>select(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        a: ProperCrtUint&lt;F&gt;,
+        b: ProperCrtUint&lt;F&gt;,
+        sel: AssignedValue&lt;F&gt;,
+    ) -&gt; ProperCrtUint&lt;F&gt; {
+        ProperCrtUint(select::crt(<span class="self">self</span>.gate(), ctx, a.<span class="number">0</span>, b.<span class="number">0</span>, sel))
+    }
+
+    <span class="kw">fn </span>select_by_indicator(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        a: <span class="kw-2">&amp;</span><span class="kw">impl </span>AsRef&lt;[ProperCrtUint&lt;F&gt;]&gt;,
+        coeffs: <span class="kw-2">&amp;</span>[AssignedValue&lt;F&gt;],
+    ) -&gt; ProperCrtUint&lt;F&gt; {
+        <span class="kw">let </span>out = select_by_indicator::crt(<span class="self">self</span>.gate(), ctx, a.as_ref(), coeffs, <span class="kw-2">&amp;</span><span class="self">self</span>.limb_bases);
+        ProperCrtUint(out)
+    }
+}
+
+<span class="kw">impl</span>&lt;F: PrimeField, Fp, Pt: Clone, FC&gt; Selectable&lt;F, Reduced&lt;Pt, Fp&gt;&gt; <span class="kw">for </span>FC
+<span class="kw">where
+    </span>FC: Selectable&lt;F, Pt&gt;,
+{
+    <span class="kw">fn </span>select(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        a: Reduced&lt;Pt, Fp&gt;,
+        b: Reduced&lt;Pt, Fp&gt;,
+        sel: AssignedValue&lt;F&gt;,
+    ) -&gt; Reduced&lt;Pt, Fp&gt; {
+        Reduced(<span class="self">self</span>.select(ctx, a.<span class="number">0</span>, b.<span class="number">0</span>, sel), PhantomData)
+    }
+
+    <span class="kw">fn </span>select_by_indicator(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        a: <span class="kw-2">&amp;</span><span class="kw">impl </span>AsRef&lt;[Reduced&lt;Pt, Fp&gt;]&gt;,
+        coeffs: <span class="kw-2">&amp;</span>[AssignedValue&lt;F&gt;],
+    ) -&gt; Reduced&lt;Pt, Fp&gt; {
+        <span class="comment">// this is inefficient, could do std::mem::transmute but that is unsafe. hopefully compiler optimizes it out
+        </span><span class="kw">let </span>a = a.as_ref().iter().map(|a| a.<span class="number">0</span>.clone()).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        Reduced(<span class="self">self</span>.select_by_indicator(ctx, <span class="kw-2">&amp;</span>a, coeffs), PhantomData)
     }
 }
 </code></pre></div>

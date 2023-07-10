@@ -228,7 +228,7 @@
     <span class="kw">fn </span>to_scalar(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;F&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">32</span>];
         <span class="self">self</span>.to_little_endian(<span class="kw-2">&amp;mut </span>bytes);
-        F::from_repr(bytes).into()
+        <span class="prelude-val">Some</span>(F::from_bytes_le(<span class="kw-2">&amp;</span>bytes))
     }
 }
 
@@ -270,7 +270,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">32</span>];
         bytes[<span class="number">32 </span>- <span class="self">Self</span>::len_bytes()..].copy_from_slice(<span class="self">self</span>.as_bytes());
         bytes.reverse();
-        F::from_repr(bytes).into()
+        <span class="prelude-val">Some</span>(F::from_bytes_le(<span class="kw-2">&amp;</span>bytes))
     }
 }
 

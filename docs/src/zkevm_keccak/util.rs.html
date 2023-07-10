@@ -595,7 +595,7 @@
 <span class="doccomment">/// Unpack a sparse keccak word into bits in the range [0,BIT_SIZE[
 </span><span class="kw">pub fn </span>unpack&lt;F: Field&gt;(packed: F) -&gt; [u8; NUM_BITS_PER_WORD] {
     <span class="kw">let </span><span class="kw-2">mut </span>bits = [<span class="number">0</span>; NUM_BITS_PER_WORD];
-    <span class="kw">let </span>packed = Word::from_little_endian(packed.to_repr().as_ref());
+    <span class="kw">let </span>packed = Word::from_little_endian(packed.to_bytes_le().as_ref());
     <span class="kw">let </span>mask = Word::from(BIT_SIZE - <span class="number">1</span>);
     <span class="kw">for </span>(idx, bit) <span class="kw">in </span>bits.iter_mut().enumerate() {
         <span class="kw-2">*</span>bit = ((packed &gt;&gt; (idx * BIT_COUNT)) &amp; mask).as_u32() <span class="kw">as </span>u8;
@@ -612,10 +612,10 @@
 <span class="doccomment">/// Calculates a ^ b with a and b field elements
 </span><span class="kw">pub fn </span>field_xor&lt;F: Field&gt;(a: F, b: F) -&gt; F {
     <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">32</span>];
-    <span class="kw">for </span>(idx, (a, b)) <span class="kw">in </span>a.to_repr().as_ref().iter().zip(b.to_repr().as_ref().iter()).enumerate() {
-        bytes[idx] = <span class="kw-2">*</span>a ^ <span class="kw-2">*</span>b;
+    <span class="kw">for </span>(idx, (a, b)) <span class="kw">in </span>a.to_bytes_le().into_iter().zip(b.to_bytes_le()).enumerate() {
+        bytes[idx] = a ^ b;
     }
-    F::from_repr(bytes).unwrap()
+    F::from_bytes_le(<span class="kw-2">&amp;</span>bytes)
 }
 
 <span class="doccomment">/// Returns the size (in bits) of each part size when splitting up a keccak word

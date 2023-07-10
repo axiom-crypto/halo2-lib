@@ -52,6 +52,10 @@
 <span id="52">52</span>
 <span id="53">53</span>
 <span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
 </pre><pre class="rust"><code><span class="kw">use super</span>::{CRTInteger, OverflowInteger};
 <span class="kw">use </span>halo2_base::{
     gates::GateInstructions,
@@ -59,36 +63,40 @@
     Context,
     QuantumCell::Constant,
 };
+<span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>std::cmp::max;
 
 <span class="doccomment">/// compute a * c + b = b + a * c
+///
+/// # Assumptions
+/// * `a, b` have same number of limbs
+/// * Number of limbs is nonzero
+/// * `c_log2_ceil = log2_ceil(c)` where `c` is the BigUint value of `c_f`
 </span><span class="comment">// this is uniquely suited for our simple gate
 </span><span class="kw">pub fn </span>assign&lt;F: ScalarField&gt;(
     gate: <span class="kw-2">&amp;</span><span class="kw">impl </span>GateInstructions&lt;F&gt;,
     ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-    a: <span class="kw-2">&amp;</span>OverflowInteger&lt;F&gt;,
-    b: <span class="kw-2">&amp;</span>OverflowInteger&lt;F&gt;,
+    a: OverflowInteger&lt;F&gt;,
+    b: OverflowInteger&lt;F&gt;,
     c_f: F,
     c_log2_ceil: usize,
 ) -&gt; OverflowInteger&lt;F&gt; {
-    <span class="macro">debug_assert_eq!</span>(a.limbs.len(), b.limbs.len());
-
     <span class="kw">let </span>out_limbs = a
         .limbs
-        .iter()
-        .zip(b.limbs.iter())
-        .map(|(<span class="kw-2">&amp;</span>a_limb, <span class="kw-2">&amp;</span>b_limb)| gate.mul_add(ctx, a_limb, Constant(c_f), b_limb))
+        .into_iter()
+        .zip_eq(b.limbs)
+        .map(|(a_limb, b_limb)| gate.mul_add(ctx, a_limb, Constant(c_f), b_limb))
         .collect();
 
-    OverflowInteger::construct(out_limbs, max(a.max_limb_bits + c_log2_ceil, b.max_limb_bits) + <span class="number">1</span>)
+    OverflowInteger::new(out_limbs, max(a.max_limb_bits + c_log2_ceil, b.max_limb_bits) + <span class="number">1</span>)
 }
 
 <span class="doccomment">/// compute a * c + b = b + a * c
 </span><span class="kw">pub fn </span>crt&lt;F: ScalarField&gt;(
     gate: <span class="kw-2">&amp;</span><span class="kw">impl </span>GateInstructions&lt;F&gt;,
     ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-    a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
-    b: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
+    a: CRTInteger&lt;F&gt;,
+    b: CRTInteger&lt;F&gt;,
     c: i64,
 ) -&gt; CRTInteger&lt;F&gt; {
     <span class="macro">debug_assert_eq!</span>(a.truncation.limbs.len(), b.truncation.limbs.len());
@@ -101,10 +109,10 @@
         (-F::from(c_abs), c_abs)
     };
 
-    <span class="kw">let </span>out_trunc = assign::&lt;F&gt;(gate, ctx, <span class="kw-2">&amp;</span>a.truncation, <span class="kw-2">&amp;</span>b.truncation, c_f, log2_ceil(c_abs));
+    <span class="kw">let </span>out_trunc = assign(gate, ctx, a.truncation, b.truncation, c_f, log2_ceil(c_abs));
     <span class="kw">let </span>out_native = gate.mul_add(ctx, a.native, Constant(c_f), b.native);
-    <span class="kw">let </span>out_val = <span class="kw-2">&amp;</span>a.value * c + <span class="kw-2">&amp;</span>b.value;
-    CRTInteger::construct(out_trunc, out_native, out_val)
+    <span class="kw">let </span>out_val = a.value * c + b.value;
+    CRTInteger::new(out_trunc, out_native, out_val)
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="halo2_ecc" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (0da281b60 2022-10-27)" ></div></body></html>

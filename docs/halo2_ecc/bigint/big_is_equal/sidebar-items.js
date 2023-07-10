@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["assign","Given OverflowInteger’s `a` and `b` of the same shape, returns whether `a == b`."],["crt",""],["wrapper",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["assign","Given [`ProperUint`]s `a` and `b` with the same number of limbs, returns whether `a == b`."]]};

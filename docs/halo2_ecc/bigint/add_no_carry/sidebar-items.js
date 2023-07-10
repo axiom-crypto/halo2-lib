@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["assign",""],["crt",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["assign","Assumptions"],["crt","Assumptions"]]};

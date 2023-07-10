@@ -123,10 +123,6 @@
 <span id="123">123</span>
 <span id="124">124</span>
 <span id="125">125</span>
-<span id="126">126</span>
-<span id="127">127</span>
-<span id="128">128</span>
-<span id="129">129</span>
 </pre><pre class="rust"><code><span class="kw">use super</span>::{check_carry_to_zero, CRTInteger, OverflowInteger};
 <span class="kw">use </span>halo2_base::{
     gates::{GateInstructions, RangeInstructions},
@@ -145,7 +141,7 @@
 </span><span class="kw">pub fn </span>crt&lt;F: BigPrimeField&gt;(
     range: <span class="kw-2">&amp;</span><span class="kw">impl </span>RangeInstructions&lt;F&gt;,
     ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-    a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
+    a: CRTInteger&lt;F&gt;,
     k_bits: usize, <span class="comment">// = a.len().bits()
     </span>modulus: <span class="kw-2">&amp;</span>BigInt,
     mod_vec: <span class="kw-2">&amp;</span>[F],
@@ -172,7 +168,7 @@
     // we need to constrain that `sum_i quot_vec[i] * 2^{n*i} = quot_native` in `F`
     </span><span class="kw">let </span>(quot_val, _out_val) = a.value.div_mod_floor(modulus);
 
-    <span class="comment">// only perform safety checks in display mode so we can turn them off in production
+    <span class="comment">// only perform safety checks in debug mode
     </span><span class="macro">debug_assert_eq!</span>(_out_val, BigInt::zero());
     <span class="macro">debug_assert!</span>(quot_val.abs() &lt; (BigInt::one() &lt;&lt; quot_max_bits));
 
@@ -197,7 +193,7 @@
 
     <span class="comment">// match chip.strategy {
     //    BigIntStrategy::Simple =&gt; {
-    </span><span class="kw">for </span>(i, (a_limb, quot_v)) <span class="kw">in </span>a.truncation.limbs.iter().zip(quot_vec.into_iter()).enumerate() {
+    </span><span class="kw">for </span>(i, (a_limb, quot_v)) <span class="kw">in </span>a.truncation.limbs.into_iter().zip(quot_vec).enumerate() {
         <span class="kw">let </span>(prod, new_quot_cell) = range.gate().inner_product_left_last(
             ctx,
             quot_assigned.iter().map(|x| Existing(<span class="kw-2">*</span>x)).chain(iter::once(Witness(quot_v))),
@@ -209,7 +205,7 @@
         // | prod | -1 | a | prod - a |
         </span><span class="kw">let </span>check_val = <span class="kw-2">*</span>prod.value() - a_limb.value();
         <span class="kw">let </span>check_cell = ctx
-            .assign_region_last([Constant(-F::one()), Existing(<span class="kw-2">*</span>a_limb), Witness(check_val)], [-<span class="number">1</span>]);
+            .assign_region_last([Constant(-F::one()), Existing(a_limb), Witness(check_val)], [-<span class="number">1</span>]);
 
         quot_assigned.push(new_quot_cell);
         check_assigned.push(check_cell);
@@ -229,7 +225,7 @@
     }
 
     <span class="kw">let </span>check_overflow_int =
-        OverflowInteger::construct(check_assigned, max(a.truncation.max_limb_bits, <span class="number">2 </span>* n + k_bits));
+        OverflowInteger::new(check_assigned, max(a.truncation.max_limb_bits, <span class="number">2 </span>* n + k_bits));
 
     <span class="comment">// check that `modulus * quotient - a == 0 mod 2^{trunc_len}` after carry
     </span>check_carry_to_zero::truncate::&lt;F&gt;(
@@ -242,12 +238,8 @@
     );
 
     <span class="comment">// Constrain `quot_native = sum_i out_assigned[i] * 2^{n*i}` in `F`
-    </span><span class="kw">let </span>quot_native = OverflowInteger::&lt;F&gt;::evaluate(
-        range.gate(),
-        ctx,
-        quot_assigned,
-        limb_bases.iter().copied(),
-    );
+    </span><span class="kw">let </span>quot_native =
+        OverflowInteger::evaluate_native(ctx, range.gate(), quot_assigned, limb_bases);
 
     <span class="comment">// Check `0 + modulus * quotient - a = 0` in native field
     // | 0 | modulus | quotient | a |

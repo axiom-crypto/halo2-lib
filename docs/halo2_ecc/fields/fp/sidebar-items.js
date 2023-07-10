@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["FpChip",""]],"type":[["BaseFieldChip",""],["FpConfig",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["FpChip",""],["Reduced","Wrapper around `FieldPoint` to guarantee this is a “reduced” representation of an `Fp` field element. A reduced representation guarantees that there is a unique representation of each field element. Typically this means Uints that are less than the modulus."]],"type":[["BaseFieldChip",""],["FpConfig",""]]};

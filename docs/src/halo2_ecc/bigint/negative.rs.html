@@ -18,7 +18,7 @@
     a: OverflowInteger&lt;F&gt;,
 ) -&gt; OverflowInteger&lt;F&gt; {
     <span class="kw">let </span>out_limbs = a.limbs.into_iter().map(|limb| gate.neg(ctx, limb)).collect();
-    OverflowInteger::construct(out_limbs, a.max_limb_bits)
+    OverflowInteger::new(out_limbs, a.max_limb_bits)
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="halo2_ecc" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (0da281b60 2022-10-27)" ></div></body></html>

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["assign",""],["crt",""],["positive","assume you know that the limbs of `a` are all in [0, 2^{a.max_limb_bits})"]]};
+window.SIDEBAR_ITEMS = {"fn":[["assign","Given ProperUint `a`, returns 1 iff every limb of `a` is zero. Returns 0 otherwise."],["crt","Returns 0 or 1. Returns 1 iff the limbs of `a` are identically zero. This just calls [`assign`] on the limbs."],["positive","Assumptions"]]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["RangeStrategy",""]],"struct":[["RangeChip",""],["RangeConfig",""]],"trait":[["RangeInstructions",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["RangeStrategy","Specifies the gate strategy for the range chip"]],"struct":[["RangeChip","A chip that implements RangeInstructions which provides methods to constrain a field element `x` is within a range of bits."],["RangeConfig","Configuration for Range Chip"]],"trait":[["RangeInstructions","Trait that implements methods to constrain a field element number `x` is within a range of bits."]]};

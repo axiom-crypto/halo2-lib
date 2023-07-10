@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["multi_exp","Currently does not support if the final answer is actually the point at infinity"],["multi_exp_par","Multi-thread witness generation for multi-scalar multiplication. Should give exact same circuit as `multi_exp`."],["multi_product",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["multi_exp_par","Multi-thread witness generation for multi-scalar multiplication."]]};

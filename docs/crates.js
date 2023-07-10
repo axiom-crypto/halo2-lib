@@ -1,1 +1,1 @@
-window.ALL_CRATES = ["halo2_base","halo2_ecc","zkevm_keccak"];
+window.ALL_CRATES = ["halo2_base","halo2_ecc","poseidon","zkevm_keccak"];

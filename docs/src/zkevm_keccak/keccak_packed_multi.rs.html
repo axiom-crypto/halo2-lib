@@ -2037,6 +2037,7 @@
 <span id="2037">2037</span>
 <span id="2038">2038</span>
 <span id="2039">2039</span>
+<span id="2040">2040</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::util::{
     constraint_builder::BaseConstraintBuilder,
     eth_types::Field,
@@ -2324,6 +2325,7 @@
         <span class="kw">let </span>column = <span class="kw">if </span>column_idx &lt; <span class="self">self</span>.columns.len() {
             <span class="self">self</span>.columns[column_idx].advice
         } <span class="kw">else </span>{
+            <span class="macro">assert!</span>(column_idx == <span class="self">self</span>.columns.len());
             <span class="kw">let </span>advice = meta.advice_column();
             <span class="kw">let </span><span class="kw-2">mut </span>expr = <span class="number">0</span>.expr();
             meta.create_gate(<span class="string">&quot;Query column&quot;</span>, |meta| {
@@ -2376,7 +2378,7 @@
         <span class="comment">// Make sure all rows start at the same column
         </span><span class="kw">let </span>width = <span class="self">self</span>.get_width();
         <span class="attribute">#[cfg(debug_assertions)]
-        </span><span class="kw">for </span>row <span class="kw">in </span><span class="self">self</span>.rows.iter_mut() {
+        </span><span class="kw">for </span>row <span class="kw">in </span><span class="self">self</span>.rows.iter() {
             <span class="self">self</span>.num_unused_cells += width - <span class="kw-2">*</span>row;
         }
         <span class="self">self</span>.rows = <span class="macro">vec!</span>[width; <span class="self">self</span>.height];
@@ -3174,7 +3176,7 @@
             </span><span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">5 </span>{
                 <span class="kw">let </span>input = scatter::expr(<span class="number">3</span>, part_size_base) - <span class="number">2</span>.expr() * input[i].clone()
                     + input[(i + <span class="number">1</span>) % <span class="number">5</span>].clone()
-                    - input[(i + <span class="number">2</span>) % <span class="number">5</span>].clone().clone();
+                    - input[(i + <span class="number">2</span>) % <span class="number">5</span>].clone();
                 <span class="kw">let </span>output = output[i].clone();
                 meta.lookup(<span class="string">&quot;chi base&quot;</span>, |<span class="kw">_</span>| {
                     <span class="macro">vec!</span>[(input.clone(), chi_base_table[<span class="number">0</span>]), (output.clone(), chi_base_table[<span class="number">1</span>])]
@@ -3980,7 +3982,7 @@
             .take(<span class="number">4</span>)
             .map(|a| {
                 pack_with_base::&lt;F&gt;(<span class="kw-2">&amp;</span>unpack(a[<span class="number">0</span>]), <span class="number">2</span>)
-                    .to_repr()
+                    .to_bytes_le()
                     .into_iter()
                     .take(<span class="number">8</span>)
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()

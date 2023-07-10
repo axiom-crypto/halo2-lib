@@ -15,7 +15,7 @@
 <span id="15">15</span>
 <span id="16">16</span>
 <span id="17">17</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::OverflowInteger;
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::ProperUint;
 <span class="kw">use </span>halo2_base::{gates::RangeInstructions, utils::ScalarField, AssignedValue, Context};
 
 <span class="comment">// given OverflowInteger&lt;F&gt;&#39;s `a` and `b` of the same shape,
@@ -23,13 +23,13 @@
 </span><span class="kw">pub fn </span>assign&lt;F: ScalarField&gt;(
     range: <span class="kw-2">&amp;</span><span class="kw">impl </span>RangeInstructions&lt;F&gt;,
     ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-    a: <span class="kw-2">&amp;</span>OverflowInteger&lt;F&gt;,
-    b: <span class="kw-2">&amp;</span>OverflowInteger&lt;F&gt;,
+    a: <span class="kw">impl </span>Into&lt;ProperUint&lt;F&gt;&gt;,
+    b: <span class="kw">impl </span>Into&lt;ProperUint&lt;F&gt;&gt;,
     limb_bits: usize,
     limb_base: F,
 ) -&gt; AssignedValue&lt;F&gt; {
     <span class="comment">// a &lt; b iff a - b has underflow
-    </span><span class="kw">let </span>(<span class="kw">_</span>, underflow) = <span class="kw">super</span>::sub::assign::&lt;F&gt;(range, ctx, a, b, limb_bits, limb_base);
+    </span><span class="kw">let </span>(<span class="kw">_</span>, underflow) = <span class="kw">super</span>::sub::assign(range, ctx, a, b, limb_bits, limb_base);
     underflow
 }
 </code></pre></div>

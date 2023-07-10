@@ -14,19 +14,17 @@
 <span id="14">14</span>
 <span id="15">15</span>
 <span id="16">16</span>
-<span id="17">17</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::halo2_proofs::halo2curves::bn256::{Fq, Fq12, Fq2};
-<span class="kw">use crate</span>::{
-    bigint::CRTInteger,
-    fields::{fp, fp12, fp2, FieldExtPoint},
-};
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::bigint::ProperCrtUint;
+<span class="kw">use </span><span class="kw">crate</span>::fields::vector::FieldVector;
+<span class="kw">use </span><span class="kw">crate</span>::fields::{fp, fp12, fp2};
+<span class="kw">use </span><span class="kw">crate</span>::halo2_proofs::halo2curves::bn256::{Fq, Fq12, Fq2};
 
 <span class="kw">pub mod </span>final_exp;
 <span class="kw">pub mod </span>pairing;
 
 <span class="kw">pub type </span>FpChip&lt;<span class="lifetime">&#39;range</span>, F&gt; = fp::FpChip&lt;<span class="lifetime">&#39;range</span>, F, Fq&gt;;
-<span class="kw">pub type </span>FpPoint&lt;F&gt; = CRTInteger&lt;F&gt;;
-<span class="kw">pub type </span>FqPoint&lt;F&gt; = FieldExtPoint&lt;FpPoint&lt;F&gt;&gt;;
+<span class="kw">pub type </span>FpPoint&lt;F&gt; = ProperCrtUint&lt;F&gt;;
+<span class="kw">pub type </span>FqPoint&lt;F&gt; = FieldVector&lt;FpPoint&lt;F&gt;&gt;;
 <span class="kw">pub type </span>Fp2Chip&lt;<span class="lifetime">&#39;chip</span>, F&gt; = fp2::Fp2Chip&lt;<span class="lifetime">&#39;chip</span>, F, FpChip&lt;<span class="lifetime">&#39;chip</span>, F&gt;, Fq2&gt;;
 <span class="kw">pub type </span>Fp12Chip&lt;<span class="lifetime">&#39;chip</span>, F&gt; = fp12::Fp12Chip&lt;<span class="lifetime">&#39;chip</span>, F, FpChip&lt;<span class="lifetime">&#39;chip</span>, F&gt;, Fq12, <span class="number">9</span>&gt;;
 

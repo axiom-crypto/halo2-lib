@@ -42,14 +42,24 @@
 <span id="42">42</span>
 <span id="43">43</span>
 <span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
 </pre><pre class="rust"><code><span class="kw">use super</span>::{CRTInteger, OverflowInteger};
 <span class="kw">use </span>halo2_base::{gates::GateInstructions, utils::ScalarField, Context, QuantumCell::Existing};
 
-<span class="kw">pub fn </span>truncate&lt;F: ScalarField&gt;(
+<span class="doccomment">/// # Assumptions
+/// * `a` and `b` have the same number of limbs `k`
+/// * `k` is nonzero
+/// * `num_limbs_log2_ceil = log2_ceil(k)`
+/// * `log2_ceil(k) + a.max_limb_bits + b.max_limb_bits &lt;= F::NUM_BITS as usize - 2`
+</span><span class="kw">pub fn </span>truncate&lt;F: ScalarField&gt;(
     gate: <span class="kw-2">&amp;</span><span class="kw">impl </span>GateInstructions&lt;F&gt;,
     ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-    a: <span class="kw-2">&amp;</span>OverflowInteger&lt;F&gt;,
-    b: <span class="kw-2">&amp;</span>OverflowInteger&lt;F&gt;,
+    a: OverflowInteger&lt;F&gt;,
+    b: OverflowInteger&lt;F&gt;,
     num_limbs_log2_ceil: usize,
 ) -&gt; OverflowInteger&lt;F&gt; {
     <span class="kw">let </span>k = a.limbs.len();
@@ -70,21 +80,21 @@
         })
         .collect();
 
-    OverflowInteger::construct(out_limbs, num_limbs_log2_ceil + a.max_limb_bits + b.max_limb_bits)
+    OverflowInteger::new(out_limbs, num_limbs_log2_ceil + a.max_limb_bits + b.max_limb_bits)
 }
 
 <span class="kw">pub fn </span>crt&lt;F: ScalarField&gt;(
     gate: <span class="kw-2">&amp;</span><span class="kw">impl </span>GateInstructions&lt;F&gt;,
     ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-    a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
-    b: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
+    a: CRTInteger&lt;F&gt;,
+    b: CRTInteger&lt;F&gt;,
     num_limbs_log2_ceil: usize,
 ) -&gt; CRTInteger&lt;F&gt; {
-    <span class="kw">let </span>out_trunc = truncate::&lt;F&gt;(gate, ctx, <span class="kw-2">&amp;</span>a.truncation, <span class="kw-2">&amp;</span>b.truncation, num_limbs_log2_ceil);
+    <span class="kw">let </span>out_trunc = truncate::&lt;F&gt;(gate, ctx, a.truncation, b.truncation, num_limbs_log2_ceil);
     <span class="kw">let </span>out_native = gate.mul(ctx, a.native, b.native);
-    <span class="kw">let </span>out_val = <span class="kw-2">&amp;</span>a.value * <span class="kw-2">&amp;</span>b.value;
+    <span class="kw">let </span>out_val = a.value * b.value;
 
-    CRTInteger::construct(out_trunc, out_native, out_val)
+    CRTInteger::new(out_trunc, out_native, out_val)
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="halo2_ecc" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (0da281b60 2022-10-27)" ></div></body></html>

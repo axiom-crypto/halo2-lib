@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["crt",""],["truncate",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["crt",""],["truncate","Assumptions"]]};

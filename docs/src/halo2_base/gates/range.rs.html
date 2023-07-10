@@ -502,6 +502,148 @@
 <span id="502">502</span>
 <span id="503">503</span>
 <span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
+<span id="510">510</span>
+<span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
+<span id="546">546</span>
+<span id="547">547</span>
+<span id="548">548</span>
+<span id="549">549</span>
+<span id="550">550</span>
+<span id="551">551</span>
+<span id="552">552</span>
+<span id="553">553</span>
+<span id="554">554</span>
+<span id="555">555</span>
+<span id="556">556</span>
+<span id="557">557</span>
+<span id="558">558</span>
+<span id="559">559</span>
+<span id="560">560</span>
+<span id="561">561</span>
+<span id="562">562</span>
+<span id="563">563</span>
+<span id="564">564</span>
+<span id="565">565</span>
+<span id="566">566</span>
+<span id="567">567</span>
+<span id="568">568</span>
+<span id="569">569</span>
+<span id="570">570</span>
+<span id="571">571</span>
+<span id="572">572</span>
+<span id="573">573</span>
+<span id="574">574</span>
+<span id="575">575</span>
+<span id="576">576</span>
+<span id="577">577</span>
+<span id="578">578</span>
+<span id="579">579</span>
+<span id="580">580</span>
+<span id="581">581</span>
+<span id="582">582</span>
+<span id="583">583</span>
+<span id="584">584</span>
+<span id="585">585</span>
+<span id="586">586</span>
+<span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
+<span id="618">618</span>
+<span id="619">619</span>
+<span id="620">620</span>
+<span id="621">621</span>
+<span id="622">622</span>
+<span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
+<span id="627">627</span>
+<span id="628">628</span>
+<span id="629">629</span>
+<span id="630">630</span>
+<span id="631">631</span>
+<span id="632">632</span>
+<span id="633">633</span>
+<span id="634">634</span>
+<span id="635">635</span>
+<span id="636">636</span>
+<span id="637">637</span>
+<span id="638">638</span>
+<span id="639">639</span>
+<span id="640">640</span>
+<span id="641">641</span>
+<span id="642">642</span>
+<span id="643">643</span>
+<span id="644">644</span>
+<span id="645">645</span>
+<span id="646">646</span>
 </pre><pre class="rust"><code><span class="kw">use crate</span>::{
     gates::flex_gate::{FlexGateConfig, GateInstructions, GateStrategy, MAX_PHASE},
     halo2_proofs::{
@@ -525,29 +667,57 @@
 
 <span class="kw">use </span><span class="kw">super</span>::flex_gate::GateChip;
 
-<span class="attribute">#[derive(Clone, Copy, Debug, PartialEq)]
+<span class="doccomment">/// Specifies the gate strategy for the range chip
+</span><span class="attribute">#[derive(Clone, Copy, Debug, PartialEq)]
 </span><span class="kw">pub enum </span>RangeStrategy {
-    Vertical, <span class="comment">// vanilla implementation with vertical basic gate(s)
+    <span class="doccomment">/// # Vertical Gate Strategy:
+    /// `q_0 * (a + b * c - d) = 0`
+    /// where
+    /// * a = value[0], b = value[1], c = value[2], d = value[3]
+    /// * q = q_lookup[0]
+    /// * q is either 0 or 1 so this is just a simple selector
+    ///
+    /// Using `a + b * c` instead of `a * b + c` allows for &quot;chaining&quot; of gates, i.e., the output of one gate becomes `a` in the next gate.
+    </span>Vertical, <span class="comment">// vanilla implementation with vertical basic gate(s)
 </span>}
 
-<span class="attribute">#[derive(Clone, Debug)]
+<span class="doccomment">/// Configuration for Range Chip
+</span><span class="attribute">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>RangeConfig&lt;F: ScalarField&gt; {
-    <span class="kw">pub </span>gate: FlexGateConfig&lt;F&gt;,
-    <span class="doccomment">/// `lookup_advice` are special advice columns only used for lookups
+    <span class="doccomment">/// Underlying Gate Configuration
+    </span><span class="kw">pub </span>gate: FlexGateConfig&lt;F&gt;,
+    <span class="doccomment">/// Special advice (witness) Columns used only for lookup tables.
     ///
-    /// If `strategy` is `Vertical`:
-    /// * If `gate` has only 1 advice column, enable lookups for that column, in which case `lookup_advice` is empty
-    /// * Otherwise, add some user-specified number of `lookup_advice` columns
-    ///   * In this case, we don&#39;t even need a selector so `q_lookup` is empty
+    /// Each phase of a halo2 circuit has a distinct lookup_advice column.
+    ///
+    /// * If `gate` has only 1 advice column, lookups are enabled for that column, in which case `lookup_advice` is empty
+    /// * If `gate` has more than 1 advice column some number of user-specified `lookup_advice` columns are added
+    ///     * In this case, we don&#39;t need a selector so `q_lookup` is empty
     </span><span class="kw">pub </span>lookup_advice: [Vec&lt;Column&lt;Advice&gt;&gt;; MAX_PHASE],
-    <span class="kw">pub </span>q_lookup: Vec&lt;<span class="prelude-ty">Option</span>&lt;Selector&gt;&gt;,
-    <span class="kw">pub </span>lookup: TableColumn,
-    lookup_bits: usize,
-    _strategy: RangeStrategy,
+    <span class="doccomment">/// Selector values for the lookup table.
+    </span><span class="kw">pub </span>q_lookup: Vec&lt;<span class="prelude-ty">Option</span>&lt;Selector&gt;&gt;,
+    <span class="doccomment">/// Column for lookup table values.
+    </span><span class="kw">pub </span>lookup: TableColumn,
+    <span class="doccomment">/// Defines the number of bits represented in the lookup table [0,2^&lt;sup&gt;lookup_bits&lt;/sup&gt;).
+    </span>lookup_bits: usize,
+    <span class="doccomment">/// Gate Strategy used for specifying advice values.
+    </span>_strategy: RangeStrategy,
 }
 
 <span class="kw">impl</span>&lt;F: ScalarField&gt; RangeConfig&lt;F&gt; {
-    <span class="kw">pub fn </span>configure(
+    <span class="doccomment">/// Generates a new [RangeConfig] with the specified parameters.
+    ///
+    /// If `num_columns` is 0, then we assume you do not want to perform any lookups in that phase.
+    ///
+    /// Panics if `lookup_bits` &gt; 28.
+    /// * `meta`: [ConstraintSystem] of the circuit
+    /// * `range_strategy`: [GateStrategy] of the range chip
+    /// * `num_advice`: Number of [Advice] [Column]s without lookup enabled in each phase
+    /// * `num_lookup_advice`: Number of `lookup_advice` [Column]s in each phase
+    /// * `num_fixed`: Number of fixed [Column]s in each phase
+    /// * `lookup_bits`: Number of bits represented in the LookUp table [0,2^lookup_bits)
+    /// * `circuit_degree`: Degree that expresses the size of circuit (i.e., 2^&lt;sup&gt;circuit_degree&lt;/sup&gt; is the number of rows in the circuit)
+    </span><span class="kw">pub fn </span>configure(
         meta: <span class="kw-2">&amp;mut </span>ConstraintSystem&lt;F&gt;,
         range_strategy: RangeStrategy,
         num_advice: <span class="kw-2">&amp;</span>[usize],
@@ -595,7 +765,10 @@
         <span class="kw">let </span><span class="kw-2">mut </span>config =
             <span class="self">Self </span>{ lookup_advice, q_lookup, lookup, lookup_bits, gate, _strategy: range_strategy };
 
-        config.create_lookup(meta);
+        <span class="comment">// sanity check: only create lookup table if there are lookup_advice columns
+        </span><span class="kw">if </span>!num_lookup_advice.is_empty() {
+            config.create_lookup(meta);
+        }
         config.gate.max_rows = (<span class="number">1 </span>&lt;&lt; circuit_degree) - meta.minimum_rows();
         <span class="macro">assert!</span>(
             (<span class="number">1 </span>&lt;&lt; lookup_bits) &lt;= config.gate.max_rows,
@@ -605,11 +778,14 @@
         config
     }
 
-    <span class="kw">pub fn </span>lookup_bits(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+    <span class="doccomment">/// Returns the number of bits represented in the lookup table [0,2^&lt;sup&gt;lookup_bits&lt;/sup&gt;).
+    </span><span class="kw">pub fn </span>lookup_bits(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.lookup_bits
     }
 
-    <span class="kw">fn </span>create_lookup(<span class="kw-2">&amp;</span><span class="self">self</span>, meta: <span class="kw-2">&amp;mut </span>ConstraintSystem&lt;F&gt;) {
+    <span class="doccomment">/// Instantiates the lookup table of the circuit.
+    /// * `meta`: [ConstraintSystem] of the circuit
+    </span><span class="kw">fn </span>create_lookup(<span class="kw-2">&amp;</span><span class="self">self</span>, meta: <span class="kw-2">&amp;mut </span>ConstraintSystem&lt;F&gt;) {
         <span class="kw">for </span>(phase, q_l) <span class="kw">in </span><span class="self">self</span>.q_lookup.iter().enumerate() {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(q) = q_l {
                 meta.lookup(<span class="string">&quot;lookup&quot;</span>, |meta| {
@@ -621,7 +797,8 @@
                 });
             }
         }
-        <span class="kw">for </span>la <span class="kw">in </span><span class="self">self</span>.lookup_advice.iter().flat_map(|advices| advices.iter()) {
+        <span class="comment">//if multiple columns
+        </span><span class="kw">for </span>la <span class="kw">in </span><span class="self">self</span>.lookup_advice.iter().flat_map(|advices| advices.iter()) {
             meta.lookup(<span class="string">&quot;lookup wo selector&quot;</span>, |meta| {
                 <span class="kw">let </span>a = meta.query_advice(<span class="kw-2">*</span>la, Rotation::cur());
                 <span class="macro">vec!</span>[(a, <span class="self">self</span>.lookup)]
@@ -629,7 +806,9 @@
         }
     }
 
-    <span class="kw">pub fn </span>load_lookup_table(<span class="kw-2">&amp;</span><span class="self">self</span>, layouter: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Layouter&lt;F&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+    <span class="doccomment">/// Loads the lookup table into the circuit using the provided `layouter`.
+    /// * `layouter`: layouter for the circuit
+    </span><span class="kw">pub fn </span>load_lookup_table(<span class="kw-2">&amp;</span><span class="self">self</span>, layouter: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Layouter&lt;F&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         layouter.assign_table(
             || <span class="macro">format!</span>(<span class="string">&quot;{} bit lookup&quot;</span>, <span class="self">self</span>.lookup_bits),
             |<span class="kw-2">mut </span>table| {
@@ -648,18 +827,36 @@
     }
 }
 
-<span class="kw">pub trait </span>RangeInstructions&lt;F: ScalarField&gt; {
-    <span class="kw">type </span>Gate: GateInstructions&lt;F&gt;;
+<span class="doccomment">/// Trait that implements methods to constrain a field element number `x` is within a range of bits.
+</span><span class="kw">pub trait </span>RangeInstructions&lt;F: ScalarField&gt; {
+    <span class="doccomment">/// The type of Gate used within the instructions.
+    </span><span class="kw">type </span>Gate: GateInstructions&lt;F&gt;;
 
-    <span class="kw">fn </span>gate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Gate;
-    <span class="kw">fn </span>strategy(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RangeStrategy;
+    <span class="doccomment">/// Returns the type of gate used.
+    </span><span class="kw">fn </span>gate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Gate;
 
-    <span class="kw">fn </span>lookup_bits(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
+    <span class="doccomment">/// Returns the [GateStrategy] for this range.
+    </span><span class="kw">fn </span>strategy(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RangeStrategy;
 
-    <span class="doccomment">/// Constrain that `a` lies in the range [0, 2&lt;sup&gt;range_bits&lt;/sup&gt;).
+    <span class="doccomment">/// Returns the number of bits the lookup table represents.
+    </span><span class="kw">fn </span>lookup_bits(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
+
+    <span class="doccomment">/// Checks and constrains that `a` lies in the range [0, 2&lt;sup&gt;range_bits&lt;/sup&gt;).
+    ///
+    /// Assumes that both `a`&lt;= `range_bits` bits.
+    /// * a: [AssignedValue] value to be range checked
+    /// * range_bits: number of bits to represent the range
     </span><span class="kw">fn </span>range_check(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: AssignedValue&lt;F&gt;, range_bits: usize);
 
-    <span class="kw">fn </span>check_less_than(
+    <span class="doccomment">/// Constrains that &#39;a&#39; is less than &#39;b&#39;.
+    ///
+    /// Assumes that `a` and `b` have bit length &lt;= num_bits bits.
+    ///
+    /// Note: This may fail silently if a or b have more than num_bits.
+    /// * a: [QuantumCell] value to check
+    /// * b: upper bound expressed as a [QuantumCell]
+    /// * num_bits: number of bits used to represent the values of `a` and `b`
+    </span><span class="kw">fn </span>check_less_than(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
         a: <span class="kw">impl </span>Into&lt;QuantumCell&lt;F&gt;&gt;,
@@ -667,9 +864,10 @@
         num_bits: usize,
     );
 
-    <span class="doccomment">/// Checks that `a` is in `[0, b)`.
+    <span class="doccomment">/// Performs a range check that `a` has at most `bit_length(b)` bits and then constrains that `a` is less than `b`.
     ///
-    /// Does not require bit assumptions on `a, b` because we range check that `a` has at most `bit_length(b)` bits.
+    /// * a: [AssignedValue] value to check
+    /// * b: upper bound expressed as a [u64] value
     </span><span class="kw">fn </span>check_less_than_safe(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: AssignedValue&lt;F&gt;, b: u64) {
         <span class="kw">let </span>range_bits =
             (bit_length(b) + <span class="self">self</span>.lookup_bits() - <span class="number">1</span>) / <span class="self">self</span>.lookup_bits() * <span class="self">self</span>.lookup_bits();
@@ -678,9 +876,10 @@
         <span class="self">self</span>.check_less_than(ctx, a, Constant(<span class="self">self</span>.gate().get_field_element(b)), range_bits)
     }
 
-    <span class="doccomment">/// Checks that `a` is in `[0, b)`.
+    <span class="doccomment">/// Performs a range check that `a` has at most `bit_length(b)` bits and then constrains that `a` is less than `b`.
     ///
-    /// Does not require bit assumptions on `a, b` because we range check that `a` has at most `bit_length(b)` bits.
+    /// * a: [AssignedValue] value to check
+    /// * b: upper bound expressed as a [BigUint] value
     </span><span class="kw">fn </span>check_big_less_than_safe(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: AssignedValue&lt;F&gt;, b: BigUint)
     <span class="kw">where
         </span>F: BigPrimeField,
@@ -692,9 +891,12 @@
         <span class="self">self</span>.check_less_than(ctx, a, Constant(biguint_to_fe(<span class="kw-2">&amp;</span>b)), range_bits)
     }
 
-    <span class="doccomment">/// Returns whether `a` is in `[0, b)`.
+    <span class="doccomment">/// Constrains whether `a` is in `[0, b)`, and returns 1 if `a` &lt; `b`, otherwise 0.
     ///
-    /// Warning: This may fail silently if `a` or `b` have more than `num_bits` bits
+    /// Assumes that`a` and `b` are known to have &lt;= num_bits bits.
+    /// * a: first [QuantumCell] to compare
+    /// * b: second [QuantumCell] to compare
+    /// * num_bits: number of bits to represent the values
     </span><span class="kw">fn </span>is_less_than(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
@@ -703,9 +905,12 @@
         num_bits: usize,
     ) -&gt; AssignedValue&lt;F&gt;;
 
-    <span class="doccomment">/// Returns whether `a` is in `[0, b)`.
+    <span class="doccomment">/// Performs a range check that `a` has at most `ceil(bit_length(b) / lookup_bits) * lookup_bits` and then constrains that `a` is in `[0,b)`.
     ///
-    /// Does not require bit assumptions on `a, b` because we range check that `a` has at most `range_bits` bits.
+    /// Returns 1 if `a` &lt; `b`, otherwise 0.
+    ///
+    /// * a: [AssignedValue] value to check
+    /// * b: upper bound as [u64] value
     </span><span class="kw">fn </span>is_less_than_safe(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
@@ -719,9 +924,14 @@
         <span class="self">self</span>.is_less_than(ctx, a, Constant(<span class="self">self</span>.gate().get_field_element(b)), range_bits)
     }
 
-    <span class="doccomment">/// Returns whether `a` is in `[0, b)`.
+    <span class="doccomment">/// Performs a range check that `a` has at most `ceil(b.bits() / lookup_bits) * lookup_bits` bits and then constrains that `a` is in `[0,b)`.
     ///
-    /// Does not require bit assumptions on `a, b` because we range check that `a` has at most `range_bits` bits.
+    /// Returns 1 if `a` &lt; `b`, otherwise 0.
+    ///
+    /// * a: [AssignedValue] value to check
+    /// * b: upper bound as [BigUint] value
+    ///
+    /// For the current implementation using [`is_less_than`], we require `ceil(b.bits() / lookup_bits) + 1 &lt; F::NUM_BITS / lookup_bits`
     </span><span class="kw">fn </span>is_big_less_than_safe(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
@@ -738,9 +948,12 @@
         <span class="self">self</span>.is_less_than(ctx, a, Constant(biguint_to_fe(<span class="kw-2">&amp;</span>b)), range_bits)
     }
 
-    <span class="doccomment">/// Returns `(c, r)` such that `a = b * c + r`.
+    <span class="doccomment">/// Constrains and returns `(c, r)` such that `a = b * c + r`.
     ///
-    /// Assumes that `b != 0`.
+    /// Assumes that `b != 0` and that `a` has &lt;= `a_num_bits` bits.
+    /// * a: [QuantumCell] value to divide
+    /// * b: [BigUint] value to divide by
+    /// * a_num_bits: number of bits needed to represent the value of `a`
     </span><span class="kw">fn </span>div_mod(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
@@ -759,23 +972,34 @@
         ctx.assign_region([Witness(rem), Constant(biguint_to_fe(<span class="kw-2">&amp;</span>b)), Witness(div), a], [<span class="number">0</span>]);
         <span class="kw">let </span>rem = ctx.get(-<span class="number">4</span>);
         <span class="kw">let </span>div = ctx.get(-<span class="number">2</span>);
-        <span class="self">self</span>.check_big_less_than_safe(
+        <span class="comment">// Constrain that a_num_bits fulfills `div &lt; 2 ** a_num_bits / b`.
+        </span><span class="self">self</span>.check_big_less_than_safe(
             ctx,
             div,
             BigUint::one().shl(a_num_bits <span class="kw">as </span>u32) / <span class="kw-2">&amp;</span>b + BigUint::one(),
         );
-        <span class="self">self</span>.check_big_less_than_safe(ctx, rem, b);
+        <span class="comment">// Constrain that remainder is less than divisor (i.e. `r &lt; b`).
+        </span><span class="self">self</span>.check_big_less_than_safe(ctx, rem, b);
         (div, rem)
     }
 
-    <span class="doccomment">/// Returns `(c, r)` such that `a = b * c + r`.
+    <span class="doccomment">/// Constrains and returns `(c, r)` such that `a = b * c + r`.
     ///
-    /// Assumes that `b != 0`.
+    /// Assumes:
+    /// that `b != 0`.
+    /// that `a` has &lt;= `a_num_bits` bits.
+    /// that `b` has &lt;= `b_num_bits` bits.
     ///
-    /// Let `X = 2 ** b_num_bits`.
-    /// Write `a = a1 * X + a0` and `c = c1 * X + c0`.
+    /// Note:
+    /// Let `X = 2 ** b_num_bits`
+    /// Write `a = a1 * X + a0` and `c = c1 * X + c0`
     /// If we write `b * c0 + r = d1 * X + d0` then
     ///     `b * c + r = (b * c1 + d1) * X + d0`
+    /// * a: [QuantumCell] value to divide
+    /// * b: [QuantumCell] value to divide by
+    /// * a_num_bits: number of bits needed to represent the value of `a`
+    /// * b_num_bits: number of bits needed to represent the value of `b`
+    ///
     </span><span class="kw">fn </span>div_mod_var(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
@@ -803,7 +1027,11 @@
         );
         <span class="kw">let </span>[div_lo, div_hi, div, rem] = [-<span class="number">5</span>, -<span class="number">4</span>, -<span class="number">2</span>, -<span class="number">1</span>].map(|i| ctx.get(i));
         <span class="self">self</span>.range_check(ctx, div_lo, b_num_bits);
-        <span class="self">self</span>.range_check(ctx, div_hi, a_num_bits.saturating_sub(b_num_bits));
+        <span class="kw">if </span>a_num_bits &lt;= b_num_bits {
+            <span class="self">self</span>.gate().assert_is_const(ctx, <span class="kw-2">&amp;</span>div_hi, <span class="kw-2">&amp;</span>F::zero());
+        } <span class="kw">else </span>{
+            <span class="self">self</span>.range_check(ctx, div_hi, a_num_bits - b_num_bits);
+        }
 
         <span class="kw">let </span>(bcr0_hi, bcr0_lo) = {
             <span class="kw">let </span>bcr0 = <span class="self">self</span>.gate().mul_add(ctx, b, Existing(div_lo), Existing(rem));
@@ -820,43 +1048,58 @@
         (div, rem)
     }
 
-    <span class="doccomment">/// Assume `a` has been range checked already to `limb_bits` bits
+    <span class="doccomment">/// Constrains and returns the last bit of the value of `a`.
+    ///
+    /// Assume `a` has been range checked already to `limb_bits` bits.
+    /// * a: [AssignedValue] value to get the last bit of
+    /// * limb_bits: number of bits in a limb
     </span><span class="kw">fn </span>get_last_bit(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
         a: AssignedValue&lt;F&gt;,
         limb_bits: usize,
     ) -&gt; AssignedValue&lt;F&gt; {
-        <span class="kw">let </span>a_v = a.value();
-        <span class="kw">let </span>bit_v = {
-            <span class="kw">let </span>a = a_v.get_lower_32();
-            F::from(a ^ <span class="number">1 </span>!= <span class="number">0</span>)
-        };
+        <span class="kw">let </span>a_big = fe_to_biguint(a.value());
+        <span class="kw">let </span>bit_v = F::from(a_big.bit(<span class="number">0</span>));
         <span class="kw">let </span>two = <span class="self">self</span>.gate().get_field_element(<span class="number">2u64</span>);
-        <span class="kw">let </span>h_v = (<span class="kw-2">*</span>a_v - bit_v) * two.invert().unwrap();
-        ctx.assign_region([Witness(bit_v), Witness(h_v), Constant(two), Existing(a)], [<span class="number">0</span>]);
+        <span class="kw">let </span>h_v = F::from_bytes_le(<span class="kw-2">&amp;</span>(a_big &gt;&gt; <span class="number">1usize</span>).to_bytes_le());
 
+        ctx.assign_region([Witness(bit_v), Witness(h_v), Constant(two), Existing(a)], [<span class="number">0</span>]);
         <span class="kw">let </span>half = ctx.get(-<span class="number">3</span>);
-        <span class="self">self</span>.range_check(ctx, half, limb_bits - <span class="number">1</span>);
         <span class="kw">let </span>bit = ctx.get(-<span class="number">4</span>);
+
+        <span class="self">self</span>.range_check(ctx, half, limb_bits - <span class="number">1</span>);
         <span class="self">self</span>.gate().assert_bit(ctx, bit);
         bit
     }
 }
 
-<span class="attribute">#[derive(Clone, Debug)]
+<span class="doccomment">/// A chip that implements RangeInstructions which provides methods to constrain a field element `x` is within a range of bits.
+</span><span class="attribute">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>RangeChip&lt;F: ScalarField&gt; {
-    strategy: RangeStrategy,
-    <span class="kw">pub </span>gate: GateChip&lt;F&gt;,
-    <span class="kw">pub </span>lookup_bits: usize,
-    <span class="kw">pub </span>limb_bases: Vec&lt;QuantumCell&lt;F&gt;&gt;,
+    <span class="doccomment">/// # RangeChip
+    /// Provides methods to constrain a field element `x` is within a range of  bits.
+    /// Declares a lookup table of [0, 2&lt;sup&gt;lookup_bits&lt;/sup&gt;) and constrains whether a field element appears in this table.
+
+    /// [GateStrategy] for advice values in this chip.
+    </span>strategy: RangeStrategy,
+    <span class="doccomment">/// Underlying [GateChip] for this chip.
+    </span><span class="kw">pub </span>gate: GateChip&lt;F&gt;,
+    <span class="doccomment">/// Defines the number of bits represented in the lookup table [0,2&lt;sup&gt;lookup_bits&lt;/sup&gt;).
+    </span><span class="kw">pub </span>lookup_bits: usize,
+    <span class="doccomment">/// [Vec] of powers of `2 ** lookup_bits` represented as [QuantumCell::Constant].
+    /// These are precomputed and cached as a performance optimization for later limb decompositions. We precompute up to the higher power that fits in `F`, which is `2 ** ((F::CAPACITY / lookup_bits) * lookup_bits)`.
+    </span><span class="kw">pub </span>limb_bases: Vec&lt;QuantumCell&lt;F&gt;&gt;,
 }
 
 <span class="kw">impl</span>&lt;F: ScalarField&gt; RangeChip&lt;F&gt; {
-    <span class="kw">pub fn </span>new(strategy: RangeStrategy, lookup_bits: usize) -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Creates a new [RangeChip] with the given strategy and lookup_bits.
+    /// * strategy: [GateStrategy] for advice values in this chip
+    /// * lookup_bits: number of bits represented in the lookup table [0,2&lt;sup&gt;lookup_bits&lt;/sup&gt;)
+    </span><span class="kw">pub fn </span>new(strategy: RangeStrategy, lookup_bits: usize) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>limb_base = F::from(<span class="number">1u64 </span>&lt;&lt; lookup_bits);
         <span class="kw">let </span><span class="kw-2">mut </span>running_base = limb_base;
-        <span class="kw">let </span>num_bases = F::NUM_BITS <span class="kw">as </span>usize / lookup_bits;
+        <span class="kw">let </span>num_bases = F::CAPACITY <span class="kw">as </span>usize / lookup_bits;
         <span class="kw">let </span><span class="kw-2">mut </span>limb_bases = Vec::with_capacity(num_bases + <span class="number">1</span>);
         limb_bases.extend([Constant(F::one()), Constant(running_base)]);
         <span class="kw">for _ in </span><span class="number">2</span>..=num_bases {
@@ -870,7 +1113,9 @@
         <span class="self">Self </span>{ strategy, gate, lookup_bits, limb_bases }
     }
 
-    <span class="kw">pub fn </span>default(lookup_bits: usize) -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Creates a new [RangeChip] with the default strategy and provided lookup_bits.
+    /// * lookup_bits: number of bits represented in the lookup table [0,2&lt;sup&gt;lookup_bits&lt;/sup&gt;)
+    </span><span class="kw">pub fn </span>default(lookup_bits: usize) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new(RangeStrategy::Vertical, lookup_bits)
     }
 }
@@ -878,18 +1123,38 @@
 <span class="kw">impl</span>&lt;F: ScalarField&gt; RangeInstructions&lt;F&gt; <span class="kw">for </span>RangeChip&lt;F&gt; {
     <span class="kw">type </span>Gate = GateChip&lt;F&gt;;
 
-    <span class="kw">fn </span>gate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Gate {
+    <span class="doccomment">/// The type of Gate used in this chip.
+    </span><span class="kw">fn </span>gate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Gate {
         <span class="kw-2">&amp;</span><span class="self">self</span>.gate
     }
-    <span class="kw">fn </span>strategy(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RangeStrategy {
+
+    <span class="doccomment">/// Returns the [GateStrategy] for this range.
+    </span><span class="kw">fn </span>strategy(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RangeStrategy {
         <span class="self">self</span>.strategy
     }
 
-    <span class="kw">fn </span>lookup_bits(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+    <span class="doccomment">/// Defines the number of bits represented in the lookup table [0,2&lt;sup&gt;lookup_bits&lt;/sup&gt;).
+    </span><span class="kw">fn </span>lookup_bits(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.lookup_bits
     }
 
-    <span class="kw">fn </span>range_check(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: AssignedValue&lt;F&gt;, range_bits: usize) {
+    <span class="doccomment">/// Checks and constrains that `a` lies in the range [0, 2&lt;sup&gt;range_bits&lt;/sup&gt;).
+    ///
+    /// This is done by decomposing `a` into `k` limbs, where `k = ceil(range_bits / lookup_bits)`.
+    /// Each limb is constrained to be within the range [0, 2&lt;sup&gt;lookup_bits&lt;/sup&gt;).
+    /// The limbs are then combined to form `a` again with the last limb having `rem_bits` number of bits.
+    ///
+    /// * `a`: [AssignedValue] value to be range checked
+    /// * `range_bits`: number of bits in the range
+    /// * `lookup_bits`: number of bits in the lookup table
+    ///
+    /// # Assumptions
+    /// * `ceil(range_bits / lookup_bits) * lookup_bits &lt;= F::CAPACITY`
+    </span><span class="kw">fn </span>range_check(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: AssignedValue&lt;F&gt;, range_bits: usize) {
+        <span class="kw">if </span>range_bits == <span class="number">0 </span>{
+            <span class="self">self</span>.gate.assert_is_const(ctx, <span class="kw-2">&amp;</span>a, <span class="kw-2">&amp;</span>F::zero());
+            <span class="kw">return</span>;
+        }
         <span class="comment">// the number of limbs
         </span><span class="kw">let </span>k = (range_bits + <span class="self">self</span>.lookup_bits - <span class="number">1</span>) / <span class="self">self</span>.lookup_bits;
         <span class="comment">// println!(&quot;range check {} bits {} len&quot;, range_bits, k);
@@ -932,7 +1197,14 @@
         }
     }
 
-    <span class="doccomment">/// Warning: This may fail silently if a or b have more than num_bits
+    <span class="doccomment">/// Constrains that &#39;a&#39; is less than &#39;b&#39;.
+    ///
+    /// Assumes that`a` and `b` are known to have &lt;= num_bits bits.
+    ///
+    /// Note: This may fail silently if a or b have more than num_bits
+    /// * a: [QuantumCell] value to check
+    /// * b: upper bound expressed as a [QuantumCell]
+    /// * num_bits: number of bits to represent the values
     </span><span class="kw">fn </span>check_less_than(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
@@ -964,7 +1236,15 @@
         <span class="self">self</span>.range_check(ctx, check_cell, num_bits);
     }
 
-    <span class="doccomment">/// Warning: This may fail silently if a or b have more than num_bits
+    <span class="doccomment">/// Constrains whether `a` is in `[0, b)`, and returns 1 if `a` &lt; `b`, otherwise 0.
+    ///
+    /// * a: first [QuantumCell] to compare
+    /// * b: second [QuantumCell] to compare
+    /// * num_bits: number of bits to represent the values
+    ///
+    /// # Assumptions
+    /// * `a` and `b` are known to have `&lt;= num_bits` bits.
+    /// * (`ceil(num_bits / lookup_bits) + 1) * lookup_bits &lt;= F::CAPACITY`
     </span><span class="kw">fn </span>is_less_than(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
@@ -977,6 +1257,10 @@
 
         <span class="kw">let </span>k = (num_bits + <span class="self">self</span>.lookup_bits - <span class="number">1</span>) / <span class="self">self</span>.lookup_bits;
         <span class="kw">let </span>padded_bits = k * <span class="self">self</span>.lookup_bits;
+        <span class="macro">debug_assert!</span>(
+            padded_bits + <span class="self">self</span>.lookup_bits &lt;= F::CAPACITY <span class="kw">as </span>usize,
+            <span class="string">&quot;num_bits is too large for this is_less_than implementation&quot;
+        </span>);
         <span class="kw">let </span>pow_padded = <span class="self">self</span>.gate.pow_of_two[padded_bits];
 
         <span class="kw">let </span>shift_a_val = pow_padded + a.value();

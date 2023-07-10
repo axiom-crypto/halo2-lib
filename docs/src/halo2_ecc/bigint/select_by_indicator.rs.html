@@ -91,50 +91,50 @@
 
     <span class="kw">let </span>max_limb_bits = a.iter().fold(<span class="number">0</span>, |acc, x| max(acc, x.max_limb_bits));
 
-    OverflowInteger::construct(out_limbs, max_limb_bits)
+    OverflowInteger::new(out_limbs, max_limb_bits)
 }
 
 <span class="doccomment">/// only use case is when coeffs has only a single 1, rest are 0
 </span><span class="kw">pub fn </span>crt&lt;F: ScalarField&gt;(
     gate: <span class="kw-2">&amp;</span><span class="kw">impl </span>GateInstructions&lt;F&gt;,
     ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-    a: <span class="kw-2">&amp;</span>[CRTInteger&lt;F&gt;],
+    a: <span class="kw-2">&amp;</span>[<span class="kw">impl </span>AsRef&lt;CRTInteger&lt;F&gt;&gt;],
     coeffs: <span class="kw-2">&amp;</span>[AssignedValue&lt;F&gt;],
     limb_bases: <span class="kw-2">&amp;</span>[F],
 ) -&gt; CRTInteger&lt;F&gt; {
     <span class="macro">assert_eq!</span>(a.len(), coeffs.len());
-    <span class="kw">let </span>k = a[<span class="number">0</span>].truncation.limbs.len();
+    <span class="kw">let </span>k = a[<span class="number">0</span>].as_ref().truncation.limbs.len();
 
     <span class="kw">let </span>out_limbs = (<span class="number">0</span>..k)
         .map(|idx| {
-            <span class="kw">let </span>int_limbs = a.iter().map(|a| a.truncation.limbs[idx]);
+            <span class="kw">let </span>int_limbs = a.iter().map(|a| a.as_ref().truncation.limbs[idx]);
             gate.select_by_indicator(ctx, int_limbs, coeffs.iter().copied())
         })
         .collect();
 
-    <span class="kw">let </span>max_limb_bits = a.iter().fold(<span class="number">0</span>, |acc, x| max(acc, x.truncation.max_limb_bits));
+    <span class="kw">let </span>max_limb_bits = a.iter().fold(<span class="number">0</span>, |acc, x| max(acc, x.as_ref().truncation.max_limb_bits));
 
-    <span class="kw">let </span>out_trunc = OverflowInteger::construct(out_limbs, max_limb_bits);
+    <span class="kw">let </span>out_trunc = OverflowInteger::new(out_limbs, max_limb_bits);
     <span class="kw">let </span>out_native = <span class="kw">if </span>a.len() &gt; k {
-        OverflowInteger::&lt;F&gt;::evaluate(
-            gate,
+        OverflowInteger::evaluate_native(
             ctx,
+            gate,
             out_trunc.limbs.iter().copied(),
-            limb_bases[..k].iter().copied(),
+            <span class="kw-2">&amp;</span>limb_bases[..k],
         )
     } <span class="kw">else </span>{
-        <span class="kw">let </span>a_native = a.iter().map(|x| x.native);
+        <span class="kw">let </span>a_native = a.iter().map(|x| x.as_ref().native);
         gate.select_by_indicator(ctx, a_native, coeffs.iter().copied())
     };
     <span class="kw">let </span>out_val = a.iter().zip(coeffs.iter()).fold(BigInt::zero(), |acc, (x, y)| {
         <span class="kw">if </span>y.value().is_zero_vartime() {
             acc
         } <span class="kw">else </span>{
-            x.value.clone()
+            x.as_ref().value.clone()
         }
     });
 
-    CRTInteger::construct(out_trunc, out_native, out_val)
+    CRTInteger::new(out_trunc, out_native, out_val)
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="halo2_ecc" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (0da281b60 2022-10-27)" ></div></body></html>

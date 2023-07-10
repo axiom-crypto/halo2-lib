@@ -195,7 +195,8 @@
 <span id="195">195</span>
 <span id="196">196</span>
 <span id="197">197</span>
-</pre><pre class="rust"><code><span class="kw">use super</span>::{check_carry_to_zero, CRTInteger, OverflowInteger};
+</pre><pre class="rust"><code><span class="kw">use </span>std::{cmp::max, iter};
+
 <span class="kw">use </span>halo2_base::{
     gates::{range::RangeStrategy, GateInstructions, RangeInstructions},
     utils::{decompose_bigint, BigPrimeField},
@@ -205,7 +206,8 @@
 <span class="kw">use </span>num_bigint::BigInt;
 <span class="kw">use </span>num_integer::Integer;
 <span class="kw">use </span>num_traits::{One, Signed};
-<span class="kw">use </span>std::{cmp::max, iter};
+
+<span class="kw">use super</span>::{check_carry_to_zero, CRTInteger, OverflowInteger, ProperCrtUint, ProperUint};
 
 <span class="comment">// Input `a` is `CRTInteger` with `a.truncation` of length `k` with &quot;signed&quot; limbs
 // Output is `out = a (mod modulus)` as CRTInteger with
@@ -215,15 +217,18 @@
 // `out.native = (a (mod modulus)) % (native_modulus::&lt;F&gt;)`
 // We constrain `a = out + modulus * quotient` and range check `out` and `quotient`
 //
-// Assumption: the leading two bits (in big endian) are 1, and `abs(a) &lt;= 2^{n * k - 1 + F::NUM_BITS - 2}` (A weaker assumption is also enough, but this is good enough for forseeable use cases)
+// Assumption: the leading two bits (in big endian) are 1,
+</span><span class="doccomment">/// # Assumptions
+/// * abs(a) &lt;= 2&lt;sup&gt;n * k - 1 + F::NUM_BITS - 2&lt;/sup&gt; (A weaker assumption is also enough, but this is good enough for forseeable use cases)
+/// * `native_modulus::&lt;F&gt;` requires *exactly* `k = a.limbs.len()` limbs to represent
 
-// This is currently optimized for limbs greater than 64 bits, so we need `F` to be a `BigPrimeField`
+</span><span class="comment">// This is currently optimized for limbs greater than 64 bits, so we need `F` to be a `BigPrimeField`
 // In the future we&#39;ll need a slightly different implementation for limbs that fit in 32 or 64 bits (e.g., `F` is Goldilocks)
 </span><span class="kw">pub fn </span>crt&lt;F: BigPrimeField&gt;(
     range: <span class="kw-2">&amp;</span><span class="kw">impl </span>RangeInstructions&lt;F&gt;,
     <span class="comment">// chip: &amp;BigIntConfig&lt;F&gt;,
     </span>ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-    a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
+    a: CRTInteger&lt;F&gt;,
     k_bits: usize, <span class="comment">// = a.len().bits()
     </span>modulus: <span class="kw-2">&amp;</span>BigInt,
     mod_vec: <span class="kw-2">&amp;</span>[F],
@@ -231,7 +236,7 @@
     limb_bits: usize,
     limb_bases: <span class="kw-2">&amp;</span>[F],
     limb_base_big: <span class="kw-2">&amp;</span>BigInt,
-) -&gt; CRTInteger&lt;F&gt; {
+) -&gt; ProperCrtUint&lt;F&gt; {
     <span class="kw">let </span>n = limb_bits;
     <span class="kw">let </span>k = a.truncation.limbs.len();
     <span class="kw">let </span>trunc_len = n * k;
@@ -290,8 +295,8 @@
 
     <span class="comment">// strategies where we carry out school-book multiplication in some form:
     //    BigIntStrategy::Simple =&gt; {
-    </span><span class="kw">for </span>(i, (a_limb, (quot_v, out_v))) <span class="kw">in
-        </span>a.truncation.limbs.iter().zip(quot_vec.into_iter().zip(out_vec.into_iter())).enumerate()
+    </span><span class="kw">for </span>(i, ((a_limb, quot_v), out_v)) <span class="kw">in
+        </span>a.truncation.limbs.into_iter().zip(quot_vec).zip(out_vec).enumerate()
     {
         <span class="kw">let </span>(prod, new_quot_cell) = range.gate().inner_product_left_last(
             ctx,
@@ -314,7 +319,7 @@
                 </span>ctx.assign_region(
                     [
                         Constant(-F::one()),
-                        Existing(<span class="kw-2">*</span>a_limb),
+                        Existing(a_limb),
                         Witness(temp1),
                         Constant(F::one()),
                         Witness(out_v),
@@ -350,7 +355,7 @@
         range.range_check(ctx, quot_shift, limb_bits + <span class="number">1</span>);
     }
 
-    <span class="kw">let </span>check_overflow_int = OverflowInteger::construct(
+    <span class="kw">let </span>check_overflow_int = OverflowInteger::new(
         check_assigned,
         max(max(limb_bits, a.truncation.max_limb_bits) + <span class="number">1</span>, <span class="number">2 </span>* n + k_bits),
     );
@@ -366,21 +371,12 @@
     );
 
     <span class="comment">// Constrain `quot_native = sum_i quot_assigned[i] * 2^{n*i}` in `F`
-    </span><span class="kw">let </span>quot_native = OverflowInteger::&lt;F&gt;::evaluate(
-        range.gate(),
-        ctx,
-        quot_assigned,
-        limb_bases.iter().copied(),
-    );
+    </span><span class="kw">let </span>quot_native =
+        OverflowInteger::evaluate_native(ctx, range.gate(), quot_assigned, limb_bases);
 
     <span class="comment">// Constrain `out_native = sum_i out_assigned[i] * 2^{n*i}` in `F`
-    </span><span class="kw">let </span>out_native = OverflowInteger::&lt;F&gt;::evaluate(
-        range.gate(),
-        ctx,
-        out_assigned.iter().copied(),
-        limb_bases.iter().copied(),
-    );
-
+    </span><span class="kw">let </span>out_native =
+        OverflowInteger::evaluate_native(ctx, range.gate(), out_assigned.clone(), limb_bases);
     <span class="comment">// We save 1 cell by connecting `out_native` computation with the following:
 
     // Check `out + modulus * quotient - a = 0` in native field
@@ -390,7 +386,11 @@
         [-<span class="number">1</span>], <span class="comment">// negative index because -1 relative offset is `out_native` assigned value
     </span>);
 
-    CRTInteger::construct(OverflowInteger::construct(out_assigned, limb_bits), out_native, out_val)
+    ProperCrtUint(CRTInteger::new(
+        ProperUint(out_assigned).into_overflow(limb_bits),
+        out_native,
+        out_val,
+    ))
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="halo2_ecc" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (0da281b60 2022-10-27)" ></div></body></html>

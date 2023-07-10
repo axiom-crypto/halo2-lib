@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["ecdsa_verify_no_pubkey_check",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["ecdsa_verify_no_pubkey_check","WARNING: Only use this function if `1 / (p - n)` is very small (e.g., < 2-100) `pubkey` should not be the identity point"]]};

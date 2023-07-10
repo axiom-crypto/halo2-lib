@@ -249,9 +249,77 @@
 <span id="249">249</span>
 <span id="250">250</span>
 <span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::halo2_proofs::arithmetic::Field;
 <span class="kw">use </span>halo2_base::{
-    gates::RangeInstructions,
+    gates::{GateInstructions, RangeInstructions},
     utils::{BigPrimeField, ScalarField},
     AssignedValue, Context,
 };
@@ -262,37 +330,42 @@
 <span class="kw">pub mod </span>fp;
 <span class="kw">pub mod </span>fp12;
 <span class="kw">pub mod </span>fp2;
+<span class="kw">pub mod </span>vector;
 
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests;
 
 <span class="kw">pub trait </span>PrimeField = BigPrimeField;
 
-<span class="attribute">#[derive(Clone, Debug)]
-</span><span class="kw">pub struct </span>FieldExtPoint&lt;FieldPoint: Clone + Debug&gt; {
-    <span class="comment">// `F_q` field extension of `F_p` where `q = p^degree`
-    // An `F_q` point consists of `degree` number of `F_p` points
-    // The `F_p` points are stored as `FieldPoint`s
-
-    // We do not specify the irreducible `F_p` polynomial used to construct `F_q` here - that is implementation specific
-    </span><span class="kw">pub </span>coeffs: Vec&lt;FieldPoint&gt;,
-    <span class="comment">// `degree = coeffs.len()`
-</span>}
-
-<span class="kw">impl</span>&lt;FieldPoint: Clone + Debug&gt; FieldExtPoint&lt;FieldPoint&gt; {
-    <span class="kw">pub fn </span>construct(coeffs: Vec&lt;FieldPoint&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{ coeffs }
-    }
-}
-
-<span class="doccomment">/// Common functionality for finite field chips
-</span><span class="kw">pub trait </span>FieldChip&lt;F: PrimeField&gt;: Clone + Debug + Send + Sync {
+<span class="doccomment">/// Trait for common functionality for finite field chips.
+/// Primarily intended to emulate a &quot;non-native&quot; finite field using &quot;native&quot; values in a prime field `F`.
+/// Most functions are designed for the case when the non-native field is larger than the native field, but
+/// the trait can still be implemented and used in other cases.
+</span><span class="kw">pub trait </span>FieldChip&lt;F: PrimeField&gt;: Clone + Send + Sync {
     <span class="kw">const </span>PRIME_FIELD_NUM_BITS: u32;
 
-    <span class="kw">type </span>ConstantType: Debug;
-    <span class="kw">type </span>WitnessType: Debug;
-    <span class="kw">type </span>FieldPoint: Clone + Debug + Send + Sync;
-    <span class="comment">// a type implementing `Field` trait to help with witness generation (for example with inverse)
+    <span class="doccomment">/// A representation of a field element that is used for intermediate computations.
+    /// The representation can have &quot;overflows&quot; (e.g., overflow limbs or negative limbs).
+    </span><span class="kw">type </span>UnsafeFieldPoint: Clone
+        + Debug
+        + Send
+        + Sync
+        + From&lt;<span class="self">Self</span>::FieldPoint&gt;
+        + <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; From&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::UnsafeFieldPoint&gt;
+        + <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; From&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::FieldPoint&gt;; <span class="comment">// Cloning all the time impacts readability, so we allow references to be cloned into owned values
+
+    </span><span class="doccomment">/// The &quot;proper&quot; representation of a field element. Allowed to be a non-unique representation of a field element (e.g., can be greater than modulus)
+    </span><span class="kw">type </span>FieldPoint: Clone
+        + Debug
+        + Send
+        + Sync
+        + From&lt;<span class="self">Self</span>::ReducedFieldPoint&gt;
+        + <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; From&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::FieldPoint&gt;;
+
+    <span class="doccomment">/// A proper representation of field elements that guarantees a unique representation of each field element. Typically this means Uints that are less than the modulus.
+    </span><span class="kw">type </span>ReducedFieldPoint: Clone + Debug + Send + Sync;
+
+    <span class="doccomment">/// A type implementing `Field` trait to help with witness generation (for example with inverse)
     </span><span class="kw">type </span>FieldType: Field;
     <span class="kw">type </span>RangeChip: RangeInstructions&lt;F&gt;;
 
@@ -303,179 +376,242 @@
     <span class="kw">fn </span>range(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::RangeChip;
     <span class="kw">fn </span>limb_bits(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
 
-    <span class="kw">fn </span>get_assigned_value(<span class="kw-2">&amp;</span><span class="self">self</span>, x: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint) -&gt; <span class="self">Self</span>::FieldType;
+    <span class="kw">fn </span>get_assigned_value(<span class="kw-2">&amp;</span><span class="self">self</span>, x: <span class="kw-2">&amp;</span><span class="self">Self</span>::UnsafeFieldPoint) -&gt; <span class="self">Self</span>::FieldType;
 
-    <span class="kw">fn </span>fe_to_constant(x: <span class="self">Self</span>::FieldType) -&gt; <span class="self">Self</span>::ConstantType;
-    <span class="kw">fn </span>fe_to_witness(x: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldType) -&gt; <span class="self">Self</span>::WitnessType;
+    <span class="doccomment">/// Assigns `fe` as private witness. Note that the witness may **not** be constrained to be a unique representation of the field element `fe`.
+    </span><span class="kw">fn </span>load_private(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, fe: <span class="self">Self</span>::FieldType) -&gt; <span class="self">Self</span>::FieldPoint;
 
-    <span class="kw">fn </span>load_private(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, coeffs: <span class="self">Self</span>::WitnessType) -&gt; <span class="self">Self</span>::FieldPoint;
+    <span class="doccomment">/// Assigns `fe` as private witness and contrains the witness to be in reduced form.
+    </span><span class="kw">fn </span>load_private_reduced(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        fe: <span class="self">Self</span>::FieldType,
+    ) -&gt; <span class="self">Self</span>::ReducedFieldPoint {
+        <span class="kw">let </span>fe = <span class="self">self</span>.load_private(ctx, fe);
+        <span class="self">self</span>.enforce_less_than(ctx, fe)
+    }
 
-    <span class="kw">fn </span>load_constant(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, coeffs: <span class="self">Self</span>::ConstantType) -&gt; <span class="self">Self</span>::FieldPoint;
+    <span class="doccomment">/// Assigns `fe` as constant.
+    </span><span class="kw">fn </span>load_constant(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, fe: <span class="self">Self</span>::FieldType) -&gt; <span class="self">Self</span>::FieldPoint;
 
     <span class="kw">fn </span>add_no_carry(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
-        b: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
-    ) -&gt; <span class="self">Self</span>::FieldPoint;
+        a: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::UnsafeFieldPoint&gt;,
+        b: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::UnsafeFieldPoint&gt;,
+    ) -&gt; <span class="self">Self</span>::UnsafeFieldPoint;
 
     <span class="doccomment">/// output: `a + c`
     </span><span class="kw">fn </span>add_constant_no_carry(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
-        c: <span class="self">Self</span>::ConstantType,
-    ) -&gt; <span class="self">Self</span>::FieldPoint;
+        a: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::UnsafeFieldPoint&gt;,
+        c: <span class="self">Self</span>::FieldType,
+    ) -&gt; <span class="self">Self</span>::UnsafeFieldPoint;
 
     <span class="kw">fn </span>sub_no_carry(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
-        b: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
-    ) -&gt; <span class="self">Self</span>::FieldPoint;
+        a: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::UnsafeFieldPoint&gt;,
+        b: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::UnsafeFieldPoint&gt;,
+    ) -&gt; <span class="self">Self</span>::UnsafeFieldPoint;
 
-    <span class="kw">fn </span>negate(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint) -&gt; <span class="self">Self</span>::FieldPoint;
+    <span class="kw">fn </span>negate(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="self">Self</span>::FieldPoint) -&gt; <span class="self">Self</span>::FieldPoint;
 
     <span class="doccomment">/// a * c
     </span><span class="kw">fn </span>scalar_mul_no_carry(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
+        a: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::UnsafeFieldPoint&gt;,
         c: i64,
-    ) -&gt; <span class="self">Self</span>::FieldPoint;
+    ) -&gt; <span class="self">Self</span>::UnsafeFieldPoint;
 
     <span class="doccomment">/// a * c + b
     </span><span class="kw">fn </span>scalar_mul_and_add_no_carry(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
-        b: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
+        a: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::UnsafeFieldPoint&gt;,
+        b: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::UnsafeFieldPoint&gt;,
         c: i64,
-    ) -&gt; <span class="self">Self</span>::FieldPoint;
+    ) -&gt; <span class="self">Self</span>::UnsafeFieldPoint;
 
     <span class="kw">fn </span>mul_no_carry(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
-        b: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
-    ) -&gt; <span class="self">Self</span>::FieldPoint;
+        a: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::UnsafeFieldPoint&gt;,
+        b: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::UnsafeFieldPoint&gt;,
+    ) -&gt; <span class="self">Self</span>::UnsafeFieldPoint;
 
-    <span class="kw">fn </span>check_carry_mod_to_zero(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint);
+    <span class="kw">fn </span>check_carry_mod_to_zero(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="self">Self</span>::UnsafeFieldPoint);
 
-    <span class="kw">fn </span>carry_mod(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint) -&gt; <span class="self">Self</span>::FieldPoint;
+    <span class="kw">fn </span>carry_mod(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="self">Self</span>::UnsafeFieldPoint) -&gt; <span class="self">Self</span>::FieldPoint;
 
-    <span class="kw">fn </span>range_check(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint, max_bits: usize);
+    <span class="kw">fn </span>range_check(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        a: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::UnsafeFieldPoint&gt;,
+        max_bits: usize,
+    );
 
-    <span class="kw">fn </span>enforce_less_than(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint);
+    <span class="doccomment">/// Constrains that `a` is a reduced representation and returns the wrapped `a`.
+    </span><span class="kw">fn </span>enforce_less_than(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        a: <span class="self">Self</span>::FieldPoint,
+    ) -&gt; <span class="self">Self</span>::ReducedFieldPoint;
 
     <span class="comment">// Returns 1 iff the underlying big integer for `a` is 0. Otherwise returns 0.
     // For field extensions, checks coordinate-wise.
-    </span><span class="kw">fn </span>is_soft_zero(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint) -&gt; AssignedValue&lt;F&gt;;
+    </span><span class="kw">fn </span>is_soft_zero(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        a: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::FieldPoint&gt;,
+    ) -&gt; AssignedValue&lt;F&gt;;
 
     <span class="comment">// Constrains that the underlying big integer is in [0, p - 1].
     // Then returns 1 iff the underlying big integer for `a` is 0. Otherwise returns 0.
     // For field extensions, checks coordinate-wise.
-    </span><span class="kw">fn </span>is_soft_nonzero(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint) -&gt; AssignedValue&lt;F&gt;;
+    </span><span class="kw">fn </span>is_soft_nonzero(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        a: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::FieldPoint&gt;,
+    ) -&gt; AssignedValue&lt;F&gt;;
 
-    <span class="kw">fn </span>is_zero(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint) -&gt; AssignedValue&lt;F&gt;;
+    <span class="kw">fn </span>is_zero(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::FieldPoint&gt;) -&gt; AssignedValue&lt;F&gt;;
 
-    <span class="comment">// assuming `a, b` have been range checked to be a proper BigInt
+    <span class="kw">fn </span>is_equal_unenforced(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        a: <span class="self">Self</span>::ReducedFieldPoint,
+        b: <span class="self">Self</span>::ReducedFieldPoint,
+    ) -&gt; AssignedValue&lt;F&gt;;
+
+    <span class="kw">fn </span>assert_equal(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        a: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::FieldPoint&gt;,
+        b: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::FieldPoint&gt;,
+    );
+
+    <span class="comment">// =========== default implementations =============
+
+    // assuming `a, b` have been range checked to be a proper BigInt
     // constrain the witnesses `a, b` to be `&lt; p`
     // then check `a == b` as BigInts
     </span><span class="kw">fn </span>is_equal(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
-        b: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
+        a: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::FieldPoint&gt;,
+        b: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::FieldPoint&gt;,
     ) -&gt; AssignedValue&lt;F&gt; {
-        <span class="self">self</span>.enforce_less_than(ctx, a);
-        <span class="self">self</span>.enforce_less_than(ctx, b);
+        <span class="kw">let </span>a = <span class="self">self</span>.enforce_less_than(ctx, a.into());
+        <span class="kw">let </span>b = <span class="self">self</span>.enforce_less_than(ctx, b.into());
         <span class="comment">// a.native and b.native are derived from `a.truncation, b.truncation`, so no need to check if they&#39;re equal
         </span><span class="self">self</span>.is_equal_unenforced(ctx, a, b)
     }
 
-    <span class="kw">fn </span>is_equal_unenforced(
+    <span class="doccomment">/// If using `UnsafeFieldPoint`, make sure multiplication does not cause overflow.
+    </span><span class="kw">fn </span>mul(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
-        b: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
-    ) -&gt; AssignedValue&lt;F&gt;;
-
-    <span class="kw">fn </span>assert_equal(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint, b: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint);
-
-    <span class="kw">fn </span>mul(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
-        b: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
+        a: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::UnsafeFieldPoint&gt;,
+        b: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::UnsafeFieldPoint&gt;,
     ) -&gt; <span class="self">Self</span>::FieldPoint {
         <span class="kw">let </span>no_carry = <span class="self">self</span>.mul_no_carry(ctx, a, b);
-        <span class="self">self</span>.carry_mod(ctx, <span class="kw-2">&amp;</span>no_carry)
+        <span class="self">self</span>.carry_mod(ctx, no_carry)
     }
 
-    <span class="kw">fn </span>divide(
+    <span class="doccomment">/// Constrains that `b` is nonzero as a field element and then returns `a / b`.
+    </span><span class="kw">fn </span>divide(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
-        b: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
+        a: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::FieldPoint&gt;,
+        b: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::FieldPoint&gt;,
     ) -&gt; <span class="self">Self</span>::FieldPoint {
-        <span class="kw">let </span>a_val = <span class="self">self</span>.get_assigned_value(a);
-        <span class="kw">let </span>b_val = <span class="self">self</span>.get_assigned_value(b);
-        <span class="kw">let </span>b_inv = b_val.invert().unwrap();
+        <span class="kw">let </span>b = b.into();
+        <span class="kw">let </span>b_is_zero = <span class="self">self</span>.is_zero(ctx, b.clone());
+        <span class="self">self</span>.gate().assert_is_const(ctx, <span class="kw-2">&amp;</span>b_is_zero, <span class="kw-2">&amp;</span>F::zero());
+
+        <span class="self">self</span>.divide_unsafe(ctx, a.into(), b)
+    }
+
+    <span class="doccomment">/// Returns `a / b` without constraining `b` to be nonzero.
+    ///
+    /// Warning: undefined behavior when `b` is zero.
+    ///
+    /// `a, b` must be such that `quot * b - a` without carry does not overflow, where `quot` is the output.
+    </span><span class="kw">fn </span>divide_unsafe(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        a: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::UnsafeFieldPoint&gt;,
+        b: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::UnsafeFieldPoint&gt;,
+    ) -&gt; <span class="self">Self</span>::FieldPoint {
+        <span class="kw">let </span>a = a.into();
+        <span class="kw">let </span>b = b.into();
+        <span class="kw">let </span>a_val = <span class="self">self</span>.get_assigned_value(<span class="kw-2">&amp;</span>a);
+        <span class="kw">let </span>b_val = <span class="self">self</span>.get_assigned_value(<span class="kw-2">&amp;</span>b);
+        <span class="kw">let </span>b_inv: <span class="self">Self</span>::FieldType = Option::from(b_val.invert()).unwrap_or_default();
         <span class="kw">let </span>quot_val = a_val * b_inv;
 
-        <span class="kw">let </span>quot = <span class="self">self</span>.load_private(ctx, <span class="self">Self</span>::fe_to_witness(<span class="kw-2">&amp;</span>quot_val));
+        <span class="kw">let </span>quot = <span class="self">self</span>.load_private(ctx, quot_val);
 
         <span class="comment">// constrain quot * b - a = 0 mod p
-        </span><span class="kw">let </span>quot_b = <span class="self">self</span>.mul_no_carry(ctx, <span class="kw-2">&amp;</span>quot, b);
-        <span class="kw">let </span>quot_constraint = <span class="self">self</span>.sub_no_carry(ctx, <span class="kw-2">&amp;</span>quot_b, a);
-        <span class="self">self</span>.check_carry_mod_to_zero(ctx, <span class="kw-2">&amp;</span>quot_constraint);
+        </span><span class="kw">let </span>quot_b = <span class="self">self</span>.mul_no_carry(ctx, quot.clone(), b);
+        <span class="kw">let </span>quot_constraint = <span class="self">self</span>.sub_no_carry(ctx, quot_b, a);
+        <span class="self">self</span>.check_carry_mod_to_zero(ctx, quot_constraint);
 
         quot
     }
 
-    <span class="comment">// constrain and output -a / b
-    // this is usually cheaper constraint-wise than computing -a and then (-a) / b separately
+    <span class="doccomment">/// Constrains that `b` is nonzero as a field element and then returns `-a / b`.
     </span><span class="kw">fn </span>neg_divide(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
-        b: <span class="kw-2">&amp;</span><span class="self">Self</span>::FieldPoint,
+        a: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::FieldPoint&gt;,
+        b: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::FieldPoint&gt;,
     ) -&gt; <span class="self">Self</span>::FieldPoint {
-        <span class="kw">let </span>a_val = <span class="self">self</span>.get_assigned_value(a);
-        <span class="kw">let </span>b_val = <span class="self">self</span>.get_assigned_value(b);
-        <span class="kw">let </span>b_inv = b_val.invert().unwrap();
+        <span class="kw">let </span>b = b.into();
+        <span class="kw">let </span>b_is_zero = <span class="self">self</span>.is_zero(ctx, b.clone());
+        <span class="self">self</span>.gate().assert_is_const(ctx, <span class="kw-2">&amp;</span>b_is_zero, <span class="kw-2">&amp;</span>F::zero());
+
+        <span class="self">self</span>.neg_divide_unsafe(ctx, a.into(), b)
+    }
+
+    <span class="comment">// Returns `-a / b` without constraining `b` to be nonzero.
+    // this is usually cheaper constraint-wise than computing -a and then (-a) / b separately
+    </span><span class="kw">fn </span>neg_divide_unsafe(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        a: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::UnsafeFieldPoint&gt;,
+        b: <span class="kw">impl </span>Into&lt;<span class="self">Self</span>::UnsafeFieldPoint&gt;,
+    ) -&gt; <span class="self">Self</span>::FieldPoint {
+        <span class="kw">let </span>a = a.into();
+        <span class="kw">let </span>b = b.into();
+        <span class="kw">let </span>a_val = <span class="self">self</span>.get_assigned_value(<span class="kw-2">&amp;</span>a);
+        <span class="kw">let </span>b_val = <span class="self">self</span>.get_assigned_value(<span class="kw-2">&amp;</span>b);
+        <span class="kw">let </span>b_inv: <span class="self">Self</span>::FieldType = Option::from(b_val.invert()).unwrap_or_default();
         <span class="kw">let </span>quot_val = -a_val * b_inv;
 
-        <span class="kw">let </span>quot = <span class="self">self</span>.load_private(ctx, <span class="self">Self</span>::fe_to_witness(<span class="kw-2">&amp;</span>quot_val));
-        <span class="self">self</span>.range_check(ctx, <span class="kw-2">&amp;</span>quot, <span class="self">Self</span>::PRIME_FIELD_NUM_BITS <span class="kw">as </span>usize);
+        <span class="kw">let </span>quot = <span class="self">self</span>.load_private(ctx, quot_val);
 
         <span class="comment">// constrain quot * b + a = 0 mod p
-        </span><span class="kw">let </span>quot_b = <span class="self">self</span>.mul_no_carry(ctx, <span class="kw-2">&amp;</span>quot, b);
-        <span class="kw">let </span>quot_constraint = <span class="self">self</span>.add_no_carry(ctx, <span class="kw-2">&amp;</span>quot_b, a);
-        <span class="self">self</span>.check_carry_mod_to_zero(ctx, <span class="kw-2">&amp;</span>quot_constraint);
+        </span><span class="kw">let </span>quot_b = <span class="self">self</span>.mul_no_carry(ctx, quot.clone(), b);
+        <span class="kw">let </span>quot_constraint = <span class="self">self</span>.add_no_carry(ctx, quot_b, a);
+        <span class="self">self</span>.check_carry_mod_to_zero(ctx, quot_constraint);
 
         quot
     }
 }
 
-<span class="kw">pub trait </span>Selectable&lt;F: ScalarField&gt; {
-    <span class="kw">type </span>Point;
-
-    <span class="kw">fn </span>select(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span><span class="self">Self</span>::Point,
-        b: <span class="kw-2">&amp;</span><span class="self">Self</span>::Point,
-        sel: AssignedValue&lt;F&gt;,
-    ) -&gt; <span class="self">Self</span>::Point;
+<span class="kw">pub trait </span>Selectable&lt;F: ScalarField, Pt&gt; {
+    <span class="kw">fn </span>select(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: Pt, b: Pt, sel: AssignedValue&lt;F&gt;) -&gt; Pt;
 
     <span class="kw">fn </span>select_by_indicator(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span>[<span class="self">Self</span>::Point],
+        a: <span class="kw-2">&amp;</span><span class="kw">impl </span>AsRef&lt;[Pt]&gt;,
         coeffs: <span class="kw-2">&amp;</span>[AssignedValue&lt;F&gt;],
-    ) -&gt; <span class="self">Self</span>::Point;
+    ) -&gt; Pt;
 }
 
 <span class="comment">// Common functionality for prime field chips

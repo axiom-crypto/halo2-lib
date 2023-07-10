@@ -403,6 +403,143 @@
 <span id="403">403</span>
 <span id="404">404</span>
 <span id="405">405</span>
+<span id="406">406</span>
+<span id="407">407</span>
+<span id="408">408</span>
+<span id="409">409</span>
+<span id="410">410</span>
+<span id="411">411</span>
+<span id="412">412</span>
+<span id="413">413</span>
+<span id="414">414</span>
+<span id="415">415</span>
+<span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
+<span id="419">419</span>
+<span id="420">420</span>
+<span id="421">421</span>
+<span id="422">422</span>
+<span id="423">423</span>
+<span id="424">424</span>
+<span id="425">425</span>
+<span id="426">426</span>
+<span id="427">427</span>
+<span id="428">428</span>
+<span id="429">429</span>
+<span id="430">430</span>
+<span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
+<span id="451">451</span>
+<span id="452">452</span>
+<span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
+<span id="468">468</span>
+<span id="469">469</span>
+<span id="470">470</span>
+<span id="471">471</span>
+<span id="472">472</span>
+<span id="473">473</span>
+<span id="474">474</span>
+<span id="475">475</span>
+<span id="476">476</span>
+<span id="477">477</span>
+<span id="478">478</span>
+<span id="479">479</span>
+<span id="480">480</span>
+<span id="481">481</span>
+<span id="482">482</span>
+<span id="483">483</span>
+<span id="484">484</span>
+<span id="485">485</span>
+<span id="486">486</span>
+<span id="487">487</span>
+<span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
+<span id="495">495</span>
+<span id="496">496</span>
+<span id="497">497</span>
+<span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
+<span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
+<span id="510">510</span>
+<span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
 </pre><pre class="rust"><code><span class="attribute">#[cfg(feature = <span class="string">&quot;halo2-pse&quot;</span>)]
 </span><span class="kw">use </span><span class="kw">crate</span>::halo2_proofs::arithmetic::CurveAffine;
 <span class="kw">use </span><span class="kw">crate</span>::halo2_proofs::{arithmetic::FieldExt, circuit::Value};
@@ -413,55 +550,42 @@
 <span class="kw">use </span>num_traits::Signed;
 <span class="kw">use </span>num_traits::{One, Zero};
 
-<span class="attribute">#[cfg(feature = <span class="string">&quot;halo2-axiom&quot;</span>)]
-</span><span class="kw">pub trait </span>BigPrimeField: ScalarField {
-    <span class="kw">fn </span>from_u64_digits(val: <span class="kw-2">&amp;</span>[u64]) -&gt; <span class="self">Self</span>;
-}
-<span class="attribute">#[cfg(feature = <span class="string">&quot;halo2-axiom&quot;</span>)]
-</span><span class="kw">impl</span>&lt;F&gt; BigPrimeField <span class="kw">for </span>F
-<span class="kw">where
-    </span>F: FieldExt + Hash + Into&lt;[u64; <span class="number">4</span>]&gt; + From&lt;[u64; <span class="number">4</span>]&gt;,
-{
-    <span class="attribute">#[inline(always)]
-    </span><span class="kw">fn </span>from_u64_digits(val: <span class="kw-2">&amp;</span>[u64]) -&gt; <span class="self">Self </span>{
-        <span class="macro">debug_assert!</span>(val.len() &lt;= <span class="number">4</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>raw = [<span class="number">0u64</span>; <span class="number">4</span>];
-        raw[..val.len()].copy_from_slice(val);
-        <span class="self">Self</span>::from(raw)
-    }
-}
-
-<span class="attribute">#[cfg(feature = <span class="string">&quot;halo2-axiom&quot;</span>)]
+<span class="doccomment">/// Helper trait to represent a field element that can be converted into [u64] limbs.
+///
+/// Note: Since the number of bits necessary to represent a field element is larger than the number of bits in a u64, we decompose the integer representation of the field element into multiple [u64] values e.g. `limbs`.
 </span><span class="kw">pub trait </span>ScalarField: FieldExt + Hash {
-    <span class="doccomment">/// Returns the base `2^bit_len` little endian representation of the prime field element
-    /// up to `num_limbs` number of limbs (truncates any extra limbs)
+    <span class="doccomment">/// Returns the base `2&lt;sup&gt;bit_len&lt;/sup&gt;` little endian representation of the [ScalarField] element up to `num_limbs` number of limbs (truncates any extra limbs).
     ///
-    /// Basically same as `to_repr` but does not go further into bytes
-    ///
-    /// Undefined behavior if `bit_len &gt; 64`
+    /// Assumes `bit_len &lt; 64`.
+    /// * `num_limbs`: number of limbs to return
+    /// * `bit_len`: number of bits in each limb
     </span><span class="kw">fn </span>to_u64_limbs(<span class="self">self</span>, num_limbs: usize, bit_len: usize) -&gt; Vec&lt;u64&gt;;
-}
-<span class="attribute">#[cfg(feature = <span class="string">&quot;halo2-axiom&quot;</span>)]
-</span><span class="kw">impl</span>&lt;F&gt; ScalarField <span class="kw">for </span>F
-<span class="kw">where
-    </span>F: FieldExt + Hash + Into&lt;[u64; <span class="number">4</span>]&gt;,
-{
-    <span class="attribute">#[inline(always)]
-    </span><span class="kw">fn </span>to_u64_limbs(<span class="self">self</span>, num_limbs: usize, bit_len: usize) -&gt; Vec&lt;u64&gt; {
-        <span class="kw">let </span>tmp: [u64; <span class="number">4</span>] = <span class="self">self</span>.into();
-        decompose_u64_digits_to_limbs(tmp, num_limbs, bit_len)
+
+    <span class="doccomment">/// Returns the little endian byte representation of the element.
+    </span><span class="kw">fn </span>to_bytes_le(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt;;
+
+    <span class="doccomment">/// Creates a field element from a little endian byte representation.
+    ///
+    /// The default implementation assumes that `PrimeField::from_repr` is implemented for little-endian.
+    /// It should be overriden if this is not the case.
+    </span><span class="kw">fn </span>from_bytes_le(bytes: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>repr = <span class="self">Self</span>::Repr::default();
+        repr.as_mut()[..bytes.len()].copy_from_slice(bytes);
+        <span class="self">Self</span>::from_repr(repr).unwrap()
     }
 }
+<span class="comment">// See below for implementations
 
-<span class="comment">// Later: will need to separate BigPrimeField from ScalarField when Goldilocks is introduced
+// Later: will need to separate BigPrimeField from ScalarField when Goldilocks is introduced
+</span><span class="kw">pub trait </span>BigPrimeField = ScalarField;
 
-</span><span class="attribute">#[cfg(feature = <span class="string">&quot;halo2-pse&quot;</span>)]
-</span><span class="kw">pub trait </span>BigPrimeField = FieldExt&lt;Repr = [u8; <span class="number">32</span>]&gt; + Hash;
-
-<span class="attribute">#[cfg(feature = <span class="string">&quot;halo2-pse&quot;</span>)]
-</span><span class="kw">pub trait </span>ScalarField = FieldExt + Hash;
-
-<span class="attribute">#[inline(always)]
+<span class="doccomment">/// Converts an [Iterator] of u64 digits into `number_of_limbs` limbs of `bit_len` bits returned as a [Vec].
+///
+/// Assumes: `bit_len &lt; 64`.
+/// * `e`: Iterator of [u64] digits
+/// * `number_of_limbs`: number of limbs to return
+/// * `bit_len`: number of bits in each limb
+</span><span class="attribute">#[inline(always)]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>decompose_u64_digits_to_limbs(
     e: <span class="kw">impl </span>IntoIterator&lt;Item = u64&gt;,
     number_of_limbs: usize,
@@ -470,27 +594,36 @@
     <span class="macro">debug_assert!</span>(bit_len &lt; <span class="number">64</span>);
 
     <span class="kw">let </span><span class="kw-2">mut </span>e = e.into_iter();
-    <span class="kw">let </span>mask: u64 = (<span class="number">1u64 </span>&lt;&lt; bit_len) - <span class="number">1u64</span>;
+    <span class="comment">// Mask to extract the bits from each digit
+    </span><span class="kw">let </span>mask: u64 = (<span class="number">1u64 </span>&lt;&lt; bit_len) - <span class="number">1u64</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>u64_digit = e.next().unwrap_or(<span class="number">0</span>);
     <span class="kw">let </span><span class="kw-2">mut </span>rem = <span class="number">64</span>;
-    (<span class="number">0</span>..number_of_limbs)
+
+    <span class="comment">// For each digit, we extract its individual limbs by repeatedly masking and shifting the digit based on how many bits we have left to extract.
+    </span>(<span class="number">0</span>..number_of_limbs)
         .map(|<span class="kw">_</span>| <span class="kw">match </span>rem.cmp(<span class="kw-2">&amp;</span>bit_len) {
-            core::cmp::Ordering::Greater =&gt; {
+            <span class="comment">// If `rem` &gt; `bit_len`, we mask the bits from the `u64_digit` to return the first limb.
+            // We shift the digit to the right by `bit_len` bits and subtract `bit_len` from `rem`
+            </span>core::cmp::Ordering::Greater =&gt; {
                 <span class="kw">let </span>limb = u64_digit &amp; mask;
                 u64_digit &gt;&gt;= bit_len;
                 rem -= bit_len;
                 limb
             }
-            core::cmp::Ordering::Equal =&gt; {
+            <span class="comment">// If `rem` == `bit_len`, then we mask the bits from the `u64_digit` to return the first limb
+            // We retrieve the next digit and reset `rem` to 64
+            </span>core::cmp::Ordering::Equal =&gt; {
                 <span class="kw">let </span>limb = u64_digit &amp; mask;
                 u64_digit = e.next().unwrap_or(<span class="number">0</span>);
                 rem = <span class="number">64</span>;
                 limb
             }
-            core::cmp::Ordering::Less =&gt; {
+            <span class="comment">// If `rem` &lt; `bit_len`, we retrieve the next digit, mask it, and shift left `rem` bits from the `u64_digit` to return the first limb.
+            // we shift the digit to the right by `bit_len` - `rem` bits to retrieve the start of the next limb and add 64 - bit_len to `rem` to get the remainder.
+            </span>core::cmp::Ordering::Less =&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>limb = u64_digit;
                 u64_digit = e.next().unwrap_or(<span class="number">0</span>);
-                limb |= (u64_digit &amp; ((<span class="number">1 </span>&lt;&lt; (bit_len - rem)) - <span class="number">1</span>)) &lt;&lt; rem;
+                limb |= (u64_digit &amp; ((<span class="number">1u64 </span>&lt;&lt; (bit_len - rem)) - <span class="number">1u64</span>)) &lt;&lt; rem;
                 u64_digit &gt;&gt;= bit_len - rem;
                 rem += <span class="number">64 </span>- bit_len;
                 limb
@@ -499,68 +632,66 @@
         .collect()
 }
 
-<span class="kw">pub fn </span>bit_length(x: u64) -&gt; usize {
+<span class="doccomment">/// Returns the number of bits needed to represent the value of `x`.
+</span><span class="kw">pub fn </span>bit_length(x: u64) -&gt; usize {
     (u64::BITS - x.leading_zeros()) <span class="kw">as </span>usize
 }
 
-<span class="kw">pub fn </span>log2_ceil(x: u64) -&gt; usize {
-    (u64::BITS - x.leading_zeros() - (x &amp; (x - <span class="number">1</span>) == <span class="number">0</span>) <span class="kw">as </span>u32) <span class="kw">as </span>usize
+<span class="doccomment">/// Returns the ceiling of the base 2 logarithm of `x`.
+///
+/// `log2_ceil(0)` returns 0.
+</span><span class="kw">pub fn </span>log2_ceil(x: u64) -&gt; usize {
+    (u64::BITS - x.leading_zeros()) <span class="kw">as </span>usize - usize::from(x.is_power_of_two())
 }
 
-<span class="kw">pub fn </span>modulus&lt;F: BigPrimeField&gt;() -&gt; BigUint {
+<span class="doccomment">/// Returns the modulus of [BigPrimeField].
+</span><span class="kw">pub fn </span>modulus&lt;F: BigPrimeField&gt;() -&gt; BigUint {
     fe_to_biguint(<span class="kw-2">&amp;</span>-F::one()) + <span class="number">1u64
 </span>}
 
-<span class="kw">pub fn </span>power_of_two&lt;F: BigPrimeField&gt;(n: usize) -&gt; F {
+<span class="doccomment">/// Returns the [BigPrimeField] element of 2&lt;sup&gt;n&lt;/sup&gt;.
+/// * `n`: the desired power of 2.
+</span><span class="kw">pub fn </span>power_of_two&lt;F: BigPrimeField&gt;(n: usize) -&gt; F {
     biguint_to_fe(<span class="kw-2">&amp;</span>(BigUint::one() &lt;&lt; n))
 }
 
-<span class="doccomment">/// assume `e` less than modulus of F
+<span class="doccomment">/// Converts an immutable reference to [BigUint] to a [BigPrimeField].
+/// * `e`: immutable reference to [BigUint]
+///
+/// # Assumptions:
+/// * `e` is less than the modulus of `F`
 </span><span class="kw">pub fn </span>biguint_to_fe&lt;F: BigPrimeField&gt;(e: <span class="kw-2">&amp;</span>BigUint) -&gt; F {
-    <span class="attribute">#[cfg(feature = <span class="string">&quot;halo2-axiom&quot;</span>)]
-    </span>{
-        F::from_u64_digits(<span class="kw-2">&amp;</span>e.to_u64_digits())
-    }
-
-    <span class="attribute">#[cfg(feature = <span class="string">&quot;halo2-pse&quot;</span>)]
-    </span>{
-        <span class="kw">let </span><span class="kw-2">mut </span>repr = F::Repr::default();
-        <span class="kw">let </span>bytes = e.to_bytes_le();
-        repr.as_mut()[..bytes.len()].copy_from_slice(<span class="kw-2">&amp;</span>bytes);
-        F::from_repr(repr).unwrap()
-    }
+    <span class="kw">let </span>bytes = e.to_bytes_le();
+    F::from_bytes_le(<span class="kw-2">&amp;</span>bytes)
 }
 
-<span class="doccomment">/// assume `|e|` less than modulus of F
+<span class="doccomment">/// Converts an immutable reference to [BigInt] to a [BigPrimeField].
+/// * `e`: immutable reference to [BigInt]
+///
+/// # Assumptions:
+/// * The absolute value of `e` is less than the modulus of `F`
 </span><span class="kw">pub fn </span>bigint_to_fe&lt;F: BigPrimeField&gt;(e: <span class="kw-2">&amp;</span>BigInt) -&gt; F {
-    <span class="attribute">#[cfg(feature = <span class="string">&quot;halo2-axiom&quot;</span>)]
-    </span>{
-        <span class="kw">let </span>(sign, digits) = e.to_u64_digits();
-        <span class="kw">if </span>sign == Sign::Minus {
-            -F::from_u64_digits(<span class="kw-2">&amp;</span>digits)
-        } <span class="kw">else </span>{
-            F::from_u64_digits(<span class="kw-2">&amp;</span>digits)
-        }
-    }
-    <span class="attribute">#[cfg(feature = <span class="string">&quot;halo2-pse&quot;</span>)]
-    </span>{
-        <span class="kw">let </span>(sign, bytes) = e.to_bytes_le();
-        <span class="kw">let </span><span class="kw-2">mut </span>repr = F::Repr::default();
-        repr.as_mut()[..bytes.len()].copy_from_slice(<span class="kw-2">&amp;</span>bytes);
-        <span class="kw">let </span>f_abs = F::from_repr(repr).unwrap();
-        <span class="kw">if </span>sign == Sign::Minus {
-            -f_abs
-        } <span class="kw">else </span>{
-            f_abs
-        }
+    <span class="kw">let </span>(sign, bytes) = e.to_bytes_le();
+    <span class="kw">let </span>f_abs = F::from_bytes_le(<span class="kw-2">&amp;</span>bytes);
+    <span class="kw">if </span>sign == Sign::Minus {
+        -f_abs
+    } <span class="kw">else </span>{
+        f_abs
     }
 }
 
-<span class="kw">pub fn </span>fe_to_biguint&lt;F: ff::PrimeField&gt;(fe: <span class="kw-2">&amp;</span>F) -&gt; BigUint {
-    BigUint::from_bytes_le(fe.to_repr().as_ref())
+<span class="doccomment">/// Converts an immutable reference to an PrimeField element into a [BigUint] element.
+/// * `fe`: immutable reference to PrimeField element to convert
+</span><span class="kw">pub fn </span>fe_to_biguint&lt;F: ScalarField&gt;(fe: <span class="kw-2">&amp;</span>F) -&gt; BigUint {
+    BigUint::from_bytes_le(fe.to_bytes_le().as_ref())
 }
 
-<span class="kw">pub fn </span>fe_to_bigint&lt;F: BigPrimeField&gt;(fe: <span class="kw-2">&amp;</span>F) -&gt; BigInt {
+<span class="doccomment">/// Converts a [BigPrimeField] element into a [BigInt] element by sending `fe` in `[0, F::modulus())` to
+/// ```ignore
+/// fe,                 if fe &lt; F::modulus() / 2
+/// fe - F::modulus(),  otherwise
+/// ```
+</span><span class="kw">pub fn </span>fe_to_bigint&lt;F: BigPrimeField&gt;(fe: <span class="kw-2">&amp;</span>F) -&gt; BigInt {
     <span class="comment">// TODO: `F` should just have modulus as lazy_static or something
     </span><span class="kw">let </span>modulus = modulus::&lt;F&gt;();
     <span class="kw">let </span>e = fe_to_biguint(fe);
@@ -571,7 +702,13 @@
     }
 }
 
-<span class="kw">pub fn </span>decompose&lt;F: BigPrimeField&gt;(e: <span class="kw-2">&amp;</span>F, number_of_limbs: usize, bit_len: usize) -&gt; Vec&lt;F&gt; {
+<span class="doccomment">/// Decomposes an immutable reference to a [BigPrimeField] element into `number_of_limbs` limbs of `bit_len` bits each and returns a [Vec] of [BigPrimeField] represented by those limbs.
+///
+/// Assumes `bit_len &lt; 128`.
+/// * `e`: immutable reference to [BigPrimeField] element to decompose
+/// * `number_of_limbs`: number of limbs to decompose `e` into
+/// * `bit_len`: number of bits in each limb
+</span><span class="kw">pub fn </span>decompose&lt;F: BigPrimeField&gt;(e: <span class="kw-2">&amp;</span>F, number_of_limbs: usize, bit_len: usize) -&gt; Vec&lt;F&gt; {
     <span class="kw">if </span>bit_len &gt; <span class="number">64 </span>{
         decompose_biguint(<span class="kw-2">&amp;</span>fe_to_biguint(e), number_of_limbs, bit_len)
     } <span class="kw">else </span>{
@@ -579,7 +716,12 @@
     }
 }
 
-<span class="doccomment">/// Assumes `bit_len` &lt;= 64
+<span class="doccomment">/// Decomposes an immutable reference to a [ScalarField] element into `number_of_limbs` limbs of `bit_len` bits each and returns a [Vec] of [u64] represented by those limbs.
+///
+/// Assumes `bit_len` &lt; 64
+/// * `e`: immutable reference to [ScalarField] element to decompose
+/// * `number_of_limbs`: number of limbs to decompose `e` into
+/// * `bit_len`: number of bits in each limb
 </span><span class="kw">pub fn </span>decompose_fe_to_u64_limbs&lt;F: ScalarField&gt;(
     e: <span class="kw-2">&amp;</span>F,
     number_of_limbs: usize,
@@ -596,22 +738,34 @@
     }
 }
 
-<span class="kw">pub fn </span>decompose_biguint&lt;F: BigPrimeField&gt;(
+<span class="doccomment">/// Decomposes an immutable reference to a [BigUint] into `num_limbs` limbs of `bit_len` bits each and returns a [Vec] of [BigPrimeField] represented by those limbs.
+///
+/// Assumes 64 &lt;= `bit_len` &lt; 128.
+/// * `e`: immutable reference to [BigInt] to decompose
+/// * `num_limbs`: number of limbs to decompose `e` into
+/// * `bit_len`: number of bits in each limb
+///
+/// Truncates to `num_limbs` limbs if `e` is too large.
+</span><span class="kw">pub fn </span>decompose_biguint&lt;F: BigPrimeField&gt;(
     e: <span class="kw-2">&amp;</span>BigUint,
     num_limbs: usize,
     bit_len: usize,
 ) -&gt; Vec&lt;F&gt; {
-    <span class="macro">debug_assert!</span>((<span class="number">64</span>..<span class="number">128</span>).contains(<span class="kw-2">&amp;</span>bit_len));
+    <span class="comment">// bit_len must be between 64` and 128
+    </span><span class="macro">debug_assert!</span>((<span class="number">64</span>..<span class="number">128</span>).contains(<span class="kw-2">&amp;</span>bit_len));
     <span class="kw">let </span><span class="kw-2">mut </span>e = e.iter_u64_digits();
 
-    <span class="kw">let </span><span class="kw-2">mut </span>limb0 = e.next().unwrap_or(<span class="number">0</span>) <span class="kw">as </span>u128;
+    <span class="comment">// Grab first 128-bit limb from iterator
+    </span><span class="kw">let </span><span class="kw-2">mut </span>limb0 = e.next().unwrap_or(<span class="number">0</span>) <span class="kw">as </span>u128;
     <span class="kw">let </span><span class="kw-2">mut </span>rem = bit_len - <span class="number">64</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>u64_digit = e.next().unwrap_or(<span class="number">0</span>);
-    limb0 |= ((u64_digit &amp; ((<span class="number">1 </span>&lt;&lt; rem) - <span class="number">1u64</span>)) <span class="kw">as </span>u128) &lt;&lt; <span class="number">64u32</span>;
+    <span class="comment">// Extract second limb (bit length 64) from e
+    </span>limb0 |= ((u64_digit &amp; ((<span class="number">1u64 </span>&lt;&lt; rem) - <span class="number">1u64</span>)) <span class="kw">as </span>u128) &lt;&lt; <span class="number">64u32</span>;
     u64_digit &gt;&gt;= rem;
     rem = <span class="number">64 </span>- rem;
 
-    core::iter::once(F::from_u128(limb0))
+    <span class="comment">// Convert `limb0` into field element `F` and create an iterator by chaining `limb0` with the computing the remaining limbs
+    </span>core::iter::once(F::from_u128(limb0))
         .chain((<span class="number">1</span>..num_limbs).map(|<span class="kw">_</span>| {
             <span class="kw">let </span><span class="kw-2">mut </span>limb = u64_digit <span class="kw">as </span>u128;
             <span class="kw">let </span><span class="kw-2">mut </span>bits = rem;
@@ -622,7 +776,7 @@
                 bits += <span class="number">64</span>;
             }
             rem = bit_len - bits;
-            limb |= ((u64_digit &amp; ((<span class="number">1 </span>&lt;&lt; rem) - <span class="number">1</span>)) <span class="kw">as </span>u128) &lt;&lt; bits;
+            limb |= ((u64_digit &amp; ((<span class="number">1u64 </span>&lt;&lt; rem) - <span class="number">1u64</span>)) <span class="kw">as </span>u128) &lt;&lt; bits;
             u64_digit &gt;&gt;= rem;
             rem = <span class="number">64 </span>- rem;
             F::from_u128(limb)
@@ -630,7 +784,13 @@
         .collect()
 }
 
-<span class="kw">pub fn </span>decompose_bigint&lt;F: BigPrimeField&gt;(e: <span class="kw-2">&amp;</span>BigInt, num_limbs: usize, bit_len: usize) -&gt; Vec&lt;F&gt; {
+<span class="doccomment">/// Decomposes an immutable reference to a [BigInt] into `num_limbs` limbs of `bit_len` bits each and returns a [Vec] of [BigPrimeField] represented by those limbs.
+///
+/// Assumes `bit_len &lt; 128`.
+/// * `e`: immutable reference to `BigInt` to decompose
+/// * `num_limbs`: number of limbs to decompose `e` into
+/// * `bit_len`: number of bits in each limb
+</span><span class="kw">pub fn </span>decompose_bigint&lt;F: BigPrimeField&gt;(e: <span class="kw-2">&amp;</span>BigInt, num_limbs: usize, bit_len: usize) -&gt; Vec&lt;F&gt; {
     <span class="kw">if </span>e.is_negative() {
         decompose_biguint::&lt;F&gt;(e.magnitude(), num_limbs, bit_len).into_iter().map(|x| -x).collect()
     } <span class="kw">else </span>{
@@ -638,7 +798,13 @@
     }
 }
 
-<span class="kw">pub fn </span>decompose_bigint_option&lt;F: BigPrimeField&gt;(
+<span class="doccomment">/// Decomposes an immutable reference to a [BigInt] into `num_limbs` limbs of `bit_len` bits each and returns a [Vec] of [BigPrimeField] represented by those limbs wrapped in [Value].
+///
+/// Assumes `bit_len` &lt; 128.
+/// * `e`: immutable reference to `BigInt` to decompose
+/// * `num_limbs`: number of limbs to decompose `e` into
+/// * `bit_len`: number of bits in each limb
+</span><span class="kw">pub fn </span>decompose_bigint_option&lt;F: BigPrimeField&gt;(
     value: Value&lt;<span class="kw-2">&amp;</span>BigInt&gt;,
     number_of_limbs: usize,
     bit_len: usize,
@@ -646,7 +812,10 @@
     value.map(|e| decompose_bigint(e, number_of_limbs, bit_len)).transpose_vec(number_of_limbs)
 }
 
-<span class="kw">pub fn </span>value_to_option&lt;V&gt;(value: Value&lt;V&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;V&gt; {
+<span class="doccomment">/// Wraps the internal value of `value` in an [Option].
+/// If the value is [None], then the function returns [None].
+/// * `value`: Value to convert.
+</span><span class="kw">pub fn </span>value_to_option&lt;V&gt;(value: Value&lt;V&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;V&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>v = <span class="prelude-val">None</span>;
     value.map(|val| {
         v = <span class="prelude-val">Some</span>(val);
@@ -654,11 +823,11 @@
     v
 }
 
-<span class="doccomment">/// Compute the represented value by a vector of values and a bit length.
+<span class="doccomment">/// Computes the value of an integer by passing as `input` a [Vec] of its limb values and the `bit_len` (bit length) used.
 ///
-/// This function is used to compute the value of an integer
-/// passing as input its limb values and the bit length used.
-/// Returns the sum of all limbs scaled by 2^(bit_len * i)
+/// Returns the sum of all limbs scaled by 2&lt;sup&gt;(bit_len * i)&lt;/sup&gt; where i is the index of the limb.
+/// * `input`: Limb values of the integer.
+/// * `bit_len`: Length of limb in bits
 </span><span class="kw">pub fn </span>compose(input: Vec&lt;BigUint&gt;, bit_len: usize) -&gt; BigUint {
     input.iter().rev().fold(BigUint::zero(), |acc, val| (acc &lt;&lt; bit_len) + val)
 }
@@ -666,9 +835,10 @@
 <span class="attribute">#[cfg(feature = <span class="string">&quot;halo2-axiom&quot;</span>)]
 </span><span class="kw">pub use </span>halo2_proofs_axiom::halo2curves::CurveAffineExt;
 
-<span class="attribute">#[cfg(feature = <span class="string">&quot;halo2-pse&quot;</span>)]
+<span class="doccomment">/// Helper trait
+</span><span class="attribute">#[cfg(feature = <span class="string">&quot;halo2-pse&quot;</span>)]
 </span><span class="kw">pub trait </span>CurveAffineExt: CurveAffine {
-    <span class="doccomment">/// Unlike the `Coordinates` trait, this just returns the raw affine coordinantes without checking `is_on_curve`
+    <span class="doccomment">/// Unlike the `Coordinates` trait, this just returns the raw affine (X, Y) coordinantes without checking `is_on_curve`
     </span><span class="kw">fn </span>into_coordinates(<span class="self">self</span>) -&gt; (<span class="self">Self</span>::Base, <span class="self">Self</span>::Base) {
         <span class="kw">let </span>coordinates = <span class="self">self</span>.coordinates().unwrap();
         (<span class="kw-2">*</span>coordinates.x(), <span class="kw-2">*</span>coordinates.y())
@@ -677,7 +847,37 @@
 <span class="attribute">#[cfg(feature = <span class="string">&quot;halo2-pse&quot;</span>)]
 </span><span class="kw">impl</span>&lt;C: CurveAffine&gt; CurveAffineExt <span class="kw">for </span>C {}
 
-<span class="kw">pub mod </span>fs {
+<span class="kw">mod </span>scalar_field_impls {
+    <span class="kw">use </span>num_bigint::BigUint;
+
+    <span class="kw">use super</span>::{decompose_u64_digits_to_limbs, ScalarField};
+    <span class="kw">use </span><span class="kw">crate</span>::halo2_proofs::halo2curves::FieldExt;
+    <span class="kw">use </span>std::hash::Hash;
+
+    <span class="doccomment">/// We do a blanket implementation in &#39;community-edition&#39; to make it easier to integrate with other crates.
+    ///
+    /// ASSUMING F::Repr is little-endian
+    </span><span class="kw">impl</span>&lt;F&gt; ScalarField <span class="kw">for </span>F
+    <span class="kw">where
+        </span>F: FieldExt + Hash,
+    {
+        <span class="attribute">#[inline(always)]
+        </span><span class="kw">fn </span>to_u64_limbs(<span class="self">self</span>, num_limbs: usize, bit_len: usize) -&gt; Vec&lt;u64&gt; {
+            <span class="kw">let </span>bytes = <span class="self">self</span>.to_repr();
+            <span class="kw">let </span>uint = BigUint::from_bytes_le(bytes.as_ref());
+            <span class="kw">let </span>digits = uint.iter_u64_digits();
+            decompose_u64_digits_to_limbs(digits, num_limbs, bit_len)
+        }
+
+        <span class="attribute">#[inline(always)]
+        </span><span class="kw">fn </span>to_bytes_le(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; {
+            <span class="self">self</span>.to_repr().as_ref().to_vec()
+        }
+    }
+}
+
+<span class="doccomment">/// Module for reading parameters for Halo2 proving system from the file system.
+</span><span class="kw">pub mod </span>fs {
     <span class="kw">use </span>std::{
         env::var,
         fs::{<span class="self">self</span>, File},
@@ -696,7 +896,9 @@
     };
     <span class="kw">use </span>rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 
-    <span class="kw">pub fn </span>read_params(k: u32) -&gt; ParamsKZG&lt;Bn256&gt; {
+    <span class="doccomment">/// Reads the srs from a file found in `./params/kzg_bn254_{k}.srs` or `{dir}/kzg_bn254_{k}.srs` if `PARAMS_DIR` env var is specified.
+    /// * `k`: degree that expresses the size of circuit (i.e., 2^&lt;sup&gt;k&lt;/sup&gt; is the number of rows in the circuit)
+    </span><span class="kw">pub fn </span>read_params(k: u32) -&gt; ParamsKZG&lt;Bn256&gt; {
         <span class="kw">let </span>dir = var(<span class="string">&quot;PARAMS_DIR&quot;</span>).unwrap_or_else(|<span class="kw">_</span>| <span class="string">&quot;./params&quot;</span>.to_string());
         ParamsKZG::&lt;Bn256&gt;::read(<span class="kw-2">&amp;mut </span>BufReader::new(
             File::open(<span class="macro">format!</span>(<span class="string">&quot;{dir}/kzg_bn254_{k}.srs&quot;</span>).as_str())
@@ -705,7 +907,10 @@
         .unwrap()
     }
 
-    <span class="kw">pub fn </span>read_or_create_srs&lt;<span class="lifetime">&#39;a</span>, C: CurveAffine, P: ParamsProver&lt;<span class="lifetime">&#39;a</span>, C&gt;&gt;(
+    <span class="doccomment">/// Attempts to read the srs from a file found in `./params/kzg_bn254_{k}.srs` or `{dir}/kzg_bn254_{k}.srs` if `PARAMS_DIR` env var is specified, creates a file it if it does not exist.
+    /// * `k`: degree that expresses the size of circuit (i.e., 2^&lt;sup&gt;k&lt;/sup&gt; is the number of rows in the circuit)
+    /// * `setup`: a function that creates the srs
+    </span><span class="kw">pub fn </span>read_or_create_srs&lt;<span class="lifetime">&#39;a</span>, C: CurveAffine, P: ParamsProver&lt;<span class="lifetime">&#39;a</span>, C&gt;&gt;(
         k: u32,
         setup: <span class="kw">impl </span>Fn(u32) -&gt; P,
     ) -&gt; P {
@@ -729,10 +934,74 @@
         }
     }
 
-    <span class="kw">pub fn </span>gen_srs(k: u32) -&gt; ParamsKZG&lt;Bn256&gt; {
+    <span class="doccomment">/// Generates the SRS for the KZG scheme and writes it to a file found in &quot;./params/kzg_bn2_{k}.srs` or `{dir}/kzg_bn254_{k}.srs` if `PARAMS_DIR` env var is specified, creates a file it if it does not exist&quot;
+    /// * `k`: degree that expresses the size of circuit (i.e., 2^&lt;sup&gt;k&lt;/sup&gt; is the number of rows in the circuit)
+    </span><span class="kw">pub fn </span>gen_srs(k: u32) -&gt; ParamsKZG&lt;Bn256&gt; {
         read_or_create_srs::&lt;G1Affine, <span class="kw">_</span>&gt;(k, |k| {
             ParamsKZG::&lt;Bn256&gt;::setup(k, ChaCha20Rng::from_seed(Default::default()))
         })
+    }
+}
+
+<span class="doccomment">/// Utilities for testing
+</span><span class="attribute">#[cfg(any(test, feature = <span class="string">&quot;test-utils&quot;</span>))]
+</span><span class="kw">pub mod </span>testing {
+    <span class="kw">use </span><span class="kw">crate</span>::halo2_proofs::{
+        halo2curves::bn256::{Bn256, Fr, G1Affine},
+        plonk::{create_proof, verify_proof, Circuit, ProvingKey, VerifyingKey},
+        poly::commitment::ParamsProver,
+        poly::kzg::{
+            commitment::KZGCommitmentScheme, commitment::ParamsKZG, multiopen::ProverSHPLONK,
+            multiopen::VerifierSHPLONK, strategy::SingleStrategy,
+        },
+        transcript::{
+            Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
+        },
+    };
+    <span class="kw">use </span>rand::rngs::OsRng;
+
+    <span class="doccomment">/// helper function to generate a proof with real prover
+    </span><span class="kw">pub fn </span>gen_proof(
+        params: <span class="kw-2">&amp;</span>ParamsKZG&lt;Bn256&gt;,
+        pk: <span class="kw-2">&amp;</span>ProvingKey&lt;G1Affine&gt;,
+        circuit: <span class="kw">impl </span>Circuit&lt;Fr&gt;,
+    ) -&gt; Vec&lt;u8&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>transcript = Blake2bWrite::&lt;<span class="kw">_</span>, <span class="kw">_</span>, Challenge255&lt;<span class="kw">_</span>&gt;&gt;::init(<span class="macro">vec!</span>[]);
+        create_proof::&lt;
+            KZGCommitmentScheme&lt;Bn256&gt;,
+            ProverSHPLONK&lt;<span class="lifetime">&#39;_</span>, Bn256&gt;,
+            Challenge255&lt;<span class="kw">_</span>&gt;,
+            <span class="kw">_</span>,
+            Blake2bWrite&lt;Vec&lt;u8&gt;, G1Affine, <span class="kw">_</span>&gt;,
+            <span class="kw">_</span>,
+        &gt;(params, pk, <span class="kw-2">&amp;</span>[circuit], <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>[]], OsRng, <span class="kw-2">&amp;mut </span>transcript)
+        .expect(<span class="string">&quot;prover should not fail&quot;</span>);
+        transcript.finalize()
+    }
+
+    <span class="doccomment">/// helper function to verify a proof
+    </span><span class="kw">pub fn </span>check_proof(
+        params: <span class="kw-2">&amp;</span>ParamsKZG&lt;Bn256&gt;,
+        vk: <span class="kw-2">&amp;</span>VerifyingKey&lt;G1Affine&gt;,
+        proof: <span class="kw-2">&amp;</span>[u8],
+        expect_satisfied: bool,
+    ) {
+        <span class="kw">let </span>verifier_params = params.verifier_params();
+        <span class="kw">let </span>strategy = SingleStrategy::new(params);
+        <span class="kw">let </span><span class="kw-2">mut </span>transcript = Blake2bRead::&lt;<span class="kw">_</span>, <span class="kw">_</span>, Challenge255&lt;<span class="kw">_</span>&gt;&gt;::init(proof);
+        <span class="kw">let </span>res = verify_proof::&lt;
+            KZGCommitmentScheme&lt;Bn256&gt;,
+            VerifierSHPLONK&lt;<span class="lifetime">&#39;_</span>, Bn256&gt;,
+            Challenge255&lt;G1Affine&gt;,
+            Blake2bRead&lt;<span class="kw-2">&amp;</span>[u8], G1Affine, Challenge255&lt;G1Affine&gt;&gt;,
+            SingleStrategy&lt;<span class="lifetime">&#39;_</span>, Bn256&gt;,
+        &gt;(verifier_params, vk, strategy, <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>[]], <span class="kw-2">&amp;mut </span>transcript);
+
+        <span class="kw">if </span>expect_satisfied {
+            <span class="macro">assert!</span>(res.is_ok());
+        } <span class="kw">else </span>{
+            <span class="macro">assert!</span>(res.is_err());
+        }
     }
 }
 
@@ -806,6 +1075,11 @@
                 }
             }
         }
+    }
+
+    <span class="attribute">#[test]
+    </span><span class="kw">fn </span>test_log2_ceil_zero() {
+        <span class="macro">assert_eq!</span>(log2_ceil(<span class="number">0</span>), <span class="number">0</span>);
     }
 }
 </code></pre></div>

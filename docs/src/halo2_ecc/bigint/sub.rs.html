@@ -72,31 +72,38 @@
 <span id="72">72</span>
 <span id="73">73</span>
 <span id="74">74</span>
-</pre><pre class="rust"><code><span class="kw">use super</span>::{CRTInteger, OverflowInteger};
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+</pre><pre class="rust"><code><span class="kw">use super</span>::{CRTInteger, OverflowInteger, ProperCrtUint, ProperUint};
 <span class="kw">use </span>halo2_base::{
     gates::{GateInstructions, RangeInstructions},
     utils::ScalarField,
     AssignedValue, Context,
     QuantumCell::{Constant, Existing, Witness},
 };
+<span class="kw">use </span>itertools::Itertools;
 
-<span class="doccomment">/// Should only be called on integers a, b in proper representation with all limbs having at most `limb_bits` number of bits
+<span class="doccomment">/// # Assumptions
+/// * Should only be called on integers a, b in proper representation with all limbs having at most `limb_bits` number of bits
+/// * `a, b` have same nonzero number of limbs
 </span><span class="kw">pub fn </span>assign&lt;F: ScalarField&gt;(
     range: <span class="kw-2">&amp;</span><span class="kw">impl </span>RangeInstructions&lt;F&gt;,
     ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-    a: <span class="kw-2">&amp;</span>OverflowInteger&lt;F&gt;,
-    b: <span class="kw-2">&amp;</span>OverflowInteger&lt;F&gt;,
+    a: <span class="kw">impl </span>Into&lt;ProperUint&lt;F&gt;&gt;,
+    b: <span class="kw">impl </span>Into&lt;ProperUint&lt;F&gt;&gt;,
     limb_bits: usize,
     limb_base: F,
 ) -&gt; (OverflowInteger&lt;F&gt;, AssignedValue&lt;F&gt;) {
-    <span class="macro">debug_assert!</span>(a.max_limb_bits &lt;= limb_bits);
-    <span class="macro">debug_assert!</span>(b.max_limb_bits &lt;= limb_bits);
-    <span class="macro">debug_assert_eq!</span>(a.limbs.len(), b.limbs.len());
-    <span class="kw">let </span>k = a.limbs.len();
+    <span class="kw">let </span>a = a.into();
+    <span class="kw">let </span>b = b.into();
+    <span class="kw">let </span>k = a.<span class="number">0</span>.len();
     <span class="kw">let </span><span class="kw-2">mut </span>out_limbs = Vec::with_capacity(k);
 
     <span class="kw">let </span><span class="kw-2">mut </span>borrow: <span class="prelude-ty">Option</span>&lt;AssignedValue&lt;F&gt;&gt; = <span class="prelude-val">None</span>;
-    <span class="kw">for </span>(<span class="kw-2">&amp;</span>a_limb, <span class="kw-2">&amp;</span>b_limb) <span class="kw">in </span>a.limbs.iter().zip(b.limbs.iter()) {
+    <span class="kw">for </span>(a_limb, b_limb) <span class="kw">in </span>a.<span class="number">0</span>.into_iter().zip_eq(b.<span class="number">0</span>) {
         <span class="kw">let </span>(bottom, lt) = <span class="kw">match </span>borrow {
             <span class="prelude-val">None </span>=&gt; {
                 <span class="kw">let </span>lt = range.is_less_than(ctx, a_limb, b_limb, limb_bits);
@@ -128,23 +135,26 @@
         out_limbs.push(out_limb);
         borrow = <span class="prelude-val">Some</span>(lt);
     }
-    (OverflowInteger::construct(out_limbs, limb_bits), borrow.unwrap())
+    (OverflowInteger::new(out_limbs, limb_bits), borrow.unwrap())
 }
 
 <span class="comment">// returns (a-b, underflow), where underflow is nonzero iff a &lt; b
+</span><span class="doccomment">/// # Assumptions
+/// * `a, b` are proper CRT representations of integers with the same number of limbs
 </span><span class="kw">pub fn </span>crt&lt;F: ScalarField&gt;(
     range: <span class="kw-2">&amp;</span><span class="kw">impl </span>RangeInstructions&lt;F&gt;,
     ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-    a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
-    b: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
+    a: ProperCrtUint&lt;F&gt;,
+    b: ProperCrtUint&lt;F&gt;,
     limb_bits: usize,
     limb_base: F,
 ) -&gt; (CRTInteger&lt;F&gt;, AssignedValue&lt;F&gt;) {
-    <span class="kw">let </span>(out_trunc, underflow) =
-        assign::&lt;F&gt;(range, ctx, <span class="kw-2">&amp;</span>a.truncation, <span class="kw-2">&amp;</span>b.truncation, limb_bits, limb_base);
-    <span class="kw">let </span>out_native = range.gate().sub(ctx, a.native, b.native);
-    <span class="kw">let </span>out_val = <span class="kw-2">&amp;</span>a.value - <span class="kw-2">&amp;</span>b.value;
-    (CRTInteger::construct(out_trunc, out_native, out_val), underflow)
+    <span class="kw">let </span>out_native = range.gate().sub(ctx, a.<span class="number">0</span>.native, b.<span class="number">0</span>.native);
+    <span class="kw">let </span>a_limbs = ProperUint(a.<span class="number">0</span>.truncation.limbs);
+    <span class="kw">let </span>b_limbs = ProperUint(b.<span class="number">0</span>.truncation.limbs);
+    <span class="kw">let </span>(out_trunc, underflow) = assign(range, ctx, a_limbs, b_limbs, limb_bits, limb_base);
+    <span class="kw">let </span>out_val = a.<span class="number">0</span>.value - b.<span class="number">0</span>.value;
+    (CRTInteger::new(out_trunc, out_native, out_val), underflow)
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="halo2_ecc" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (0da281b60 2022-10-27)" ></div></body></html>

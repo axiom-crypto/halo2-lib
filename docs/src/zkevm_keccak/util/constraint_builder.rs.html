@@ -130,7 +130,7 @@
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>validate_degree(<span class="kw-2">&amp;</span><span class="self">self</span>, degree: usize, name: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) {
         <span class="kw">if </span><span class="self">self</span>.max_degree &gt; <span class="number">0 </span>{
-            <span class="macro">debug_assert!</span>(
+            <span class="macro">assert!</span>(
                 degree &lt;= <span class="self">self</span>.max_degree,
                 <span class="string">&quot;Expression {} degree too high: {} &gt; {}&quot;</span>,
                 name,

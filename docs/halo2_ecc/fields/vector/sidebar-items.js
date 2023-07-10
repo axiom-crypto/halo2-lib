@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["FieldVector","A fixed length vector of `FieldPoint`s"],["FieldVectorChip","Contains common functionality for vector operations that can be derived from those of the underlying `FpChip`"]]};

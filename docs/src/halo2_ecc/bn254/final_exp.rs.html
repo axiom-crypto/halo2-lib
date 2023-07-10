@@ -391,21 +391,20 @@
 <span id="391">391</span>
 <span id="392">392</span>
 <span id="393">393</span>
-</pre><pre class="rust"><code><span class="kw">use super</span>::{Fp12Chip, Fp2Chip, FpChip, FpPoint};
+<span id="394">394</span>
+<span id="395">395</span>
+<span id="396">396</span>
+<span id="397">397</span>
+</pre><pre class="rust"><code><span class="kw">use super</span>::{Fp12Chip, Fp2Chip, FpChip, FqPoint};
 <span class="kw">use </span><span class="kw">crate</span>::halo2_proofs::{
     arithmetic::Field,
     halo2curves::bn256::{Fq, Fq2, BN_X, FROBENIUS_COEFF_FQ12_C1},
 };
 <span class="kw">use crate</span>::{
     ecc::get_naf,
-    fields::{fp12::mul_no_carry_w6, FieldChip, FieldExtPoint, PrimeField},
+    fields::{fp12::mul_no_carry_w6, vector::FieldVector, FieldChip, PrimeField},
 };
-<span class="kw">use </span>halo2_base::{
-    gates::GateInstructions,
-    utils::{fe_to_biguint, modulus},
-    Context,
-    QuantumCell::Constant,
-};
+<span class="kw">use </span>halo2_base::{gates::GateInstructions, utils::modulus, Context, QuantumCell::Constant};
 <span class="kw">use </span>num_bigint::BigUint;
 
 <span class="kw">const </span>XI_0: i64 = <span class="number">9</span>;
@@ -421,46 +420,48 @@
     ) -&gt; &lt;<span class="self">Self </span><span class="kw">as </span>FieldChip&lt;F&gt;&gt;::FieldPoint {
         <span class="macro">assert_eq!</span>(modulus::&lt;Fq&gt;() % <span class="number">4u64</span>, BigUint::from(<span class="number">3u64</span>));
         <span class="macro">assert_eq!</span>(modulus::&lt;Fq&gt;() % <span class="number">6u64</span>, BigUint::from(<span class="number">1u64</span>));
-        <span class="macro">assert_eq!</span>(a.coeffs.len(), <span class="number">12</span>);
+        <span class="macro">assert_eq!</span>(a.<span class="number">0</span>.len(), <span class="number">12</span>);
         <span class="kw">let </span>pow = power % <span class="number">12</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>out_fp2 = Vec::with_capacity(<span class="number">6</span>);
 
-        <span class="kw">let </span>fp2_chip = Fp2Chip::&lt;F&gt;::new(<span class="self">self</span>.fp_chip);
+        <span class="kw">let </span>fp_chip = <span class="self">self</span>.fp_chip();
+        <span class="kw">let </span>fp2_chip = Fp2Chip::&lt;F&gt;::new(fp_chip);
         <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">6 </span>{
             <span class="kw">let </span>frob_coeff = FROBENIUS_COEFF_FQ12_C1[pow].pow_vartime([i <span class="kw">as </span>u64]);
             <span class="comment">// possible optimization (not implemented): load `frob_coeff` as we multiply instead of loading first
             // frobenius map is used infrequently so this is a small optimization
 
-            </span><span class="kw">let </span><span class="kw-2">mut </span>a_fp2 =
-                FieldExtPoint::construct(<span class="macro">vec!</span>[a.coeffs[i].clone(), a.coeffs[i + <span class="number">6</span>].clone()]);
+            </span><span class="kw">let </span><span class="kw-2">mut </span>a_fp2 = FieldVector(<span class="macro">vec!</span>[a[i].clone(), a[i + <span class="number">6</span>].clone()]);
             <span class="kw">if </span>pow % <span class="number">2 </span>!= <span class="number">0 </span>{
-                a_fp2 = fp2_chip.conjugate(ctx, <span class="kw-2">&amp;</span>a_fp2);
+                a_fp2 = fp2_chip.conjugate(ctx, a_fp2);
             }
             <span class="comment">// if `frob_coeff` is in `Fp` and not just `Fp2`, then we can be more efficient in multiplication
             </span><span class="kw">if </span>frob_coeff == Fq2::one() {
                 out_fp2.push(a_fp2);
             } <span class="kw">else if </span>frob_coeff.c1 == Fq::zero() {
-                <span class="kw">let </span>frob_fixed = fp2_chip.fp_chip.load_constant(ctx, fe_to_biguint(<span class="kw-2">&amp;</span>frob_coeff.c0));
+                <span class="kw">let </span>frob_fixed = fp_chip.load_constant(ctx, frob_coeff.c0);
                 {
-                    <span class="kw">let </span>out_nocarry = fp2_chip.fp_mul_no_carry(ctx, <span class="kw-2">&amp;</span>a_fp2, <span class="kw-2">&amp;</span>frob_fixed);
-                    out_fp2.push(fp2_chip.carry_mod(ctx, <span class="kw-2">&amp;</span>out_nocarry));
+                    <span class="kw">let </span>out_nocarry = fp2_chip.<span class="number">0</span>.fp_mul_no_carry(ctx, a_fp2, frob_fixed);
+                    out_fp2.push(fp2_chip.carry_mod(ctx, out_nocarry));
                 }
             } <span class="kw">else </span>{
                 <span class="kw">let </span>frob_fixed = fp2_chip.load_constant(ctx, frob_coeff);
-                out_fp2.push(fp2_chip.mul(ctx, <span class="kw-2">&amp;</span>a_fp2, <span class="kw-2">&amp;</span>frob_fixed));
+                out_fp2.push(fp2_chip.mul(ctx, a_fp2, frob_fixed));
             }
         }
 
         <span class="kw">let </span>out_coeffs = out_fp2
             .iter()
-            .map(|x| x.coeffs[<span class="number">0</span>].clone())
-            .chain(out_fp2.iter().map(|x| x.coeffs[<span class="number">1</span>].clone()))
+            .map(|x| x[<span class="number">0</span>].clone())
+            .chain(out_fp2.iter().map(|x| x[<span class="number">1</span>].clone()))
             .collect();
 
-        FieldExtPoint::construct(out_coeffs)
+        FieldVector(out_coeffs)
     }
 
     <span class="comment">// exp is in little-endian
+    </span><span class="doccomment">/// # Assumptions
+    /// * `a` is nonzero field point
     </span><span class="kw">pub fn </span>pow(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
@@ -479,7 +480,11 @@
             <span class="kw">if </span>z != <span class="number">0 </span>{
                 <span class="macro">assert!</span>(z == <span class="number">1 </span>|| z == -<span class="number">1</span>);
                 <span class="kw">if </span>is_started {
-                    res = <span class="kw">if </span>z == <span class="number">1 </span>{ <span class="self">self</span>.mul(ctx, <span class="kw-2">&amp;</span>res, a) } <span class="kw">else </span>{ <span class="self">self</span>.divide(ctx, <span class="kw-2">&amp;</span>res, a) };
+                    res = <span class="kw">if </span>z == <span class="number">1 </span>{
+                        <span class="self">self</span>.mul(ctx, <span class="kw-2">&amp;</span>res, a)
+                    } <span class="kw">else </span>{
+                        <span class="self">self</span>.divide_unsafe(ctx, <span class="kw-2">&amp;</span>res, a)
+                    };
                 } <span class="kw">else </span>{
                     <span class="macro">assert_eq!</span>(z, <span class="number">1</span>);
                     is_started = <span class="bool-val">true</span>;
@@ -499,14 +504,12 @@
 
     </span><span class="doccomment">/// in = g0 + g2 w + g4 w^2 + g1 w^3 + g3 w^4 + g5 w^5 where g_i = g_i0 + g_i1 * u are elements of Fp2
     /// out = Compress(in) = [ g2, g3, g4, g5 ]
-    </span><span class="kw">pub fn </span>cyclotomic_compress(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        a: <span class="kw-2">&amp;</span>FieldExtPoint&lt;FpPoint&lt;F&gt;&gt;,
-    ) -&gt; Vec&lt;FieldExtPoint&lt;FpPoint&lt;F&gt;&gt;&gt; {
-        <span class="kw">let </span>g2 = FieldExtPoint::construct(<span class="macro">vec!</span>[a.coeffs[<span class="number">1</span>].clone(), a.coeffs[<span class="number">1 </span>+ <span class="number">6</span>].clone()]);
-        <span class="kw">let </span>g3 = FieldExtPoint::construct(<span class="macro">vec!</span>[a.coeffs[<span class="number">4</span>].clone(), a.coeffs[<span class="number">4 </span>+ <span class="number">6</span>].clone()]);
-        <span class="kw">let </span>g4 = FieldExtPoint::construct(<span class="macro">vec!</span>[a.coeffs[<span class="number">2</span>].clone(), a.coeffs[<span class="number">2 </span>+ <span class="number">6</span>].clone()]);
-        <span class="kw">let </span>g5 = FieldExtPoint::construct(<span class="macro">vec!</span>[a.coeffs[<span class="number">5</span>].clone(), a.coeffs[<span class="number">5 </span>+ <span class="number">6</span>].clone()]);
+    </span><span class="kw">pub fn </span>cyclotomic_compress(<span class="kw-2">&amp;</span><span class="self">self</span>, a: <span class="kw-2">&amp;</span>FqPoint&lt;F&gt;) -&gt; Vec&lt;FqPoint&lt;F&gt;&gt; {
+        <span class="kw">let </span>a = <span class="kw-2">&amp;</span>a.<span class="number">0</span>;
+        <span class="kw">let </span>g2 = FieldVector(<span class="macro">vec!</span>[a[<span class="number">1</span>].clone(), a[<span class="number">1 </span>+ <span class="number">6</span>].clone()]);
+        <span class="kw">let </span>g3 = FieldVector(<span class="macro">vec!</span>[a[<span class="number">4</span>].clone(), a[<span class="number">4 </span>+ <span class="number">6</span>].clone()]);
+        <span class="kw">let </span>g4 = FieldVector(<span class="macro">vec!</span>[a[<span class="number">2</span>].clone(), a[<span class="number">2 </span>+ <span class="number">6</span>].clone()]);
+        <span class="kw">let </span>g5 = FieldVector(<span class="macro">vec!</span>[a[<span class="number">5</span>].clone(), a[<span class="number">5 </span>+ <span class="number">6</span>].clone()]);
         <span class="macro">vec!</span>[g2, g3, g4, g5]
     }
 
@@ -525,13 +528,14 @@
     </span><span class="kw">pub fn </span>cyclotomic_decompress(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        compression: Vec&lt;FieldExtPoint&lt;FpPoint&lt;F&gt;&gt;&gt;,
-    ) -&gt; FieldExtPoint&lt;FpPoint&lt;F&gt;&gt; {
-        <span class="kw">let </span>[g2, g3, g4, g5]: [FieldExtPoint&lt;FpPoint&lt;F&gt;&gt;; <span class="number">4</span>] = compression.try_into().unwrap();
+        compression: Vec&lt;FqPoint&lt;F&gt;&gt;,
+    ) -&gt; FqPoint&lt;F&gt; {
+        <span class="kw">let </span>[g2, g3, g4, g5]: [<span class="kw">_</span>; <span class="number">4</span>] = compression.try_into().unwrap();
 
-        <span class="kw">let </span>fp2_chip = Fp2Chip::&lt;F&gt;::new(<span class="self">self</span>.fp_chip);
+        <span class="kw">let </span>fp_chip = <span class="self">self</span>.fp_chip();
+        <span class="kw">let </span>fp2_chip = Fp2Chip::&lt;F&gt;::new(fp_chip);
         <span class="kw">let </span>g5_sq = fp2_chip.mul_no_carry(ctx, <span class="kw-2">&amp;</span>g5, <span class="kw-2">&amp;</span>g5);
-        <span class="kw">let </span>g5_sq_c = mul_no_carry_w6::&lt;F, FpChip&lt;F&gt;, XI_0&gt;(fp2_chip.fp_chip, ctx, <span class="kw-2">&amp;</span>g5_sq);
+        <span class="kw">let </span>g5_sq_c = mul_no_carry_w6::&lt;<span class="kw">_</span>, <span class="kw">_</span>, XI_0&gt;(fp_chip, ctx, g5_sq);
 
         <span class="kw">let </span>g4_sq = fp2_chip.mul_no_carry(ctx, <span class="kw-2">&amp;</span>g4, <span class="kw-2">&amp;</span>g4);
         <span class="kw">let </span>g4_sq_3 = fp2_chip.scalar_mul_no_carry(ctx, <span class="kw-2">&amp;</span>g4_sq, <span class="number">3</span>);
@@ -541,15 +545,15 @@
         g1_num = fp2_chip.sub_no_carry(ctx, <span class="kw-2">&amp;</span>g1_num, <span class="kw-2">&amp;</span>g3_2);
         <span class="comment">// can divide without carrying g1_num or g1_denom (I think)
         </span><span class="kw">let </span>g2_4 = fp2_chip.scalar_mul_no_carry(ctx, <span class="kw-2">&amp;</span>g2, <span class="number">4</span>);
-        <span class="kw">let </span>g1_1 = fp2_chip.divide(ctx, <span class="kw-2">&amp;</span>g1_num, <span class="kw-2">&amp;</span>g2_4);
+        <span class="kw">let </span>g1_1 = fp2_chip.divide_unsafe(ctx, <span class="kw-2">&amp;</span>g1_num, <span class="kw-2">&amp;</span>g2_4);
 
         <span class="kw">let </span>g4_g5 = fp2_chip.mul_no_carry(ctx, <span class="kw-2">&amp;</span>g4, <span class="kw-2">&amp;</span>g5);
         <span class="kw">let </span>g1_num = fp2_chip.scalar_mul_no_carry(ctx, <span class="kw-2">&amp;</span>g4_g5, <span class="number">2</span>);
-        <span class="kw">let </span>g1_0 = fp2_chip.divide(ctx, <span class="kw-2">&amp;</span>g1_num, <span class="kw-2">&amp;</span>g3);
+        <span class="kw">let </span>g1_0 = fp2_chip.divide_unsafe(ctx, <span class="kw-2">&amp;</span>g1_num, <span class="kw-2">&amp;</span>g3);
 
         <span class="kw">let </span>g2_is_zero = fp2_chip.is_zero(ctx, <span class="kw-2">&amp;</span>g2);
         <span class="comment">// resulting `g1` is already in &quot;carried&quot; format (witness is in `[0, p)`)
-        </span><span class="kw">let </span>g1 = fp2_chip.select(ctx, <span class="kw-2">&amp;</span>g1_0, <span class="kw-2">&amp;</span>g1_1, g2_is_zero);
+        </span><span class="kw">let </span>g1 = fp2_chip.<span class="number">0</span>.select(ctx, g1_0, g1_1, g2_is_zero);
 
         <span class="comment">// share the computation of 2 g1^2 between the two cases
         </span><span class="kw">let </span>g1_sq = fp2_chip.mul_no_carry(ctx, <span class="kw-2">&amp;</span>g1, <span class="kw-2">&amp;</span>g1);
@@ -559,26 +563,26 @@
         <span class="kw">let </span>g3_g4 = fp2_chip.mul_no_carry(ctx, <span class="kw-2">&amp;</span>g3, <span class="kw-2">&amp;</span>g4);
         <span class="kw">let </span>g3_g4_3 = fp2_chip.scalar_mul_no_carry(ctx, <span class="kw-2">&amp;</span>g3_g4, <span class="number">3</span>);
         <span class="kw">let </span>temp = fp2_chip.add_no_carry(ctx, <span class="kw-2">&amp;</span>g1_sq_2, <span class="kw-2">&amp;</span>g2_g5);
-        <span class="kw">let </span>temp = fp2_chip.select(ctx, <span class="kw-2">&amp;</span>g1_sq_2, <span class="kw-2">&amp;</span>temp, g2_is_zero);
+        <span class="kw">let </span>temp = fp2_chip.<span class="number">0</span>.select(ctx, g1_sq_2, temp, g2_is_zero);
         <span class="kw">let </span>temp = fp2_chip.sub_no_carry(ctx, <span class="kw-2">&amp;</span>temp, <span class="kw-2">&amp;</span>g3_g4_3);
-        <span class="kw">let </span><span class="kw-2">mut </span>g0 = mul_no_carry_w6::&lt;F, FpChip&lt;F&gt;, XI_0&gt;(fp2_chip.fp_chip, ctx, <span class="kw-2">&amp;</span>temp);
+        <span class="kw">let </span><span class="kw-2">mut </span>g0 = mul_no_carry_w6::&lt;<span class="kw">_</span>, <span class="kw">_</span>, XI_0&gt;(fp_chip, ctx, temp);
 
         <span class="comment">// compute `g0 + 1`
-        </span>g0.coeffs[<span class="number">0</span>].truncation.limbs[<span class="number">0</span>] =
-            fp2_chip.gate().add(ctx, g0.coeffs[<span class="number">0</span>].truncation.limbs[<span class="number">0</span>], Constant(F::one()));
-        g0.coeffs[<span class="number">0</span>].native = fp2_chip.gate().add(ctx, g0.coeffs[<span class="number">0</span>].native, Constant(F::one()));
-        g0.coeffs[<span class="number">0</span>].truncation.max_limb_bits += <span class="number">1</span>;
-        g0.coeffs[<span class="number">0</span>].value += <span class="number">1usize</span>;
+        </span>g0[<span class="number">0</span>].truncation.limbs[<span class="number">0</span>] =
+            fp2_chip.gate().add(ctx, g0[<span class="number">0</span>].truncation.limbs[<span class="number">0</span>], Constant(F::one()));
+        g0[<span class="number">0</span>].native = fp2_chip.gate().add(ctx, g0[<span class="number">0</span>].native, Constant(F::one()));
+        g0[<span class="number">0</span>].truncation.max_limb_bits += <span class="number">1</span>;
+        g0[<span class="number">0</span>].value += <span class="number">1usize</span>;
 
         <span class="comment">// finally, carry g0
-        </span>g0 = fp2_chip.carry_mod(ctx, <span class="kw-2">&amp;</span>g0);
+        </span><span class="kw">let </span>g0 = fp2_chip.carry_mod(ctx, g0);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>g0 = g0.coeffs.into_iter();
-        <span class="kw">let </span><span class="kw-2">mut </span>g1 = g1.coeffs.into_iter();
-        <span class="kw">let </span><span class="kw-2">mut </span>g2 = g2.coeffs.into_iter();
-        <span class="kw">let </span><span class="kw-2">mut </span>g3 = g3.coeffs.into_iter();
-        <span class="kw">let </span><span class="kw-2">mut </span>g4 = g4.coeffs.into_iter();
-        <span class="kw">let </span><span class="kw-2">mut </span>g5 = g5.coeffs.into_iter();
+        <span class="kw">let </span><span class="kw-2">mut </span>g0 = g0.into_iter();
+        <span class="kw">let </span><span class="kw-2">mut </span>g1 = g1.into_iter();
+        <span class="kw">let </span><span class="kw-2">mut </span>g2 = g2.into_iter();
+        <span class="kw">let </span><span class="kw-2">mut </span>g3 = g3.into_iter();
+        <span class="kw">let </span><span class="kw-2">mut </span>g4 = g4.into_iter();
+        <span class="kw">let </span><span class="kw-2">mut </span>g5 = g5.into_iter();
 
         <span class="kw">let </span><span class="kw-2">mut </span>out_coeffs = Vec::with_capacity(<span class="number">12</span>);
         <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">2 </span>{
@@ -591,7 +595,7 @@
                 g5.next().unwrap(),
             ]);
         }
-        FieldExtPoint::construct(out_coeffs)
+        FieldVector(out_coeffs)
     }
 
     <span class="comment">// input is [g2, g3, g4, g5] = C(g) in compressed format of `cyclotomic_compress`
@@ -609,58 +613,56 @@
     </span><span class="kw">pub fn </span>cyclotomic_square(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        compression: <span class="kw-2">&amp;</span>[FieldExtPoint&lt;FpPoint&lt;F&gt;&gt;],
-    ) -&gt; Vec&lt;FieldExtPoint&lt;FpPoint&lt;F&gt;&gt;&gt; {
+        compression: <span class="kw-2">&amp;</span>[FqPoint&lt;F&gt;],
+    ) -&gt; Vec&lt;FqPoint&lt;F&gt;&gt; {
         <span class="macro">assert_eq!</span>(compression.len(), <span class="number">4</span>);
         <span class="kw">let </span>g2 = <span class="kw-2">&amp;</span>compression[<span class="number">0</span>];
         <span class="kw">let </span>g3 = <span class="kw-2">&amp;</span>compression[<span class="number">1</span>];
         <span class="kw">let </span>g4 = <span class="kw-2">&amp;</span>compression[<span class="number">2</span>];
         <span class="kw">let </span>g5 = <span class="kw-2">&amp;</span>compression[<span class="number">3</span>];
 
-        <span class="kw">let </span>fp2_chip = Fp2Chip::&lt;F&gt;::new(<span class="self">self</span>.fp_chip);
+        <span class="kw">let </span>fp_chip = <span class="self">self</span>.fp_chip();
+        <span class="kw">let </span>fp2_chip = Fp2Chip::&lt;F&gt;::new(fp_chip);
 
         <span class="kw">let </span>g2_plus_g3 = fp2_chip.add_no_carry(ctx, g2, g3);
-        <span class="kw">let </span>cg3 = mul_no_carry_w6::&lt;F, FpChip&lt;F&gt;, XI_0&gt;(fp2_chip.fp_chip, ctx, g3);
+        <span class="kw">let </span>cg3 = mul_no_carry_w6::&lt;F, FpChip&lt;F&gt;, XI_0&gt;(fp_chip, ctx, g3.into());
         <span class="kw">let </span>g2_plus_cg3 = fp2_chip.add_no_carry(ctx, g2, <span class="kw-2">&amp;</span>cg3);
         <span class="kw">let </span>a23 = fp2_chip.mul_no_carry(ctx, <span class="kw-2">&amp;</span>g2_plus_g3, <span class="kw-2">&amp;</span>g2_plus_cg3);
 
         <span class="kw">let </span>g4_plus_g5 = fp2_chip.add_no_carry(ctx, g4, g5);
-        <span class="kw">let </span>cg5 = mul_no_carry_w6::&lt;F, FpChip&lt;F&gt;, XI_0&gt;(fp2_chip.fp_chip, ctx, g5);
+        <span class="kw">let </span>cg5 = mul_no_carry_w6::&lt;<span class="kw">_</span>, <span class="kw">_</span>, XI_0&gt;(fp_chip, ctx, g5.into());
         <span class="kw">let </span>g4_plus_cg5 = fp2_chip.add_no_carry(ctx, g4, <span class="kw-2">&amp;</span>cg5);
         <span class="kw">let </span>a45 = fp2_chip.mul_no_carry(ctx, <span class="kw-2">&amp;</span>g4_plus_g5, <span class="kw-2">&amp;</span>g4_plus_cg5);
 
         <span class="kw">let </span>b23 = fp2_chip.mul_no_carry(ctx, g2, g3);
         <span class="kw">let </span>b45 = fp2_chip.mul_no_carry(ctx, g4, g5);
-        <span class="kw">let </span>b45_c = mul_no_carry_w6::&lt;F, FpChip&lt;F&gt;, XI_0&gt;(fp2_chip.fp_chip, ctx, <span class="kw-2">&amp;</span>b45);
+        <span class="kw">let </span>b45_c = mul_no_carry_w6::&lt;<span class="kw">_</span>, <span class="kw">_</span>, XI_0&gt;(fp_chip, ctx, b45.clone());
 
         <span class="kw">let </span><span class="kw-2">mut </span>temp = fp2_chip.scalar_mul_and_add_no_carry(ctx, <span class="kw-2">&amp;</span>b45_c, g2, <span class="number">3</span>);
         <span class="kw">let </span>h2 = fp2_chip.scalar_mul_no_carry(ctx, <span class="kw-2">&amp;</span>temp, <span class="number">2</span>);
 
-        temp = fp2_chip.add_no_carry(ctx, <span class="kw-2">&amp;</span>b45_c, <span class="kw-2">&amp;</span>b45);
-        temp = fp2_chip.sub_no_carry(ctx, <span class="kw-2">&amp;</span>a45, <span class="kw-2">&amp;</span>temp);
-        temp = fp2_chip.scalar_mul_no_carry(ctx, <span class="kw-2">&amp;</span>temp, <span class="number">3</span>);
-        <span class="kw">let </span>h3 = fp2_chip.scalar_mul_and_add_no_carry(ctx, g3, <span class="kw-2">&amp;</span>temp, -<span class="number">2</span>);
+        temp = fp2_chip.add_no_carry(ctx, b45_c, b45);
+        temp = fp2_chip.sub_no_carry(ctx, <span class="kw-2">&amp;</span>a45, temp);
+        temp = fp2_chip.scalar_mul_no_carry(ctx, temp, <span class="number">3</span>);
+        <span class="kw">let </span>h3 = fp2_chip.scalar_mul_and_add_no_carry(ctx, g3, temp, -<span class="number">2</span>);
 
         <span class="kw">const </span>XI0_PLUS_1: i64 = XI_0 + <span class="number">1</span>;
         <span class="comment">// (c + 1) = (XI_0 + 1) + u
-        </span>temp = mul_no_carry_w6::&lt;F, FpChip&lt;F&gt;, XI0_PLUS_1&gt;(fp2_chip.fp_chip, ctx, <span class="kw-2">&amp;</span>b23);
-        temp = fp2_chip.sub_no_carry(ctx, <span class="kw-2">&amp;</span>a23, <span class="kw-2">&amp;</span>temp);
-        temp = fp2_chip.scalar_mul_no_carry(ctx, <span class="kw-2">&amp;</span>temp, <span class="number">3</span>);
-        <span class="kw">let </span>h4 = fp2_chip.scalar_mul_and_add_no_carry(ctx, g4, <span class="kw-2">&amp;</span>temp, -<span class="number">2</span>);
+        </span>temp = mul_no_carry_w6::&lt;F, FpChip&lt;F&gt;, XI0_PLUS_1&gt;(fp_chip, ctx, b23.clone());
+        temp = fp2_chip.sub_no_carry(ctx, <span class="kw-2">&amp;</span>a23, temp);
+        temp = fp2_chip.scalar_mul_no_carry(ctx, temp, <span class="number">3</span>);
+        <span class="kw">let </span>h4 = fp2_chip.scalar_mul_and_add_no_carry(ctx, g4, temp, -<span class="number">2</span>);
 
-        temp = fp2_chip.scalar_mul_and_add_no_carry(ctx, <span class="kw-2">&amp;</span>b23, g5, <span class="number">3</span>);
-        <span class="kw">let </span>h5 = fp2_chip.scalar_mul_no_carry(ctx, <span class="kw-2">&amp;</span>temp, <span class="number">2</span>);
+        temp = fp2_chip.scalar_mul_and_add_no_carry(ctx, b23, g5, <span class="number">3</span>);
+        <span class="kw">let </span>h5 = fp2_chip.scalar_mul_no_carry(ctx, temp, <span class="number">2</span>);
 
-        [h2, h3, h4, h5].iter().map(|h| fp2_chip.carry_mod(ctx, h)).collect()
+        [h2, h3, h4, h5].into_iter().map(|h| fp2_chip.carry_mod(ctx, h)).collect()
     }
 
     <span class="comment">// exp is in little-endian
-    </span><span class="kw">pub fn </span>cyclotomic_pow(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: FieldExtPoint&lt;FpPoint&lt;F&gt;&gt;,
-        exp: Vec&lt;u64&gt;,
-    ) -&gt; FieldExtPoint&lt;FpPoint&lt;F&gt;&gt; {
+    </span><span class="doccomment">/// # Assumptions
+    /// * `a` is a nonzero element in the cyclotomic subgroup
+    </span><span class="kw">pub fn </span>cyclotomic_pow(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, a: FqPoint&lt;F&gt;, exp: Vec&lt;u64&gt;) -&gt; FqPoint&lt;F&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>compression = <span class="self">self</span>.cyclotomic_compress(<span class="kw-2">&amp;</span>a);
         <span class="kw">let </span><span class="kw-2">mut </span>out = <span class="prelude-val">None</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>is_started = <span class="bool-val">false</span>;
@@ -674,7 +676,11 @@
                 <span class="macro">assert!</span>(z == <span class="number">1 </span>|| z == -<span class="number">1</span>);
                 <span class="kw">if </span>is_started {
                     <span class="kw">let </span><span class="kw-2">mut </span>res = <span class="self">self</span>.cyclotomic_decompress(ctx, compression);
-                    res = <span class="kw">if </span>z == <span class="number">1 </span>{ <span class="self">self</span>.mul(ctx, <span class="kw-2">&amp;</span>res, <span class="kw-2">&amp;</span>a) } <span class="kw">else </span>{ <span class="self">self</span>.divide(ctx, <span class="kw-2">&amp;</span>res, <span class="kw-2">&amp;</span>a) };
+                    res = <span class="kw">if </span>z == <span class="number">1 </span>{
+                        <span class="self">self</span>.mul(ctx, <span class="kw-2">&amp;</span>res, <span class="kw-2">&amp;</span>a)
+                    } <span class="kw">else </span>{
+                        <span class="self">self</span>.divide_unsafe(ctx, <span class="kw-2">&amp;</span>res, <span class="kw-2">&amp;</span>a)
+                    };
                     <span class="comment">// compression is free, so it doesn&#39;t hurt (except possibly witness generation runtime) to do it
                     // TODO: alternatively we go from small bits to large to avoid this compression
                     </span>compression = <span class="self">self</span>.cyclotomic_compress(<span class="kw-2">&amp;</span>res);
@@ -711,7 +717,7 @@
         </span><span class="kw">let </span>mp2_mp3 = <span class="self">self</span>.mul(ctx, <span class="kw-2">&amp;</span>mp2, <span class="kw-2">&amp;</span>mp3);
         <span class="kw">let </span>y0 = <span class="self">self</span>.mul(ctx, <span class="kw-2">&amp;</span>mp, <span class="kw-2">&amp;</span>mp2_mp3);
         <span class="comment">// y1 = 1/m,  inverse = frob(6) = conjugation in cyclotomic subgroup
-        </span><span class="kw">let </span>y1 = <span class="self">self</span>.conjugate(ctx, <span class="kw-2">&amp;</span>m);
+        </span><span class="kw">let </span>y1 = <span class="self">self</span>.conjugate(ctx, m.clone());
 
         <span class="comment">// m^x
         </span><span class="kw">let </span>mx = <span class="self">self</span>.cyclotomic_pow(ctx, m, <span class="macro">vec!</span>[BN_X]);
@@ -726,20 +732,20 @@
         </span><span class="kw">let </span>y2 = <span class="self">self</span>.frobenius_map(ctx, <span class="kw-2">&amp;</span>mx2, <span class="number">2</span>);
         <span class="comment">// m^{x^3}
         // y5 = 1/mx2
-        </span><span class="kw">let </span>y5 = <span class="self">self</span>.conjugate(ctx, <span class="kw-2">&amp;</span>mx2);
+        </span><span class="kw">let </span>y5 = <span class="self">self</span>.conjugate(ctx, mx2.clone());
 
         <span class="kw">let </span>mx3 = <span class="self">self</span>.cyclotomic_pow(ctx, mx2, <span class="macro">vec!</span>[BN_X]);
         <span class="comment">// (m^{x^3})^p
         </span><span class="kw">let </span>mx3p = <span class="self">self</span>.frobenius_map(ctx, <span class="kw-2">&amp;</span>mx3, <span class="number">1</span>);
 
         <span class="comment">// y3 = 1/mxp
-        </span><span class="kw">let </span>y3 = <span class="self">self</span>.conjugate(ctx, <span class="kw-2">&amp;</span>mxp);
+        </span><span class="kw">let </span>y3 = <span class="self">self</span>.conjugate(ctx, mxp);
         <span class="comment">// y4 = 1/(mx * mx2p)
         </span><span class="kw">let </span>mx_mx2p = <span class="self">self</span>.mul(ctx, <span class="kw-2">&amp;</span>mx, <span class="kw-2">&amp;</span>mx2p);
-        <span class="kw">let </span>y4 = <span class="self">self</span>.conjugate(ctx, <span class="kw-2">&amp;</span>mx_mx2p);
+        <span class="kw">let </span>y4 = <span class="self">self</span>.conjugate(ctx, mx_mx2p);
         <span class="comment">// y6 = 1/(mx3 * mx3p)
         </span><span class="kw">let </span>mx3_mx3p = <span class="self">self</span>.mul(ctx, <span class="kw-2">&amp;</span>mx3, <span class="kw-2">&amp;</span>mx3p);
-        <span class="kw">let </span>y6 = <span class="self">self</span>.conjugate(ctx, <span class="kw-2">&amp;</span>mx3_mx3p);
+        <span class="kw">let </span>y6 = <span class="self">self</span>.conjugate(ctx, mx3_mx3p);
 
         <span class="comment">// out = y0 * y1^2 * y2^6 * y3^12 * y4^18 * y5^30 * y6^36
         // we compute this using the vectorial addition chain from p. 6 of https://eprint.iacr.org/2008/490.pdf
@@ -761,14 +767,16 @@
     }
 
     <span class="comment">// out = in^{ (q^6 - 1)*(q^2 + 1) }
+    </span><span class="doccomment">/// # Assumptions
+    /// * `a` is nonzero field point
     </span><span class="kw">pub fn </span>easy_part(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span>&lt;<span class="self">Self </span><span class="kw">as </span>FieldChip&lt;F&gt;&gt;::FieldPoint,
+        a: &lt;<span class="self">Self </span><span class="kw">as </span>FieldChip&lt;F&gt;&gt;::FieldPoint,
     ) -&gt; &lt;<span class="self">Self </span><span class="kw">as </span>FieldChip&lt;F&gt;&gt;::FieldPoint {
         <span class="comment">// a^{q^6} = conjugate of a
-        </span><span class="kw">let </span>f1 = <span class="self">self</span>.conjugate(ctx, a);
-        <span class="kw">let </span>f2 = <span class="self">self</span>.divide(ctx, <span class="kw-2">&amp;</span>f1, a);
+        </span><span class="kw">let </span>f1 = <span class="self">self</span>.conjugate(ctx, a.clone());
+        <span class="kw">let </span>f2 = <span class="self">self</span>.divide_unsafe(ctx, <span class="kw-2">&amp;</span>f1, a);
         <span class="kw">let </span>f3 = <span class="self">self</span>.frobenius_map(ctx, <span class="kw-2">&amp;</span>f2, <span class="number">2</span>);
         <span class="self">self</span>.mul(ctx, <span class="kw-2">&amp;</span>f3, <span class="kw-2">&amp;</span>f2)
     }
@@ -777,7 +785,7 @@
     </span><span class="kw">pub fn </span>final_exp(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-        a: <span class="kw-2">&amp;</span>&lt;<span class="self">Self </span><span class="kw">as </span>FieldChip&lt;F&gt;&gt;::FieldPoint,
+        a: &lt;<span class="self">Self </span><span class="kw">as </span>FieldChip&lt;F&gt;&gt;::FieldPoint,
     ) -&gt; &lt;<span class="self">Self </span><span class="kw">as </span>FieldChip&lt;F&gt;&gt;::FieldPoint {
         <span class="kw">let </span>f0 = <span class="self">self</span>.easy_part(ctx, a);
         <span class="kw">let </span>f = <span class="self">self</span>.hard_part_BN(ctx, f0);

@@ -1,0 +1,294 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `halo2-base/src/safe_types/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../../normalize.css"><link rel="stylesheet" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../../ayu.css" disabled><link rel="stylesheet" href="../../../dark.css" disabled><link rel="stylesheet" href="../../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../../storage.js"></script><script defer src="../../../source-script.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../main.js"></script><noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../halo2_base/index.html"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></a><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../wheel.svg"></a></div></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<span id="2">2</span>
+<span id="3">3</span>
+<span id="4">4</span>
+<span id="5">5</span>
+<span id="6">6</span>
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
+<span id="10">10</span>
+<span id="11">11</span>
+<span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
+<span id="88">88</span>
+<span id="89">89</span>
+<span id="90">90</span>
+<span id="91">91</span>
+<span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+</pre><pre class="rust"><code><span class="kw">pub use crate</span>::{
+    gates::{
+        flex_gate::GateInstructions,
+        range::{RangeChip, RangeInstructions},
+    },
+    utils::ScalarField,
+    AssignedValue, Context,
+    QuantumCell::{<span class="self">self</span>, Constant, Existing, Witness},
+};
+<span class="kw">use </span>std::cmp::{max, min};
+
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">pub mod </span>tests;
+
+<span class="kw">type </span>RawAssignedValues&lt;F&gt; = Vec&lt;AssignedValue&lt;F&gt;&gt;;
+
+<span class="kw">const </span>BITS_PER_BYTE: usize = <span class="number">8</span>;
+
+<span class="doccomment">/// SafeType&#39;s goal is to avoid out-of-range undefined behavior.
+/// When building circuits, it&#39;s common to use mulitple AssignedValue&lt;F&gt; to represent
+/// a logical varaible. For example, we might want to represent a hash with 32 AssignedValue&lt;F&gt;
+/// where each AssignedValue represents 1 byte. However, the range of AssignedValue&lt;F&gt; is much
+/// larger than 1 byte(0~255). If a circuit takes 32 AssignedValue&lt;F&gt; as inputs and some of them
+/// are actually greater than 255, there could be some undefined behaviors.
+/// SafeType gurantees the value range of its owned AssignedValue&lt;F&gt;. So circuits don&#39;t need to
+/// do any extra value checking if they take SafeType as inputs.
+/// TOTAL_BITS is the number of total bits of this type.
+/// BYTES_PER_ELE is the number of bytes of each element.
+</span><span class="attribute">#[derive(Clone, Debug)]
+</span><span class="kw">pub struct </span>SafeType&lt;F: ScalarField, <span class="kw">const </span>BYTES_PER_ELE: usize, <span class="kw">const </span>TOTAL_BITS: usize&gt; {
+    <span class="comment">// value is stored in little-endian.
+    </span>value: RawAssignedValues&lt;F&gt;,
+}
+
+<span class="kw">impl</span>&lt;F: ScalarField, <span class="kw">const </span>BYTES_PER_ELE: usize, <span class="kw">const </span>TOTAL_BITS: usize&gt;
+    SafeType&lt;F, BYTES_PER_ELE, TOTAL_BITS&gt;
+{
+    <span class="doccomment">/// Number of bytes of each element.
+    </span><span class="kw">pub const </span>BYTES_PER_ELE: usize = BYTES_PER_ELE;
+    <span class="doccomment">/// Total bits of this type.
+    </span><span class="kw">pub const </span>TOTAL_BITS: usize = TOTAL_BITS;
+    <span class="doccomment">/// Number of bits of each element.
+    </span><span class="kw">pub const </span>BITS_PER_ELE: usize = min(TOTAL_BITS, BYTES_PER_ELE * BITS_PER_BYTE);
+    <span class="doccomment">/// Number of elements of this type.
+    </span><span class="kw">pub const </span>VALUE_LENGTH: usize =
+        (TOTAL_BITS + BYTES_PER_ELE * BITS_PER_BYTE - <span class="number">1</span>) / (BYTES_PER_ELE * BITS_PER_BYTE);
+
+    <span class="comment">// new is private so Safetype can only be constructed by this crate.
+    </span><span class="kw">fn </span>new(raw_values: RawAssignedValues&lt;F&gt;) -&gt; <span class="self">Self </span>{
+        <span class="macro">assert!</span>(raw_values.len() == <span class="self">Self</span>::VALUE_LENGTH, <span class="string">&quot;Invalid raw values length&quot;</span>);
+        <span class="self">Self </span>{ value: raw_values }
+    }
+
+    <span class="doccomment">/// Return values in littile-endian.
+    </span><span class="kw">pub fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>RawAssignedValues&lt;F&gt; {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.value
+    }
+}
+
+<span class="doccomment">/// Represent TOTAL_BITS with the least number of AssignedValue&lt;F&gt;.
+/// (2^(F::NUM_BITS) - 1) might not be a valid value for F. e.g. max value of F is a prime in [2^(F::NUM_BITS-1), 2^(F::NUM_BITS) - 1]
+</span><span class="attribute">#[allow(type_alias_bounds)]
+</span><span class="kw">type </span>CompactSafeType&lt;F: ScalarField, <span class="kw">const </span>TOTAL_BITS: usize&gt; =
+    SafeType&lt;F, { ((F::NUM_BITS - <span class="number">1</span>) / <span class="number">8</span>) <span class="kw">as </span>usize }, TOTAL_BITS&gt;;
+
+<span class="doccomment">/// SafeType for bool.
+</span><span class="kw">pub type </span>SafeBool&lt;F&gt; = CompactSafeType&lt;F, <span class="number">1</span>&gt;;
+<span class="doccomment">/// SafeType for uint8.
+</span><span class="kw">pub type </span>SafeUint8&lt;F&gt; = CompactSafeType&lt;F, <span class="number">8</span>&gt;;
+<span class="doccomment">/// SafeType for uint16.
+</span><span class="kw">pub type </span>SafeUint16&lt;F&gt; = CompactSafeType&lt;F, <span class="number">16</span>&gt;;
+<span class="doccomment">/// SafeType for uint32.
+</span><span class="kw">pub type </span>SafeUint32&lt;F&gt; = CompactSafeType&lt;F, <span class="number">32</span>&gt;;
+<span class="doccomment">/// SafeType for uint64.
+</span><span class="kw">pub type </span>SafeUint64&lt;F&gt; = CompactSafeType&lt;F, <span class="number">64</span>&gt;;
+<span class="doccomment">/// SafeType for uint128.
+</span><span class="kw">pub type </span>SafeUint128&lt;F&gt; = CompactSafeType&lt;F, <span class="number">128</span>&gt;;
+<span class="doccomment">/// SafeType for uint256.
+</span><span class="kw">pub type </span>SafeUint256&lt;F&gt; = CompactSafeType&lt;F, <span class="number">256</span>&gt;;
+<span class="doccomment">/// SafeType for bytes32.
+</span><span class="kw">pub type </span>SafeBytes32&lt;F&gt; = SafeType&lt;F, <span class="number">1</span>, <span class="number">256</span>&gt;;
+
+<span class="doccomment">/// Chip for SafeType
+</span><span class="kw">pub struct </span>SafeTypeChip&lt;<span class="lifetime">&#39;a</span>, F: ScalarField&gt; {
+    range_chip: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>RangeChip&lt;F&gt;,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, F: ScalarField&gt; SafeTypeChip&lt;<span class="lifetime">&#39;a</span>, F&gt; {
+    <span class="doccomment">/// Construct a SafeTypeChip.
+    </span><span class="kw">pub fn </span>new(range_chip: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>RangeChip&lt;F&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ range_chip }
+    }
+
+    <span class="doccomment">/// Convert a vector of AssignedValue(treated as little-endian) to a SafeType.
+    /// The number of bytes of inputs must equal to the number of bytes of outputs.
+    /// This function also add contraints that a AssignedValue in inputs must be in the range of a byte.
+    </span><span class="kw">pub fn </span>raw_bytes_to&lt;<span class="kw">const </span>BYTES_PER_ELE: usize, <span class="kw">const </span>TOTAL_BITS: usize&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        inputs: RawAssignedValues&lt;F&gt;,
+    ) -&gt; SafeType&lt;F, BYTES_PER_ELE, TOTAL_BITS&gt; {
+        <span class="kw">let </span>element_bits = SafeType::&lt;F, BYTES_PER_ELE, TOTAL_BITS&gt;::BITS_PER_ELE;
+        <span class="kw">let </span>bits = TOTAL_BITS;
+        <span class="macro">assert!</span>(
+            inputs.len() * BITS_PER_BYTE == max(bits, BITS_PER_BYTE),
+            <span class="string">&quot;number of bits doesn&#39;t match&quot;
+        </span>);
+        <span class="self">self</span>.add_bytes_constraints(ctx, <span class="kw-2">&amp;</span>inputs, bits);
+        <span class="comment">// inputs is a bool or uint8.
+        </span><span class="kw">if </span>bits == <span class="number">1 </span>|| element_bits == BITS_PER_BYTE {
+            <span class="kw">return </span>SafeType::&lt;F, BYTES_PER_ELE, TOTAL_BITS&gt;::new(inputs);
+        };
+
+        <span class="kw">let </span>byte_base = (<span class="number">0</span>..BYTES_PER_ELE)
+            .map(|i| Witness(<span class="self">self</span>.range_chip.gate.pow_of_two[i * BITS_PER_BYTE]))
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">let </span>value = inputs
+            .chunks(BYTES_PER_ELE)
+            .map(|chunk| {
+                <span class="self">self</span>.range_chip.gate.inner_product(
+                    ctx,
+                    chunk.to_vec(),
+                    byte_base[..chunk.len()].to_vec(),
+                )
+            })
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        SafeType::&lt;F, BYTES_PER_ELE, TOTAL_BITS&gt;::new(value)
+    }
+
+    <span class="kw">fn </span>add_bytes_constraints(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        inputs: <span class="kw-2">&amp;</span>RawAssignedValues&lt;F&gt;,
+        bits: usize,
+    ) {
+        <span class="kw">let </span><span class="kw-2">mut </span>bits_left = bits;
+        <span class="kw">for </span>input <span class="kw">in </span>inputs {
+            <span class="kw">let </span>num_bit = min(bits_left, BITS_PER_BYTE);
+            <span class="self">self</span>.range_chip.range_check(ctx, <span class="kw-2">*</span>input, num_bit);
+            bits_left -= num_bit;
+        }
+    }
+
+    <span class="comment">// TODO: Add comprasion. e.g. is_less_than(SafeUint8, SafeUint8) -&gt; SafeBool
+    // TODO: Add type castings. e.g. uint256 -&gt; bytes32/uint32 -&gt; uint64
+</span>}
+</code></pre></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="halo2_base" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (0da281b60 2022-10-27)" ></div></body></html>

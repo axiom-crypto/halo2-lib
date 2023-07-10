@@ -45,52 +45,58 @@
 <span id="45">45</span>
 <span id="46">46</span>
 <span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
 </pre><pre class="rust"><code><span class="kw">use super</span>::{CRTInteger, OverflowInteger};
 <span class="kw">use </span>halo2_base::{gates::GateInstructions, utils::ScalarField, AssignedValue, Context};
+<span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>std::cmp::max;
 
-<span class="kw">pub fn </span>assign&lt;F: ScalarField&gt;(
+<span class="doccomment">/// # Assumptions
+/// * `a, b` have same number of limbs
+/// * Number of limbs is nonzero
+</span><span class="kw">pub fn </span>assign&lt;F: ScalarField&gt;(
     gate: <span class="kw-2">&amp;</span><span class="kw">impl </span>GateInstructions&lt;F&gt;,
     ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
     a: OverflowInteger&lt;F&gt;,
     b: OverflowInteger&lt;F&gt;,
     sel: AssignedValue&lt;F&gt;,
 ) -&gt; OverflowInteger&lt;F&gt; {
-    <span class="macro">debug_assert_eq!</span>(a.limbs.len(), b.limbs.len());
     <span class="kw">let </span>out_limbs = a
         .limbs
         .into_iter()
-        .zip(b.limbs.into_iter())
+        .zip_eq(b.limbs)
         .map(|(a_limb, b_limb)| gate.select(ctx, a_limb, b_limb, sel))
         .collect();
 
-    OverflowInteger::construct(out_limbs, max(a.max_limb_bits, b.max_limb_bits))
+    OverflowInteger::new(out_limbs, max(a.max_limb_bits, b.max_limb_bits))
 }
 
 <span class="kw">pub fn </span>crt&lt;F: ScalarField&gt;(
     gate: <span class="kw-2">&amp;</span><span class="kw">impl </span>GateInstructions&lt;F&gt;,
     ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-    a: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
-    b: <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt;,
+    a: CRTInteger&lt;F&gt;,
+    b: CRTInteger&lt;F&gt;,
     sel: AssignedValue&lt;F&gt;,
 ) -&gt; CRTInteger&lt;F&gt; {
     <span class="macro">debug_assert_eq!</span>(a.truncation.limbs.len(), b.truncation.limbs.len());
     <span class="kw">let </span>out_limbs = a
         .truncation
         .limbs
-        .iter()
-        .zip(b.truncation.limbs.iter())
-        .map(|(<span class="kw-2">&amp;</span>a_limb, <span class="kw-2">&amp;</span>b_limb)| gate.select(ctx, a_limb, b_limb, sel))
+        .into_iter()
+        .zip_eq(b.truncation.limbs)
+        .map(|(a_limb, b_limb)| gate.select(ctx, a_limb, b_limb, sel))
         .collect();
 
-    <span class="kw">let </span>out_trunc = OverflowInteger::construct(
+    <span class="kw">let </span>out_trunc = OverflowInteger::new(
         out_limbs,
         max(a.truncation.max_limb_bits, b.truncation.max_limb_bits),
     );
 
     <span class="kw">let </span>out_native = gate.select(ctx, a.native, b.native, sel);
-    <span class="kw">let </span>out_val = <span class="kw">if </span>sel.value().is_zero_vartime() { b.value.clone() } <span class="kw">else </span>{ a.value.clone() };
-    CRTInteger::construct(out_trunc, out_native, out_val)
+    <span class="kw">let </span>out_val = <span class="kw">if </span>sel.value().is_zero_vartime() { b.value } <span class="kw">else </span>{ a.value };
+    CRTInteger::new(out_trunc, out_native, out_val)
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="halo2_ecc" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (0da281b60 2022-10-27)" ></div></body></html>

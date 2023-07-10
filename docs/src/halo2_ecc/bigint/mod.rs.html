@@ -210,8 +210,101 @@
 <span id="210">210</span>
 <span id="211">211</span>
 <span id="212">212</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::halo2_proofs::circuit::Cell;
-<span class="kw">use </span>halo2_base::{
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+</pre><pre class="rust"><code><span class="kw">use </span>halo2_base::{
     gates::flex_gate::GateInstructions,
     utils::{biguint_to_fe, decompose_biguint, fe_to_biguint, BigPrimeField, ScalarField},
     AssignedValue, Context,
@@ -236,8 +329,7 @@
 <span class="kw">pub mod </span>sub;
 <span class="kw">pub mod </span>sub_no_carry;
 
-<span class="attribute">#[derive(Clone, Debug, PartialEq)]
-#[derive(Default)]
+<span class="attribute">#[derive(Clone, Debug, PartialEq, Default)]
 </span><span class="kw">pub enum </span>BigIntStrategy {
     <span class="comment">// use existing gates
     </span><span class="attribute">#[default]
@@ -246,8 +338,6 @@
     // we restrict to gate of length 4 since this uses the same set of evaluation points Rotation(0..=3) as our simple gate
     // CustomVerticalShort,
 </span>}
-
-
 
 <span class="attribute">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>OverflowInteger&lt;F: ScalarField&gt; {
@@ -259,7 +349,7 @@
 </span>}
 
 <span class="kw">impl</span>&lt;F: ScalarField&gt; OverflowInteger&lt;F&gt; {
-    <span class="kw">pub fn </span>construct(limbs: Vec&lt;AssignedValue&lt;F&gt;&gt;, max_limb_bits: usize) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(limbs: Vec&lt;AssignedValue&lt;F&gt;&gt;, max_limb_bits: usize) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{ limbs, max_limb_bits }
     }
 
@@ -277,18 +367,58 @@
             .fold(BigInt::zero(), |acc, acell| (acc &lt;&lt; limb_bits) + fe_to_bigint(acell.value()))
     }
 
-    <span class="kw">pub fn </span>evaluate(
-        gate: <span class="kw-2">&amp;</span><span class="kw">impl </span>GateInstructions&lt;F&gt;,
+    <span class="doccomment">/// Computes `sum_i limbs[i] * limb_bases[i]` in native field `F`.
+    /// In practice assumes `limb_bases[i] = 2^{limb_bits * i}`.
+    </span><span class="kw">pub fn </span>evaluate_native(
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        gate: <span class="kw-2">&amp;</span><span class="kw">impl </span>GateInstructions&lt;F&gt;,
         limbs: <span class="kw">impl </span>IntoIterator&lt;Item = AssignedValue&lt;F&gt;&gt;,
-        limb_bases: <span class="kw">impl </span>IntoIterator&lt;Item = F&gt;,
+        limb_bases: <span class="kw-2">&amp;</span>[F],
     ) -&gt; AssignedValue&lt;F&gt; {
         <span class="comment">// Constrain `out_native = sum_i out_assigned[i] * 2^{n*i}` in `F`
-        </span>gate.inner_product(ctx, limbs, limb_bases.into_iter().map(|c| Constant(c)))
+        </span>gate.inner_product(ctx, limbs, limb_bases.iter().map(|c| Constant(<span class="kw-2">*</span>c)))
     }
 }
 
-<span class="attribute">#[derive(Clone, Debug)]
+<span class="doccomment">/// Safe wrapper around a BigUint represented as a vector of limbs in **little endian**.
+/// The underlying BigUint is represented by
+/// sum&lt;sub&gt;i&lt;/sub&gt; limbs\[i\] * 2&lt;sup&gt;limb_bits * i&lt;/sup&gt;
+///
+/// To save memory we do not store the `limb_bits` and it must be inferred from context.
+</span><span class="attribute">#[repr(transparent)]
+#[derive(Clone, Debug)]
+</span><span class="kw">pub struct </span>ProperUint&lt;F: ScalarField&gt;(<span class="kw">pub</span>(<span class="kw">crate</span>) Vec&lt;AssignedValue&lt;F&gt;&gt;);
+
+<span class="kw">impl</span>&lt;F: ScalarField&gt; ProperUint&lt;F&gt; {
+    <span class="kw">pub fn </span>limbs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[AssignedValue&lt;F&gt;] {
+        <span class="self">self</span>.<span class="number">0</span>.as_slice()
+    }
+
+    <span class="kw">pub fn </span>into_overflow(<span class="self">self</span>, limb_bits: usize) -&gt; OverflowInteger&lt;F&gt; {
+        OverflowInteger::new(<span class="self">self</span>.<span class="number">0</span>, limb_bits)
+    }
+
+    <span class="doccomment">/// Computes `sum_i limbs[i] * limb_bases[i]` in native field `F`.
+    /// In practice assumes `limb_bases[i] = 2^{limb_bits * i}`.
+    ///
+    /// Assumes that `value` is the underlying BigUint value represented by `self`.
+    </span><span class="kw">pub fn </span>into_crt(
+        <span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
+        gate: <span class="kw-2">&amp;</span><span class="kw">impl </span>GateInstructions&lt;F&gt;,
+        value: BigUint,
+        limb_bases: <span class="kw-2">&amp;</span>[F],
+        limb_bits: usize,
+    ) -&gt; ProperCrtUint&lt;F&gt; {
+        <span class="comment">// Constrain `out_native = sum_i out_assigned[i] * 2^{n*i}` in `F`
+        </span><span class="kw">let </span>native =
+            OverflowInteger::evaluate_native(ctx, gate, <span class="self">self</span>.<span class="number">0</span>.iter().copied(), limb_bases);
+        ProperCrtUint(CRTInteger::new(<span class="self">self</span>.into_overflow(limb_bits), native, value.into()))
+    }
+}
+
+<span class="attribute">#[repr(transparent)]
+#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>FixedOverflowInteger&lt;F: ScalarField&gt; {
     <span class="kw">pub </span>limbs: Vec&lt;F&gt;,
 }
@@ -313,9 +443,9 @@
             .fold(BigUint::zero(), |acc, x| (acc &lt;&lt; limb_bits) + fe_to_biguint(x))
     }
 
-    <span class="kw">pub fn </span>assign(<span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;, limb_bits: usize) -&gt; OverflowInteger&lt;F&gt; {
+    <span class="kw">pub fn </span>assign(<span class="self">self</span>, ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;) -&gt; ProperUint&lt;F&gt; {
         <span class="kw">let </span>assigned_limbs = <span class="self">self</span>.limbs.into_iter().map(|limb| ctx.load_constant(limb)).collect();
-        OverflowInteger::construct(assigned_limbs, limb_bits)
+        ProperUint(assigned_limbs)
     }
 
     <span class="doccomment">/// only use case is when coeffs has only a single 1, rest are 0
@@ -335,7 +465,7 @@
             })
             .collect();
 
-        OverflowInteger::construct(out_limbs, limb_bits)
+        OverflowInteger::new(out_limbs, limb_bits)
     }
 }
 
@@ -343,7 +473,7 @@
 </span><span class="kw">pub struct </span>CRTInteger&lt;F: ScalarField&gt; {
     <span class="comment">// keep track of an integer `a` using CRT as `a mod 2^t` and `a mod n`
     // where `t = truncation.limbs.len() * truncation.limb_bits`
-    //       `n = modulus::&lt;Fn&gt;`
+    //       `n = modulus::&lt;F&gt;`
     // `value` is the actual integer value we want to keep track of
 
     // we allow `value` to be a signed BigInt
@@ -357,12 +487,21 @@
     <span class="kw">pub </span>value: BigInt,
 }
 
+<span class="kw">impl</span>&lt;F: ScalarField&gt; AsRef&lt;CRTInteger&lt;F&gt;&gt; <span class="kw">for </span>CRTInteger&lt;F&gt; {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt; {
+        <span class="self">self
+    </span>}
+}
+
+<span class="comment">// Cloning all the time impacts readability so we&#39;ll just implement From&lt;&amp;T&gt; for T
+</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, F: ScalarField&gt; From&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>CRTInteger&lt;F&gt;&gt; <span class="kw">for </span>CRTInteger&lt;F&gt; {
+    <span class="kw">fn </span>from(x: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>CRTInteger&lt;F&gt;) -&gt; <span class="self">Self </span>{
+        x.clone()
+    }
+}
+
 <span class="kw">impl</span>&lt;F: ScalarField&gt; CRTInteger&lt;F&gt; {
-    <span class="kw">pub fn </span>construct(
-        truncation: OverflowInteger&lt;F&gt;,
-        native: AssignedValue&lt;F&gt;,
-        value: BigInt,
-    ) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(truncation: OverflowInteger&lt;F&gt;, native: AssignedValue&lt;F&gt;, value: BigInt) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{ truncation, native, value }
     }
 
@@ -372,6 +511,62 @@
 
     <span class="kw">pub fn </span>limbs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[AssignedValue&lt;F&gt;] {
         <span class="self">self</span>.truncation.limbs.as_slice()
+    }
+}
+
+<span class="doccomment">/// Safe wrapper for representing a BigUint as a [`CRTInteger`] whose underlying BigUint value is in `[0, 2^t)`
+/// where `t = truncation.limbs.len() * limb_bits`. This struct guarantees that
+/// * each `truncation.limbs[i]` is ranged checked to be in `[0, 2^limb_bits)`,
+/// * `native` is the evaluation of `sum_i truncation.limbs[i] * 2^{limb_bits * i} (mod modulus::&lt;F&gt;)` in the native field `F`
+/// * `value` is equal to `sum_i truncation.limbs[i] * 2^{limb_bits * i}` as integers
+///
+/// Note this means `native` and `value` are completely determined by `truncation`. However, we still store them explicitly for convenience.
+</span><span class="attribute">#[repr(transparent)]
+#[derive(Clone, Debug)]
+</span><span class="kw">pub struct </span>ProperCrtUint&lt;F: ScalarField&gt;(<span class="kw">pub</span>(<span class="kw">crate</span>) CRTInteger&lt;F&gt;);
+
+<span class="kw">impl</span>&lt;F: ScalarField&gt; AsRef&lt;CRTInteger&lt;F&gt;&gt; <span class="kw">for </span>ProperCrtUint&lt;F&gt; {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>CRTInteger&lt;F&gt; {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
+    </span>}
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, F: ScalarField&gt; From&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ProperCrtUint&lt;F&gt;&gt; <span class="kw">for </span>ProperCrtUint&lt;F&gt; {
+    <span class="kw">fn </span>from(x: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ProperCrtUint&lt;F&gt;) -&gt; <span class="self">Self </span>{
+        x.clone()
+    }
+}
+
+<span class="comment">// cannot blanket implement From&lt;Proper&lt;T&gt;&gt; for T because of Rust
+</span><span class="kw">impl</span>&lt;F: ScalarField&gt; From&lt;ProperCrtUint&lt;F&gt;&gt; <span class="kw">for </span>CRTInteger&lt;F&gt; {
+    <span class="kw">fn </span>from(x: ProperCrtUint&lt;F&gt;) -&gt; <span class="self">Self </span>{
+        x.<span class="number">0
+    </span>}
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, F: ScalarField&gt; From&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ProperCrtUint&lt;F&gt;&gt; <span class="kw">for </span>CRTInteger&lt;F&gt; {
+    <span class="kw">fn </span>from(x: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ProperCrtUint&lt;F&gt;) -&gt; <span class="self">Self </span>{
+        x.<span class="number">0</span>.clone()
+    }
+}
+
+<span class="kw">impl</span>&lt;F: ScalarField&gt; From&lt;ProperCrtUint&lt;F&gt;&gt; <span class="kw">for </span>ProperUint&lt;F&gt; {
+    <span class="kw">fn </span>from(x: ProperCrtUint&lt;F&gt;) -&gt; <span class="self">Self </span>{
+        ProperUint(x.<span class="number">0</span>.truncation.limbs)
+    }
+}
+
+<span class="kw">impl</span>&lt;F: ScalarField&gt; ProperCrtUint&lt;F&gt; {
+    <span class="kw">pub fn </span>limbs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[AssignedValue&lt;F&gt;] {
+        <span class="self">self</span>.<span class="number">0</span>.limbs()
+    }
+
+    <span class="kw">pub fn </span>native(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>AssignedValue&lt;F&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.native()
+    }
+
+    <span class="kw">pub fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BigUint {
+        <span class="self">self</span>.<span class="number">0</span>.value.to_biguint().expect(<span class="string">&quot;Value of proper uint should not be negative&quot;</span>)
     }
 }
 
@@ -392,15 +587,8 @@
     <span class="kw">pub </span>value: BigUint,
 }
 
-<span class="attribute">#[derive(Clone, Debug)]
-</span><span class="kw">pub struct </span>FixedAssignedCRTInteger&lt;F: ScalarField&gt; {
-    <span class="kw">pub </span>truncation: FixedOverflowInteger&lt;F&gt;,
-    <span class="kw">pub </span>limb_fixed_cells: Vec&lt;Cell&gt;,
-    <span class="kw">pub </span>value: BigUint,
-}
-
 <span class="kw">impl</span>&lt;F: BigPrimeField&gt; FixedCRTInteger&lt;F&gt; {
-    <span class="kw">pub fn </span>construct(truncation: FixedOverflowInteger&lt;F&gt;, value: BigUint) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(truncation: FixedOverflowInteger&lt;F&gt;, value: BigUint) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{ truncation, value }
     }
 
@@ -416,10 +604,10 @@
         ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
         limb_bits: usize,
         native_modulus: <span class="kw-2">&amp;</span>BigUint,
-    ) -&gt; CRTInteger&lt;F&gt; {
-        <span class="kw">let </span>assigned_truncation = <span class="self">self</span>.truncation.assign(ctx, limb_bits);
+    ) -&gt; ProperCrtUint&lt;F&gt; {
+        <span class="kw">let </span>assigned_truncation = <span class="self">self</span>.truncation.assign(ctx).into_overflow(limb_bits);
         <span class="kw">let </span>assigned_native = ctx.load_constant(biguint_to_fe(<span class="kw-2">&amp;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.value % native_modulus)));
-        CRTInteger::construct(assigned_truncation, assigned_native, <span class="self">self</span>.value.into())
+        ProperCrtUint(CRTInteger::new(assigned_truncation, assigned_native, <span class="self">self</span>.value.into()))
     }
 }
 </code></pre></div>

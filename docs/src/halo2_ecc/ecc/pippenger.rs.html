@@ -339,40 +339,22 @@
 <span id="339">339</span>
 <span id="340">340</span>
 <span id="341">341</span>
-<span id="342">342</span>
-<span id="343">343</span>
-<span id="344">344</span>
-<span id="345">345</span>
-<span id="346">346</span>
-<span id="347">347</span>
-<span id="348">348</span>
-<span id="349">349</span>
-<span id="350">350</span>
-<span id="351">351</span>
-<span id="352">352</span>
-<span id="353">353</span>
-<span id="354">354</span>
-<span id="355">355</span>
-<span id="356">356</span>
-<span id="357">357</span>
-<span id="358">358</span>
-<span id="359">359</span>
-<span id="360">360</span>
-<span id="361">361</span>
-<span id="362">362</span>
-<span id="363">363</span>
 </pre><pre class="rust"><code><span class="kw">use super</span>::{
-    ec_add_unequal, ec_double, ec_select, ec_select_from_bits, ec_sub_unequal, load_random_point,
-    EcPoint,
+    ec_add_unequal, ec_double, ec_select, ec_sub_unequal, into_strict_point, load_random_point,
+    strict_ec_select_from_bits, EcPoint,
 };
-<span class="kw">use </span><span class="kw">crate</span>::fields::{FieldChip, PrimeField, Selectable};
+<span class="kw">use crate</span>::{
+    ecc::ec_sub_strict,
+    fields::{FieldChip, PrimeField, Selectable},
+};
 <span class="kw">use </span>halo2_base::{
-    gates::{builder::GateThreadBuilder, GateInstructions},
+    gates::{
+        builder::{parallelize_in, GateThreadBuilder},
+        GateInstructions,
+    },
     utils::CurveAffineExt,
-    AssignedValue, Context,
+    AssignedValue,
 };
-<span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
-<span class="kw">use </span>std::sync::Mutex;
 
 <span class="comment">// Reference: https://jbootle.github.io/Misc/pippenger.pdf
 
@@ -428,150 +410,157 @@ where
 }
 */
 
+/* Left as reference; should always use msm_par
 // Given points[i] and bool_scalars[j][i],
 // compute G&#39;[j] = sum_{i=0..points.len()} points[i] * bool_scalars[j][i]
 // output is [ G&#39;[j] + rand_point ]_{j=0..bool_scalars.len()}, rand_point
-</span><span class="kw">pub fn </span>multi_product&lt;F: PrimeField, FC, C&gt;(
-    chip: <span class="kw-2">&amp;</span>FC,
-    ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-    points: <span class="kw-2">&amp;</span>[EcPoint&lt;F, FC::FieldPoint&gt;],
-    bool_scalars: <span class="kw-2">&amp;</span>[Vec&lt;AssignedValue&lt;F&gt;&gt;],
+pub fn multi_product&lt;F: PrimeField, FC, C&gt;(
+    chip: &amp;FC,
+    ctx: &amp;mut Context&lt;F&gt;,
+    points: &amp;[EcPoint&lt;F, FC::FieldPoint&gt;],
+    bool_scalars: &amp;[Vec&lt;AssignedValue&lt;F&gt;&gt;],
     clumping_factor: usize,
-) -&gt; (Vec&lt;EcPoint&lt;F, FC::FieldPoint&gt;&gt;, EcPoint&lt;F, FC::FieldPoint&gt;)
-<span class="kw">where
-    </span>FC: FieldChip&lt;F&gt; + Selectable&lt;F, Point = FC::FieldPoint&gt;,
+) -&gt; (Vec&lt;StrictEcPoint&lt;F, FC&gt;&gt;, EcPoint&lt;F, FC::FieldPoint&gt;)
+where
+    FC: FieldChip&lt;F&gt; + Selectable&lt;F, FC::FieldPoint&gt; + Selectable&lt;F, FC::ReducedFieldPoint&gt;,
     C: CurveAffineExt&lt;Base = FC::FieldType&gt;,
 {
-    <span class="kw">let </span>c = clumping_factor; <span class="comment">// this is `b` in Section 3 of Bootle
+    let c = clumping_factor; // this is `b` in Section 3 of Bootle
 
     // to avoid adding two points that are equal or negative of each other,
     // we use a trick from halo2wrong where we load a random C point as witness
     // note that while we load a random point, an adversary could load a specifically chosen point, so we must carefully handle edge cases with constraints
     // TODO: an alternate approach is to use Fiat-Shamir transform (with Poseidon) to hash all the inputs (points, bool_scalars, ...) to get the random point. This could be worth it for large MSMs as we get savings from `add_unequal` in &quot;non-strict&quot; mode. Perhaps not worth the trouble / security concern, though.
-    </span><span class="kw">let </span>rand_base = load_random_point::&lt;F, FC, C&gt;(chip, ctx);
+    let any_base = load_random_point::&lt;F, FC, C&gt;(chip, ctx);
 
-    <span class="kw">let </span><span class="kw-2">mut </span>acc = Vec::with_capacity(bool_scalars.len());
+    let mut acc = Vec::with_capacity(bool_scalars.len());
 
-    <span class="kw">let </span><span class="kw-2">mut </span>bucket = Vec::with_capacity(<span class="number">1 </span>&lt;&lt; c);
-    <span class="kw">let </span><span class="kw-2">mut </span>rand_point = rand_base.clone();
-    <span class="kw">for </span>(round, points_clump) <span class="kw">in </span>points.chunks(c).enumerate() {
-        <span class="comment">// compute all possible multi-products of elements in points[round * c .. round * (c+1)]
+    let mut bucket = Vec::with_capacity(1 &lt;&lt; c);
+    let mut any_point = any_base.clone();
+    for (round, points_clump) in points.chunks(c).enumerate() {
+        // compute all possible multi-products of elements in points[round * c .. round * (c+1)]
 
         // for later addition collision-prevension, we need a different random point per round
         // we take 2^round * rand_base
-        </span><span class="kw">if </span>round &gt; <span class="number">0 </span>{
-            rand_point = ec_double(chip, ctx, <span class="kw-2">&amp;</span>rand_point);
+        if round &gt; 0 {
+            any_point = ec_double(chip, ctx, any_point);
         }
-        <span class="comment">// stores { rand_point, rand_point + points[0], rand_point + points[1], rand_point + points[0] + points[1] , ... }
+        // stores { rand_point, rand_point + points[0], rand_point + points[1], rand_point + points[0] + points[1] , ... }
         // since rand_point is random, we can always use add_unequal (with strict constraint checking that the points are indeed unequal and not negative of each other)
-        </span>bucket.clear();
-        chip.enforce_less_than(ctx, rand_point.x());
-        bucket.push(rand_point.clone());
-        <span class="kw">for </span>(i, point) <span class="kw">in </span>points_clump.iter().enumerate() {
-            <span class="comment">// we allow for points[i] to be the point at infinity, represented by (0, 0) in affine coordinates
+        bucket.clear();
+        let strict_any_point = into_strict_point(chip, ctx, any_point.clone());
+        bucket.push(strict_any_point);
+        for (i, point) in points_clump.iter().enumerate() {
+            // we allow for points[i] to be the point at infinity, represented by (0, 0) in affine coordinates
             // this can be checked by points[i].y == 0 iff points[i] == O
-            </span><span class="kw">let </span>is_infinity = chip.is_zero(ctx, <span class="kw-2">&amp;</span>point.y);
-            chip.enforce_less_than(ctx, point.x());
+            let is_infinity = chip.is_zero(ctx, &amp;point.y);
+            let point = into_strict_point(chip, ctx, point.clone());
 
-            <span class="kw">for </span>j <span class="kw">in </span><span class="number">0</span>..(<span class="number">1 </span>&lt;&lt; i) {
-                <span class="kw">let </span><span class="kw-2">mut </span>new_point = ec_add_unequal(chip, ctx, <span class="kw-2">&amp;</span>bucket[j], point, <span class="bool-val">true</span>);
-                <span class="comment">// if points[i] is point at infinity, do nothing
-                </span>new_point = ec_select(chip, ctx, <span class="kw-2">&amp;</span>bucket[j], <span class="kw-2">&amp;</span>new_point, is_infinity);
-                chip.enforce_less_than(ctx, new_point.x());
+            for j in 0..(1 &lt;&lt; i) {
+                let mut new_point = ec_add_unequal(chip, ctx, &amp;bucket[j], &amp;point, true);
+                // if points[i] is point at infinity, do nothing
+                new_point = ec_select(chip, ctx, (&amp;bucket[j]).into(), new_point, is_infinity);
+                let new_point = into_strict_point(chip, ctx, new_point);
                 bucket.push(new_point);
             }
         }
 
-        <span class="comment">// for each j, select using clump in e[j][i=...]
-        </span><span class="kw">for </span>(j, bits) <span class="kw">in </span>bool_scalars.iter().enumerate() {
-            <span class="kw">let </span>multi_prod = ec_select_from_bits::&lt;F, <span class="kw">_</span>&gt;(
+        // for each j, select using clump in e[j][i=...]
+        for (j, bits) in bool_scalars.iter().enumerate() {
+            let multi_prod = strict_ec_select_from_bits(
                 chip,
                 ctx,
-                <span class="kw-2">&amp;</span>bucket,
-                <span class="kw-2">&amp;</span>bits[round * c..round * c + points_clump.len()],
+                &amp;bucket,
+                &amp;bits[round * c..round * c + points_clump.len()],
             );
-            <span class="comment">// everything in bucket has already been enforced
-            </span><span class="kw">if </span>round == <span class="number">0 </span>{
+            // since `bucket` is all `StrictEcPoint` and we are selecting from it, we know `multi_prod` is StrictEcPoint
+            // everything in bucket has already been enforced
+            if round == 0 {
                 acc.push(multi_prod);
-            } <span class="kw">else </span>{
-                acc[j] = ec_add_unequal(chip, ctx, <span class="kw-2">&amp;</span>acc[j], <span class="kw-2">&amp;</span>multi_prod, <span class="bool-val">true</span>);
-                chip.enforce_less_than(ctx, acc[j].x());
+            } else {
+                let _acc = ec_add_unequal(chip, ctx, &amp;acc[j], multi_prod, true);
+                acc[j] = into_strict_point(chip, ctx, _acc);
             }
         }
     }
 
-    <span class="comment">// we have acc[j] = G&#39;[j] + (2^num_rounds - 1) * rand_base
-    </span>rand_point = ec_double(chip, ctx, <span class="kw-2">&amp;</span>rand_point);
-    rand_point = ec_sub_unequal(chip, ctx, <span class="kw-2">&amp;</span>rand_point, <span class="kw-2">&amp;</span>rand_base, <span class="bool-val">false</span>);
+    // we have acc[j] = G&#39;[j] + (2^num_rounds - 1) * rand_base
+    any_point = ec_double(chip, ctx, any_point);
+    any_point = ec_sub_unequal(chip, ctx, any_point, any_base, false);
 
-    (acc, rand_point)
+    (acc, any_point)
 }
 
-<span class="doccomment">/// Currently does not support if the final answer is actually the point at infinity
-</span><span class="kw">pub fn </span>multi_exp&lt;F: PrimeField, FC, C&gt;(
-    chip: <span class="kw-2">&amp;</span>FC,
-    ctx: <span class="kw-2">&amp;mut </span>Context&lt;F&gt;,
-    points: <span class="kw-2">&amp;</span>[EcPoint&lt;F, FC::FieldPoint&gt;],
+/// Currently does not support if the final answer is actually the point at infinity (meaning constraints will fail in that case)
+///
+/// # Assumptions
+/// * `points.len() == scalars.len()`
+/// * `scalars[i].len() == scalars[j].len()` for all `i, j`
+pub fn multi_exp&lt;F: PrimeField, FC, C&gt;(
+    chip: &amp;FC,
+    ctx: &amp;mut Context&lt;F&gt;,
+    points: &amp;[EcPoint&lt;F, FC::FieldPoint&gt;],
     scalars: Vec&lt;Vec&lt;AssignedValue&lt;F&gt;&gt;&gt;,
     max_scalar_bits_per_cell: usize,
-    <span class="comment">// radix: usize, // specialize to radix = 1
-    </span>clump_factor: usize,
+    // radix: usize, // specialize to radix = 1
+    clump_factor: usize,
 ) -&gt; EcPoint&lt;F, FC::FieldPoint&gt;
-<span class="kw">where
-    </span>FC: FieldChip&lt;F&gt; + Selectable&lt;F, Point = FC::FieldPoint&gt;,
+where
+    FC: FieldChip&lt;F&gt; + Selectable&lt;F, FC::FieldPoint&gt; + Selectable&lt;F, FC::ReducedFieldPoint&gt;,
     C: CurveAffineExt&lt;Base = FC::FieldType&gt;,
 {
-    <span class="comment">// let (points, bool_scalars) = decompose::&lt;F, _&gt;(chip, ctx, points, scalars, max_scalar_bits_per_cell, radix);
+    // let (points, bool_scalars) = decompose::&lt;F, _&gt;(chip, ctx, points, scalars, max_scalar_bits_per_cell, radix);
 
-    </span><span class="macro">debug_assert_eq!</span>(points.len(), scalars.len());
-    <span class="kw">let </span>scalar_bits = max_scalar_bits_per_cell * scalars[<span class="number">0</span>].len();
-    <span class="comment">// bool_scalars: 2d array `scalar_bits` by `points.len()`
-    </span><span class="kw">let </span><span class="kw-2">mut </span>bool_scalars = <span class="macro">vec!</span>[Vec::with_capacity(points.len()); scalar_bits];
-    <span class="kw">for </span>scalar <span class="kw">in </span>scalars {
-        <span class="kw">for </span>(scalar_chunk, bool_chunk) <span class="kw">in
-            </span>scalar.into_iter().zip(bool_scalars.chunks_mut(max_scalar_bits_per_cell))
+    debug_assert_eq!(points.len(), scalars.len());
+    let scalar_bits = max_scalar_bits_per_cell * scalars[0].len();
+    // bool_scalars: 2d array `scalar_bits` by `points.len()`
+    let mut bool_scalars = vec![Vec::with_capacity(points.len()); scalar_bits];
+    for scalar in scalars {
+        for (scalar_chunk, bool_chunk) in
+            scalar.into_iter().zip(bool_scalars.chunks_mut(max_scalar_bits_per_cell))
         {
-            <span class="kw">let </span>bits = chip.gate().num_to_bits(ctx, scalar_chunk, max_scalar_bits_per_cell);
-            <span class="kw">for </span>(bit, bool_bit) <span class="kw">in </span>bits.into_iter().zip(bool_chunk.iter_mut()) {
+            let bits = chip.gate().num_to_bits(ctx, scalar_chunk, max_scalar_bits_per_cell);
+            for (bit, bool_bit) in bits.into_iter().zip(bool_chunk.iter_mut()) {
                 bool_bit.push(bit);
             }
         }
     }
 
-    <span class="kw">let </span>(<span class="kw-2">mut </span>agg, rand_point) =
-        multi_product::&lt;F, FC, C&gt;(chip, ctx, points, <span class="kw-2">&amp;</span>bool_scalars, clump_factor);
-    <span class="comment">// everything in agg has been enforced
+    let (mut agg, any_point) =
+        multi_product::&lt;F, FC, C&gt;(chip, ctx, points, &amp;bool_scalars, clump_factor);
+    // everything in agg has been enforced
 
     // compute sum_{k=0..t} agg[k] * 2^{radix * k} - (sum_k 2^{radix * k}) * rand_point
     // (sum_{k=0..t} 2^{radix * k}) = (2^{radix * t} - 1)/(2^radix - 1)
-    </span><span class="kw">let </span><span class="kw-2">mut </span>sum = agg.pop().unwrap();
-    <span class="kw">let </span><span class="kw-2">mut </span>rand_sum = rand_point.clone();
-    <span class="kw">for </span>g <span class="kw">in </span>agg.iter().rev() {
-        rand_sum = ec_double(chip, ctx, <span class="kw-2">&amp;</span>rand_sum);
-        <span class="comment">// cannot use ec_double_and_add_unequal because you cannot guarantee that `sum != g`
-        </span>sum = ec_double(chip, ctx, <span class="kw-2">&amp;</span>sum);
-        chip.enforce_less_than(ctx, sum.x());
-        sum = ec_add_unequal(chip, ctx, <span class="kw-2">&amp;</span>sum, g, <span class="bool-val">true</span>);
+    let mut sum = agg.pop().unwrap().into();
+    let mut any_sum = any_point.clone();
+    for g in agg.iter().rev() {
+        any_sum = ec_double(chip, ctx, any_sum);
+        // cannot use ec_double_and_add_unequal because you cannot guarantee that `sum != g`
+        sum = ec_double(chip, ctx, sum);
+        sum = ec_add_unequal(chip, ctx, sum, g, true);
     }
 
-    rand_sum = ec_double(chip, ctx, <span class="kw-2">&amp;</span>rand_sum);
-    <span class="comment">// assume 2^scalar_bits != +-1 mod modulus::&lt;F&gt;()
-    </span>rand_sum = ec_sub_unequal(chip, ctx, <span class="kw-2">&amp;</span>rand_sum, <span class="kw-2">&amp;</span>rand_point, <span class="bool-val">false</span>);
+    any_sum = ec_double(chip, ctx, any_sum);
+    // assume 2^scalar_bits != +-1 mod modulus::&lt;F&gt;()
+    any_sum = ec_sub_unequal(chip, ctx, any_sum, any_point, false);
 
-    chip.enforce_less_than(ctx, sum.x());
-    chip.enforce_less_than(ctx, rand_sum.x());
-    ec_sub_unequal(chip, ctx, <span class="kw-2">&amp;</span>sum, <span class="kw-2">&amp;</span>rand_sum, <span class="bool-val">true</span>)
+    ec_sub_unequal(chip, ctx, sum, any_sum, true)
 }
+*/
 
-<span class="doccomment">/// Multi-thread witness generation for multi-scalar multiplication.
-/// Should give exact same circuit as `multi_exp`.
+</span><span class="doccomment">/// Multi-thread witness generation for multi-scalar multiplication.
 ///
-/// Currently does not support if the final answer is actually the point at infinity
+/// # Assumptions
+/// * `points.len() == scalars.len()`
+/// * `scalars[i].len() == scalars[j].len()` for all `i, j`
+/// * `points` are all on the curve or the point at infinity
+/// * `points[i]` is allowed to be (0, 0) to represent the point at infinity (identity point)
+/// * Currently implementation assumes that the only point on curve with y-coordinate equal to `0` is identity point
 </span><span class="kw">pub fn </span>multi_exp_par&lt;F: PrimeField, FC, C&gt;(
     chip: <span class="kw-2">&amp;</span>FC,
-    <span class="comment">// we use a Mutex guard for synchronous adding threads to the thread pool
-    // these are the threads within a single Phase
-    </span>thread_pool: <span class="kw-2">&amp;</span>Mutex&lt;GateThreadBuilder&lt;F&gt;&gt;,
+    <span class="comment">// these are the &quot;threads&quot; within a single Phase
+    </span>builder: <span class="kw-2">&amp;mut </span>GateThreadBuilder&lt;F&gt;,
     points: <span class="kw-2">&amp;</span>[EcPoint&lt;F, FC::FieldPoint&gt;],
     scalars: Vec&lt;Vec&lt;AssignedValue&lt;F&gt;&gt;&gt;,
     max_scalar_bits_per_cell: usize,
@@ -580,20 +569,18 @@ where
     phase: usize,
 ) -&gt; EcPoint&lt;F, FC::FieldPoint&gt;
 <span class="kw">where
-    </span>FC: FieldChip&lt;F&gt; + Selectable&lt;F, Point = FC::FieldPoint&gt;,
+    </span>FC: FieldChip&lt;F&gt; + Selectable&lt;F, FC::FieldPoint&gt; + Selectable&lt;F, FC::ReducedFieldPoint&gt;,
     C: CurveAffineExt&lt;Base = FC::FieldType&gt;,
 {
     <span class="comment">// let (points, bool_scalars) = decompose::&lt;F, _&gt;(chip, ctx, points, scalars, max_scalar_bits_per_cell, radix);
 
-    </span><span class="macro">debug_assert_eq!</span>(points.len(), scalars.len());
+    </span><span class="macro">assert_eq!</span>(points.len(), scalars.len());
     <span class="kw">let </span>scalar_bits = max_scalar_bits_per_cell * scalars[<span class="number">0</span>].len();
     <span class="comment">// bool_scalars: 2d array `scalar_bits` by `points.len()`
     </span><span class="kw">let </span><span class="kw-2">mut </span>bool_scalars = <span class="macro">vec!</span>[Vec::with_capacity(points.len()); scalar_bits];
 
     <span class="comment">// get a main thread
-    </span><span class="kw">let </span><span class="kw-2">mut </span>builder = thread_pool.lock().unwrap();
-    <span class="kw">let </span>ctx = builder.main(phase);
-    <span class="kw">let </span>witness_gen_only = ctx.witness_gen_only();
+    </span><span class="kw">let </span>ctx = builder.main(phase);
     <span class="comment">// single-threaded computation:
     </span><span class="kw">for </span>scalar <span class="kw">in </span>scalars {
         <span class="kw">for </span>(scalar_chunk, bool_chunk) <span class="kw">in
@@ -605,124 +592,93 @@ where
             }
         }
     }
-    <span class="comment">// see multi-product comments for explanation of below
 
-    </span><span class="kw">let </span>c = clump_factor;
+    <span class="kw">let </span>c = clump_factor;
     <span class="kw">let </span>num_rounds = (points.len() + c - <span class="number">1</span>) / c;
-    <span class="kw">let </span>rand_base = load_random_point::&lt;F, FC, C&gt;(chip, ctx);
-    <span class="kw">let </span><span class="kw-2">mut </span>rand_points = Vec::with_capacity(num_rounds);
-    rand_points.push(rand_base);
+    <span class="comment">// to avoid adding two points that are equal or negative of each other,
+    // we use a trick from halo2wrong where we load a &quot;sufficiently generic&quot; `C` point as witness
+    // note that while we load a random point, an adversary could load a specifically chosen point, so we must carefully handle edge cases with constraints
+    // we call it &quot;any point&quot; instead of &quot;random point&quot; to emphasize that &quot;any&quot; sufficiently generic point will do
+    </span><span class="kw">let </span>any_base = load_random_point::&lt;F, FC, C&gt;(chip, ctx);
+    <span class="kw">let </span><span class="kw-2">mut </span>any_points = Vec::with_capacity(num_rounds);
+    any_points.push(any_base);
     <span class="kw">for _ in </span><span class="number">1</span>..num_rounds {
-        rand_points.push(ec_double(chip, ctx, rand_points.last().unwrap()));
+        any_points.push(ec_double(chip, ctx, any_points.last().unwrap()));
     }
-    <span class="comment">// we will use a different thread per round
-    // to prevent concurrency issues with context id, we generate all the ids first
-    </span><span class="kw">let </span>thread_ids = (<span class="number">0</span>..num_rounds).map(|<span class="kw">_</span>| builder.get_new_thread_id()).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-    drop(builder);
-    <span class="comment">// now begins multi-threading
 
+    <span class="comment">// now begins multi-threading
     // multi_prods is 2d vector of size `num_rounds` by `scalar_bits`
-    </span><span class="kw">let </span>(new_threads, multi_prods): (Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;) = points
-        .par_chunks(c)
-        .zip(rand_points.par_iter())
-        .zip(thread_ids.into_par_iter())
-        .enumerate()
-        .map(|(round, ((points_clump, rand_point), thread_id))| {
+    </span><span class="kw">let </span>multi_prods = parallelize_in(
+        phase,
+        builder,
+        points.chunks(c).into_iter().zip(any_points.iter()).enumerate().collect(),
+        |ctx, (round, (points_clump, any_point))| {
             <span class="comment">// compute all possible multi-products of elements in points[round * c .. round * (c+1)]
-            // create new thread
-            </span><span class="kw">let </span><span class="kw-2">mut </span>thread = Context::new(witness_gen_only, thread_id);
-            <span class="kw">let </span>ctx = <span class="kw-2">&amp;mut </span>thread;
-            <span class="comment">// stores { rand_point, rand_point + points[0], rand_point + points[1], rand_point + points[0] + points[1] , ... }
+            // stores { any_point, any_point + points[0], any_point + points[1], any_point + points[0] + points[1] , ... }
             </span><span class="kw">let </span><span class="kw-2">mut </span>bucket = Vec::with_capacity(<span class="number">1 </span>&lt;&lt; c);
-            chip.enforce_less_than(ctx, rand_point.x());
-            bucket.push(rand_point.clone());
+            <span class="kw">let </span>any_point = into_strict_point(chip, ctx, any_point.clone());
+            bucket.push(any_point);
             <span class="kw">for </span>(i, point) <span class="kw">in </span>points_clump.iter().enumerate() {
                 <span class="comment">// we allow for points[i] to be the point at infinity, represented by (0, 0) in affine coordinates
                 // this can be checked by points[i].y == 0 iff points[i] == O
                 </span><span class="kw">let </span>is_infinity = chip.is_zero(ctx, <span class="kw-2">&amp;</span>point.y);
-                chip.enforce_less_than(ctx, point.x());
+                <span class="kw">let </span>point = into_strict_point(chip, ctx, point.clone());
 
                 <span class="kw">for </span>j <span class="kw">in </span><span class="number">0</span>..(<span class="number">1 </span>&lt;&lt; i) {
-                    <span class="kw">let </span><span class="kw-2">mut </span>new_point = ec_add_unequal(chip, ctx, <span class="kw-2">&amp;</span>bucket[j], point, <span class="bool-val">true</span>);
+                    <span class="kw">let </span><span class="kw-2">mut </span>new_point = ec_add_unequal(chip, ctx, <span class="kw-2">&amp;</span>bucket[j], <span class="kw-2">&amp;</span>point, <span class="bool-val">true</span>);
                     <span class="comment">// if points[i] is point at infinity, do nothing
-                    </span>new_point = ec_select(chip, ctx, <span class="kw-2">&amp;</span>bucket[j], <span class="kw-2">&amp;</span>new_point, is_infinity);
-                    chip.enforce_less_than(ctx, new_point.x());
+                    </span>new_point = ec_select(chip, ctx, (<span class="kw-2">&amp;</span>bucket[j]).into(), new_point, is_infinity);
+                    <span class="kw">let </span>new_point = into_strict_point(chip, ctx, new_point);
                     bucket.push(new_point);
                 }
             }
-            <span class="kw">let </span>multi_prods = bool_scalars
+            bool_scalars
                 .iter()
                 .map(|bits| {
-                    ec_select_from_bits::&lt;F, <span class="kw">_</span>&gt;(
+                    strict_ec_select_from_bits(
                         chip,
                         ctx,
                         <span class="kw-2">&amp;</span>bucket,
                         <span class="kw-2">&amp;</span>bits[round * c..round * c + points_clump.len()],
                     )
                 })
-                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-
-            (thread, multi_prods)
-        })
-        .unzip();
-    <span class="comment">// we collect the new threads to ensure they are a FIXED order, otherwise later `assign_threads_in` will get confused
-    </span>thread_pool.lock().unwrap().threads[phase].extend(new_threads);
+                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+        },
+    );
 
     <span class="comment">// agg[j] = sum_{i=0..num_rounds} multi_prods[i][j] for j = 0..scalar_bits
-    // get a main thread
-    </span><span class="kw">let </span><span class="kw-2">mut </span>builder = thread_pool.lock().unwrap();
-    <span class="kw">let </span>thread_ids = (<span class="number">0</span>..scalar_bits).map(|<span class="kw">_</span>| builder.get_new_thread_id()).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-    drop(builder);
-    <span class="kw">let </span>(new_threads, <span class="kw-2">mut </span>agg): (Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;) = thread_ids
-        .into_par_iter()
-        .enumerate()
-        .map(|(i, thread_id)| {
-            <span class="kw">let </span><span class="kw-2">mut </span>thread = Context::new(witness_gen_only, thread_id);
-            <span class="kw">let </span>ctx = <span class="kw-2">&amp;mut </span>thread;
-            <span class="kw">let </span><span class="kw-2">mut </span>acc = <span class="kw">if </span>multi_prods.len() == <span class="number">1 </span>{
-                multi_prods[<span class="number">0</span>][i].clone()
-            } <span class="kw">else </span>{
-                ec_add_unequal(chip, ctx, <span class="kw-2">&amp;</span>multi_prods[<span class="number">0</span>][i], <span class="kw-2">&amp;</span>multi_prods[<span class="number">1</span>][i], <span class="bool-val">true</span>)
-            };
-            chip.enforce_less_than(ctx, acc.x());
-            <span class="kw">for </span>multi_prod <span class="kw">in </span>multi_prods.iter().skip(<span class="number">2</span>) {
-                acc = ec_add_unequal(chip, ctx, <span class="kw-2">&amp;</span>acc, <span class="kw-2">&amp;</span>multi_prod[i], <span class="bool-val">true</span>);
-                chip.enforce_less_than(ctx, acc.x());
-            }
-            (thread, acc)
-        })
-        .unzip();
-    thread_pool.lock().unwrap().threads[phase].extend(new_threads);
+    </span><span class="kw">let </span><span class="kw-2">mut </span>agg = parallelize_in(phase, builder, (<span class="number">0</span>..scalar_bits).collect(), |ctx, i| {
+        <span class="kw">let </span><span class="kw-2">mut </span>acc = multi_prods[<span class="number">0</span>][i].clone();
+        <span class="kw">for </span>multi_prod <span class="kw">in </span>multi_prods.iter().skip(<span class="number">1</span>) {
+            <span class="kw">let </span>_acc = ec_add_unequal(chip, ctx, <span class="kw-2">&amp;</span>acc, <span class="kw-2">&amp;</span>multi_prod[i], <span class="bool-val">true</span>);
+            acc = into_strict_point(chip, ctx, _acc);
+        }
+        acc
+    });
 
     <span class="comment">// gets the LAST thread for single threaded work
-    // warning: don&#39;t get any earlier threads, because currently we assume equality constraints in thread i only involves threads &lt;= i
-    </span><span class="kw">let </span><span class="kw-2">mut </span>builder = thread_pool.lock().unwrap();
-    <span class="kw">let </span>ctx = builder.main(phase);
-    <span class="comment">// we have agg[j] = G&#39;[j] + (2^num_rounds - 1) * rand_base
-    // let rand_point = (2^num_rounds - 1) * rand_base
+    </span><span class="kw">let </span>ctx = builder.main(phase);
+    <span class="comment">// we have agg[j] = G&#39;[j] + (2^num_rounds - 1) * any_base
+    // let any_point = (2^num_rounds - 1) * any_base
     // TODO: can we remove all these random point operations somehow?
-    </span><span class="kw">let </span><span class="kw-2">mut </span>rand_point = ec_double(chip, ctx, rand_points.last().unwrap());
-    rand_point = ec_sub_unequal(chip, ctx, <span class="kw-2">&amp;</span>rand_point, <span class="kw-2">&amp;</span>rand_points[<span class="number">0</span>], <span class="bool-val">false</span>);
+    </span><span class="kw">let </span><span class="kw-2">mut </span>any_point = ec_double(chip, ctx, any_points.last().unwrap());
+    any_point = ec_sub_unequal(chip, ctx, any_point, <span class="kw-2">&amp;</span>any_points[<span class="number">0</span>], <span class="bool-val">true</span>);
 
     <span class="comment">// compute sum_{k=0..scalar_bits} agg[k] * 2^k - (sum_{k=0..scalar_bits} 2^k) * rand_point
     // (sum_{k=0..scalar_bits} 2^k) = (2^scalar_bits - 1)
-    </span><span class="kw">let </span><span class="kw-2">mut </span>sum = agg.pop().unwrap();
-    <span class="kw">let </span><span class="kw-2">mut </span>rand_sum = rand_point.clone();
+    </span><span class="kw">let </span><span class="kw-2">mut </span>sum = agg.pop().unwrap().into();
+    <span class="kw">let </span><span class="kw-2">mut </span>any_sum = any_point.clone();
     <span class="kw">for </span>g <span class="kw">in </span>agg.iter().rev() {
-        rand_sum = ec_double(chip, ctx, <span class="kw-2">&amp;</span>rand_sum);
+        any_sum = ec_double(chip, ctx, any_sum);
         <span class="comment">// cannot use ec_double_and_add_unequal because you cannot guarantee that `sum != g`
-        </span>sum = ec_double(chip, ctx, <span class="kw-2">&amp;</span>sum);
-        chip.enforce_less_than(ctx, sum.x());
-        sum = ec_add_unequal(chip, ctx, <span class="kw-2">&amp;</span>sum, g, <span class="bool-val">true</span>);
+        </span>sum = ec_double(chip, ctx, sum);
+        sum = ec_add_unequal(chip, ctx, sum, g, <span class="bool-val">true</span>);
     }
 
-    rand_sum = ec_double(chip, ctx, <span class="kw-2">&amp;</span>rand_sum);
-    <span class="comment">// assume 2^scalar_bits != +-1 mod modulus::&lt;F&gt;()
-    </span>rand_sum = ec_sub_unequal(chip, ctx, <span class="kw-2">&amp;</span>rand_sum, <span class="kw-2">&amp;</span>rand_point, <span class="bool-val">false</span>);
+    any_sum = ec_double(chip, ctx, any_sum);
+    any_sum = ec_sub_unequal(chip, ctx, any_sum, any_point, <span class="bool-val">true</span>);
 
-    chip.enforce_less_than(ctx, sum.x());
-    chip.enforce_less_than(ctx, rand_sum.x());
-    ec_sub_unequal(chip, ctx, <span class="kw-2">&amp;</span>sum, <span class="kw-2">&amp;</span>rand_sum, <span class="bool-val">true</span>)
+    ec_sub_strict(chip, ctx, sum, any_sum)
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="halo2_ecc" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (0da281b60 2022-10-27)" ></div></body></html>
