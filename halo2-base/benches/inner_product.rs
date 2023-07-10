@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
-use halo2_base::gates::builder::{GateCircuitBuilder, GateThreadBuilder};
+use halo2_base::gates::builder::{GateCircuitBuilder, GateThreadBuilder, RangeCircuitBuilder};
 use halo2_base::gates::flex_gate::{FlexGateConfig, GateChip, GateInstructions, GateStrategy};
 use halo2_base::halo2_proofs::{
     arithmetic::Field,
@@ -50,7 +50,7 @@ fn bench(c: &mut Criterion) {
     let mut builder = GateThreadBuilder::new(false);
     inner_prod_bench(builder.main(0), vec![Fr::zero(); 5], vec![Fr::zero(); 5]);
     builder.config(k as usize, Some(20));
-    let circuit = GateCircuitBuilder::mock(builder);
+    let circuit = RangeCircuitBuilder::mock(builder);
 
     // check the circuit is correct just in case
     MockProver::run(k, &circuit, vec![]).unwrap().assert_satisfied();
@@ -59,7 +59,7 @@ fn bench(c: &mut Criterion) {
     let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
     let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
 
-    let break_points = circuit.break_points.take();
+    let break_points = circuit.0.break_points.take();
     drop(circuit);
 
     let mut group = c.benchmark_group("plonk-prover");
@@ -73,7 +73,7 @@ fn bench(c: &mut Criterion) {
                 let a = (0..5).map(|_| Fr::random(OsRng)).collect_vec();
                 let b = (0..5).map(|_| Fr::random(OsRng)).collect_vec();
                 inner_prod_bench(builder.main(0), a, b);
-                let circuit = GateCircuitBuilder::prover(builder, break_points.clone());
+                let circuit = RangeCircuitBuilder::prover(builder, break_points.clone());
 
                 let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
                 create_proof::<

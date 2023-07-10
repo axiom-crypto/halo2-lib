@@ -5,5 +5,5 @@ mod general;
 mod idx_to_indicator;
 mod neg_prop;
 mod pos_prop;
-mod range_gate;
+mod range;
 mod utils;

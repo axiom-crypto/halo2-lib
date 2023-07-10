@@ -18,13 +18,12 @@ jobs:
       - name: Build
         run: cargo build --verbose
       - name: Run halo2-base tests
+        working-directory: "halo2-base"
         run: |
-          cd halo2-base
           cargo test -- --test-threads=1
-          cd ..
       - name: Run halo2-ecc tests MockProver
+        working-directory: "halo2-ecc"
         run: |
-          cd halo2-ecc
           cargo test -- --test-threads=1 test_fp
           cargo test -- test_ecc
           cargo test -- test_secp
@@ -34,10 +33,9 @@ jobs:
           cargo test -- test_msm
           cargo test -- test_fb
           cargo test -- test_pairing
-          cd ..
       - name: Run halo2-ecc tests real prover
+        working-directory: "halo2-ecc"
         run: |
-          cd halo2-ecc
           cargo test --release -- test_fp_assert_eq
           cargo test --release -- --nocapture bench_secp256k1_ecdsa
           cargo test --release -- --nocapture bench_ec_add
@@ -47,4 +45,3 @@ jobs:
           cargo test --release -- --nocapture bench_msm
           mv configs/bn254/bench_pairing.t.config configs/bn254/bench_pairing.config
           cargo test --release -- --nocapture bench_pairing
-          cd ..

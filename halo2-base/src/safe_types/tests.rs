@@ -1,4 +1,5 @@
 use crate::{
+    gates::builder::set_lookup_bits,
     halo2_proofs::{halo2curves::bn256::Fr, poly::kzg::commitment::ParamsKZG},
     utils::testing::{check_proof, gen_proof},
 };
@@ -16,7 +17,6 @@ use crate::{
 };
 use itertools::Itertools;
 use rand::rngs::OsRng;
-use std::env;
 
 // soundness checks for `raw_bytes_to` function
 fn test_raw_bytes_to_gen<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
@@ -28,7 +28,7 @@ fn test_raw_bytes_to_gen<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
     // first create proving and verifying key
     let mut builder = GateThreadBuilder::<Fr>::keygen();
     let lookup_bits = 3;
-    env::set_var("LOOKUP_BITS", lookup_bits.to_string());
+    set_lookup_bits(lookup_bits);
     let range_chip = RangeChip::<Fr>::default(lookup_bits);
     let safe_type_chip = SafeTypeChip::new(&range_chip);
 
