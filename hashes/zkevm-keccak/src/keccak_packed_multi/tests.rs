@@ -19,6 +19,7 @@ use crate::halo2_proofs::{
     },
 };
 use rand_core::OsRng;
+use test_case::test_case;
 
 /// KeccakCircuit
 #[derive(Default, Clone, Debug)]
@@ -42,7 +43,8 @@ impl<F: Field> Circuit<F> for KeccakCircuit<F> {
         meta.advice_column();
 
         let challenge = meta.challenge_usable_after(FirstPhase);
-        KeccakCircuitConfig::new(meta, challenge)
+        let params = KECCAK_CONFIG_PARAMS.with(|conf| *conf.borrow());
+        KeccakCircuitConfig::new(meta, challenge, params)
     }
 
     fn synthesize(
@@ -50,7 +52,8 @@ impl<F: Field> Circuit<F> for KeccakCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        config.load_aux_tables(&mut layouter)?;
+        let params = config.parameters;
+        config.load_aux_tables(&mut layouter, params.k)?;
         let mut challenge = layouter.get_challenge(config.challenge);
         let mut first_pass = true;
         layouter.assign_region(
@@ -60,7 +63,11 @@ impl<F: Field> Circuit<F> for KeccakCircuit<F> {
                     first_pass = false;
                     return Ok(());
                 }
-                let (witness, squeeze_digests) = multi_keccak_phase0(&self.inputs, self.capacity());
+                let (witness, squeeze_digests) = multi_keccak_phase0(
+                    &self.inputs,
+                    self.num_rows.map(|nr| get_keccak_capacity(nr, params.rows_per_round)),
+                    params,
+                );
                 config.assign(&mut region, &witness);
 
                 #[cfg(feature = "halo2-axiom")]
@@ -74,6 +81,7 @@ impl<F: Field> Circuit<F> for KeccakCircuit<F> {
                     self.inputs.iter().map(|v| v.as_slice()),
                     challenge,
                     squeeze_digests,
+                    params,
                 );
                 Ok(())
             },
@@ -88,12 +96,6 @@ impl<F: Field> KeccakCircuit<F> {
     pub fn new(num_rows: Option<usize>, inputs: Vec<Vec<u8>>) -> Self {
         KeccakCircuit { inputs, num_rows, _marker: PhantomData }
     }
-
-    /// The number of keccak_f's that can be done in this circuit
-    pub fn capacity(&self) -> Option<usize> {
-        // Subtract two for unusable rows
-        self.num_rows.map(|num_rows| num_rows / ((NUM_ROUNDS + 1) * get_num_rows_per_round()) - 2)
-    }
 }
 
 fn verify<F: Field>(k: u32, inputs: Vec<Vec<u8>>, _success: bool) {
@@ -103,12 +105,14 @@ fn verify<F: Field>(k: u32, inputs: Vec<Vec<u8>>, _success: bool) {
     prover.assert_satisfied();
 }
 
-/// Cmdline: KECCAK_ROWS=28 KECCAK_DEGREE=14 RUST_LOG=info cargo test -- --nocapture packed_multi_keccak_simple
-#[test]
-fn packed_multi_keccak_simple() {
+#[test_case(14, 28; "k: 14, rows_per_round: 28")]
+fn packed_multi_keccak_simple(k: u32, rows_per_round: usize) {
+    KECCAK_CONFIG_PARAMS.with(|conf| {
+        conf.borrow_mut().k = k;
+        conf.borrow_mut().rows_per_round = rows_per_round;
+    });
     let _ = env_logger::builder().is_test(true).try_init();
 
-    let k = 14;
     let inputs = vec![
         vec![],
         (0u8..1).collect::<Vec<_>>(),
@@ -119,11 +123,14 @@ fn packed_multi_keccak_simple() {
     verify::<Fr>(k, inputs, true);
 }
 
-#[test]
-fn packed_multi_keccak_prover() {
+#[test_case(14, 25 ; "k: 14, rows_per_round: 25")]
+fn packed_multi_keccak_prover(k: u32, rows_per_round: usize) {
+    KECCAK_CONFIG_PARAMS.with(|conf| {
+        conf.borrow_mut().k = k;
+        conf.borrow_mut().rows_per_round = rows_per_round;
+    });
     let _ = env_logger::builder().is_test(true).try_init();
 
-    let k: u32 = var("KECCAK_DEGREE").unwrap_or_else(|_| "14".to_string()).parse().unwrap();
     let params = ParamsKZG::<Bn256>::setup(k, OsRng);
 
     let inputs = vec![

@@ -25,3 +25,7 @@ jobs:
         working-directory: "halo2-ecc"
         run: |
           cargo test -- --nocapture
+      - name: Run zkevm-keccak tests
+        working-directory: "hashes/zkevm-keccak"
+        run: |
+          cargo test -- --nocapture

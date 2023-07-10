@@ -472,7 +472,7 @@ pub fn assign_threads_in<F: ScalarField>(
 pub struct BaseConfigParams {
     /// The gate strategy used for the advice column of the circuit and applied at every row.
     pub strategy: GateStrategy,
-    /// Security parameter `k` used for the keygen.
+    /// Specifies the number of rows in the circuit to be 2<sup>k</sup>
     pub k: usize,
     /// The number of advice columns per phase
     pub num_advice_per_phase: Vec<usize>,
