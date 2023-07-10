@@ -20,12 +20,23 @@ jobs:
       - name: Run halo2-base tests
         working-directory: "halo2-base"
         run: |
-          cargo test -- --test-threads=1
-      - name: Run halo2-ecc tests
+          cargo test
+      - name: Run halo2-ecc tests MockProver
         working-directory: "halo2-ecc"
         run: |
-          cargo test -- --nocapture
+          cargo test -- --skip bench
+      - name: Run halo2-ecc tests (real prover)
+        working-directory: "halo2-ecc"
+        run: |
+          cargo test --release -- bench_secp256k1_ecdsa
+          cargo test --release -- bench_ec_add
+          mv configs/bn254/bench_fixed_msm.t.config configs/bn254/bench_fixed_msm.config
+          cargo test --release -- bench_fixed_base_msm
+          mv configs/bn254/bench_msm.t.config configs/bn254/bench_msm.config
+          cargo test --release -- bench_msm
+          mv configs/bn254/bench_pairing.t.config configs/bn254/bench_pairing.config
+          cargo test --release -- bench_pairing
       - name: Run zkevm-keccak tests
         working-directory: "hashes/zkevm-keccak"
         run: |
-          cargo test -- --nocapture
+          cargo test
