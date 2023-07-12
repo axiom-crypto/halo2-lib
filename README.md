@@ -288,6 +288,6 @@ cargo test --release --no-default-features --features "halo2-axiom, mimalloc" --
   - [halo2-rsa](https://github.com/zkemail/halo2-rsa/tree/feat/new_bigint)
 - [halo2-fri-gadget](https://github.com/maxgillett/halo2-fri-gadget) -- FRI verifier in halo2.
 - [eth-voice-recovery](https://github.com/SoraSuegami/voice_recovery_circuit)
-- [zkevm tx-circuit](https://github.com/scroll-tech/zkevm-circuits/tree/develop/zkevm-circuits/src/tx_circuit)
+- [zkevm signature verification circuit](https://github.com/scroll-tech/zkevm-circuits/tree/develop/zkevm-circuits/src/sig_circuit.rs)
 - [webauthn-halo2](https://github.com/zkwebauthn/webauthn-halo2) -- Proving and verifying WebAuthn with halo2.
 - [Fixed Point Arithmetic](https://github.com/DCMMC/halo2-scaffold/tree/main/src/gadget) -- Fixed point arithmetic library in halo2.
