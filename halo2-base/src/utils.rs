@@ -96,7 +96,7 @@ pub(crate) fn z3_formally_verify<F: BigPrimeField>(
             if circuit.selector[i] {
                 let lhs = Int::add(
                     &ctx, &[&advice[i],&Int::mul(&ctx,&[&advice[i + 1],&advice[i + 2],])]);
-                constraints.push(lhs._eq(&advice[i + 3]));
+                constraints.push(lhs.modulo(&p)._eq(&advice[i + 3]));
 
             }
         }
