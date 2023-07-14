@@ -18,6 +18,7 @@ use crate::halo2_proofs::{
         Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
     },
 };
+use halo2_base::SKIP_FIRST_PASS;
 use rand_core::OsRng;
 
 /// KeccakCircuit
@@ -52,7 +53,7 @@ impl<F: Field> Circuit<F> for KeccakCircuit<F> {
     ) -> Result<(), Error> {
         config.load_aux_tables(&mut layouter)?;
         let mut challenge = layouter.get_challenge(config.challenge);
-        let mut first_pass = true;
+        let mut first_pass = SKIP_FIRST_PASS;
         layouter.assign_region(
             || "keccak circuit",
             |mut region| {
@@ -75,6 +76,7 @@ impl<F: Field> Circuit<F> for KeccakCircuit<F> {
                     challenge,
                     squeeze_digests,
                 );
+                println!("finished keccak circuit");
                 Ok(())
             },
         )?;
@@ -119,6 +121,7 @@ fn packed_multi_keccak_simple() {
     verify::<Fr>(k, inputs, true);
 }
 
+/// Cmdline: KECCAK_DEGREE=14 RUST_LOG=info cargo test -- --nocapture packed_multi_keccak_prover
 #[test]
 fn packed_multi_keccak_prover() {
     let _ = env_logger::builder().is_test(true).try_init();
