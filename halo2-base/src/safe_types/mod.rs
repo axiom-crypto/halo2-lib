@@ -84,31 +84,27 @@ pub type SafeAddress<F> = SafeType<F, 1, 160>;
 /// SafeType for bytes32.
 pub type SafeBytes32<F> = SafeType<F, 1, 256>;
 
-/// Represents a variable length byte array as a vector of AssignedValue<F>'s.
-/// 
-/// The number of elements within the array may vary in circuit from `0..max_var_len`, with the assigned witness `var_len` 
+/// Represents a variable length byte array by wrapping a vector of AssignedValue<F>'s.
+///
+/// The number of elements within the array may vary in circuit from `0..MAX_VAR_LEN`, with the assigned witness `var_len`
 /// representing in circuit the number of significant elements present within the byte array from `0..=var_len`.
-/// 
+///
 /// * Range checks that each AssignedValue<F> of the vector is within byte range 0~255.
-/// * Asserts that bytes.len() == max_var_len and var_len < max_var_len.
-/// 
-/// Note: The minimum value of max_var_len (and length of the byte array) is 1 i.e. for var_len = 32, max_var_len must be 33.
+/// * Asserts that bytes.len() == MAX_VAR_LEN and var_len < MAX_VAR_LEN.
+///
+/// Note: The minimum value of MAX_VAR_LEN (and length of the byte array) is 1 i.e. for var_len = 32, max_var_len must be 33.
 #[derive(Debug, Clone)]
-pub struct VariableByteArray<F: ScalarField> {
+pub struct VariableByteArray<F: ScalarField, const MAX_VAR_LEN: usize> {
     /// Vector of AssignedValue<F>'s witnesses representing the byte array.
     bytes: Vec<AssignedValue<F>>,
     /// AssignedValue<F> witness representing the variable elements within the byte array from 0..var_len.
     pub var_len: AssignedValue<F>,
-    /// Maximum length of the byte array and the number of elements it must contain.
-    pub max_var_len: usize,
 }
 
-impl<F: ScalarField> VariableByteArray<F> {
-
-    fn new(bytes: Vec<AssignedValue<F>>, var_len: AssignedValue<F>, max_var_len: usize) -> Self {
-        assert!(bytes.len() == max_var_len, "len of bytes must equal max_var_len");
-        //Change this to constraint
-        Self { bytes, var_len, max_var_len}
+impl<F: ScalarField, const MAX_VAR_LEN: usize> VariableByteArray<F, MAX_VAR_LEN> {
+    fn new(bytes: Vec<AssignedValue<F>>, var_len: AssignedValue<F>) -> Self {
+        assert!(bytes.len() == MAX_VAR_LEN, "len of bytes must equal max_var_len");
+        Self { bytes, var_len }
     }
 
     pub fn var_len_to_usize(&self) -> usize {
@@ -116,7 +112,7 @@ impl<F: ScalarField> VariableByteArray<F> {
     }
 
     pub fn bytes(&self) -> &[AssignedValue<F>] {
-        &self.bytes.as_slice()
+        self.bytes.as_slice()
     }
 
     pub fn len(&self) -> usize {
@@ -124,7 +120,7 @@ impl<F: ScalarField> VariableByteArray<F> {
     }
 }
 
-impl<F: ScalarField> IntoIterator for VariableByteArray<F> {
+impl<F: ScalarField, const MAX_VAR_LEN: usize> IntoIterator for VariableByteArray<F, MAX_VAR_LEN> {
     type Item = AssignedValue<F>;
     type IntoIter = ::std::vec::IntoIter<AssignedValue<F>>;
 
@@ -181,21 +177,20 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
     }
 
     /// Converts a vector of AssignedValue(treated as little-endian) to VariableAssignedBytes.
-    /// 
+    ///
     /// * ctx: Circuit [Context]<F> to assign witnesses to.
     /// * inputs: Vector of [RawAssignedValues]<F> representing the byte array.
     /// * var_len: [AssignedValue]<F> witness representing the variable elements within the byte array from 0..=var_len.
     /// * max_var_len: [usize] representing the maximum length of the byte array and the number of elements it must contain.
-    pub fn raw_var_bytes_to(
+    pub fn raw_var_bytes_to<const MAX_VAR_LEN: usize>(
         &self,
         ctx: &mut Context<F>,
         inputs: RawAssignedValues<F>,
         var_len: AssignedValue<F>,
-        max_var_len: usize,
-    ) -> VariableByteArray<F> {
-        self.add_bytes_constraints(ctx, &inputs, BITS_PER_BYTE * max_var_len);
-        self.range_chip.check_less_than_safe(ctx, var_len, max_var_len as u64);
-        VariableByteArray::new(inputs, var_len, max_var_len)
+    ) -> VariableByteArray<F, MAX_VAR_LEN> {
+        self.add_bytes_constraints(ctx, &inputs, BITS_PER_BYTE * MAX_VAR_LEN);
+        self.range_chip.check_less_than_safe(ctx, var_len, MAX_VAR_LEN as u64);
+        VariableByteArray::<F, MAX_VAR_LEN>::new(inputs, var_len)
     }
 
     fn add_bytes_constraints(
