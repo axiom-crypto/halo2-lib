@@ -51,6 +51,8 @@ pub trait BigPrimeField = ScalarField;
 pub(crate) fn z3_formally_verify<F: BigPrimeField>(
     ctx: &mut Context<F>,
     num_bits: usize,
+    a: usize,
+    b: usize,
 ){
     let circuit = ctx;
     {
@@ -88,6 +90,8 @@ pub(crate) fn z3_formally_verify<F: BigPrimeField>(
             assert!(b.context_id == 0);
             let val_temp = F::from_bytes_le(a.to_repr().as_ref());
             let val =  BigUint::from_bytes_le(val_temp.to_bytes_le().as_ref());
+            println!("VAL: {:?}", val);
+            println!("VAL TEMP: {:?}", val_temp.to_bytes_le().as_slice());
             constraints.push(advice[b.offset]._eq(&Int::from_str(&ctx, &format!("{}", val)).unwrap()));
 
         }
@@ -96,6 +100,7 @@ pub(crate) fn z3_formally_verify<F: BigPrimeField>(
             if circuit.selector[i] {
                 let lhs = Int::add(
                     &ctx, &[&advice[i],&Int::mul(&ctx,&[&advice[i + 1],&advice[i + 2],])]);
+                //constraints.push(lhs.modulo(&p)._eq(&advice[i + 3]));
                 constraints.push(lhs._eq(&advice[i + 3]));
 
             }
@@ -105,11 +110,9 @@ pub(crate) fn z3_formally_verify<F: BigPrimeField>(
         let all_constraints = Bool::and(&ctx, &refs_par);
         println!("ALL CONSTRAINTS: {:?}", all_constraints);
 
-        let goal = Bool::and(&ctx, &[&advice[0].le(&advice[1])]);
-
+        let goal = Bool::and(&ctx, &[&advice[a].le(&advice[b])]);
         solver.assert(&all_constraints);
         solver.assert(&goal.not());
-
         solver.check();
         //assert_eq!(solver.check(), SatResult::Sat);
 
