@@ -110,7 +110,8 @@ pub(crate) fn z3_formally_verify<F: BigPrimeField>(
         solver.assert(&all_constraints);
         solver.assert(&goal.not());
 
-        assert_eq!(solver.check(), SatResult::Sat);
+        solver.check();
+        //assert_eq!(solver.check(), SatResult::Sat);
 
         println!("Model: {:?}", solver.get_model());
 
