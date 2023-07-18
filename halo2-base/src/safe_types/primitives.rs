@@ -1,0 +1,45 @@
+use super::*;
+/// SafeType for bool (1 bit).
+///
+/// This is a separate struct from [`CompactSafeType`] with the same behavior. Because
+/// we know only one [`AssignedValue`] is needed to hold the boolean value, we avoid
+/// using [`CompactSafeType`] to avoid the additional heap allocation from a length 1 vector.
+pub struct SafeBool<F: ScalarField>(pub(super) AssignedValue<F>);
+
+/// SafeType for byte (8 bits).
+///
+/// This is a separate struct from [`CompactSafeType`] with the same behavior. Because
+/// we know only one [`AssignedValue`] is needed to hold the boolean value, we avoid
+/// using [`CompactSafeType`] to avoid the additional heap allocation from a length 1 vector.
+pub struct SafeByte<F: ScalarField>(pub(super) AssignedValue<F>);
+
+macro_rules! safe_primitive_impls {
+    ($SafePrimitive:ty) => {
+        impl<F: ScalarField> AsRef<AssignedValue<F>> for $SafePrimitive {
+            fn as_ref(&self) -> &AssignedValue<F> {
+                &self.0
+            }
+        }
+
+        impl<F: ScalarField> AsMut<AssignedValue<F>> for $SafePrimitive {
+            fn as_mut(&mut self) -> &mut AssignedValue<F> {
+                &mut self.0
+            }
+        }
+
+        impl<F: ScalarField> Borrow<AssignedValue<F>> for $SafePrimitive {
+            fn borrow(&self) -> &AssignedValue<F> {
+                &self.0
+            }
+        }
+
+        impl<F: ScalarField> BorrowMut<AssignedValue<F>> for $SafePrimitive {
+            fn borrow_mut(&mut self) -> &mut AssignedValue<F> {
+                &mut self.0
+            }
+        }
+    };
+}
+
+safe_primitive_impls!(SafeBool<F>);
+safe_primitive_impls!(SafeByte<F>);

@@ -7,7 +7,14 @@ pub use crate::{
     AssignedValue, Context,
     QuantumCell::{self, Constant, Existing, Witness},
 };
-use std::cmp::{max, min};
+use std::{
+    borrow::{Borrow, BorrowMut},
+    cmp::{max, min},
+};
+
+mod primitives;
+
+pub use primitives::*;
 
 #[cfg(test)]
 pub mod tests;
@@ -51,9 +58,17 @@ impl<F: ScalarField, const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>
         Self { value: raw_values }
     }
 
-    /// Return values in littile-endian.
-    pub fn value(&self) -> &RawAssignedValues<F> {
+    /// Return values in little-endian.
+    pub fn value(&self) -> &[AssignedValue<F>] {
         &self.value
+    }
+}
+
+impl<F: ScalarField, const BYTES_PER_ELE: usize, const TOTAL_BITS: usize> AsRef<[AssignedValue<F>]>
+    for SafeType<F, BYTES_PER_ELE, TOTAL_BITS>
+{
+    fn as_ref(&self) -> &[AssignedValue<F>] {
+        self.value()
     }
 }
 
@@ -61,10 +76,8 @@ impl<F: ScalarField, const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>
 /// (2^(F::NUM_BITS) - 1) might not be a valid value for F. e.g. max value of F is a prime in [2^(F::NUM_BITS-1), 2^(F::NUM_BITS) - 1]
 #[allow(type_alias_bounds)]
 type CompactSafeType<F: ScalarField, const TOTAL_BITS: usize> =
-    SafeType<F, { ((F::NUM_BITS - 1) / 8) as usize }, TOTAL_BITS>;
+    SafeType<F, { (F::CAPACITY / 8) as usize }, TOTAL_BITS>;
 
-/// SafeType for bool.
-pub type SafeBool<F> = CompactSafeType<F, 1>;
 /// SafeType for uint8.
 pub type SafeUint8<F> = CompactSafeType<F, 8>;
 /// SafeType for uint16.
@@ -140,7 +153,7 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
         Self { range_chip }
     }
 
-    /// Convert a vector of AssignedValue(treated as little-endian) to a SafeType.
+    /// Convert a vector of AssignedValue (treated as little-endian) to a SafeType.
     /// The number of bytes of inputs must equal to the number of bytes of outputs.
     /// This function also add contraints that a AssignedValue in inputs must be in the range of a byte.
     pub fn raw_bytes_to<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
@@ -176,6 +189,42 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
         SafeType::<F, BYTES_PER_ELE, TOTAL_BITS>::new(value)
     }
 
+    /// Constrains that the `input` is a boolean value (either 0 or 1) and wraps it in [`SafeBool`].
+    pub fn assert_bool(&self, ctx: &mut Context<F>, input: AssignedValue<F>) -> SafeBool<F> {
+        self.range_chip.gate().assert_bit(ctx, input);
+        SafeBool(input)
+    }
+
+    /// Load a boolean value as witness and constrain it is either 0 or 1.
+    pub fn load_bool(&self, ctx: &mut Context<F>, input: bool) -> SafeBool<F> {
+        let input = ctx.load_witness(F::from(input));
+        self.assert_bool(ctx, input)
+    }
+
+    /// Unsafe method that directly converts `input` to [`SafeBool`] **without any checks**.
+    /// This should **only** be used if an external library needs to convert their types to [`SafeBool`].
+    pub fn unsafe_to_bool(&self, input: AssignedValue<F>) -> SafeBool<F> {
+        SafeBool(input)
+    }
+
+    /// Constrains that the `input` is a byte value and wraps it in [`SafeByte`].
+    pub fn assert_byte(&self, ctx: &mut Context<F>, input: AssignedValue<F>) -> SafeByte<F> {
+        self.range_chip.range_check(ctx, input, BITS_PER_BYTE);
+        SafeByte(input)
+    }
+
+    /// Load a boolean value as witness and constrain it is either 0 or 1.
+    pub fn load_byte(&self, ctx: &mut Context<F>, input: u8) -> SafeByte<F> {
+        let input = ctx.load_witness(F::from(input as u64));
+        self.assert_byte(ctx, input)
+    }
+
+    /// Unsafe method that directly converts `input` to [`SafeByte`] **without any checks**.
+    /// This should **only** be used if an external library needs to convert their types to [`SafeByte`].
+    pub fn unsafe_to_byte(&self, input: AssignedValue<F>) -> SafeByte<F> {
+        SafeByte(input)
+    }
+
     /// Converts a vector of AssignedValue(treated as little-endian) to VariableAssignedBytes.
     ///
     /// * ctx: Circuit [Context]<F> to assign witnesses to.
@@ -207,6 +256,6 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
         }
     }
 
-    // TODO: Add comprasion. e.g. is_less_than(SafeUint8, SafeUint8) -> SafeBool
+    // TODO: Add comparison. e.g. is_less_than(SafeUint8, SafeUint8) -> SafeBool
     // TODO: Add type castings. e.g. uint256 -> bytes32/uint32 -> uint64
 }
