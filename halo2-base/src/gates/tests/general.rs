@@ -4,10 +4,11 @@ use crate::gates::{
     range::{RangeChip, RangeInstructions},
 };
 use crate::halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
-use crate::utils::{BigPrimeField, ScalarField};
+use crate::utils::{BigPrimeField, ScalarField,biguint_to_fe};
 use crate::{Context, QuantumCell::Constant};
 use rand::rngs::OsRng;
 use rayon::prelude::*;
+use num_bigint::BigUint;
 
 fn gate_tests<F: ScalarField>(ctx: &mut Context<F>, inputs: [F; 3]) {
     let [a, b, c]: [_; 3] = ctx.assign_witnesses(inputs).try_into().unwrap();

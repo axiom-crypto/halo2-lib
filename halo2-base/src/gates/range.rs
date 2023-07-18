@@ -9,20 +9,17 @@ use crate::{
     },
     utils::{
         biguint_to_fe, bit_length, decompose_fe_to_u64_limbs, fe_to_biguint, BigPrimeField,
-        ScalarField,z3_formally_verify
+        ScalarField,
     },
     AssignedValue, Context,
     QuantumCell::{self, Constant, Existing, Witness},
 };
 use num_bigint::BigUint;
 use num_integer::Integer;
-use num_traits::{One, FromPrimitive};
+use num_traits::One;
 use std::{cmp::Ordering, ops::Shl};
-use z3::ast::{Array, Ast, Bool, Int, BV, Real};
-use z3::*;
-use std::env::var;
+
 use super::flex_gate::GateChip;
-use num_bigint::BigInt;
 
 /// Specifies the gate strategy for the range chip
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -204,7 +201,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// * a: [AssignedValue] value to be range checked
     /// * range_bits: number of bits to represent the range
     fn range_check(&self, ctx: &mut Context<F>, a: AssignedValue<F>, range_bits: usize);
-    
+
     /// Constrains that 'a' is less than 'b'.
     ///
     /// Assumes that `a` and `b` have bit length <= num_bits bits.
@@ -220,15 +217,6 @@ pub trait RangeInstructions<F: ScalarField> {
         b: impl Into<QuantumCell<F>>,
         num_bits: usize,
     );
-
-    fn check_range(
-        &self,
-        ctx: &mut Context<F>,
-        a: impl Into<QuantumCell<F>>,
-        b: impl Into<QuantumCell<F>>,
-        num_bits: usize,
-    );
-
 
     /// Performs a range check that `a` has at most `bit_length(b)` bits and then constrains that `a` is less than `b`.
     ///
@@ -517,15 +505,17 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
     /// # Assumptions
     /// * `ceil(range_bits / lookup_bits) * lookup_bits <= F::CAPACITY`
     fn range_check(&self, ctx: &mut Context<F>, a: AssignedValue<F>, range_bits: usize) {
+        if range_bits == 0 {
+            self.gate.assert_is_const(ctx, &a, &F::zero());
+            return;
+        }
         // the number of limbs
-
         let k = (range_bits + self.lookup_bits - 1) / self.lookup_bits;
-         //println!("range check {} bits {} len", range_bits, k);
+        // println!("range check {} bits {} len", range_bits, k);
         let rem_bits = range_bits % self.lookup_bits;
 
         debug_assert!(self.limb_bases.len() >= k);
 
-        println!("INPUT A: {:?}", a);
         if k == 1 {
             ctx.cells_to_lookup.push(a);
         } else {
@@ -559,88 +549,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
             }
             _ => {}
         }
-
-        /*let circuit = ctx;
-        println!("Advice: {:?}", circuit.advice);
-        println!("SELECTOR: {:?}", circuit.selector);
-        println!("SELECTOR CONSTRAINT: {:?}", circuit.advice[2] + circuit.advice[3] * circuit.advice[4]);
-        println!("len: {}", circuit.advice.len());
-        {
-         let cfg = Config::new();
-         let ctx = z3::Context::new(&cfg);
-         let solver = Solver::new(&ctx);
-
-         let mut constraints = Vec::new();
-
-         let mut advice = Vec::new();
-         for i in 0..circuit.advice.len() {
-                advice.push(Int::new_const(&ctx, format!("advice_{}", i)));
-             constraints.push(advice[i]._eq(&(&advice[i] + &Int::from_str(&ctx, "21888242871839275222246405745257275088548364400416034343698204186575808495617").unwrap()).modulo(&Int::from_str(&ctx, "21888242871839275222246405745257275088548364400416034343698204186575808495617").unwrap())));
-             // println!("ADVICE: {:?}", circuit.advice[i]);
-             constraints.push(advice[i].lt(&Int::from_str(&ctx, "21888242871839275222246405745257275088548364400416034343698204186575808495617").unwrap()));
-
-              //  constraints.push(advice[i].ge(&Int::from_u64(&ctx, 0)));
-                //println!("ADVICE: {:?}", advice[i].ge(&Int::from_u64(&ctx, 0)));
-                //println!("ADVICE: {:?}", advice[i].lt(&Int::from_str(&ctx, "21888242871839275222246405745257275088548364400416034343698204186575808495617").unwrap()));
-               // constraints.push(advice[i].lt(&Int::from_str(&ctx, "21888242871839275222246405745257275088548364400416034343698204186575808495617").unwrap()));
-         }
-
-                let lookup_bits: usize = var("LOOKUP_BITS").unwrap().parse().unwrap();
-
-
-               for a in circuit.cells_to_lookup.iter() {
-                   assert!(a.cell.unwrap().context_id == 0);
-                   let i = a.cell.unwrap().offset;
-                   constraints.push(advice[i].ge(&Int::from_u64(&ctx, 0)));
-                   constraints.push(advice[i].lt(&Int::from_u64(&ctx, 1 << lookup_bits)));
-                   println!("CONSTRAINT: {:?}", advice[i].ge(&Int::from_u64(&ctx, 0)));
-                   println!("CONSTRAINT: {:?}", advice[i].lt(&Int::from_u64(&ctx, 1 << lookup_bits)));
-               }
-
-               for (a, b) in circuit.advice_equality_constraints.iter() {
-                   constraints.push(advice[a.offset]._eq(&advice[b.offset]));
-                   println!("EQUALITY: {:?}", advice[a.offset].ge(&advice[b.offset]));
-
-               }
-
-              for (a, b) in circuit.constant_equality_constraints.iter() {
-                   assert!(b.context_id == 0);
-                   let val = BigUint::from_bytes_le(a.to_repr().as_ref());
-
-                   constraints.push(advice[b.offset]._eq(&Int::from_str(&ctx, &format!("{}", val)).unwrap()));
-                  println!("CONSTANT: {:?}", advice[b.offset]._eq(&Int::from_str(&ctx, &format!("{}", val)).unwrap()));
-
-              }
-
-              for i in 0..circuit.advice.len() {
-                    if circuit.selector[i] {
-                        let lhs = Int::add(
-                        &ctx, &[&advice[i],&Int::mul(&ctx,&[&advice[i + 1],&advice[i + 2],])]);
-
-                        constraints.push(lhs._eq(&advice[i + 3]));
-                        constraints.push(lhs.le(&advice[i + 3]));
-                    }
-              }
-
-            assert_eq!(a.cell.unwrap().context_id, 0);
-            let a_idx = a.cell.unwrap().offset;
-
-            let refs = constraints.iter().collect::<Vec<&Bool>>();
-            let all_constraints = Bool::and(&ctx, &refs);
-            println!("ALL CONSTRAINTS: {:?}", all_constraints);
-
-            let goal = Bool::and(&ctx, &[&advice[a_idx].ge(&Int::from_u64(&ctx, 0)),&advice[a_idx].lt(&Int::from_u64(&ctx, 2<<range_bits))]);
-
-            //solver.assert(&all_constraints.implies(&goal).not());
-            solver.assert(&all_constraints);
-            solver.assert(&goal.not());
-            assert_eq!(solver.check(), SatResult::Sat);
-            println!("Model: {:?}", solver.get_model());
-
-
-            }*/
     }
-
 
     /// Constrains that 'a' is less than 'b'.
     ///
@@ -657,7 +566,6 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         b: impl Into<QuantumCell<F>>,
         num_bits: usize,
     ) {
-
         let a = a.into();
         let b = b.into();
         let pow_of_two = self.gate.pow_of_two[num_bits];
@@ -680,48 +588,6 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         };
 
         self.range_check(ctx, check_cell, num_bits);
-
-
-        let a = format!("advice_{}", 0);
-        let b = format!("advice_{}", 1);
-
-
-        z3_formally_verify(ctx,num_bits, 0, 1);
-
-    }
-
-
-    fn check_range(
-        &self,
-        ctx: &mut Context<F>,
-        a: impl Into<QuantumCell<F>>,
-        b: impl Into<QuantumCell<F>>,
-        num_bits: usize,
-    ) {
-
-        let a = a.into();
-        let b = b.into();
-        let pow_of_two = self.gate.pow_of_two[num_bits];
-        let x = -pow_of_two;
-        println!(" pos power_of_two {:?}",pow_of_two);
-        println!(" neg power_of_two {:?}",-pow_of_two);
-        println!(" neg neg power_of_two {:?}",-(-pow_of_two));
-        println!(" -power_of_two bytes {:?}",pow_of_two.to_bytes_le());
-        let val =  BigUint::from_bytes_le(x.to_bytes_le().as_ref());
-        println!("VAL: {:?}",val);
-        let check_cell = match self.strategy {
-            RangeStrategy::Vertical => {
-                let cells = [
-                    Constant(-pow_of_two),
-                ];
-                ctx.assign_region(cells, []);
-                ctx.get(-1)
-            }
-        };
-
-        //check -2^253
-        self.range_check(ctx, check_cell, num_bits);
-
     }
 
     /// Constrains whether `a` is in `[0, b)`, and returns 1 if `a` < `b`, otherwise 0.

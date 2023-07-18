@@ -11,6 +11,7 @@ use num_traits::{One, Zero};
 use z3::ast::{Array, Ast, Bool, Int, BV, Real};
 use z3::*;
 use std::env::var;
+use crate::{AssignedValue,QuantumCell};
 /// Helper trait to represent a field element that can be converted into [u64] limbs.
 ///
 /// Note: Since the number of bits necessary to represent a field element is larger than the number of bits in a u64, we decompose the integer representation of the field element into multiple [u64] values e.g. `limbs`.
@@ -47,79 +48,6 @@ pub trait BigPrimeField = ScalarField;
 /// * `number_of_limbs`: number of limbs to return
 /// * `bit_len`: number of bits in each limb
 #[inline(always)]
-
-pub(crate) fn z3_formally_verify<F: BigPrimeField>(
-    ctx: &mut Context<F>,
-    num_bits: usize,
-    a: usize,
-    b: usize,
-){
-    let circuit = ctx;
-    {
-        let cfg = Config::new();
-        let ctx = z3::Context::new(&cfg);
-        let solver = Solver::new(&ctx);
-
-        let mut constraints = Vec::new();
-
-        let mut advice = Vec::new();
-
-
-        let p = Int::from_str(&ctx, "21888242871839275222246405745257275088548364400416034343698204186575808495617").unwrap();
-        for i in 0..circuit.advice.len() {
-            advice.push(Int::new_const(&ctx, format!("advice_{}", i)));
-
-            constraints.push(advice[i]._eq(&(&advice[i] + &p).modulo(&p)));
-
-
-        }
-        let lookup_bits: usize = var("LOOKUP_BITS").unwrap().parse().unwrap();
-
-        for a in circuit.cells_to_lookup.iter() {
-            assert!(a.cell.unwrap().context_id == 0);
-            let i = a.cell.unwrap().offset;
-            constraints.push(advice[i].ge(&Int::from_u64(&ctx, 0)));
-            constraints.push(advice[i].lt(&Int::from_u64(&ctx, 1 << lookup_bits)));
-        }
-
-        for (a, b) in circuit.advice_equality_constraints.iter() {
-            constraints.push(advice[a.offset]._eq(&advice[b.offset]));
-        }
-
-        for (a, b) in circuit.constant_equality_constraints.iter() {
-            assert!(b.context_id == 0);
-            let val_temp = F::from_bytes_le(a.to_repr().as_ref());
-            let val =  BigUint::from_bytes_le(val_temp.to_bytes_le().as_ref());
-            println!("VAL: {:?}", val);
-            println!("VAL TEMP: {:?}", val_temp.to_bytes_le().as_slice());
-            constraints.push(advice[b.offset]._eq(&Int::from_str(&ctx, &format!("{}", val)).unwrap()));
-
-        }
-
-        for i in 0..circuit.advice.len() {
-            if circuit.selector[i] {
-                let lhs = Int::add(
-                    &ctx, &[&advice[i],&Int::mul(&ctx,&[&advice[i + 1],&advice[i + 2],])]);
-                //constraints.push(lhs.modulo(&p)._eq(&advice[i + 3]));
-                constraints.push(lhs._eq(&advice[i + 3]));
-
-            }
-        }
-
-        let refs_par = constraints.iter().collect::<Vec<&Bool>>();
-        let all_constraints = Bool::and(&ctx, &refs_par);
-        println!("ALL CONSTRAINTS: {:?}", all_constraints);
-
-        let goal = Bool::and(&ctx, &[&advice[a].le(&advice[b])]);
-        solver.assert(&all_constraints);
-        solver.assert(&goal.not());
-        solver.check();
-        //assert_eq!(solver.check(), SatResult::Sat);
-
-        println!("Model: {:?}", solver.get_model());
-
-    }
-}
 pub(crate) fn decompose_u64_digits_to_limbs(
     e: impl IntoIterator<Item = u64>,
     number_of_limbs: usize,
@@ -478,6 +406,86 @@ pub mod fs {
         })
     }
 }
+
+/// Formal verification of halo2 circuit.
+///
+/// * `ctx_circuit`: The circuit
+/// * `ctx`: z3 context
+/// * `solver`: z3 solver
+/// * `goal`: Goal defined by users
+/// * `inputs`: A vector of the circuit inputs
+#[inline(always)]
+pub(crate) fn z3_formally_verify<F: BigPrimeField>(
+    ctx_circuit: &mut Context<F>,
+    ctx: &z3::Context,
+    solver: &z3::Solver,
+    goal : &Bool,
+    inputs: &Vec<&AssignedValue<F>>,
+) {
+
+    let circuit = ctx_circuit;
+
+    let mut constraints = Vec::new();
+
+    let mut advice = Vec::new();
+    let mut ins = Vec::new();
+    let p = Int::from_str(&ctx, "21888242871839275222246405745257275088548364400416034343698204186575808495617").unwrap();
+    for i in 0..circuit.advice.len() {
+        for j in 0..inputs.to_vec().len(){
+            if inputs[j].cell.unwrap().offset == i {
+                ins.push(Int::new_const(&ctx, format!("input_{}", j)));
+                advice.push(Int::new_const(&ctx, format!("advice_{}", i)));
+                constraints.push(ins[j]._eq(&advice[i]));
+            }
+            else{
+                advice.push(Int::new_const(&ctx, format!("advice_{}", i)));
+
+                constraints.push(advice[i]._eq(&(&advice[i] + &p).modulo(&p)));
+            }
+
+        }
+
+    }
+    let lookup_bits: usize = var("LOOKUP_BITS").unwrap().parse().unwrap();
+
+    for a in circuit.cells_to_lookup.iter() {
+        assert!(a.cell.unwrap().context_id == 0);
+        let i = a.cell.unwrap().offset;
+        constraints.push(advice[i].ge(&Int::from_u64(&ctx, 0)));
+        constraints.push(advice[i].lt(&Int::from_u64(&ctx, 1 << lookup_bits)));
+    }
+
+    for (a, b) in circuit.advice_equality_constraints.iter() {
+        constraints.push(advice[a.offset]._eq(&advice[b.offset]));
+    }
+
+    for (a, b) in circuit.constant_equality_constraints.iter() {
+        assert!(b.context_id == 0);
+        let val_temp = F::from_bytes_le(a.to_repr().as_ref());
+        let val =  BigUint::from_bytes_le(val_temp.to_bytes_le().as_ref());
+        constraints.push(advice[b.offset]._eq(&Int::from_str(&ctx, &format!("{}", val)).unwrap()));
+
+    }
+
+    for i in 0..circuit.advice.len() {
+        if circuit.selector[i] {
+            let lhs = Int::add(
+                &ctx, &[&advice[i],&Int::mul(&ctx,&[&advice[i + 1],&advice[i + 2],])]);
+            constraints.push(lhs.modulo(&p)._eq(&advice[i + 3]));
+
+        }
+    }
+    let refs_par = constraints.iter().collect::<Vec<&Bool>>();
+    let all_constraints = Bool::and(&ctx, &refs_par);
+
+    solver.assert(&all_constraints);
+    solver.assert(&goal.not());
+
+    //the solver should return Unsat meaning no values should satisfy all constraints but not goal
+    assert_eq!(solver.check(), SatResult::Unsat);
+
+}
+
 
 /// Utilities for testing
 #[cfg(any(test, feature = "test-utils"))]
