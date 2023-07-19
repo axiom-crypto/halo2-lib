@@ -8,6 +8,7 @@ itertools = "0.10"
 num-bigint = { version = "0.4", features = ["rand"] }
 num-integer = "0.1"
 num-traits = "0.2"
+rand = { version = "0.8", optional = true }
 rand_chacha = "0.3"
 rustc-hash = "1.1"
 ff = "0.12"
@@ -20,19 +21,14 @@ log = "0.4"
 halo2_proofs_axiom = { git = "https://github.com/axiom-crypto/halo2.git", branch = "axiom/dev", package = "halo2_proofs", optional = true }
 # Use PSE halo2 and halo2curves for compatibility when feature = "halo2-pse" is on
 halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2023_02_02", optional = true }
+z3 = { version = "0.11.2", features = ["static-link-z3"] }
 
 # plotting circuit layout
 plotters = { version = "0.3.0", optional = true }
 tabbycat = { version = "0.1", features = ["attributes"], optional = true }
 
-# test-utils
-rand = { version = "0.8", optional = true }
-z3 = {version="0.11.2", features = ["static-link-z3"]}
-
 [dev-dependencies]
 ark-std = { version = "0.3.0", features = ["print-trace"] }
-halo2-base = { path = ".", features = ["test-utils"] }
-rand = "0.8"
 pprof = { version = "0.11", features = ["criterion", "flamegraph"] }
 criterion = "0.4"
 criterion-macro = "0.4"
@@ -47,7 +43,7 @@ jemallocator = { version = "0.5", optional = true }
 mimalloc = { version = "0.1", default-features = false, optional = true }
 
 [features]
-default = ["halo2-axiom", "display"]
+default = ["halo2-axiom", "display", "test-utils"]
 dev-graph = ["halo2_proofs?/dev-graph", "halo2_proofs_axiom?/dev-graph", "plotters"]
 halo2-pse = ["halo2_proofs"]
 halo2-axiom = ["halo2_proofs_axiom"]
