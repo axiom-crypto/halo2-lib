@@ -8,10 +8,10 @@ use num_bigint::BigUint;
 use num_bigint::Sign;
 use num_traits::Signed;
 use num_traits::{One, Zero};
-use z3::ast::{Array, Ast, Bool, Int, BV, Real};
+use z3::ast::{Ast, Bool, Int};
 use z3::*;
 use std::env::var;
-use crate::{AssignedValue,QuantumCell};
+use crate::AssignedValue;
 /// Helper trait to represent a field element that can be converted into [u64] limbs.
 ///
 /// Note: Since the number of bits necessary to represent a field element is larger than the number of bits in a u64, we decompose the integer representation of the field element into multiple [u64] values e.g. `limbs`.
@@ -415,7 +415,7 @@ pub mod fs {
 /// * `goal`: Goal defined by users
 /// * `inputs`: A vector of the circuit inputs
 #[inline(always)]
-pub(crate) fn z3_formally_verify<F: BigPrimeField>(
+pub fn z3_formally_verify<F: BigPrimeField>(
     ctx_circuit: &mut Context<F>,
     ctx: &z3::Context,
     solver: &z3::Solver,

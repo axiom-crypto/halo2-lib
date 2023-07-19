@@ -1,7 +1,14 @@
-use crate::gates::tests::{flex_gate, range_gate, utils::*, Fr};
-use crate::utils::{bit_length, fe_to_biguint};
-use crate::{QuantumCell, QuantumCell::Witness};
+use halo2_base::utils::{bit_length, fe_to_biguint};
+use halo2_base::{QuantumCell, QuantumCell::Witness};
+use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 use proptest::{collection::vec, prelude::*};
+
+mod flex_gate;
+mod range_gate;
+mod common;
+
+use common::utils::*;
+
 //TODO: implement Copy for rand witness and rand fr to allow for array creation
 //  create vec and convert to array???
 //TODO: implement arbitrary for fr using looks like you'd probably need to implement your own TestFr struct to implement Arbitrary: https://docs.rs/quickcheck/latest/quickcheck/trait.Arbitrary.html , can probably just hack it from Fr = [u64; 4]

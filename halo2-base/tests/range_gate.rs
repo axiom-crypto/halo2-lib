@@ -1,10 +1,9 @@
 use std::env::set_var;
 
-use super::*;
-use crate::halo2_proofs::dev::MockProver;
-use crate::utils::{biguint_to_fe, ScalarField};
-use crate::QuantumCell::Witness;
-use crate::{
+use halo2_base::halo2_proofs::dev::MockProver;
+use halo2_base::utils::{biguint_to_fe, ScalarField};
+use halo2_base::QuantumCell::Witness;
+use halo2_base::{
     gates::{
         builder::{GateThreadBuilder, RangeCircuitBuilder},
         range::{RangeChip, RangeInstructions},
@@ -14,6 +13,7 @@ use crate::{
 };
 use num_bigint::BigUint;
 use test_case::test_case;
+use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 
 #[test_case(16, 10, Fr::from(100), 8; "range_check() pos")]
 pub fn test_range_check<F: ScalarField>(k: usize, lookup_bits: usize, a_val: F, range_bits: usize) {

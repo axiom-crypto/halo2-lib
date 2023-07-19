@@ -1,20 +1,12 @@
-use crate::gates::{
-    builder::{GateCircuitBuilder, GateThreadBuilder, RangeCircuitBuilder},
-    flex_gate::{GateChip, GateInstructions},
+use halo2_base::gates::{
+    builder::{GateThreadBuilder, RangeCircuitBuilder},
     range::{RangeChip, RangeInstructions},
 };
-use crate::halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
-use crate::utils::{BigPrimeField, ScalarField,biguint_to_fe,z3_formally_verify};
-use crate::{Context, QuantumCell::Constant, QuantumCell::Witness};
-use rand::rngs::OsRng;
-use rayon::prelude::*;
-use num_bigint::{BigInt, ToBigInt, ToBigUint, BigUint};
-use z3::ast::{Array, Ast, Bool, Int, BV, Real};
-use num_traits::One;
+use halo2_base::halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
+use halo2_base::utils::{BigPrimeField, z3_formally_verify};
+use halo2_base::Context;
+use z3::ast::{Bool, Int};
 use z3::*;
-use std::env::var;
-
-
 
 // Example of how to formally verify a circuit
 fn z3_range_test<F: BigPrimeField>(
@@ -22,10 +14,9 @@ fn z3_range_test<F: BigPrimeField>(
     lookup_bits: usize,
     inputs: [F; 2],
     range_bits: usize,
-    lt_bits: usize,
+    _lt_bits: usize,
 ) {
-
-    let [a, b]: [_; 2] = ctx.assign_witnesses(inputs).try_into().unwrap();
+    let [a, _]: [_; 2] = ctx.assign_witnesses(inputs).try_into().unwrap();
     let chip = RangeChip::default(lookup_bits);
 
     std::env::set_var("LOOKUP_BITS", lookup_bits.to_string());
@@ -46,13 +37,12 @@ fn z3_range_test<F: BigPrimeField>(
     // a >= 0
     let a_ge_0 = Int::new_const(&ctx_z3, format!("input_0")).ge(&Int::from_u64(&ctx_z3, 0));
     // a < 2**range_bits
-    let a_lt_2numbits = Int::new_const(&ctx_z3, format!("input_0")).lt(&Int::from_u64(&ctx_z3, 2<<range_bits));
+    let a_lt_2numbits = Int::new_const(&ctx_z3, format!("input_0")).lt(&Int::from_u64(&ctx_z3, 2 << range_bits));
     //  0 <= a < 2**range_bits
-    let goal = Bool::and(&ctx_z3, &[&a_ge_0,&a_lt_2numbits]);
+    let goal = Bool::and(&ctx_z3, &[&a_ge_0, &a_lt_2numbits]);
 
 
-    z3_formally_verify(ctx,&ctx_z3, &solver, &goal,&vec);
-
+    z3_formally_verify(ctx, &ctx_z3, &solver, &goal, &vec);
 }
 
 #[test]

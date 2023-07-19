@@ -1,4 +1,4 @@
-use crate::{
+use halo2_base::{
     gates::{
         builder::{GateCircuitBuilder, GateThreadBuilder},
         GateChip, GateInstructions,
