@@ -1,4 +1,4 @@
-use crate::{
+use halo2_base::{
     gates::{
         builder::{GateCircuitBuilder, GateThreadBuilder},
         GateChip, GateInstructions,
@@ -13,8 +13,7 @@ use crate::{
 
 use halo2_proofs_axiom::halo2curves::FieldExt;
 use rand::rngs::OsRng;
-
-use super::*;
+use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 
 // soundness checks for bitwise rotation functions
 fn test_bitwise_rotate_gen<const BIT: usize, const NUM_BITS: usize>(

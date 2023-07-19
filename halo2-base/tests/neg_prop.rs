@@ -6,25 +6,25 @@ use num_bigint::BigUint;
 use proptest::{collection::vec, prelude::*};
 use rand::rngs::OsRng;
 
-use crate::halo2_proofs::{
+use halo2_base::halo2_proofs::{
     dev::MockProver,
     halo2curves::{bn256::Fr, FieldExt},
     plonk::Assigned,
 };
-use crate::{
+use halo2_base::{
     gates::{
         builder::{GateCircuitBuilder, GateThreadBuilder, RangeCircuitBuilder},
         range::{RangeChip, RangeInstructions},
-        tests::{
-            pos_prop::{rand_bin_witness, rand_fr, rand_witness},
-            utils,
-        },
         GateChip, GateInstructions,
     },
     utils::{biguint_to_fe, bit_length, fe_to_biguint, ScalarField},
     QuantumCell,
     QuantumCell::Witness,
 };
+
+mod common;
+use common::rand::{rand_bin_witness, rand_fr, rand_witness};
+use common::utils;
 
 // Strategies for generating random witnesses
 prop_compose! {

@@ -1,11 +1,11 @@
-use crate::gates::{
+use halo2_base::gates::{
     builder::{GateCircuitBuilder, GateThreadBuilder, RangeCircuitBuilder},
     flex_gate::{GateChip, GateInstructions},
     range::{RangeChip, RangeInstructions},
 };
-use crate::halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
-use crate::utils::{BigPrimeField, ScalarField,biguint_to_fe};
-use crate::{Context, QuantumCell::Constant};
+use halo2_base::halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
+use halo2_base::utils::{BigPrimeField, ScalarField,biguint_to_fe};
+use halo2_base::{Context, QuantumCell::Constant};
 use rand::rngs::OsRng;
 use rayon::prelude::*;
 use num_bigint::BigUint;
@@ -100,7 +100,7 @@ fn range_single<F: BigPrimeField>(
     ctx: &mut Context<F>,
     lookup_bits: usize,
     inputs: [F; 2],
-    range_bits: usize,
+    _range_bits: usize,
     lt_bits: usize,
 ) {
 
@@ -123,8 +123,8 @@ fn test_check_less_than_function() {
     let mut builder = GateThreadBuilder::mock();
 
     let bytes: &[u8] = &[1, 255, 255, 239, 147, 245, 225, 67, 145, 112, 185, 121, 72, 232, 51, 40, 93, 88, 129, 129, 182, 69, 80, 184, 41, 160, 49, 225, 114, 78, 100, 48];
-    let aBig = BigUint::from_bytes_le(bytes); //21888242871839275222246405745257275088548364400416034343698204186575808495361
-    let a =  biguint_to_fe(&aBig);
+    let a_big = BigUint::from_bytes_le(bytes); //21888242871839275222246405745257275088548364400416034343698204186575808495361
+    let a =  biguint_to_fe(&a_big);
 
     range_single(builder.main(0), 8, [a,b], 1, 8);
 

@@ -1,11 +1,11 @@
-#![allow(clippy::type_complexity)]
+#![allow(clippy::type_complexity, dead_code)]
 use num_integer::Integer;
 
-use crate::utils::biguint_to_fe;
-use crate::utils::fe_to_biguint;
-use crate::utils::BigPrimeField;
-use crate::utils::ScalarField;
-use crate::QuantumCell;
+use halo2_base::utils::biguint_to_fe;
+use halo2_base::utils::fe_to_biguint;
+use halo2_base::utils::BigPrimeField;
+use halo2_base::utils::ScalarField;
+use halo2_base::QuantumCell;
 
 // Ground truth functions
 
