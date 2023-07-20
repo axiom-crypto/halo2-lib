@@ -1,9 +1,7 @@
-use std::env::set_var;
-
 use ff::Field;
 use halo2_base::{
     gates::{
-        builder::{GateThreadBuilder, RangeCircuitBuilder},
+        builder::{set_lookup_bits, GateThreadBuilder, RangeCircuitBuilder},
         RangeChip,
     },
     halo2_proofs::{
@@ -19,7 +17,7 @@ use rand::thread_rng;
 // soundness checks for `` function
 fn test_fp_assert_eq_gen(k: u32, lookup_bits: usize, num_tries: usize) {
     let mut rng = thread_rng();
-    set_var("LOOKUP_BITS", lookup_bits.to_string());
+    set_lookup_bits(lookup_bits);
 
     // first create proving and verifying key
     let mut builder = GateThreadBuilder::keygen();

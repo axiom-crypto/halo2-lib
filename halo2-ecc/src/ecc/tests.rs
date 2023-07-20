@@ -8,7 +8,7 @@ use crate::halo2_proofs::{
     plonk::*,
 };
 use group::Group;
-use halo2_base::gates::builder::RangeCircuitBuilder;
+use halo2_base::gates::builder::{set_lookup_bits, RangeCircuitBuilder};
 use halo2_base::gates::RangeChip;
 use halo2_base::utils::bigint_to_fe;
 use halo2_base::SKIP_FIRST_PASS;
@@ -26,7 +26,7 @@ fn basic_g1_tests<F: PrimeField>(
     P: G1Affine,
     Q: G1Affine,
 ) {
-    std::env::set_var("LOOKUP_BITS", lookup_bits.to_string());
+    set_lookup_bits(lookup_bits);
     let range = RangeChip::<F>::default(lookup_bits);
     let fp_chip = FpChip::<F, Fq>::new(&range, limb_bits, num_limbs);
     let chip = EccChip::new(&fp_chip);

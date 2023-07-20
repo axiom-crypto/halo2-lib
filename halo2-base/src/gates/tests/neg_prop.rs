@@ -1,23 +1,24 @@
-use std::env::set_var;
-
 use ff::Field;
 use itertools::Itertools;
 use num_bigint::BigUint;
 use proptest::{collection::vec, prelude::*};
 use rand::rngs::OsRng;
 
-use crate::halo2_proofs::{
-    dev::MockProver,
-    halo2curves::{bn256::Fr, FieldExt},
-    plonk::Assigned,
+use crate::{
+    gates::builder::set_lookup_bits,
+    halo2_proofs::{
+        dev::MockProver,
+        halo2curves::{bn256::Fr, FieldExt},
+        plonk::Assigned,
+    },
 };
 use crate::{
     gates::{
-        builder::{GateCircuitBuilder, GateThreadBuilder, RangeCircuitBuilder},
+        builder::{GateThreadBuilder, RangeCircuitBuilder},
         range::{RangeChip, RangeInstructions},
         tests::{
-            pos_prop_tests::{rand_bin_witness, rand_fr, rand_witness},
-            test_ground_truths,
+            pos_prop::{rand_bin_witness, rand_fr, rand_witness},
+            utils,
         },
         GateChip, GateInstructions,
     },
@@ -156,8 +157,8 @@ fn neg_test_idx_to_indicator(k: usize, len: usize, idx: usize, ind_witnesses: &[
     }
     // Get idx and indicator from advice column
     // Apply check instance function to `idx` and `ind_witnesses`
-    let circuit = GateCircuitBuilder::mock(builder); // no break points
-                                                     // Check soundness of witness values
+    let circuit = RangeCircuitBuilder::mock(builder); // no break points
+                                                      // Check soundness of witness values
     let is_valid_witness = check_idx_to_indicator(Fr::from(idx as u64), len, ind_witnesses);
     match MockProver::run(k as u32, &circuit, vec![]).unwrap().verify() {
         // if the proof is valid, then the instance should be valid -> return true
@@ -185,8 +186,8 @@ fn neg_test_select(
     // Prank the output
     builder.main(0).advice[select_offset] = Assigned::Trivial(rand_output);
 
-    let circuit = GateCircuitBuilder::mock(builder); // no break points
-                                                     // Check soundness of output
+    let circuit = RangeCircuitBuilder::mock(builder); // no break points
+                                                      // Check soundness of output
     let is_valid_instance = check_select(*a.value(), *b.value(), *sel.value(), rand_output);
     match MockProver::run(k as u32, &circuit, vec![]).unwrap().verify() {
         // if the proof is valid, then the instance should be valid -> return true
@@ -211,9 +212,9 @@ fn neg_test_select_by_indicator(
 
     let a_idx_offset = a_idx.cell.unwrap().offset;
     builder.main(0).advice[a_idx_offset] = Assigned::Trivial(rand_output);
-    let circuit = GateCircuitBuilder::mock(builder); // no break points
-                                                     // Check soundness of witness values
-                                                     // retrieve the value of a[idx] and check that it is equal to rand_output
+    let circuit = RangeCircuitBuilder::mock(builder); // no break points
+                                                      // Check soundness of witness values
+                                                      // retrieve the value of a[idx] and check that it is equal to rand_output
     let is_valid_witness = rand_output == *a[idx].value();
     match MockProver::run(k as u32, &circuit, vec![]).unwrap().verify() {
         // if the proof is valid, then the instance should be valid -> return true
@@ -238,8 +239,8 @@ fn neg_test_select_from_idx(
 
     let idx_offset = idx_val.cell.unwrap().offset;
     builder.main(0).advice[idx_offset] = Assigned::Trivial(rand_output);
-    let circuit = GateCircuitBuilder::mock(builder); // no break points
-                                                     // Check soundness of witness values
+    let circuit = RangeCircuitBuilder::mock(builder); // no break points
+                                                      // Check soundness of witness values
     let is_valid_witness = rand_output == *cells[idx].value();
     match MockProver::run(k as u32, &circuit, vec![]).unwrap().verify() {
         // if the proof is valid, then the instance should be valid -> return true
@@ -263,9 +264,9 @@ fn neg_test_inner_product(
 
     let inner_product_offset = inner_product.cell.unwrap().offset;
     builder.main(0).advice[inner_product_offset] = Assigned::Trivial(rand_output);
-    let circuit = GateCircuitBuilder::mock(builder); // no break points
-                                                     // Check soundness of witness values
-    let is_valid_witness = rand_output == test_ground_truths::inner_product_ground_truth(&(a, b));
+    let circuit = RangeCircuitBuilder::mock(builder); // no break points
+                                                      // Check soundness of witness values
+    let is_valid_witness = rand_output == utils::inner_product_ground_truth(&(a, b));
     match MockProver::run(k as u32, &circuit, vec![]).unwrap().verify() {
         // if the proof is valid, then the instance should be valid -> return true
         Ok(_) => is_valid_witness,
@@ -291,11 +292,10 @@ fn neg_test_inner_product_left_last(
     // prank the output cells
     builder.main(0).advice[inner_product_offset.0] = Assigned::Trivial(rand_output.0);
     builder.main(0).advice[inner_product_offset.1] = Assigned::Trivial(rand_output.1);
-    let circuit = GateCircuitBuilder::mock(builder); // no break points
-                                                     // Check soundness of witness values
-                                                     // (inner_product_ground_truth, a[a.len()-1])
-    let inner_product_ground_truth =
-        test_ground_truths::inner_product_ground_truth(&(a.clone(), b));
+    let circuit = RangeCircuitBuilder::mock(builder); // no break points
+                                                      // Check soundness of witness values
+                                                      // (inner_product_ground_truth, a[a.len()-1])
+    let inner_product_ground_truth = utils::inner_product_ground_truth(&(a.clone(), b));
     let is_valid_witness =
         rand_output.0 == inner_product_ground_truth && rand_output.1 == *a[a.len() - 1].value();
     match MockProver::run(k as u32, &circuit, vec![]).unwrap().verify() {
@@ -316,7 +316,7 @@ fn neg_test_range_check(k: usize, range_bits: usize, lookup_bits: usize, rand_a:
     gate.range_check(builder.main(0), a_witness, range_bits);
 
     builder.config(k, Some(9));
-    set_var("LOOKUP_BITS", lookup_bits.to_string());
+    set_lookup_bits(lookup_bits);
     let circuit = RangeCircuitBuilder::mock(builder); // no break points
                                                       // Check soundness of witness values
     let correct = fe_to_biguint(&rand_a).bits() <= range_bits as u64;
@@ -343,7 +343,7 @@ fn neg_test_is_less_than_safe(
     ctx.advice[out_idx] = Assigned::Trivial(Fr::from(prank_out));
 
     builder.config(k, Some(9));
-    set_var("LOOKUP_BITS", lookup_bits.to_string());
+    set_lookup_bits(lookup_bits);
     let circuit = RangeCircuitBuilder::mock(builder); // no break points
                                                       // Check soundness of witness values
                                                       // println!("rand_a: {rand_a:?}, b: {b:?}");

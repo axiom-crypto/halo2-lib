@@ -166,10 +166,6 @@ pub fn lagrange_eval_ground_truth<F: ScalarField>(inputs: &[F]) -> (F, F) {
 }
 */
 
-pub fn get_field_element_ground_truth<F: ScalarField>(n: u64) -> F {
-    F::from(n)
-}
-
 // Range Chip Ground Truths
 
 pub fn is_less_than_ground_truth<F: ScalarField>(inputs: (F, F)) -> F {

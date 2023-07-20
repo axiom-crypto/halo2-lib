@@ -5,7 +5,6 @@ use crate::halo2_proofs::{
     plonk::{Error, TableColumn},
 };
 use itertools::Itertools;
-use std::env::var;
 
 pub mod constraint_builder;
 pub mod eth_types;
@@ -286,21 +285,12 @@ impl WordParts {
     }
 }
 
-/// Get the degree of the circuit from the KECCAK_DEGREE env variable
-pub fn get_degree() -> usize {
-    var("KECCAK_DEGREE")
-        .expect("Need to set KECCAK_DEGREE to log_2(rows) of circuit")
-        .parse()
-        .expect("Cannot parse KECCAK_DEGREE env var as usize")
-}
-
 /// Returns how many bits we can process in a single lookup given the range of
 /// values the bit can have and the height of the circuit.
-pub fn get_num_bits_per_lookup(range: usize) -> usize {
+pub fn get_num_bits_per_lookup(range: usize, k: u32) -> usize {
     let num_unusable_rows = 31;
-    let degree = get_degree() as u32;
     let mut num_bits = 1;
-    while range.pow(num_bits + 1) + num_unusable_rows <= 2usize.pow(degree) {
+    while range.pow(num_bits + 1) + num_unusable_rows <= 2usize.pow(k) {
         num_bits += 1;
     }
     num_bits as usize
@@ -312,8 +302,9 @@ pub(crate) fn load_normalize_table<F: Field>(
     name: &str,
     tables: &[TableColumn; 2],
     range: u64,
+    k: u32,
 ) -> Result<(), Error> {
-    let part_size = get_num_bits_per_lookup(range as usize);
+    let part_size = get_num_bits_per_lookup(range as usize, k);
     layouter.assign_table(
         || format!("{name} table"),
         |mut table| {

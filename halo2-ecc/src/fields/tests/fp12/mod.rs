@@ -5,7 +5,7 @@ use crate::halo2_proofs::{
     dev::MockProver,
     halo2curves::bn256::{Fq, Fq12, Fr},
 };
-use halo2_base::gates::builder::{GateThreadBuilder, RangeCircuitBuilder};
+use halo2_base::gates::builder::{set_lookup_bits, GateThreadBuilder, RangeCircuitBuilder};
 use halo2_base::gates::RangeChip;
 use halo2_base::Context;
 use rand_core::OsRng;
@@ -20,7 +20,7 @@ fn fp12_mul_test<F: PrimeField>(
     _a: Fq12,
     _b: Fq12,
 ) {
-    std::env::set_var("LOOKUP_BITS", lookup_bits.to_string());
+    set_lookup_bits(lookup_bits);
     let range = RangeChip::<F>::default(lookup_bits);
     let fp_chip = FpChip::<F, Fq>::new(&range, limb_bits, num_limbs);
     let chip = Fp12Chip::<F, _, Fq12, XI_0>::new(&fp_chip);
