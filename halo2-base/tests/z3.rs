@@ -3,7 +3,7 @@ use halo2_base::gates::{
     range::{RangeChip, RangeInstructions},
 };
 use halo2_base::halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
-use halo2_base::utils::{BigPrimeField, z3_formally_verify};
+use halo2_base::utils::{z3_formally_verify, BigPrimeField};
 use halo2_base::Context;
 use z3::ast::{Bool, Int};
 use z3::*;
@@ -24,23 +24,20 @@ fn z3_range_test<F: BigPrimeField>(
     // First range check a
     chip.range_check(ctx, a, range_bits);
 
-
     // seting up a z3 solver and input the circuit and a to the solver.
-    let mut vec = Vec::new();
-    vec.push(&a);
+    let vec = vec![&a];
     let cfg = Config::new();
     let ctx_z3 = z3::Context::new(&cfg);
     let solver = Solver::new(&ctx_z3);
 
-
     // specifications defined by users, input_0 is a (next input would be input_1 and so on)
     // a >= 0
-    let a_ge_0 = Int::new_const(&ctx_z3, format!("input_0")).ge(&Int::from_u64(&ctx_z3, 0));
+    let a_ge_0 = Int::new_const(&ctx_z3, "input_0").ge(&Int::from_u64(&ctx_z3, 0));
     // a < 2**range_bits
-    let a_lt_2numbits = Int::new_const(&ctx_z3, format!("input_0")).lt(&Int::from_u64(&ctx_z3, 2 << range_bits));
+    let a_lt_2numbits =
+        Int::new_const(&ctx_z3, "input_0").lt(&Int::from_u64(&ctx_z3, 2 << range_bits));
     //  0 <= a < 2**range_bits
     let goal = Bool::and(&ctx_z3, &[&a_ge_0, &a_lt_2numbits]);
-
 
     z3_formally_verify(ctx, &ctx_z3, &solver, &goal, &vec);
 }

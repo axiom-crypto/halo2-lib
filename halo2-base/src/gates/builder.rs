@@ -777,7 +777,7 @@ impl<F: ScalarField> Circuit<F> for RangeWithInstanceCircuitBuilder<F> {
                 let (cell, _) = assigned_advices
                     .get(&(cell.context_id, cell.offset))
                     .expect("instance not assigned");
-                let _ = layouter.constrain_instance(*cell, config.instance, i);
+                layouter.constrain_instance(*cell, config.instance, i);
             }
         }
         Ok(())

@@ -1,17 +1,17 @@
 #[cfg(feature = "halo2-pse")]
 use crate::halo2_proofs::arithmetic::CurveAffine;
 use crate::halo2_proofs::{arithmetic::FieldExt, circuit::Value};
-use crate::{Context};
+use crate::AssignedValue;
+use crate::Context;
 use core::hash::Hash;
 use num_bigint::BigInt;
 use num_bigint::BigUint;
 use num_bigint::Sign;
 use num_traits::Signed;
 use num_traits::{One, Zero};
+use std::env::var;
 use z3::ast::{Ast, Bool, Int};
 use z3::*;
-use std::env::var;
-use crate::AssignedValue;
 /// Helper trait to represent a field element that can be converted into [u64] limbs.
 ///
 /// Note: Since the number of bits necessary to represent a field element is larger than the number of bits in a u64, we decompose the integer representation of the field element into multiple [u64] values e.g. `limbs`.
@@ -274,8 +274,6 @@ pub fn decompose_bigint_option<F: BigPrimeField>(
     value.map(|e| decompose_bigint(e, number_of_limbs, bit_len)).transpose_vec(number_of_limbs)
 }
 
-
-
 /// Wraps the internal value of `value` in an [Option].
 /// If the value is [None], then the function returns [None].
 /// * `value`: Value to convert.
@@ -419,40 +417,40 @@ pub fn z3_formally_verify<F: BigPrimeField>(
     ctx_circuit: &mut Context<F>,
     ctx: &z3::Context,
     solver: &z3::Solver,
-    goal : &Bool,
-    inputs: &Vec<&AssignedValue<F>>,
+    goal: &Bool,
+    inputs: &[&AssignedValue<F>],
 ) {
-
     let circuit = ctx_circuit;
 
     let mut constraints = Vec::new();
 
     let mut advice = Vec::new();
     let mut ins = Vec::new();
-    let p = Int::from_str(&ctx, "21888242871839275222246405745257275088548364400416034343698204186575808495617").unwrap();
+    let p = Int::from_str(
+        ctx,
+        "21888242871839275222246405745257275088548364400416034343698204186575808495617",
+    )
+    .unwrap();
     for i in 0..circuit.advice.len() {
-        for j in 0..inputs.to_vec().len(){
+        for j in 0..inputs.to_vec().len() {
             if inputs[j].cell.unwrap().offset == i {
-                ins.push(Int::new_const(&ctx, format!("input_{}", j)));
-                advice.push(Int::new_const(&ctx, format!("advice_{}", i)));
+                ins.push(Int::new_const(ctx, format!("input_{j}")));
+                advice.push(Int::new_const(ctx, format!("advice_{i}")));
                 constraints.push(ins[j]._eq(&advice[i]));
-            }
-            else{
-                advice.push(Int::new_const(&ctx, format!("advice_{}", i)));
+            } else {
+                advice.push(Int::new_const(ctx, format!("advice_{i}")));
 
                 constraints.push(advice[i]._eq(&(&advice[i] + &p).modulo(&p)));
             }
-
         }
-
     }
     let lookup_bits: usize = var("LOOKUP_BITS").unwrap().parse().unwrap();
 
     for a in circuit.cells_to_lookup.iter() {
         assert!(a.cell.unwrap().context_id == 0);
         let i = a.cell.unwrap().offset;
-        constraints.push(advice[i].ge(&Int::from_u64(&ctx, 0)));
-        constraints.push(advice[i].lt(&Int::from_u64(&ctx, 1 << lookup_bits)));
+        constraints.push(advice[i].ge(&Int::from_u64(ctx, 0)));
+        constraints.push(advice[i].lt(&Int::from_u64(ctx, 1 << lookup_bits)));
     }
 
     for (a, b) in circuit.advice_equality_constraints.iter() {
@@ -462,30 +460,26 @@ pub fn z3_formally_verify<F: BigPrimeField>(
     for (a, b) in circuit.constant_equality_constraints.iter() {
         assert!(b.context_id == 0);
         let val_temp = F::from_bytes_le(a.to_repr().as_ref());
-        let val =  BigUint::from_bytes_le(val_temp.to_bytes_le().as_ref());
-        constraints.push(advice[b.offset]._eq(&Int::from_str(&ctx, &format!("{}", val)).unwrap()));
-
+        let val = BigUint::from_bytes_le(val_temp.to_bytes_le().as_ref());
+        constraints.push(advice[b.offset]._eq(&Int::from_str(ctx, &format!("{val}")).unwrap()));
     }
 
     for i in 0..circuit.advice.len() {
         if circuit.selector[i] {
-            let lhs = Int::add(
-                &ctx, &[&advice[i],&Int::mul(&ctx,&[&advice[i + 1],&advice[i + 2],])]);
+            let lhs =
+                Int::add(ctx, &[&advice[i], &Int::mul(ctx, &[&advice[i + 1], &advice[i + 2]])]);
             constraints.push(lhs.modulo(&p)._eq(&advice[i + 3]));
-
         }
     }
     let refs_par = constraints.iter().collect::<Vec<&Bool>>();
-    let all_constraints = Bool::and(&ctx, &refs_par);
+    let all_constraints = Bool::and(ctx, &refs_par);
 
     solver.assert(&all_constraints);
     solver.assert(&goal.not());
 
     //the solver should return Unsat meaning no values should satisfy all constraints but not goal
     assert_eq!(solver.check(), SatResult::Unsat);
-
 }
-
 
 /// Utilities for testing
 #[cfg(any(test, feature = "test-utils"))]

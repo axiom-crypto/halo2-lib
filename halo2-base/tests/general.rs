@@ -4,11 +4,11 @@ use halo2_base::gates::{
     range::{RangeChip, RangeInstructions},
 };
 use halo2_base::halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
-use halo2_base::utils::{BigPrimeField, ScalarField,biguint_to_fe};
+use halo2_base::utils::{biguint_to_fe, BigPrimeField, ScalarField};
 use halo2_base::{Context, QuantumCell::Constant};
+use num_bigint::BigUint;
 use rand::rngs::OsRng;
 use rayon::prelude::*;
-use num_bigint::BigUint;
 
 fn gate_tests<F: ScalarField>(ctx: &mut Context<F>, inputs: [F; 3]) {
     let [a, b, c]: [_; 3] = ctx.assign_witnesses(inputs).try_into().unwrap();
@@ -103,15 +103,12 @@ fn range_single<F: BigPrimeField>(
     _range_bits: usize,
     lt_bits: usize,
 ) {
-
-
     let [a, b]: [_; 2] = ctx.assign_witnesses(inputs).try_into().unwrap();
     let chip = RangeChip::default(lookup_bits);
-    println!("LOOK UP BITS {} ", lookup_bits);
+    println!("LOOK UP BITS {lookup_bits} ");
     std::env::set_var("LOOKUP_BITS", lookup_bits.to_string());
 
     chip.check_less_than(ctx, a, b, lt_bits);
-
 }
 
 #[test]
@@ -122,11 +119,14 @@ fn test_check_less_than_function() {
 
     let mut builder = GateThreadBuilder::mock();
 
-    let bytes: &[u8] = &[1, 255, 255, 239, 147, 245, 225, 67, 145, 112, 185, 121, 72, 232, 51, 40, 93, 88, 129, 129, 182, 69, 80, 184, 41, 160, 49, 225, 114, 78, 100, 48];
+    let bytes: &[u8] = &[
+        1, 255, 255, 239, 147, 245, 225, 67, 145, 112, 185, 121, 72, 232, 51, 40, 93, 88, 129, 129,
+        182, 69, 80, 184, 41, 160, 49, 225, 114, 78, 100, 48,
+    ];
     let a_big = BigUint::from_bytes_le(bytes); //21888242871839275222246405745257275088548364400416034343698204186575808495361
-    let a =  biguint_to_fe(&a_big);
+    let a = biguint_to_fe(&a_big);
 
-    range_single(builder.main(0), 8, [a,b], 1, 8);
+    range_single(builder.main(0), 8, [a, b], 1, 8);
 
     // auto-tune circuit
     builder.config(k, Some(9));
@@ -135,7 +135,6 @@ fn test_check_less_than_function() {
 
     MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
 }
-
 
 fn range_tests<F: BigPrimeField>(
     ctx: &mut Context<F>,
