@@ -121,7 +121,7 @@ pub(crate) fn decompose_u64_digits_to_limbs(
 }
 
 /// Returns the number of bits needed to represent the value of `x`.
-pub fn bit_length(x: u64) -> usize {
+pub const fn bit_length(x: u64) -> usize {
     (u64::BITS - x.leading_zeros()) as usize
 }
 
