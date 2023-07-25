@@ -67,13 +67,15 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE
         // adding preconstant to the distinguished capacity element (only one)
         // REPLACED BY THIS
         self.s[0] = ctx.load_witness(*self.s[0].value() + pre_constants[0]);
-        
+
+        // adding pre-constants and inputs to the elements for which both are available
         for ((x, constant), input) in
             self.s.iter_mut().skip(1).zip(pre_constants.iter().skip(1)).zip(inputs.iter())
         {
             *x = gate.sum(ctx, [Existing(*x), Existing(*input), Constant(*constant)]);
         }
 
+        // adding only pre-constants when no input is left
         for (i, (x, constant)) in
             self.s.iter_mut().skip(offset).zip(pre_constants.iter().skip(offset)).enumerate()
         {
