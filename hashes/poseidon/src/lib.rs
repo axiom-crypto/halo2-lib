@@ -60,14 +60,9 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE
         //   to as many elements as inputs are available.
         // - To the first element for which no input is left (if any), an extra 1 is added.
 
-        // ORIGINAL CODE: CAUSED PROBLEMS
-        // self.s[0] =
-        //     gate.sum(ctx, inputs.iter().map(|a| Existing(*a)).chain([Constant(pre_constants[0])]));
-
         // adding preconstant to the distinguished capacity element (only one)
-        // REPLACED BY THIS
-        self.s[0] = ctx.load_witness(*self.s[0].value() + pre_constants[0]);
-
+        self.s[0] = gate.add(ctx, self.s[0], Constant(pre_constants[0]));
+        
         // adding pre-constants and inputs to the elements for which both are available
         for ((x, constant), input) in
             self.s.iter_mut().skip(1).zip(pre_constants.iter().skip(1)).zip(inputs.iter())
