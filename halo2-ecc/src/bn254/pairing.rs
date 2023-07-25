@@ -453,23 +453,15 @@ impl<'chip, F: PrimeField> PairingChip<'chip, F> {
         Self { fp_chip }
     }
 
-    pub fn load_private_g1_unchecked(
-        &self,
-        ctx: &mut Context<F>,
-        point: G1Affine,
-    ) -> EcPoint<F, FpPoint<F>> {
+    pub fn load_private_g1(&self, ctx: &mut Context<F>, point: G1Affine) -> EcPoint<F, FpPoint<F>> {
         let g1_chip = EccChip::new(self.fp_chip);
-        g1_chip.load_private_unchecked(ctx, (point.x, point.y))
+        g1_chip.load_private::<G1Affine>(ctx, (point.x, point.y))
     }
 
-    pub fn load_private_g2_unchecked(
-        &self,
-        ctx: &mut Context<F>,
-        point: G2Affine,
-    ) -> EcPoint<F, FqPoint<F>> {
+    pub fn load_private_g2(&self, ctx: &mut Context<F>, point: G2Affine) -> EcPoint<F, FqPoint<F>> {
         let fp2_chip = Fp2Chip::new(self.fp_chip);
         let g2_chip = EccChip::new(&fp2_chip);
-        g2_chip.load_private_unchecked(ctx, (point.x, point.y))
+        g2_chip.load_private::<G2Affine>(ctx, (point.x, point.y))
     }
 
     pub fn miller_loop(

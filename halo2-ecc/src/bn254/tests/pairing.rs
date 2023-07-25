@@ -43,10 +43,10 @@ fn pairing_check_test<F: PrimeField>(
     let range = RangeChip::<F>::default(params.lookup_bits);
     let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
     let chip = PairingChip::new(&fp_chip);
-    let P_assigned = chip.load_private_g1_unchecked(ctx, P);
-    let Q_assigned = chip.load_private_g2_unchecked(ctx, Q);
-    let S_assigned = chip.load_private_g1_unchecked(ctx, S);
-    let T_assigned = chip.load_private_g2_unchecked(ctx, G2Affine::generator());
+    let P_assigned = chip.load_private_g1(ctx, P);
+    let Q_assigned = chip.load_private_g2(ctx, Q);
+    let S_assigned = chip.load_private_g1(ctx, S);
+    let T_assigned = chip.load_private_g2(ctx, G2Affine::generator());
     chip.pairing_check(ctx, &Q_assigned, &P_assigned, &T_assigned, &S_assigned);
 }
 
@@ -60,8 +60,8 @@ fn pairing_test<F: PrimeField>(
     let range = RangeChip::<F>::default(params.lookup_bits);
     let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
     let chip = PairingChip::new(&fp_chip);
-    let P_assigned = chip.load_private_g1_unchecked(ctx, P);
-    let Q_assigned = chip.load_private_g2_unchecked(ctx, Q);
+    let P_assigned = chip.load_private_g1(ctx, P);
+    let Q_assigned = chip.load_private_g2(ctx, Q);
     // test optimal ate pairing
     let f = chip.pairing(ctx, &Q_assigned, &P_assigned);
     let actual_f = pairing(&P, &Q);

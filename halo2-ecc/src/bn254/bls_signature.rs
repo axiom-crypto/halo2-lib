@@ -3,7 +3,7 @@
 use super::pairing::PairingChip;
 use super::{Fp12Chip, Fp2Chip, FpChip, FqPoint};
 use crate::ecc::EccChip;
-use crate::fields::{FieldChip, PrimeField};
+use crate::fields::PrimeField;
 use crate::halo2_proofs::halo2curves::bn256::{G1Affine, G2Affine};
 use halo2_base::Context;
 
@@ -41,55 +41,17 @@ impl<'chip, F: PrimeField> BlsSignatureChip<'chip, F> {
         let fp2_chip = Fp2Chip::<F>::new(self.fp_chip);
         let g2_chip = EccChip::new(&fp2_chip);
 
-        let g1_assigned = self.pairing_chip.load_private_g1_unchecked(ctx, g1);
-        // Checking element from G1 is on curve also check that it's in subgroup G1 since G1 has cofactor of 1
-        g1_chip.assert_is_on_curve::<halo2_base::halo2_proofs::halo2curves::bn256::G1Affine>(
-            ctx,
-            &g1_assigned,
-        );
+        let g1_assigned = self.pairing_chip.load_private_g1(ctx, g1);
 
-        let hash_m_assigned = self.pairing_chip.load_private_g2_unchecked(ctx, msghash);
-        g2_chip.assert_is_on_curve::<halo2_base::halo2_proofs::halo2curves::bn256::G2Affine>(
-            ctx,
-            &hash_m_assigned,
-        );
+        let hash_m_assigned = self.pairing_chip.load_private_g2(ctx, msghash);
 
-        let mut signature_agg_assigned =
-            self.pairing_chip.load_private_g2_unchecked(ctx, signatures[0]);
-        g2_chip.field_chip.enforce_less_than(ctx, signature_agg_assigned.x().clone());
-        let mut pubkey_agg_assigned = self.pairing_chip.load_private_g1_unchecked(ctx, pubkeys[0]);
-        g1_chip.field_chip.enforce_less_than(ctx, pubkey_agg_assigned.x().clone());
+        let signature_points =
+            signatures.iter().map(|pt| g2_chip.assign_point(ctx, *pt)).collect::<Vec<_>>();
+        let signature_agg_assigned = g2_chip.sum::<G2Affine>(ctx, signature_points);
 
-        // loop through signatures and aggregate them
-        for (index, signature) in signatures.iter().enumerate() {
-            if index > 0 {
-                let signature_assigned =
-                    self.pairing_chip.load_private_g2_unchecked(ctx, *signature);
-                g2_chip.field_chip.enforce_less_than(ctx, signature_assigned.x().clone());
-                g2_chip
-                    .assert_is_on_curve::<halo2_base::halo2_proofs::halo2curves::bn256::G2Affine>(
-                        ctx,
-                        &signature_assigned,
-                    );
-                signature_agg_assigned =
-                    g2_chip.add_unequal(ctx, &signature_agg_assigned, &signature_assigned, false);
-            }
-        }
-
-        // loop through pubkeys and aggregate them
-        for (index, pubkey) in pubkeys.iter().enumerate() {
-            if index > 0 {
-                let pubkey_assigned = self.pairing_chip.load_private_g1_unchecked(ctx, *pubkey);
-                g1_chip.field_chip.enforce_less_than(ctx, pubkey_assigned.x().clone());
-                g1_chip
-                    .assert_is_on_curve::<halo2_base::halo2_proofs::halo2curves::bn256::G1Affine>(
-                        ctx,
-                        &pubkey_assigned,
-                    );
-                pubkey_agg_assigned =
-                    g1_chip.add_unequal(ctx, &pubkey_agg_assigned, &pubkey_assigned, false);
-            }
-        }
+        let pubkey_points =
+            pubkeys.iter().map(|pt| g1_chip.assign_point(ctx, *pt)).collect::<Vec<_>>();
+        let pubkey_agg_assigned = g1_chip.sum::<G1Affine>(ctx, pubkey_points);
 
         let fp12_chip = Fp12Chip::<F>::new(self.fp_chip);
         let g12_chip = EccChip::new(&fp12_chip);
