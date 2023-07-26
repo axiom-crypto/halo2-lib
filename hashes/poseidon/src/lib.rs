@@ -9,6 +9,8 @@ use halo2_base::{
     QuantumCell::{Constant, Existing},
 };
 
+pub mod tests;
+
 struct PoseidonState<F: ScalarField, const T: usize, const RATE: usize> {
     s: [AssignedValue<F>; T],
 }
@@ -62,7 +64,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE
 
         // adding preconstant to the distinguished capacity element (only one)
         self.s[0] = gate.add(ctx, self.s[0], Constant(pre_constants[0]));
-        
+
         // adding pre-constants and inputs to the elements for which both are available
         for ((x, constant), input) in
             self.s.iter_mut().skip(1).zip(pre_constants.iter().skip(1)).zip(inputs.iter())
