@@ -128,7 +128,6 @@ impl<F: ScalarField> AssignedValue<F> {
 
     /// Debug helper function for writing negative tests. This will change the **witness** value of the assigned cell
     /// to `prank_value`. It does not change any constraints.
-    #[cfg(test)]
     pub fn debug_prank(&mut self, prank_value: F) {
         self.value = Assigned::Trivial(prank_value);
     }
@@ -424,7 +423,6 @@ impl<F: ScalarField> Context<F> {
     /// Helper function for debugging using `MockProver`. This adds a constraint that always fails.
     /// The `MockProver` will print out the row, column where it fails, so it serves as a debugging "break point"
     /// so you can add to your code to search for where the actual constraint failure occurs.
-    #[cfg(test)]
     pub fn debug_assert_false(&mut self) {
         let one = self.load_constant(F::one());
         let zero = self.load_zero();
