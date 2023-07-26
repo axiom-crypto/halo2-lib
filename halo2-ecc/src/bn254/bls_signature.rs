@@ -3,7 +3,9 @@
 use super::pairing::PairingChip;
 use super::{Fp12Chip, Fp2Chip, FpChip, FqPoint};
 use crate::ecc::EccChip;
+use crate::fields::FieldChip;
 use crate::fields::PrimeField;
+use crate::halo2_proofs::halo2curves::bn256::Fq12;
 use crate::halo2_proofs::halo2curves::bn256::{G1Affine, G2Affine};
 use halo2_base::Context;
 
@@ -45,12 +47,16 @@ impl<'chip, F: PrimeField> BlsSignatureChip<'chip, F> {
 
         let hash_m_assigned = self.pairing_chip.load_private_g2(ctx, msghash);
 
-        let signature_points =
-            signatures.iter().map(|pt| g2_chip.assign_point(ctx, *pt)).collect::<Vec<_>>();
+        let signature_points = signatures
+            .iter()
+            .map(|pt| g2_chip.load_private::<G2Affine>(ctx, (pt.x, pt.y)))
+            .collect::<Vec<_>>();
         let signature_agg_assigned = g2_chip.sum::<G2Affine>(ctx, signature_points);
 
-        let pubkey_points =
-            pubkeys.iter().map(|pt| g1_chip.assign_point(ctx, *pt)).collect::<Vec<_>>();
+        let pubkey_points = pubkeys
+            .iter()
+            .map(|pt| g1_chip.load_private::<G1Affine>(ctx, (pt.x, pt.y)))
+            .collect::<Vec<_>>();
         let pubkey_agg_assigned = g1_chip.sum::<G1Affine>(ctx, pubkey_points);
 
         let fp12_chip = Fp12Chip::<F>::new(self.fp_chip);
@@ -65,6 +71,14 @@ impl<'chip, F: PrimeField> BlsSignatureChip<'chip, F> {
             ],
         );
         let result = fp12_chip.final_exp(ctx, multi_paired);
+
+        // Check signatures are verified
+        assert_eq!(
+            format!("{:?}", fp12_chip.get_assigned_value(&result.clone().into())),
+            format!("{:?}", Fq12::one()),
+            "Signatures do not match!"
+        );
+
         result
     }
 }
