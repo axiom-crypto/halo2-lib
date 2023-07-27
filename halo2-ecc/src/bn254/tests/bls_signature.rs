@@ -4,10 +4,7 @@ use std::{
 };
 
 use super::*;
-use crate::{
-    fields::{FieldChip, FpStrategy},
-    halo2_proofs::halo2curves::bn256::G2Affine,
-};
+use crate::{fields::FpStrategy, halo2_proofs::halo2curves::bn256::G2Affine};
 use halo2_base::{
     gates::{
         builder::{
@@ -18,7 +15,7 @@ use halo2_base::{
     },
     halo2_proofs::{
         halo2curves::{
-            bn256::{multi_miller_loop, G2Prepared},
+            bn256::{multi_miller_loop, G2Prepared, Gt},
             pairing::MillerLoopResult,
         },
         poly::kzg::multiopen::{ProverGWC, VerifierGWC},
@@ -68,12 +65,11 @@ fn bls_signature_test<F: PrimeField>(
             .final_exponentiation();
 
     // Compare the 2 results
-    let fp12_chip = Fp12Chip::new(&fp_chip_1);
-    assert_eq!(
-        format!("Gt({:?})", fp12_chip.get_assigned_value(&result.into())),
-        format!("{actual_result:?}"),
-        "Signatures do not match!"
-    );
+    if *(result.value()) == 1.into() {
+        assert_eq!(actual_result, Gt::identity())
+    } else {
+        assert_ne!(actual_result, Gt::identity())
+    }
 }
 
 fn random_bls_signature_circuit(

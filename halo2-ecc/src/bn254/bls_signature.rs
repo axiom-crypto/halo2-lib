@@ -1,13 +1,13 @@
 #![allow(non_snake_case)]
 
 use super::pairing::PairingChip;
-use super::{Fp12Chip, Fp2Chip, FpChip, FqPoint};
+use super::{Fp12Chip, Fp2Chip, FpChip};
 use crate::ecc::EccChip;
 use crate::fields::FieldChip;
 use crate::fields::PrimeField;
 use crate::halo2_proofs::halo2curves::bn256::Fq12;
 use crate::halo2_proofs::halo2curves::bn256::{G1Affine, G2Affine};
-use halo2_base::Context;
+use halo2_base::{AssignedValue, Context};
 
 // To avoid issues with mutably borrowing twice (not allowed in Rust), we only store fp_chip and construct g2_chip and fp12_chip in scope when needed for temporary mutable borrows
 pub struct BlsSignatureChip<'chip, F: PrimeField> {
@@ -31,7 +31,7 @@ impl<'chip, F: PrimeField> BlsSignatureChip<'chip, F> {
         signatures: &[G2Affine],
         pubkeys: &[G1Affine],
         msghash: G2Affine,
-    ) -> FqPoint<F> {
+    ) -> AssignedValue<F> {
         assert!(
             signatures.len() == pubkeys.len(),
             "signatures and pubkeys must be the same length"
@@ -73,12 +73,7 @@ impl<'chip, F: PrimeField> BlsSignatureChip<'chip, F> {
         let result = fp12_chip.final_exp(ctx, multi_paired);
 
         // Check signatures are verified
-        assert_eq!(
-            format!("{:?}", fp12_chip.get_assigned_value(&result.clone().into())),
-            format!("{:?}", Fq12::one()),
-            "Signatures do not match!"
-        );
-
-        result
+        let fp12_one = fp12_chip.load_constant(ctx, Fq12::one());
+        fp12_chip.is_equal(ctx, result, fp12_one)
     }
 }
