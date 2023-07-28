@@ -15,8 +15,6 @@ mod tests {
     // make interleaved calls to absorb and squeeze elements and
     // check that the result is the same in-circuit and natively
     fn poseidon_compatiblity_verification<F: ScalarField, const T: usize, const RATE: usize>(
-        // circuit degree
-        k: u32,
         // elements of F to absorb; one sublist = one absorption
         mut absorptions: Vec<Vec<F>>,
         // list of amounts of elements of F that should be squeezed every time
@@ -92,7 +90,7 @@ mod tests {
         let absorptions = Vec::new();
         let squeezings = random_list_usize(10, 7);
 
-        poseidon_compatiblity_verification::<Fr, 3, 2>(10, absorptions, squeezings, 8, 57);
+        poseidon_compatiblity_verification::<Fr, 3, 2>(absorptions, squeezings, 8, 57);
     }
 
     #[test]
@@ -100,7 +98,7 @@ mod tests {
         let absorptions = random_nested_list_f(8, 5);
         let squeezings = Vec::new();
 
-        poseidon_compatiblity_verification::<Fr, 3, 2>(10, absorptions, squeezings, 8, 57);
+        poseidon_compatiblity_verification::<Fr, 3, 2>(absorptions, squeezings, 8, 57);
     }
 
     #[test]
@@ -108,7 +106,7 @@ mod tests {
         let absorptions = random_nested_list_f(10, 5);
         let squeezings = random_list_usize(7, 10);
 
-        poseidon_compatiblity_verification::<Fr, 3, 2>(10, absorptions, squeezings, 8, 57);
+        poseidon_compatiblity_verification::<Fr, 3, 2>(absorptions, squeezings, 8, 57);
     }
 
     #[test]
@@ -116,6 +114,6 @@ mod tests {
         let absorptions = random_nested_list_f(10, 10);
         let squeezings = random_list_usize(10, 10);
 
-        poseidon_compatiblity_verification::<Fr, 5, 4>(10, absorptions, squeezings, 8, 120);
+        poseidon_compatiblity_verification::<Fr, 5, 4>(absorptions, squeezings, 8, 120);
     }
 }
