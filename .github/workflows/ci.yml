@@ -21,6 +21,10 @@ jobs:
         working-directory: 'halo2-base'
         run: |
           cargo test -- --test-threads=1
+      - name: Run poseidon tests
+        working-directory: 'hashes/poseidon'
+        run: |
+          cargo test test_poseidon_compatibility
       - name: Run halo2-ecc tests MockProver
         working-directory: 'halo2-ecc'
         run: |
