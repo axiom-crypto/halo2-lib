@@ -24,12 +24,6 @@ mod tests {
         rounds_full: usize,
         rounts_partial: usize,
     ) {
-        // first create proving and verifying key
-        let builder = GateThreadBuilder::<F>::keygen();
-
-        // set env vars
-        builder.config(k as usize, Some(9));
-
         let mut builder = GateThreadBuilder::prover();
         let gate = GateChip::default();
 
