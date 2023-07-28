@@ -90,7 +90,26 @@ pub struct WordParts {
 
 /// Packs bits into bytes
 pub mod to_bytes {
-    pub(crate) fn value(bits: &[u8]) -> Vec<u8> {
+    use super::eth_types::Field;
+    use crate::util::expression::Expr;
+    use halo2_base::halo2_proofs::plonk::Expression;
+
+    pub fn expr<F: Field>(bits: &[Expression<F>]) -> Vec<Expression<F>> {
+        debug_assert!(bits.len() % 8 == 0, "bits not a multiple of 8");
+        let mut bytes = Vec::new();
+        for byte_bits in bits.chunks(8) {
+            let mut value = 0.expr();
+            let mut multiplier = F::one();
+            for byte in byte_bits.iter() {
+                value = value + byte.expr() * multiplier;
+                multiplier *= F::from(2);
+            }
+            bytes.push(value);
+        }
+        bytes
+    }
+
+    pub fn value(bits: &[u8]) -> Vec<u8> {
         debug_assert!(bits.len() % 8 == 0, "bits not a multiple of 8");
         let mut bytes = Vec::new();
         for byte_bits in bits.chunks(8) {
