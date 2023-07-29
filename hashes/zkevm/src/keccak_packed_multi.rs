@@ -7,14 +7,17 @@ use super::util::{
     target_part_sizes, to_bytes, unpack, CHI_BASE_LOOKUP_TABLE, NUM_BYTES_PER_WORD, NUM_ROUNDS,
     NUM_WORDS_TO_ABSORB, NUM_WORDS_TO_SQUEEZE, RATE, RATE_IN_BITS, RHO_MATRIX, ROUND_CST,
 };
-use crate::halo2_proofs::{
-    circuit::{Layouter, Region, Value},
-    halo2curves::ff::PrimeField,
-    plonk::{
-        Advice, Challenge, Column, ConstraintSystem, Error, Expression, Fixed, SecondPhase,
-        TableColumn, VirtualCells,
+use crate::{
+    halo2_proofs::{
+        circuit::{Layouter, Region, Value},
+        halo2curves::ff::PrimeField,
+        plonk::{
+            Advice, Challenge, Column, ConstraintSystem, Error, Expression, Fixed, SecondPhase,
+            TableColumn, VirtualCells,
+        },
+        poly::Rotation,
     },
-    poly::Rotation,
+    util::expression::sum,
 };
 use halo2_base::halo2_proofs::{circuit::AssignedCell, plonk::Assigned};
 use itertools::Itertools;
@@ -88,8 +91,7 @@ pub struct KeccakRow<F: PrimeField> {
     round_cst: F,
     is_final: bool,
     cell_values: Vec<F>,
-    // We have no need for length as RLC equality checks length implicitly
-    // length: usize,
+    length: usize,
     // SecondPhase values will be assigned separately
     // data_rlc: Value<F>,
     // hash_rlc: Value<F>,
@@ -100,7 +102,6 @@ impl<F: PrimeField> KeccakRow<F> {
         (0..num_rows)
             .map(|idx| KeccakRow {
                 q_enable: idx == 0,
-                // q_enable_row: true,
                 q_round: false,
                 q_absorb: idx == 0,
                 q_round_last: false,
@@ -108,6 +109,7 @@ impl<F: PrimeField> KeccakRow<F> {
                 q_padding_last: false,
                 round_cst: F::ZERO,
                 is_final: false,
+                length: 0usize,
                 cell_values: Vec::new(),
             })
             .collect()
@@ -354,7 +356,7 @@ pub struct KeccakTable {
     /// Byte array input as `RLC(reversed(input))`
     pub input_rlc: Column<Advice>, // RLC of input bytes
     // Byte array input length
-    // pub input_len: Column<Advice>,
+    pub input_len: Column<Advice>,
     /// RLC of the hash result
     pub output_rlc: Column<Advice>, // RLC of hash of input bytes
 }
@@ -362,16 +364,13 @@ pub struct KeccakTable {
 impl KeccakTable {
     /// Construct a new KeccakTable
     pub fn construct<F: Field>(meta: &mut ConstraintSystem<F>) -> Self {
+        let input_len = meta.advice_column();
         let input_rlc = meta.advice_column_in(SecondPhase);
         let output_rlc = meta.advice_column_in(SecondPhase);
+        meta.enable_equality(input_len);
         meta.enable_equality(input_rlc);
         meta.enable_equality(output_rlc);
-        Self {
-            is_enabled: meta.advice_column(),
-            input_rlc,
-            // input_len: meta.advice_column(),
-            output_rlc,
-        }
+        Self { is_enabled: meta.advice_column(), input_rlc, input_len, output_rlc }
     }
 }
 
@@ -820,7 +819,6 @@ pub struct KeccakConfigParams {
 pub struct KeccakCircuitConfig<F> {
     challenge: Challenge,
     q_enable: Column<Fixed>,
-    // q_enable_row: Column<Fixed>,
     q_first: Column<Fixed>,
     q_round: Column<Fixed>,
     q_absorb: Column<Fixed>,
@@ -869,7 +867,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
         let keccak_table = KeccakTable::construct(meta);
 
         let is_final = keccak_table.is_enabled;
-        // let length = keccak_table.input_len;
+        let input_len = keccak_table.input_len;
         let data_rlc = keccak_table.input_rlc;
         let hash_rlc = keccak_table.output_rlc;
 
@@ -1451,15 +1449,26 @@ impl<F: Field> KeccakCircuitConfig<F> {
         // TODO: there is probably a way to only require NUM_BYTES_PER_WORD instead of
         // NUM_BYTES_PER_WORD + 1 rows per round, but for simplicity and to keep the
         // gate degree at 3, we just do the obvious thing for now Input data rlc
-        meta.create_gate("data rlc", |meta| {
+        meta.create_gate("length and data rlc", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
             let q_padding = meta.query_fixed(q_padding, Rotation::cur());
             let start_new_hash_prev = start_new_hash(meta, Rotation(-(num_rows_per_round as i32)));
+            let length_prev = meta.query_advice(input_len, Rotation(-(num_rows_per_round as i32)));
+            let length = meta.query_advice(input_len, Rotation::cur());
             let data_rlc_prev = meta.query_advice(data_rlc, Rotation(-(num_rows_per_round as i32)));
 
             // Update the length/data_rlc on rows where we absorb data
             cb.condition(q_padding.expr(), |cb| {
+                // Length increases by the number of bytes that aren't padding
+                cb.require_equal(
+                    "update length",
+                    length.clone(),
+                    length_prev.clone() * not::expr(start_new_hash_prev.expr())
+                        + sum::expr(
+                            is_paddings.iter().map(|is_padding| not::expr(is_padding.expr())),
+                        ),
+                );
                 let challenge_expr = meta.query_challenge(challenge);
                 // Use intermediate cells to keep the degree low
                 let mut new_data_rlc =
@@ -1498,6 +1507,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
                     not::expr(q_padding),
                 ]),
                 |cb| {
+                    cb.require_equal("length equality check", length, length_prev);
                     cb.require_equal(
                         "data_rlc equality check",
                         meta.query_advice(data_rlc, Rotation::cur()),
@@ -1530,7 +1540,6 @@ impl<F: Field> KeccakCircuitConfig<F> {
         KeccakCircuitConfig {
             challenge,
             q_enable,
-            // q_enable_row,
             q_first,
             q_round,
             q_absorb,
@@ -1552,13 +1561,26 @@ impl<F: Field> KeccakCircuitConfig<F> {
 }
 
 impl<F: Field> KeccakCircuitConfig<F> {
-    pub fn assign(&self, region: &mut Region<'_, F>, witness: &[KeccakRow<F>]) {
-        for (offset, keccak_row) in witness.iter().enumerate() {
-            self.set_row(region, offset, keccak_row);
-        }
+    /// Returns vector of `length`s for assigned rows
+    pub fn assign<'v>(
+        &self,
+        region: &mut Region<F>,
+        witness: &[KeccakRow<F>],
+    ) -> Vec<KeccakAssignedValue<'v, F>> {
+        witness
+            .iter()
+            .enumerate()
+            .map(|(offset, keccak_row)| self.set_row(region, offset, keccak_row))
+            .collect()
     }
 
-    pub fn set_row(&self, region: &mut Region<'_, F>, offset: usize, row: &KeccakRow<F>) {
+    /// Output is `length` at that row
+    pub fn set_row<'v>(
+        &self,
+        region: &mut Region<F>,
+        offset: usize,
+        row: &KeccakRow<F>,
+    ) -> KeccakAssignedValue<'v, F> {
         // Fixed selectors
         for (_, column, value) in &[
             ("q_enable", self.q_enable, F::from(row.q_enable)),
@@ -1572,12 +1594,14 @@ impl<F: Field> KeccakCircuitConfig<F> {
             assign_fixed_custom(region, *column, offset, *value);
         }
 
-        assign_advice_custom(
-            region,
-            self.keccak_table.is_enabled,
-            offset,
-            Value::known(F::from(row.is_final)),
-        );
+        // Keccak data
+        let [_is_final, length] = [
+            ("is_final", self.keccak_table.is_enabled, F::from(row.is_final)),
+            ("length", self.keccak_table.input_len, F::from(row.length as u64)),
+        ]
+        .map(|(_name, column, value)| {
+            assign_advice_custom(region, column, offset, Value::known(value))
+        });
 
         // Cell values
         row.cell_values.iter().zip(self.cell_manager.columns()).for_each(|(bit, column)| {
@@ -1586,6 +1610,8 @@ impl<F: Field> KeccakCircuitConfig<F> {
 
         // Round constant
         assign_fixed_custom(region, self.round_cst, offset, row.round_cst);
+
+        length
     }
 
     pub fn load_aux_tables(&self, layouter: &mut impl Layouter<F>, k: u32) -> Result<(), Error> {
@@ -1670,11 +1696,15 @@ pub fn keccak_phase0<F: Field>(
     }
     bits.push(1);
 
+    // running length of absorbed input in bytes
+    let mut length = 0;
     let chunks = bits.chunks(RATE_IN_BITS);
     let num_chunks = chunks.len();
 
     let mut cell_managers = Vec::with_capacity(NUM_ROUNDS + 1);
     let mut regions = Vec::with_capacity(NUM_ROUNDS + 1);
+    // keeps track of running lengths over all rounds in an absorb step
+    let mut round_lengths = Vec::with_capacity(NUM_ROUNDS + 1);
     let mut hash_words = [F::ZERO; NUM_WORDS_TO_SQUEEZE];
 
     for (idx, chunk) in chunks.enumerate() {
@@ -1692,6 +1722,7 @@ pub fn keccak_phase0<F: Field>(
         // better memory management to clear already allocated Vecs
         cell_managers.clear();
         regions.clear();
+        round_lengths.clear();
 
         for round in 0..NUM_ROUNDS + 1 {
             let mut cell_manager = CellManager::new(num_rows_per_round);
@@ -1750,7 +1781,12 @@ pub fn keccak_phase0<F: Field>(
             if round < NUM_WORDS_TO_ABSORB {
                 for (padding_idx, is_padding) in is_paddings.iter().enumerate() {
                     let byte_idx = round * NUM_BYTES_PER_WORD + padding_idx;
-                    let padding = is_final_block && byte_idx >= num_bytes_in_last_block;
+                    let padding = if is_final_block && byte_idx >= num_bytes_in_last_block {
+                        true
+                    } else {
+                        length += 1;
+                        false
+                    };
                     is_padding.assign(&mut region, 0, F::from(padding));
                 }
             }
@@ -1901,6 +1937,8 @@ pub fn keccak_phase0<F: Field>(
                 *hash_word = a[0];
             }
 
+            round_lengths.push(length);
+
             cell_managers.push(cell_manager);
             regions.push(region);
         }
@@ -1936,6 +1974,7 @@ pub fn keccak_phase0<F: Field>(
                     q_padding_last: row_idx == 0 && round == NUM_WORDS_TO_ABSORB - 1,
                     round_cst,
                     is_final: is_final_block && round == NUM_ROUNDS && row_idx == 0,
+                    length: round_lengths[round],
                     cell_values: regions[round].rows.get(row_idx).unwrap_or(&vec![]).clone(),
                 });
                 #[cfg(debug_assertions)]
@@ -1965,7 +2004,7 @@ pub fn keccak_phase0<F: Field>(
             })
             .collect::<Vec<_>>();
         debug!("hash: {:x?}", &(hash_bytes[0..4].concat()));
-        // debug!("data rlc: {:x?}", data_rlc);
+        assert_eq!(length, bytes.len());
     }
 }
 
