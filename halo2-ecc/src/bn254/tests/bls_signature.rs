@@ -50,10 +50,9 @@ fn bls_signature_test<F: PrimeField>(
     // Calculate halo2 pairing by multipairing
     std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
     let range = RangeChip::<F>::default(params.lookup_bits);
-    let fp_chip_1 = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
-    let fp_chip_2 = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
-    let pairing_chip = PairingChip::new(&fp_chip_1);
-    let bls_signature_chip = BlsSignatureChip::new(&fp_chip_2, &pairing_chip);
+    let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
+    let pairing_chip = PairingChip::new(&fp_chip);
+    let bls_signature_chip = BlsSignatureChip::new(&fp_chip, &pairing_chip);
     let result = bls_signature_chip.bls_signature_verify(ctx, g1, signatures, pubkeys, msghash);
 
     // Calculate non-halo2 pairing by multipairing
@@ -65,11 +64,7 @@ fn bls_signature_test<F: PrimeField>(
             .final_exponentiation();
 
     // Compare the 2 results
-    if *(result.value()) == 1.into() {
-        assert_eq!(actual_result, Gt::identity())
-    } else {
-        assert_ne!(actual_result, Gt::identity())
-    }
+    assert_eq!(*result.value(), F::from(actual_result == Gt::identity()))
 }
 
 fn random_bls_signature_circuit(
