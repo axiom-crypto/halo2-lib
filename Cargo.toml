@@ -2,7 +2,7 @@
 members = [
     "halo2-base",
     "halo2-ecc",
-    "hashes/zkevm-keccak"
+    "hashes/zkevm"
 ]
 
 [profile.dev]
