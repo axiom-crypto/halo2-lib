@@ -424,9 +424,9 @@ impl<F: ScalarField> Context<F> {
     /// The `MockProver` will print out the row, column where it fails, so it serves as a debugging "break point"
     /// so you can add to your code to search for where the actual constraint failure occurs.
     pub fn debug_assert_false(&mut self) {
-        use rand::Rng;
-        let rand1 = self.load_constant(F::from(rand::thread_rng().gen::<u64>()));
-        let rand2 = self.load_constant(F::from(rand::thread_rng().gen::<u64>()));
+        use rand_chacha::rand_core::OsRng;
+        let rand1 = self.load_constant(F::random(OsRng));
+        let rand2 = self.load_constant(F::random(OsRng));
         self.constrain_equal(&rand1, &rand2);
     }
 }

@@ -6,7 +6,7 @@ use halo2_base::halo2_proofs;
 /// Keccak packed multi
 pub mod keccak_packed_multi;
 /// SHA-256 bit
-pub mod sha256_bit;
+//pub mod sha256_bit;
 /// Util
 pub mod util;
 
