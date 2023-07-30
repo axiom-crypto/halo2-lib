@@ -2,10 +2,6 @@ use super::util::{
     constraint_builder::BaseConstraintBuilder,
     eth_types::Field,
     expression::{and, not, select, Expr},
-    field_xor, get_absorb_positions, get_num_bits_per_lookup, into_bits, load_lookup_table,
-    load_normalize_table, load_pack_table, pack, pack_u64, pack_with_base, rotate, scatter,
-    target_part_sizes, to_bytes, unpack, CHI_BASE_LOOKUP_TABLE, NUM_BYTES_PER_WORD, NUM_ROUNDS,
-    NUM_WORDS_TO_ABSORB, NUM_WORDS_TO_SQUEEZE, RATE, RATE_IN_BITS, RHO_MATRIX, ROUND_CST,
 };
 use crate::{
     halo2_proofs::{
@@ -27,6 +23,14 @@ use std::{cell::RefCell, marker::PhantomData};
 
 #[cfg(test)]
 mod tests;
+pub mod util;
+
+use util::{
+    field_xor, get_absorb_positions, get_num_bits_per_lookup, into_bits, load_lookup_table,
+    load_normalize_table, load_pack_table, pack, pack_u64, pack_with_base, rotate, scatter,
+    target_part_sizes, to_bytes, unpack, CHI_BASE_LOOKUP_TABLE, NUM_BYTES_PER_WORD, NUM_ROUNDS,
+    NUM_WORDS_TO_ABSORB, NUM_WORDS_TO_SQUEEZE, RATE, RATE_IN_BITS, RHO_MATRIX, ROUND_CST,
+};
 
 const MAX_DEGREE: usize = 3;
 const ABSORB_LOOKUP_RANGE: usize = 3;
@@ -426,9 +430,9 @@ pub fn assign_fixed_custom<F: Field>(
 
 /// Recombines parts back together
 mod decode {
+    use super::util::BIT_COUNT;
     use super::{Expr, FieldExt, Part, PartValue};
     use crate::halo2_proofs::plonk::Expression;
-    use crate::util::BIT_COUNT;
 
     pub(crate) fn expr<F: FieldExt>(parts: Vec<Part<F>>) -> Expression<F> {
         parts.iter().rev().fold(0.expr(), |acc, part| {
@@ -445,12 +449,12 @@ mod decode {
 
 /// Splits a word into parts
 mod split {
+    use super::util::{pack, pack_part, unpack, WordParts};
     use super::{
         decode, BaseConstraintBuilder, CellManager, Expr, Field, FieldExt, KeccakRegion, Part,
         PartValue,
     };
     use crate::halo2_proofs::plonk::{ConstraintSystem, Expression};
-    use crate::util::{pack, pack_part, unpack, WordParts};
 
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn expr<F: FieldExt>(
@@ -518,13 +522,12 @@ mod split {
 // table layout in `output_cells` regardless of rotation.
 mod split_uniform {
     use super::{
-        decode, target_part_sizes, BaseConstraintBuilder, Cell, CellManager, Expr, FieldExt,
-        KeccakRegion, Part, PartValue,
+        decode, target_part_sizes,
+        util::{pack, pack_part, rotate, rotate_rev, unpack, WordParts, BIT_SIZE},
+        BaseConstraintBuilder, Cell, CellManager, Expr, FieldExt, KeccakRegion, Part, PartValue,
     };
     use crate::halo2_proofs::plonk::{ConstraintSystem, Expression};
-    use crate::util::{
-        eth_types::Field, pack, pack_part, rotate, rotate_rev, unpack, WordParts, BIT_SIZE,
-    };
+    use crate::util::eth_types::Field;
 
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn expr<F: FieldExt>(
@@ -746,9 +749,9 @@ mod transform {
 
 // Transfroms values to cells
 mod transform_to {
+    use super::util::{pack, to_bytes, unpack};
     use super::{Cell, Expr, Field, FieldExt, KeccakRegion, Part, PartValue};
     use crate::halo2_proofs::plonk::{ConstraintSystem, TableColumn};
-    use crate::util::{pack, to_bytes, unpack};
 
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn expr<F: FieldExt>(

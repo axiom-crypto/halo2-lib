@@ -1,15 +1,24 @@
-use crate::halo2_proofs::{
-    circuit::{Layouter, Region, SimpleFloorPlanner, Value},
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, VirtualCells},
-    poly::Rotation,
-};
 use crate::util::{
+    compose_rlc,
     constraint_builder::BaseConstraintBuilder,
     eth_types::Field,
-    expression::{and, select, sum, xor},
+    expression::{and, not, select, sum, xor},
 };
+use crate::{
+    halo2_proofs::{
+        circuit::{Layouter, Region, SimpleFloorPlanner, Value},
+        plonk::{
+            Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, VirtualCells,
+        },
+        poly::Rotation,
+    },
+    keccak_packed_multi::assign_fixed_custom,
+};
+use halo2_base::halo2_proofs::plonk::Challenge;
 use log::{debug, info};
 use std::{env::var, marker::PhantomData, vec};
+
+type ShaTable = crate::keccak_packed_multi::KeccakTable;
 
 const NUM_BITS_PER_BYTE: usize = 8;
 const NUM_BYTES_PER_WORD: usize = 4;
@@ -44,9 +53,8 @@ const H: [u32; 8] = [
 
 /// Decodes be bits
 pub mod decode {
-    use eth_types::Field;
-    use gadgets::util::Expr;
-    use halo2_proofs::plonk::Expression;
+    use super::{Expression, Field};
+    use crate::util::expression::Expr;
 
     pub(crate) fn expr<F: Field>(bits: &[Expression<F>]) -> Expression<F> {
         let mut value = 0.expr();
@@ -69,8 +77,7 @@ pub mod decode {
 
 /// Rotates bits to the right
 pub mod rotate {
-    use eth_types::Field;
-    use halo2_proofs::plonk::Expression;
+    use super::{Expression, Field};
 
     pub(crate) fn expr<F: Field>(bits: &[Expression<F>], count: usize) -> Vec<Expression<F>> {
         let mut rotated = bits.to_vec();
@@ -86,9 +93,8 @@ pub mod rotate {
 /// Shifts bits to the right
 pub mod shift {
     use super::NUM_BITS_PER_WORD;
-    use eth_types::Field;
-    use gadgets::util::Expr;
-    use halo2_proofs::plonk::Expression;
+    use super::{Expression, Field};
+    use crate::util::expression::Expr;
 
     pub(crate) fn expr<F: Field>(bits: &[Expression<F>], count: usize) -> Vec<Expression<F>> {
         let mut res = vec![0.expr(); count];
@@ -103,9 +109,8 @@ pub mod shift {
 
 /// Convert be bits to le bytes
 pub mod to_le_bytes {
-    use crate::keccak_circuit::util::to_bytes;
-    use eth_types::Field;
-    use halo2_proofs::plonk::Expression;
+    use super::{Expression, Field};
+    use crate::util::to_bytes;
 
     pub(crate) fn expr<F: Field>(bits: &[Expression<F>]) -> Vec<Expression<F>> {
         to_bytes::expr(&bits.iter().rev().cloned().collect::<Vec<_>>())
@@ -133,29 +138,31 @@ fn into_bits(bytes: &[u8]) -> Vec<u8> {
     bits
 }
 
-fn get_degree() -> usize {
-    var("DEGREE")
-        .unwrap_or_else(|_| "8".to_string())
-        .parse()
-        .expect("Cannot parse DEGREE env var as usize")
-}
-
 #[derive(Clone, Debug, PartialEq)]
-struct ShaRow<F> {
+struct ShaRow {
     w: [bool; NUM_BITS_PER_WORD_W],
     a: [bool; NUM_BITS_PER_WORD_EXT],
     e: [bool; NUM_BITS_PER_WORD_EXT],
     is_final: bool,
     length: usize,
+    is_paddings: [bool; ABSORB_WIDTH_PER_ROW_BYTES],
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct ShaRowSecondPhase<F> {
     data_rlc: F,
     hash_rlc: F,
-    is_paddings: [bool; ABSORB_WIDTH_PER_ROW_BYTES],
     data_rlcs: [F; ABSORB_WIDTH_PER_ROW_BYTES],
 }
+
+/// Configuration parameters to define [`Sha256BitConfig`]
+#[derive(Copy, Clone, Debug, Default)]
+pub struct Sha256ConfigParams 
 
 /// Sha256BitConfig
 #[derive(Clone, Debug)]
 pub struct Sha256BitConfig<F> {
+    challenge: Challenge,
     q_enable: Column<Fixed>,
     q_first: Column<Fixed>,
     q_extend: Column<Fixed>,
@@ -175,65 +182,15 @@ pub struct Sha256BitConfig<F> {
     h_a: Column<Fixed>,
     h_e: Column<Fixed>,
     /// The columns for other circuits to lookup hash results
-    pub hash_table: KeccakTable,
+    pub hash_table: ShaTable,
     _marker: PhantomData<F>,
 }
 
-/// Sha256BitCircuit
-#[derive(Default)]
-pub struct Sha256BitCircuit<F: Field> {
-    witness: Vec<ShaRow<F>>,
-    size: usize,
-}
-
-impl<F: Field> Sha256BitCircuit<F> {
-    fn r() -> F {
-        F::from(123456)
-    }
-}
-
-impl<F: Field> Circuit<F> for Sha256BitCircuit<F> {
-    type Config = Sha256BitConfig<F>;
-    type FloorPlanner = SimpleFloorPlanner;
-
-    fn without_witnesses(&self) -> Self {
-        Self::default()
-    }
-
-    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        Sha256BitConfig::configure(meta, Sha256BitCircuit::r())
-    }
-
-    fn synthesize(&self, config: Self::Config, layouter: impl Layouter<F>) -> Result<(), Error> {
-        config.assign(layouter, self.size, &self.witness)?;
-        Ok(())
-    }
-}
-
-impl<F: Field> Sha256BitCircuit<F> {
-    /// Creates a new circuit instance
-    pub fn new(size: usize) -> Self {
-        Sha256BitCircuit { witness: Vec::new(), size }
-    }
-
-    /// The number of sha256 permutations that can be done in this circuit
-    pub fn capacity(&self) -> usize {
-        // Subtract one for unusable rows
-        self.size / (NUM_ROUNDS + 8) - 1
-    }
-
-    /// Sets the witness using the data to be hashed
-    pub fn generate_witness(&mut self, inputs: &[Vec<u8>]) {
-        self.witness = multi_sha256(inputs, Sha256BitCircuit::r());
-    }
-
-    /// Sets the witness using the witness data directly
-    fn set_witness(&mut self, witness: &[ShaRow<F>]) {
-        self.witness = witness.to_vec();
-    }
-}
-
 impl<F: Field> Sha256BitConfig<F> {
+    pub fn challenge(&self) -> Challenge {
+        self.challenge
+    }
+
     pub(crate) fn configure(meta: &mut ConstraintSystem<F>, r: F) -> Self {
         let q_enable = meta.fixed_column();
         let q_first = meta.fixed_column();
@@ -253,7 +210,7 @@ impl<F: Field> Sha256BitConfig<F> {
         let round_cst = meta.fixed_column();
         let h_a = meta.fixed_column();
         let h_e = meta.fixed_column();
-        let hash_table = KeccakTable::construct(meta);
+        let hash_table = ShaTable::construct(meta);
         let is_enabled = hash_table.is_enabled;
         let length = hash_table.input_len;
         let data_rlc = hash_table.input_rlc;
@@ -730,12 +687,7 @@ impl<F: Field> Sha256BitConfig<F> {
             ("Ha", self.h_a, F::from(if round < 4 { H[3 - round] as u64 } else { 0 })),
             ("He", self.h_e, F::from(if round < 4 { H[7 - round] as u64 } else { 0 })),
         ] {
-            region.assign_fixed(
-                || format!("assign {} {}", name, offset),
-                *column,
-                offset,
-                || Value::known(*value),
-            )?;
+            assign_fixed_custom(region, *column, offset, *value);
         }
 
         // Advice values
