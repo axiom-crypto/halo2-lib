@@ -9,6 +9,8 @@ use halo2_base::{
     QuantumCell::{Constant, Existing},
 };
 
+pub mod tests;
+
 struct PoseidonState<F: ScalarField, const T: usize, const RATE: usize> {
     s: [AssignedValue<F>; T],
 }
@@ -51,15 +53,26 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE
         assert!(inputs.len() < T);
         let offset = inputs.len() + 1;
 
-        self.s[0] =
-            gate.sum(ctx, inputs.iter().map(|a| Existing(*a)).chain([Constant(pre_constants[0])]));
+        // Explanation of what's going on: before each round of the poseidon permutation,
+        // two things have to be added to the state: inputs (the absorbed elements) and
+        // preconstants. Imagine the state as a list of T elements, the first of which is
+        // the capacity:  |--cap--|--el1--|--el2--|--elR--|
+        // - A preconstant is added to each of all T elements (which is different for each)
+        // - The inputs are added to all elements starting from el1 (so, not to the capacity),
+        //   to as many elements as inputs are available.
+        // - To the first element for which no input is left (if any), an extra 1 is added.
 
+        // adding preconstant to the distinguished capacity element (only one)
+        self.s[0] = gate.add(ctx, self.s[0], Constant(pre_constants[0]));
+
+        // adding pre-constants and inputs to the elements for which both are available
         for ((x, constant), input) in
             self.s.iter_mut().skip(1).zip(pre_constants.iter().skip(1)).zip(inputs.iter())
         {
             *x = gate.sum(ctx, [Existing(*x), Existing(*input), Constant(*constant)]);
         }
 
+        // adding only pre-constants when no input is left
         for (i, (x, constant)) in
             self.s.iter_mut().skip(offset).zip(pre_constants.iter().skip(offset)).enumerate()
         {
