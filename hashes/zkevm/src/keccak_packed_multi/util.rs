@@ -85,41 +85,6 @@ pub struct WordParts {
     pub parts: Vec<PartInfo>,
 }
 
-/// Packs bits into bytes
-pub mod to_bytes {
-    use crate::util::eth_types::Field;
-    use crate::util::expression::Expr;
-    use halo2_base::halo2_proofs::plonk::Expression;
-
-    pub fn expr<F: Field>(bits: &[Expression<F>]) -> Vec<Expression<F>> {
-        debug_assert!(bits.len() % 8 == 0, "bits not a multiple of 8");
-        let mut bytes = Vec::new();
-        for byte_bits in bits.chunks(8) {
-            let mut value = 0.expr();
-            let mut multiplier = F::one();
-            for byte in byte_bits.iter() {
-                value = value + byte.expr() * multiplier;
-                multiplier *= F::from(2);
-            }
-            bytes.push(value);
-        }
-        bytes
-    }
-
-    pub fn value(bits: &[u8]) -> Vec<u8> {
-        debug_assert!(bits.len() % 8 == 0, "bits not a multiple of 8");
-        let mut bytes = Vec::new();
-        for byte_bits in bits.chunks(8) {
-            let mut value = 0u8;
-            for (idx, bit) in byte_bits.iter().enumerate() {
-                value += *bit << idx;
-            }
-            bytes.push(value);
-        }
-        bytes
-    }
-}
-
 /// Rotates a word that was split into parts to the right
 pub fn rotate<T>(parts: Vec<T>, count: usize, part_size: usize) -> Vec<T> {
     let mut rotated_parts = parts;
@@ -139,22 +104,6 @@ pub fn rotate_left(bits: &[u8], count: usize) -> [u8; NUM_BITS_PER_WORD] {
     let mut rotated = bits.to_vec();
     rotated.rotate_left(count);
     rotated.try_into().unwrap()
-}
-
-/// Encodes the data using rlc
-pub mod compose_rlc {
-    use crate::halo2_proofs::plonk::Expression;
-    use crate::util::eth_types::Field;
-
-    pub(crate) fn expr<F: Field>(expressions: &[Expression<F>], r: F) -> Expression<F> {
-        let mut rlc = expressions[0].clone();
-        let mut multiplier = r;
-        for expression in expressions[1..].iter() {
-            rlc = rlc + expression.clone() * multiplier;
-            multiplier *= r;
-        }
-        rlc
-    }
 }
 
 /// Scatters a value into a packed word constant
@@ -182,7 +131,7 @@ pub fn get_absorb_positions() -> Vec<(usize, usize)> {
 }
 
 /// Converts bytes into bits
-pub fn into_bits(bytes: &[u8]) -> Vec<u8> {
+pub(super) fn into_bits(bytes: &[u8]) -> Vec<u8> {
     let mut bits: Vec<u8> = vec![0; bytes.len() * 8];
     for (byte_idx, byte) in bytes.iter().enumerate() {
         for idx in 0u64..8 {

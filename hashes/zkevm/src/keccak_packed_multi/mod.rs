@@ -2,6 +2,7 @@ use super::util::{
     constraint_builder::BaseConstraintBuilder,
     eth_types::Field,
     expression::{and, not, select, Expr},
+    to_bytes,
 };
 use crate::{
     halo2_proofs::{
@@ -14,8 +15,8 @@ use crate::{
         poly::Rotation,
     },
     util::expression::sum,
+    Halo2AssignedCell,
 };
-use halo2_base::halo2_proofs::{circuit::AssignedCell, plonk::Assigned};
 use itertools::Itertools;
 use log::{debug, info};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
@@ -28,7 +29,7 @@ pub mod util;
 use util::{
     field_xor, get_absorb_positions, get_num_bits_per_lookup, into_bits, load_lookup_table,
     load_normalize_table, load_pack_table, pack, pack_u64, pack_with_base, rotate, scatter,
-    target_part_sizes, to_bytes, unpack, CHI_BASE_LOOKUP_TABLE, NUM_BYTES_PER_WORD, NUM_ROUNDS,
+    target_part_sizes, unpack, CHI_BASE_LOOKUP_TABLE, NUM_BYTES_PER_WORD, NUM_ROUNDS,
     NUM_WORDS_TO_ABSORB, NUM_WORDS_TO_SQUEEZE, RATE, RATE_IN_BITS, RHO_MATRIX, ROUND_CST,
 };
 
@@ -380,12 +381,33 @@ impl KeccakTable {
         meta.enable_equality(output_rlc);
         Self { is_enabled: meta.advice_column(), input_rlc, input_len, output_rlc }
     }
+
+    pub fn assign_row_phase0<'v, F: Field>(
+        &self,
+        region: &mut Region<F>,
+        offset: usize,
+        is_enabled: bool,
+        length: usize,
+    ) -> [KeccakAssignedValue<'v, F>; 2] {
+        [self.is_enabled, self.input_len].zip([F::from(is_enabled), F::from(length as u64)]).map(
+            |(column, value)| assign_advice_custom(region, column, offset, Value::known(value)),
+        )
+    }
+
+    pub fn assign_row_phase1<'v, F: Field>(
+        &self,
+        region: &mut Region<F>,
+        offset: usize,
+        input_rlc: F,
+        output_rlc: F,
+    ) -> [KeccakAssignedValue<'v, F>; 2] {
+        [self.input_rlc, self.output_rlc].zip([input_rlc, output_rlc]).map(|(column, value)| {
+            assign_advice_custom(region, column, offset, Value::known(value))
+        })
+    }
 }
 
-#[cfg(feature = "halo2-axiom")]
-type KeccakAssignedValue<'v, F> = AssignedCell<&'v Assigned<F>, F>;
-#[cfg(not(feature = "halo2-axiom"))]
-type KeccakAssignedValue<'v, F> = AssignedCell<F, F>;
+type KeccakAssignedValue<'v, F> = Halo2AssignedCell<'v, F>;
 
 pub fn assign_advice_custom<'v, F: Field>(
     region: &mut Region<F>,
@@ -749,9 +771,10 @@ mod transform {
 
 // Transfroms values to cells
 mod transform_to {
-    use super::util::{pack, to_bytes, unpack};
+    use super::util::{pack, unpack};
     use super::{Cell, Expr, Field, FieldExt, KeccakRegion, Part, PartValue};
     use crate::halo2_proofs::plonk::{ConstraintSystem, TableColumn};
+    use crate::util::to_bytes;
 
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn expr<F: FieldExt>(
@@ -1601,15 +1624,6 @@ impl<F: Field> KeccakCircuitConfig<F> {
             assign_fixed_custom(region, *column, offset, *value);
         }
 
-        // Keccak data
-        let [_is_final, length] = [
-            ("is_final", self.keccak_table.is_enabled, F::from(row.is_final)),
-            ("length", self.keccak_table.input_len, F::from(row.length as u64)),
-        ]
-        .map(|(_name, column, value)| {
-            assign_advice_custom(region, column, offset, Value::known(value))
-        });
-
         // Cell values
         row.cell_values.iter().zip(self.cell_manager.columns()).for_each(|(bit, column)| {
             assign_advice_custom(region, column.advice, offset, Value::known(*bit));
@@ -1617,6 +1631,10 @@ impl<F: Field> KeccakCircuitConfig<F> {
 
         // Round constant
         assign_fixed_custom(region, self.round_cst, offset, row.round_cst);
+
+        // Keccak data
+        let [_is_final, length] =
+            self.keccak_table.assign_row_phase0(region, offset, row.is_final, row.length);
 
         length
     }
