@@ -201,6 +201,14 @@ impl<F: ScalarField> GateThreadBuilder<F> {
         params
     }
 
+    pub fn config_from_params(&self, mut params: BaseConfigParams) -> BaseConfigParams {
+        BASE_CONFIG_PARAMS.with(|conf| {
+            params.lookup_bits = conf.borrow().lookup_bits;
+            *conf.borrow_mut() = params.clone();
+        });
+        params
+    }
+
     /// Assigns all advice and fixed cells, turns on selectors, and imposes equality constraints.
     ///
     /// Returns the assigned advices, and constants in the form of [KeygenAssignments].

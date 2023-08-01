@@ -46,6 +46,8 @@ pub mod safe_types;
 /// Utility functions for converting between different types of field elements.
 pub mod utils;
 
+use serde::{Serialize, Deserialize};
+
 /// Constant representing whether the Layouter calls `synthesize` once just to get region shape.
 #[cfg(feature = "halo2-axiom")]
 pub const SKIP_FIRST_PASS: bool = false;
@@ -95,7 +97,7 @@ impl<F: ScalarField> QuantumCell<F> {
 }
 
 /// Pointer to the position of a cell at `offset` in an advice column within a [Context] of `context_id`.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct ContextCell {
     /// Identifier of the [Context] that this cell belongs to.
     pub context_id: usize,
@@ -106,7 +108,7 @@ pub struct ContextCell {
 /// Pointer containing cell value and location within [Context].
 ///
 /// Note: Performs a copy of the value, should only be used when you are about to assign the value again elsewhere.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct AssignedValue<F: ScalarField> {
     /// Value of the cell.
     pub value: Assigned<F>, // we don't use reference to avoid issues with lifetimes (you can't safely borrow from vector and push to it at the same time).
