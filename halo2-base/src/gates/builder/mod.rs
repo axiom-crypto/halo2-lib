@@ -203,7 +203,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
 
     pub fn config_from_params(&self, mut params: BaseConfigParams) -> BaseConfigParams {
         BASE_CONFIG_PARAMS.with(|conf| {
-            params.lookup_bits = conf.borrow().lookup_bits;
+            // params.lookup_bits = conf.borrow().lookup_bits;
             *conf.borrow_mut() = params.clone();
         });
         params
