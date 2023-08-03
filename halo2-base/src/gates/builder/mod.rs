@@ -209,6 +209,24 @@ impl<F: ScalarField> GateThreadBuilder<F> {
         params
     }
 
+    pub fn get_circuit_stats(&self) -> (usize, usize, usize) {
+        let total_advice_per_phase = self
+            .threads
+            .iter()
+            .map(|threads| threads.iter().map(|ctx| ctx.advice.len()).sum::<usize>())
+            .collect::<Vec<_>>();
+        let total_lookup_advice_per_phase = self
+            .threads
+            .iter()
+            .map(|threads| threads.iter().map(|ctx| ctx.cells_to_lookup.len()).sum::<usize>())
+            .collect::<Vec<_>>();
+        let total_fixed: usize = HashSet::<F>::from_iter(self.threads.iter().flat_map(|threads| {
+            threads.iter().flat_map(|ctx| ctx.constant_equality_constraints.iter().map(|(c, _)| *c))
+        }))
+        .len();
+        (total_advice_per_phase[0], total_lookup_advice_per_phase[0], total_fixed)
+    }
+
     /// Assigns all advice and fixed cells, turns on selectors, and imposes equality constraints.
     ///
     /// Returns the assigned advices, and constants in the form of [KeygenAssignments].
