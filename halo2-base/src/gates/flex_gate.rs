@@ -762,6 +762,17 @@ pub trait GateInstructions<F: ScalarField> {
         range_bits: usize,
     ) -> Vec<AssignedValue<F>>;
 
+    /// Constrains and computes `a`<sup>`exp`</sup> where both `a, exp` are witnesses. The exponent is computed in the native field `F`.
+    ///
+    /// Constrains that `exp` has at most `max_bits` bits.
+    fn pow_var(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+        exp: AssignedValue<F>,
+        max_bits: usize,
+    ) -> AssignedValue<F>;
+
     /// Performs and constrains Lagrange interpolation on `coords` and evaluates the resulting polynomial at `x`.
     ///
     /// Given pairs `coords[i] = (x_i, y_i)`, let `f` be the unique degree `len(coords) - 1` polynomial such that `f(x_i) = y_i` for all `i`.
@@ -1136,5 +1147,29 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
             self.assert_bit(ctx, *bit_cell);
         }
         bit_cells
+    }
+
+    /// Constrains and computes `a^exp` where both `a, exp` are witnesses. The exponent is computed in the native field `F`.
+    ///
+    /// Constrains that `exp` has at most `max_bits` bits.
+    fn pow_var(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+        exp: AssignedValue<F>,
+        max_bits: usize,
+    ) -> AssignedValue<F> {
+        let exp_bits = self.num_to_bits(ctx, exp, max_bits);
+        // standard square-and-mul approach
+        let mut acc = ctx.load_constant(F::one());
+        for (i, bit) in exp_bits.into_iter().rev().enumerate() {
+            if i > 0 {
+                // square
+                acc = self.mul(ctx, acc, acc);
+            }
+            let mul = self.mul(ctx, acc, a);
+            acc = self.select(ctx, mul, acc, bit);
+        }
+        acc
     }
 }

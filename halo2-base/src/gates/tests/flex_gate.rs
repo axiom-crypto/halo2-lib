@@ -1,8 +1,10 @@
 #![allow(clippy::type_complexity)]
 use super::*;
+use crate::utils::biguint_to_fe;
 use crate::utils::testing::base_test;
 use crate::QuantumCell::Witness;
 use crate::{gates::flex_gate::GateInstructions, QuantumCell};
+use num_bigint::BigUint;
 use test_case::test_case;
 
 #[test_case(&[10, 12].map(Fr::from).map(Witness)=> Fr::from(22); "add(): 10 + 12 == 22")]
@@ -170,5 +172,15 @@ pub fn test_num_to_bits(num: usize, bits: usize) -> Vec<Fr> {
     base_test().run_gate(|ctx, chip| {
         let num = ctx.load_witness(Fr::from(num as u64));
         chip.num_to_bits(ctx, num, bits).iter().map(|a| *a.value()).collect()
+    })
+}
+
+#[test_case(Fr::from(3), BigUint::from(3u32), 4 => Fr::from(27); "pow_var(): 3^3 = 27")]
+pub fn test_pow_var(a: Fr, exp: BigUint, max_bits: usize) -> Fr {
+    assert!(exp.bits() <= max_bits as u64);
+    base_test().run_gate(|ctx, chip| {
+        let a = ctx.load_witness(a);
+        let exp = ctx.load_witness(biguint_to_fe(&exp));
+        *chip.pow_var(ctx, a, exp, max_bits).value()
     })
 }

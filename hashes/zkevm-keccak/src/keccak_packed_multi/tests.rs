@@ -101,7 +101,7 @@ impl<F: Field> KeccakCircuit<F> {
 }
 
 fn verify<F: Field>(k: u32, inputs: Vec<Vec<u8>>, _success: bool) {
-    let circuit = KeccakCircuit::new(Some(2usize.pow(k)), inputs);
+    let circuit = KeccakCircuit::new(Some(2usize.pow(k) - 109), inputs);
 
     let prover = MockProver::<F>::run(k, &circuit, vec![]).unwrap();
     prover.assert_satisfied();
@@ -150,6 +150,7 @@ fn packed_multi_keccak_prover(k: u32, rows_per_round: usize) {
     let verifier_params: ParamsVerifierKZG<Bn256> = params.verifier_params().clone();
     let mut transcript = Blake2bWrite::<_, G1Affine, Challenge255<_>>::init(vec![]);
 
+    let start = std::time::Instant::now();
     create_proof::<
         KZGCommitmentScheme<Bn256>,
         ProverSHPLONK<'_, Bn256>,
@@ -160,6 +161,7 @@ fn packed_multi_keccak_prover(k: u32, rows_per_round: usize) {
     >(&params, &pk, &[circuit], &[&[]], OsRng, &mut transcript)
     .expect("proof generation should not fail");
     let proof = transcript.finalize();
+    dbg!(start.elapsed());
 
     let mut verifier_transcript = Blake2bRead::<_, G1Affine, Challenge255<_>>::init(&proof[..]);
     let strategy = SingleStrategy::new(&params);
