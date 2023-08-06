@@ -202,6 +202,28 @@ pub trait GateInstructions<F: ScalarField> {
         ctx.get(-4)
     }
 
+    /// Constrains and returns  `a - b * c = out`.
+    ///
+    /// Defines a vertical gate of form | a - b * c | b | c | a |, where (a - b * c) = out.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: [QuantumCell] value to subtract 'b * c' from
+    /// * `b`: [QuantumCell] value
+    /// * `c`: [QuantumCell] value
+    fn sub_mul(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<QuantumCell<F>>,
+        b: impl Into<QuantumCell<F>>,
+        c: impl Into<QuantumCell<F>>,
+    ) -> AssignedValue<F> {
+        let a = a.into();
+        let b = b.into();
+        let c = c.into();
+        let out_val = *a.value() - *b.value() * c.value();
+        ctx.assign_region_last([Witness(out_val), b, c, a], [0]);
+        ctx.get(-4)
+    }
+
     /// Constrains and returns `a * (-1) = out`.
     ///
     /// Defines a vertical gate of form | a | -a | 1 | 0 |, where (-a) = out.
