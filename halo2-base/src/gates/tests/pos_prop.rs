@@ -266,6 +266,13 @@ proptest! {
         prop_assert_eq!(bits.into_iter().map(Fr::from).collect::<Vec<_>>(), result);
     }
 
+    #[test]
+    fn prop_test_pow_var(a in rand_fr(), num in any::<u64>()) {
+        let native_res = a.pow_vartime([num]);
+        let result = flex_gate::test_pow_var(a, BigUint::from(num), Fr::CAPACITY as usize);
+        prop_assert_eq!(result, native_res);
+    }
+
     /*
     #[test]
     fn prop_test_lagrange_eval(inputs in vec(rand_fr(), 3)) {
