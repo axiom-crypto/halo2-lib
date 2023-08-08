@@ -19,7 +19,12 @@ pub fn test_sub(inputs: &[QuantumCell<Fr>]) -> Fr {
     base_test().run_gate(|ctx, chip| *chip.sub(ctx, inputs[0], inputs[1]).value())
 }
 
-#[test_case(Witness(Fr::from(1)) => -Fr::from(1); "neg(): 1 -> -1")]
+#[test_case(&[1, 1, 1].map(Fr::from).map(Witness) => Fr::from(0) ; "sub_mul(): 1 - 1 * 1 == 0")]
+pub fn test_sub_mul(inputs: &[QuantumCell<Fr>]) -> Fr {
+    base_test().run_gate(|ctx, chip| *chip.sub_mul(ctx, inputs[0], inputs[1], inputs[2]).value())
+}
+
+#[test_case(Witness(Fr::from(1)) => -Fr::from(1) ; "neg(): 1 -> -1")]
 pub fn test_neg(a: QuantumCell<Fr>) -> Fr {
     base_test().run_gate(|ctx, chip| *chip.neg(ctx, a).value())
 }

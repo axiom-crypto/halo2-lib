@@ -111,6 +111,13 @@ proptest! {
     }
 
     #[test]
+    fn prop_test_sub_mul(input in vec(rand_witness(), 3)) {
+        let ground_truth = sub_mul_ground_truth(input.as_slice());
+        let result = flex_gate::test_sub_mul(input.as_slice());
+        prop_assert_eq!(result, ground_truth);
+    }
+
+    #[test]
     fn prop_test_neg(input in rand_witness()) {
         let ground_truth = neg_ground_truth(input);
         let result = flex_gate::test_neg(input);

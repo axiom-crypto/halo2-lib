@@ -19,6 +19,10 @@ pub fn sub_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
     *inputs[0].value() - *inputs[1].value()
 }
 
+pub fn sub_mul_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
+    *inputs[0].value() - *inputs[1].value() * *inputs[2].value()
+}
+
 pub fn neg_ground_truth<F: ScalarField>(input: QuantumCell<F>) -> F {
     -(*input.value())
 }
