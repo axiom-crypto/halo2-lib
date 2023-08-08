@@ -754,6 +754,9 @@ impl<const NI: usize, F: ScalarField> RangeWithMultipleInstancesCircuitBuilder<N
             };
             processed.push(processed_chunk);
         }
+        if assigned_instances_iter.next().is_some() {
+            panic!("too many public instances");
+        }
         processed
     }
 }
@@ -817,6 +820,9 @@ impl<const NI: usize, F: ScalarField> Circuit<F> for RangeWithMultipleInstancesC
                         layouter.constrain_instance(*cell, *instance_col, i);
                     }
                 }
+            }
+            if assigned_instances_iter.next().is_some() {
+                panic!("too many public instances");
             }
         }
         Ok(())
