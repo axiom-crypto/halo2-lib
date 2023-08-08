@@ -669,26 +669,28 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
 
 /// Configuration with [`BaseConfig`] and a single public instance column.
 #[derive(Clone, Debug)]
-pub struct PublicBaseConfig<F: ScalarField> {
+pub struct PublicBaseConfig<const NI: usize, F: ScalarField> {
     /// The underlying range configuration
     pub base: BaseConfig<F>,
     /// The public instance column
-    pub instance: Column<Instance>,
+    pub instances: [Column<Instance>; NI],
 }
+
+pub const MAX_BLINDING_FACTORS: usize = 109;
 
 /// This is an extension of [`RangeCircuitBuilder`] that adds support for public instances (aka public inputs+outputs)
 ///
 /// The intended design is that a [`GateThreadBuilder`] is populated and then produces some assigned instances, which are supplied as `assigned_instances` to this struct.
 /// The [`Circuit`] implementation for this struct will then expose these instances and constrain them using the Halo2 API.
 #[derive(Clone, Debug)]
-pub struct RangeWithInstanceCircuitBuilder<F: ScalarField> {
+pub struct RangeWithMultipleInstancesCircuitBuilder<const NI: usize, F: ScalarField> {
     /// The underlying circuit builder
     pub circuit: RangeCircuitBuilder<F>,
     /// The assigned instances to expose publicly at the end of circuit synthesis
     pub assigned_instances: Vec<AssignedValue<F>>,
 }
 
-impl<F: ScalarField> RangeWithInstanceCircuitBuilder<F> {
+impl<const NI: usize, F: ScalarField> RangeWithMultipleInstancesCircuitBuilder<NI, F> {
     /// See [`RangeCircuitBuilder::keygen`]
     pub fn keygen(
         builder: GateThreadBuilder<F>,
@@ -735,10 +737,29 @@ impl<F: ScalarField> RangeWithInstanceCircuitBuilder<F> {
     pub fn instance(&self) -> Vec<F> {
         self.assigned_instances.iter().map(|v| *v.value()).collect()
     }
+
+    pub fn instances(&self) -> Vec<Vec<F>> {
+        let mut processed = Vec::<Vec<F>>::new();
+        let params = BASE_CONFIG_PARAMS
+            .try_with(|config| config.borrow().clone())
+            .expect("You need to call config() to configure the halo2-base circuit shape first");
+        let k = params.k;
+        let mut assigned_instances_iter = self.assigned_instances.chunks((1 << k) - (MAX_BLINDING_FACTORS)).into_iter();
+        for _ in 0..NI {
+            let next_chunk = assigned_instances_iter.next();
+            let processed_chunk = if let Some(next_chunk) = next_chunk {
+                next_chunk.iter().map(|v| *v.value()).collect()
+            } else {
+                vec![]
+            };
+            processed.push(processed_chunk);
+        }
+        processed
+    }
 }
 
-impl<F: ScalarField> Circuit<F> for RangeWithInstanceCircuitBuilder<F> {
-    type Config = PublicBaseConfig<F>;
+impl<const NI: usize, F: ScalarField> Circuit<F> for RangeWithMultipleInstancesCircuitBuilder<NI,F> {
+    type Config = PublicBaseConfig<NI, F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -747,9 +768,11 @@ impl<F: ScalarField> Circuit<F> for RangeWithInstanceCircuitBuilder<F> {
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         let base = RangeCircuitBuilder::configure(meta);
-        let instance = meta.instance_column();
-        meta.enable_equality(instance);
-        PublicBaseConfig { base, instance }
+        let instances: [Column<Instance>; NI] = [0; NI].map(|_| meta.instance_column());
+        for i in 0..NI {
+            meta.enable_equality(instances[i]);
+        }
+        PublicBaseConfig { base, instances }
     }
 
     fn synthesize(
@@ -758,9 +781,13 @@ impl<F: ScalarField> Circuit<F> for RangeWithInstanceCircuitBuilder<F> {
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         // copied from RangeCircuitBuilder::synthesize but with extra logic to expose public instances
-        let instance_col = config.instance;
+        let instance_cols = config.instances;
         let config = config.base;
         let circuit = &self.circuit.0;
+        let params = BASE_CONFIG_PARAMS
+            .try_with(|config| config.borrow().clone())
+            .expect("You need to call config() to configure the halo2-base circuit shape first");
+        let k = params.k;
         // only load lookup table if we are actually doing lookups
         if let BaseConfig::WithRange(config) = &config {
             config.load_lookup_table(&mut layouter).expect("load lookup table should not fail");
@@ -777,12 +804,19 @@ impl<F: ScalarField> Circuit<F> for RangeWithInstanceCircuitBuilder<F> {
         if !witness_gen_only {
             // expose public instances
             let mut layouter = layouter.namespace(|| "expose");
-            for (i, instance) in self.assigned_instances.iter().enumerate() {
-                let cell = instance.cell.unwrap();
-                let (cell, _) = assigned_advices
-                    .get(&(cell.context_id, cell.offset))
-                    .expect("instance not assigned");
-                layouter.constrain_instance(*cell, instance_col, i);
+            // todo: calculate optimal chunk size using meta.blinding_factors
+            let mut assigned_instances_iter = self.assigned_instances.chunks((1 << k) - (MAX_BLINDING_FACTORS)).into_iter();
+            for instance_col in instance_cols.iter() {
+                let next_chunk = assigned_instances_iter.next();
+                if let Some(next_chunk) = next_chunk {
+                    for (i, instance) in next_chunk.iter().enumerate() {
+                        let cell = instance.cell.unwrap();
+                        let (cell, _) = assigned_advices
+                            .get(&(cell.context_id, cell.offset))
+                            .expect("instance not assigned");
+                        layouter.constrain_instance(*cell, *instance_col, i);
+                    }
+                }
             }
         }
         Ok(())
@@ -799,3 +833,5 @@ pub enum CircuitBuilderStage {
     /// Mock Circuit
     Mock,
 }
+
+pub type RangeWithInstanceCircuitBuilder<F> = RangeWithMultipleInstancesCircuitBuilder<1, F>;

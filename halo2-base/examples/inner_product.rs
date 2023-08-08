@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
-use halo2_base::gates::builder::{GateThreadBuilder, RangeCircuitBuilder};
+use halo2_base::gates::builder::{GateThreadBuilder, RangeCircuitBuilder, RangeWithMultipleInstancesCircuitBuilder};
 use halo2_base::gates::flex_gate::{FlexGateConfig, GateChip, GateInstructions, GateStrategy};
 use halo2_base::halo2_proofs::{
     arithmetic::Field,
@@ -52,22 +52,28 @@ fn main() {
     // create circuit for keygen
     let mut builder = GateThreadBuilder::new(false);
     inner_prod_bench(builder.main(0), vec![Fr::zero(); 5], vec![Fr::zero(); 5]);
+    let a = builder.main(0).load_witness(Fr::one());
     builder.config(k as usize, Some(20));
-    let circuit = RangeCircuitBuilder::mock(builder);
+    let circuit:  RangeWithMultipleInstancesCircuitBuilder<1, Fr> = RangeWithMultipleInstancesCircuitBuilder::mock(builder, vec![a]);
+    let instances = circuit.instances();
 
     // check the circuit is correct just in case
-    MockProver::run(k, &circuit, vec![]).unwrap().assert_satisfied();
+    MockProver::run(k, &circuit, instances.clone()).unwrap().assert_satisfied();
 
     let params = ParamsKZG::<Bn256>::setup(k, OsRng);
     let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
     let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
 
-    let break_points = circuit.0.break_points.take();
+    let break_points = circuit.circuit.0.break_points.take();
 
+    
     let mut builder = GateThreadBuilder::new(true);
     let a = (0..5).map(|_| Fr::random(OsRng)).collect_vec();
     let b = (0..5).map(|_| Fr::random(OsRng)).collect_vec();
     inner_prod_bench(builder.main(0), a, b);
+    let a = builder.main(0).load_witness(Fr::one());
+    let instances = circuit.instances();
+    let instances = instances.iter().map(Vec::as_slice).collect_vec();
     let circuit = RangeCircuitBuilder::prover(builder, break_points);
 
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
@@ -78,7 +84,7 @@ fn main() {
         _,
         Blake2bWrite<Vec<u8>, G1Affine, Challenge255<_>>,
         _,
-    >(&params, &pk, &[circuit], &[&[]], OsRng, &mut transcript)
+    >(&params, &pk, &[circuit], &[&instances], OsRng, &mut transcript)
     .expect("prover should not fail");
 
     let strategy = SingleStrategy::new(&params);
@@ -90,6 +96,6 @@ fn main() {
         Challenge255<G1Affine>,
         Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
         _,
-    >(&params, pk.get_vk(), strategy, &[&[]], &mut transcript)
+    >(&params, pk.get_vk(), strategy, &[&instances], &mut transcript)
     .unwrap();
 }
