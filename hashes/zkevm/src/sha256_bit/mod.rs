@@ -29,7 +29,7 @@ pub use util::*;
 pub use witness_gen::*;
 
 pub type ShaTable = crate::keccak_packed_multi::KeccakTable;
-type ShaAssignedValue<'v, F> = Halo2AssignedCell<'v, F>;
+pub type ShaAssignedValue<'v, F> = Halo2AssignedCell<'v, F>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ShaRowFirstPhase {
