@@ -56,8 +56,18 @@ fn bls_signature_test<F: PrimeField>(
     let result = bls_signature_chip.bls_signature_verify(ctx, g1, signatures, pubkeys, msghash);
 
     // Calculate non-halo2 pairing by multipairing
-    let signature_g2_prepared = G2Prepared::from(signatures.iter().sum::<G2Affine>());
-    let pubkey_aggregated = pubkeys.iter().sum::<G1Affine>();
+    let mut signatures_g2: G2Affine = signatures[0];
+    for i in 1..signatures.len() {
+        signatures_g2 = (signatures_g2 + signatures[i]).into();
+    }
+    let signature_g2_prepared = G2Prepared::from(signatures_g2);
+
+    let mut pubkeys_g1: G1Affine = pubkeys[0];
+    for i in 1..signatures.len() {
+        pubkeys_g1 = (pubkeys_g1 + pubkeys[i]).into();
+    }
+    let pubkey_aggregated = pubkeys_g1;
+
     let hash_m_prepared = G2Prepared::from(-msghash);
     let actual_result =
         multi_miller_loop(&[(&g1, &signature_g2_prepared), (&pubkey_aggregated, &hash_m_prepared)])
