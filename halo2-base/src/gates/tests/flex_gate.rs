@@ -153,10 +153,7 @@ pub fn test_select_by_indicator(array: Vec<QuantumCell<Fr>>, idx: QuantumCell<Fr
 
 #[test_case((0..3).map(Fr::from).map(Witness).collect(), Witness(Fr::from(1)) => Fr::from(1); "select_from_idx(): [0, 1, 2] -> 1")]
 pub fn test_select_from_idx(array: Vec<QuantumCell<Fr>>, idx: QuantumCell<Fr>) -> Fr {
-    base_test().run_gate(|ctx, chip| {
-        let a = chip.idx_to_indicator(ctx, idx, array.len());
-        *chip.select_by_indicator(ctx, array, a).value()
-    })
+    base_test().run_gate(|ctx, chip| *chip.select_from_idx(ctx, array, idx).value())
 }
 
 #[test_case(Fr::zero() => Fr::from(1); "is_zero(): 0 -> 1")]
