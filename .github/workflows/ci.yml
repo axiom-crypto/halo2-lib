@@ -38,6 +38,7 @@ jobs:
           cargo test -- test_sm
           cargo test -- test_fb
           cargo test -- test_pairing
+          cargo test -- test_bls_signature
       - name: Run halo2-ecc tests real prover
         working-directory: 'halo2-ecc'
         run: |
