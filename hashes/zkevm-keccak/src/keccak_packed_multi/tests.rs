@@ -126,6 +126,7 @@ fn packed_multi_keccak_simple(k: u32, rows_per_round: usize) {
 }
 
 #[test_case(14, 25 ; "k: 14, rows_per_round: 25")]
+#[test_case(18, 9 ; "k: 18, rows_per_round: 9")]
 fn packed_multi_keccak_prover(k: u32, rows_per_round: usize) {
     KECCAK_CONFIG_PARAMS.with(|conf| {
         conf.borrow_mut().k = k;
