@@ -16,6 +16,7 @@ use std::marker::PhantomData;
 
 pub mod ecdsa;
 pub mod fixed_base;
+pub mod schnorr_signature;
 // pub mod fixed_base_pippenger;
 pub mod pippenger;
 
