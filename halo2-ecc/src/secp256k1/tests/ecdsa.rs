@@ -1,4 +1,5 @@
 #![allow(non_snake_case)]
+use crate::ff::Field as _;
 use crate::fields::FpStrategy;
 use crate::halo2_proofs::{
     arithmetic::CurveAffine,
@@ -20,7 +21,7 @@ use crate::halo2_proofs::{
 use crate::secp256k1::{FpChip, FqChip};
 use crate::{
     ecc::{ecdsa::ecdsa_verify_no_pubkey_check, EccChip},
-    fields::{FieldChip, PrimeField},
+    fields::FieldChip,
 };
 use ark_std::{end_timer, start_timer};
 use halo2_base::gates::builder::{
@@ -29,7 +30,7 @@ use halo2_base::gates::builder::{
 };
 use halo2_base::gates::RangeChip;
 use halo2_base::utils::fs::gen_srs;
-use halo2_base::utils::{biguint_to_fe, fe_to_biguint, modulus};
+use halo2_base::utils::{biguint_to_fe, fe_to_biguint, modulus, BigPrimeField};
 use halo2_base::Context;
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
@@ -50,7 +51,7 @@ struct CircuitParams {
     num_limbs: usize,
 }
 
-fn ecdsa_test<F: PrimeField>(
+fn ecdsa_test<F: BigPrimeField>(
     ctx: &mut Context<F>,
     params: CircuitParams,
     r: Fq,
@@ -71,7 +72,7 @@ fn ecdsa_test<F: PrimeField>(
     let res = ecdsa_verify_no_pubkey_check::<F, Fp, Fq, Secp256k1Affine>(
         &ecc_chip, ctx, pk, r, s, m, 4, 4,
     );
-    assert_eq!(res.value(), &F::one());
+    assert_eq!(res.value(), &F::ONE);
 }
 
 fn random_ecdsa_circuit(

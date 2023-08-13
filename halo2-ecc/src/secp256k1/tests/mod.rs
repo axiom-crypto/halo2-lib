@@ -1,8 +1,8 @@
 #![allow(non_snake_case)]
 use std::fs::File;
 
-use ff::Field;
-use group::Curve;
+use crate::ff::Field;
+use crate::group::Curve;
 use halo2_base::{
     gates::{
         builder::{

@@ -1,17 +1,15 @@
 use std::cmp::max;
 
+use crate::ff::{Field, PrimeField};
 use crate::gates::tests::{flex_gate, range, utils::*, Fr};
 use crate::utils::{biguint_to_fe, bit_length, fe_to_biguint};
 use crate::{QuantumCell, QuantumCell::Witness};
 
-use ff::{Field, PrimeField};
 use num_bigint::{BigUint, RandBigInt, RandomBits};
 use proptest::{collection::vec, prelude::*};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-//TODO: implement Copy for rand witness and rand fr to allow for array creation
-//  create vec and convert to array???
-//TODO: implement arbitrary for fr using looks like you'd probably need to implement your own TestFr struct to implement Arbitrary: https://docs.rs/quickcheck/latest/quickcheck/trait.Arbitrary.html , can probably just hack it from Fr = [u64; 4]
+
 prop_compose! {
     pub fn rand_fr()(seed in any::<u64>()) -> Fr {
         let rng = StdRng::seed_from_u64(seed);

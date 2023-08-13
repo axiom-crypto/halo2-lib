@@ -1,3 +1,4 @@
+use crate::ff::Field;
 use crate::{
     gates::{
         builder::{GateThreadBuilder, RangeCircuitBuilder},
@@ -12,7 +13,6 @@ use crate::{
     utils::testing::{check_proof, gen_proof},
     QuantumCell::Witness,
 };
-use ff::Field;
 use itertools::Itertools;
 use rand::{rngs::OsRng, thread_rng, Rng};
 

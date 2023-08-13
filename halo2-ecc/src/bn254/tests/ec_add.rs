@@ -4,11 +4,12 @@ use std::io::{BufRead, BufReader};
 
 use super::*;
 use crate::fields::{FieldChip, FpStrategy};
+use crate::group::cofactor::CofactorCurveAffine;
 use crate::halo2_proofs::halo2curves::bn256::G2Affine;
-use group::cofactor::CofactorCurveAffine;
 use halo2_base::gates::builder::{set_lookup_bits, GateThreadBuilder, RangeCircuitBuilder};
 use halo2_base::gates::RangeChip;
 use halo2_base::utils::fs::gen_srs;
+use halo2_base::utils::BigPrimeField;
 use halo2_base::Context;
 use itertools::Itertools;
 use rand_core::OsRng;
@@ -26,7 +27,11 @@ struct CircuitParams {
     batch_size: usize,
 }
 
-fn g2_add_test<F: PrimeField>(ctx: &mut Context<F>, params: CircuitParams, _points: Vec<G2Affine>) {
+fn g2_add_test<F: BigPrimeField>(
+    ctx: &mut Context<F>,
+    params: CircuitParams,
+    _points: Vec<G2Affine>,
+) {
     set_lookup_bits(params.lookup_bits);
     let range = RangeChip::<F>::default(params.lookup_bits);
     let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);

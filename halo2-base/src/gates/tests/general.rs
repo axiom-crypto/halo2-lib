@@ -1,3 +1,4 @@
+use crate::ff::Field;
 use crate::halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use crate::utils::{BigPrimeField, ScalarField};
 use crate::{
@@ -9,7 +10,6 @@ use crate::{
     utils::testing::base_test,
 };
 use crate::{Context, QuantumCell::Constant};
-use ff::Field;
 use rand::rngs::OsRng;
 use rayon::prelude::*;
 
@@ -29,7 +29,7 @@ fn gate_tests<F: ScalarField>(ctx: &mut Context<F>, inputs: [F; 3]) {
     // test idx_to_indicator
     chip.idx_to_indicator(ctx, Constant(F::from(3u64)), 4);
 
-    let bits = ctx.assign_witnesses([F::zero(), F::one()]);
+    let bits = ctx.assign_witnesses([F::ZERO, F::ONE]);
     chip.bits_to_indicator(ctx, &bits);
 
     chip.is_equal(ctx, b, a);

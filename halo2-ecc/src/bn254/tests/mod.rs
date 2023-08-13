@@ -1,7 +1,8 @@
 #![allow(non_snake_case)]
 use super::pairing::PairingChip;
 use super::*;
-use crate::{ecc::EccChip, fields::PrimeField};
+use crate::ecc::EccChip;
+use crate::group::Curve;
 use crate::{
     fields::FpStrategy,
     halo2_proofs::{
@@ -19,7 +20,6 @@ use crate::{
     },
 };
 use ark_std::{end_timer, start_timer};
-use group::Curve;
 use halo2_base::utils::fe_to_biguint;
 use serde::{Deserialize, Serialize};
 use std::io::Write;

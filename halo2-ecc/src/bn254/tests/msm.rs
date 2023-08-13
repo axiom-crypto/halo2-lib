@@ -1,5 +1,5 @@
+use crate::ff::{Field, PrimeField};
 use crate::fields::FpStrategy;
-use ff::{Field, PrimeField};
 use halo2_base::{
     gates::{
         builder::{

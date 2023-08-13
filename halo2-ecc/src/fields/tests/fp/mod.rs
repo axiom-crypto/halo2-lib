@@ -1,5 +1,6 @@
+use crate::ff::{Field as _, PrimeField as _};
 use crate::fields::fp::FpChip;
-use crate::fields::{FieldChip, PrimeField};
+use crate::fields::FieldChip;
 use crate::halo2_proofs::{
     dev::MockProver,
     halo2curves::bn256::{Fq, Fr},

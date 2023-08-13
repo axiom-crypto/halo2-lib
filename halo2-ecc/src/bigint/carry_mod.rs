@@ -121,10 +121,10 @@ pub fn crt<F: BigPrimeField>(
                 // where prod is at relative row `offset`
                 ctx.assign_region(
                     [
-                        Constant(-F::one()),
+                        Constant(-F::ONE),
                         Existing(a_limb),
                         Witness(temp1),
-                        Constant(F::one()),
+                        Constant(F::ONE),
                         Witness(out_v),
                         Witness(check_val),
                     ],

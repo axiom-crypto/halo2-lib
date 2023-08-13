@@ -1,8 +1,8 @@
-use ff::Field;
 use halo2_base::gates::builder::{GateThreadBuilder, RangeCircuitBuilder};
 use halo2_base::gates::flex_gate::{GateChip, GateInstructions};
 use halo2_base::halo2_proofs::{
     halo2curves::bn256::{Bn256, Fr, G1Affine},
+    halo2curves::ff::Field,
     plonk::*,
     poly::kzg::{
         commitment::{KZGCommitmentScheme, ParamsKZG},

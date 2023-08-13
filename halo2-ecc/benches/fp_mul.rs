@@ -17,10 +17,11 @@ use halo2_base::{
         },
         transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer},
     },
+    utils::BigPrimeField,
     Context,
 };
 use halo2_ecc::fields::fp::FpChip;
-use halo2_ecc::fields::{FieldChip, PrimeField};
+use halo2_ecc::fields::FieldChip;
 use rand::rngs::OsRng;
 
 use criterion::{criterion_group, criterion_main};
@@ -32,7 +33,7 @@ use pprof::criterion::{Output, PProfProfiler};
 
 const K: u32 = 19;
 
-fn fp_mul_bench<F: PrimeField>(
+fn fp_mul_bench<F: BigPrimeField>(
     ctx: &mut Context<F>,
     lookup_bits: usize,
     limb_bits: usize,

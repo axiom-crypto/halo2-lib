@@ -1,6 +1,5 @@
 //! Base library to build Halo2 circuits.
 #![feature(generic_const_exprs)]
-#![feature(const_cmp)]
 #![allow(incomplete_features)]
 #![feature(stmt_expr_attributes)]
 #![feature(trait_alias)]

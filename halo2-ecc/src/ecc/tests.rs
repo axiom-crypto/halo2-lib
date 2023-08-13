@@ -1,13 +1,13 @@
 #![allow(unused_assignments, unused_imports, unused_variables)]
 use super::*;
 use crate::fields::fp2::Fp2Chip;
+use crate::group::Group;
 use crate::halo2_proofs::{
     circuit::*,
     dev::MockProver,
     halo2curves::bn256::{Fq, Fr, G1Affine, G2Affine, G1, G2},
     plonk::*,
 };
-use group::Group;
 use halo2_base::gates::builder::{set_lookup_bits, RangeCircuitBuilder};
 use halo2_base::gates::RangeChip;
 use halo2_base::utils::bigint_to_fe;
@@ -18,7 +18,7 @@ use rand_core::OsRng;
 use std::marker::PhantomData;
 use std::ops::Neg;
 
-fn basic_g1_tests<F: PrimeField>(
+fn basic_g1_tests<F: BigPrimeField>(
     ctx: &mut Context<F>,
     lookup_bits: usize,
     limb_bits: usize,

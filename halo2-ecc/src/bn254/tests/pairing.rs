@@ -15,7 +15,7 @@ use halo2_base::{
         RangeChip,
     },
     halo2_proofs::poly::kzg::multiopen::{ProverGWC, VerifierGWC},
-    utils::fs::gen_srs,
+    utils::{fs::gen_srs, BigPrimeField},
     Context,
 };
 use rand_core::OsRng;
@@ -32,7 +32,7 @@ struct PairingCircuitParams {
     num_limbs: usize,
 }
 
-fn pairing_test<F: PrimeField>(
+fn pairing_test<F: BigPrimeField>(
     ctx: &mut Context<F>,
     params: PairingCircuitParams,
     P: G1Affine,

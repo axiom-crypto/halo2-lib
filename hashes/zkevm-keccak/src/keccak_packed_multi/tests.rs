@@ -18,7 +18,7 @@ use crate::halo2_proofs::{
         Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
     },
 };
-use halo2_base::SKIP_FIRST_PASS;
+use halo2_base::{halo2_proofs::halo2curves::ff::FromUniformBytes, SKIP_FIRST_PASS};
 use rand_core::OsRng;
 use test_case::test_case;
 
@@ -100,7 +100,7 @@ impl<F: Field> KeccakCircuit<F> {
     }
 }
 
-fn verify<F: Field>(k: u32, inputs: Vec<Vec<u8>>, _success: bool) {
+fn verify<F: Field + Ord + FromUniformBytes<64>>(k: u32, inputs: Vec<Vec<u8>>, _success: bool) {
     let circuit = KeccakCircuit::new(Some(2usize.pow(k) - 109), inputs);
 
     let prover = MockProver::<F>::run(k, &circuit, vec![]).unwrap();

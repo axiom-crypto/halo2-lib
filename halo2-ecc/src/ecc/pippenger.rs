@@ -4,14 +4,14 @@ use super::{
 };
 use crate::{
     ecc::ec_sub_strict,
-    fields::{FieldChip, PrimeField, Selectable},
+    fields::{FieldChip, Selectable},
 };
 use halo2_base::{
     gates::{
         builder::{parallelize_in, GateThreadBuilder},
         GateInstructions,
     },
-    utils::CurveAffineExt,
+    utils::{BigPrimeField, CurveAffineExt},
     AssignedValue,
 };
 
@@ -216,7 +216,7 @@ where
 /// * `points` are all on the curve or the point at infinity
 /// * `points[i]` is allowed to be (0, 0) to represent the point at infinity (identity point)
 /// * Currently implementation assumes that the only point on curve with y-coordinate equal to `0` is identity point
-pub fn multi_exp_par<F: PrimeField, FC, C>(
+pub fn multi_exp_par<F: BigPrimeField, FC, C>(
     chip: &FC,
     // these are the "threads" within a single Phase
     builder: &mut GateThreadBuilder<F>,
@@ -270,7 +270,7 @@ where
     let multi_prods = parallelize_in(
         phase,
         builder,
-        points.chunks(c).into_iter().zip(any_points.iter()).enumerate().collect(),
+        points.chunks(c).zip(any_points.iter()).enumerate().collect(),
         |ctx, (round, (points_clump, any_point))| {
             // compute all possible multi-products of elements in points[round * c .. round * (c+1)]
             // stores { any_point, any_point + points[0], any_point + points[1], any_point + points[0] + points[1] , ... }

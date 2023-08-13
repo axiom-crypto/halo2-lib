@@ -6,6 +6,7 @@ use halo2_base::gates::{
     },
     RangeChip,
 };
+use halo2_base::halo2_proofs::halo2curves::ff::PrimeField as _;
 use halo2_base::halo2_proofs::{
     arithmetic::Field,
     halo2curves::bn256::{Bn256, Fr, G1Affine},
@@ -16,7 +17,7 @@ use halo2_base::halo2_proofs::{
     },
     transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer},
 };
-use halo2_ecc::{bn254::FpChip, ecc::EccChip, fields::PrimeField};
+use halo2_ecc::{bn254::FpChip, ecc::EccChip};
 use rand::rngs::OsRng;
 
 use criterion::{criterion_group, criterion_main};

@@ -1,18 +1,20 @@
+use crate::ff::Field as _;
 use crate::fields::fp::FpChip;
 use crate::fields::fp12::Fp12Chip;
-use crate::fields::{FieldChip, PrimeField};
+use crate::fields::FieldChip;
 use crate::halo2_proofs::{
     dev::MockProver,
     halo2curves::bn256::{Fq, Fq12, Fr},
 };
 use halo2_base::gates::builder::{set_lookup_bits, GateThreadBuilder, RangeCircuitBuilder};
 use halo2_base::gates::RangeChip;
+use halo2_base::utils::BigPrimeField;
 use halo2_base::Context;
 use rand_core::OsRng;
 
 const XI_0: i64 = 9;
 
-fn fp12_mul_test<F: PrimeField>(
+fn fp12_mul_test<F: BigPrimeField>(
     ctx: &mut Context<F>,
     lookup_bits: usize,
     limb_bits: usize,

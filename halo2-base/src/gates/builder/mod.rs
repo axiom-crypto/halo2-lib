@@ -555,12 +555,8 @@ impl<F: ScalarField> GateCircuitBuilder<F> {
                         // If we are only generating witness, we can skip the first pass and assign threads directly
                         let builder = self.builder.take();
                         let break_points = self.break_points.take();
-                        for (phase, (threads, break_points)) in builder
-                            .threads
-                            .into_iter()
-                            .zip(break_points.into_iter())
-                            .enumerate()
-                            .take(1)
+                        for (phase, (threads, break_points)) in
+                            builder.threads.into_iter().zip(break_points).enumerate().take(1)
                         {
                             assign_threads_in(
                                 phase,

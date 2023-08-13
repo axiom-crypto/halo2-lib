@@ -44,7 +44,7 @@ where
 /// Helper trait to represent a field element that can be converted into [u64] limbs.
 ///
 /// Note: Since the number of bits necessary to represent a field element is larger than the number of bits in a u64, we decompose the integer representation of the field element into multiple [u64] values e.g. `limbs`.
-pub trait ScalarField: PrimeField + Hash {
+pub trait ScalarField: PrimeField + From<bool> + Hash + PartialEq + PartialOrd {
     /// Returns the base `2<sup>bit_len</sup>` little endian representation of the [ScalarField] element up to `num_limbs` number of limbs (truncates any extra limbs).
     ///
     /// Assumes `bit_len < 64`.
@@ -64,13 +64,33 @@ pub trait ScalarField: PrimeField + Hash {
         repr.as_mut()[..bytes.len()].copy_from_slice(bytes);
         Self::from_repr(repr).unwrap()
     }
+
+    /// Gets the least significant 32 bits of the field element.
+    fn get_lower_32(&self) -> u32 {
+        let bytes = self.to_bytes_le();
+        let mut lower_32 = 0u32;
+        for (i, byte) in bytes.into_iter().enumerate().take(4) {
+            lower_32 |= (byte as u32) << (i * 8);
+        }
+        lower_32
+    }
+
+    /// Gets the least significant 64 bits of the field element.
+    fn get_lower_64(&self) -> u64 {
+        let bytes = self.to_bytes_le();
+        let mut lower_64 = 0u64;
+        for (i, byte) in bytes.into_iter().enumerate().take(8) {
+            lower_64 |= (byte as u64) << (i * 8);
+        }
+        lower_64
+    }
 }
 // See below for implementations
 
 // Later: will need to separate BigPrimeField from ScalarField when Goldilocks is introduced
 
 #[cfg(feature = "halo2-pse")]
-pub trait BigPrimeField = FieldExt<Repr = [u8; 32]> + ScalarField;
+pub trait BigPrimeField = PrimeField<Repr = [u8; 32]> + ScalarField;
 
 /// Converts an [Iterator] of u64 digits into `number_of_limbs` limbs of `bit_len` bits returned as a [Vec].
 ///
@@ -385,6 +405,18 @@ mod scalar_field_impls {
                     let tmp: [u64; 4] = (*self).into();
                     tmp.iter().flat_map(|x| x.to_le_bytes()).collect()
                 }
+
+                #[inline(always)]
+                fn get_lower_32(&self) -> u32 {
+                    let tmp: [u64; 4] = (*self).into();
+                    tmp[0] as u32
+                }
+
+                #[inline(always)]
+                fn get_lower_64(&self) -> u64 {
+                    let tmp: [u64; 4] = (*self).into();
+                    tmp[0]
+                }
             }
         };
     }
@@ -560,5 +592,24 @@ mod tests {
     #[test]
     fn test_log2_ceil_zero() {
         assert_eq!(log2_ceil(0), 0);
+    }
+
+    #[test]
+    fn test_get_lower_32() {
+        let mut rng = OsRng;
+        for _ in 0..10_000usize {
+            let e: u32 = rng.gen_range(0..u32::MAX);
+            assert_eq!(Fr::from(e as u64).get_lower_32(), e);
+        }
+        assert_eq!(Fr::from((1u64 << 32_i32) + 1).get_lower_32(), 1);
+    }
+
+    #[test]
+    fn test_get_lower_64() {
+        let mut rng = OsRng;
+        for _ in 0..10_000usize {
+            let e: u64 = rng.gen_range(0..u64::MAX);
+            assert_eq!(Fr::from(e).get_lower_64(), e);
+        }
     }
 }

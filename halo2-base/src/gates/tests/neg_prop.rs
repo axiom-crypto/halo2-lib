@@ -1,18 +1,6 @@
-use ff::Field;
-use itertools::Itertools;
-use num_bigint::BigUint;
-use proptest::{collection::vec, prelude::*};
-use rand::rngs::OsRng;
-
 use crate::{
+    ff::Field,
     gates::builder::set_lookup_bits,
-    halo2_proofs::{
-        dev::MockProver,
-        halo2curves::{bn256::Fr, FieldExt},
-        plonk::Assigned,
-    },
-};
-use crate::{
     gates::{
         builder::{GateThreadBuilder, RangeCircuitBuilder},
         range::{RangeChip, RangeInstructions},
@@ -22,10 +10,16 @@ use crate::{
         },
         GateChip, GateInstructions,
     },
+    halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr, plonk::Assigned},
     utils::{biguint_to_fe, bit_length, fe_to_biguint, ScalarField},
     QuantumCell,
     QuantumCell::Witness,
 };
+
+use itertools::Itertools;
+use num_bigint::BigUint;
+use proptest::{collection::vec, prelude::*};
+use rand::rngs::OsRng;
 
 // Strategies for generating random witnesses
 prop_compose! {
@@ -122,7 +116,7 @@ fn check_idx_to_indicator(idx: Fr, len: usize, ind_witnesses: &[Fr]) -> bool {
         return false;
     }
 
-    let idx_val = idx.get_lower_128() as usize;
+    let idx_val = idx.get_lower_64() as usize;
 
     // Check that all indexes are zero except for the one at idx
     for (i, v) in ind_witnesses.iter().enumerate() {

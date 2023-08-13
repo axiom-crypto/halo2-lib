@@ -1,4 +1,4 @@
-use ff::PrimeField;
+use crate::ff::PrimeField;
 use halo2_base::gates::{
     builder::{
         set_lookup_bits, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,

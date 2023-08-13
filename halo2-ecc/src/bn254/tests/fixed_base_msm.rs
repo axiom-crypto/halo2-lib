@@ -3,11 +3,10 @@ use std::{
     io::{BufRead, BufReader},
 };
 
-use crate::fields::{FpStrategy, PrimeField};
+use crate::ff::{Field, PrimeField};
+use crate::fields::FpStrategy;
 
 use super::*;
-#[allow(unused_imports)]
-use ff::PrimeField as _;
 use halo2_base::{
     gates::{
         builder::{

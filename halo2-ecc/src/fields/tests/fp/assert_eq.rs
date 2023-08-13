@@ -1,4 +1,6 @@
-use ff::Field;
+use crate::ff::Field;
+use crate::{bn254::FpChip, fields::FieldChip};
+
 use halo2_base::{
     gates::{
         builder::{set_lookup_bits, GateThreadBuilder, RangeCircuitBuilder},
@@ -10,8 +12,6 @@ use halo2_base::{
     },
     utils::testing::{check_proof, gen_proof},
 };
-
-use crate::{bn254::FpChip, fields::FieldChip};
 use rand::thread_rng;
 
 // soundness checks for `` function
