@@ -30,5 +30,6 @@ test-case = "3.1.0"
 [features]
 default = ["halo2-axiom", "display"]
 display = ["halo2-base/display"]
+asm = ["halo2-base/asm"]
 halo2-pse = ["halo2-base/halo2-pse"]
 halo2-axiom = ["halo2-base/halo2-axiom"]

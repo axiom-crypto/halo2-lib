@@ -29,6 +29,7 @@ halo2-base = { path = "../halo2-base", default-features = false, features = ["te
 default = ["jemallocator", "halo2-axiom", "display"]
 dev-graph = ["halo2-base/dev-graph"]
 display = ["halo2-base/display"]
+asm = ["halo2-base/asm"]
 halo2-pse = ["halo2-base/halo2-pse"]
 halo2-axiom = ["halo2-base/halo2-axiom"]
 jemallocator = ["halo2-base/jemallocator"]
