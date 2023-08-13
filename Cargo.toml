@@ -4,6 +4,7 @@ members = [
     "halo2-ecc",
     "hashes/zkevm-keccak",
 ]
+resolver = "2"
 
 [profile.dev]
 opt-level = 3
