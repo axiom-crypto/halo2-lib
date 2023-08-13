@@ -36,6 +36,8 @@ pub use halo2_proofs;
 #[cfg(feature = "halo2-axiom")]
 pub use halo2_proofs_axiom as halo2_proofs;
 
+use halo2_proofs::halo2curves;
+use halo2_proofs::halo2curves::ff;
 use halo2_proofs::plonk::Assigned;
 use utils::ScalarField;
 
@@ -415,7 +417,7 @@ impl<F: ScalarField> Context<F> {
         if let Some(zcell) = &self.zero_cell {
             return *zcell;
         }
-        let zero_cell = self.load_constant(F::zero());
+        let zero_cell = self.load_constant(F::ZERO);
         self.zero_cell = Some(zero_cell);
         zero_cell
     }
@@ -424,8 +426,8 @@ impl<F: ScalarField> Context<F> {
     /// The `MockProver` will print out the row, column where it fails, so it serves as a debugging "break point"
     /// so you can add to your code to search for where the actual constraint failure occurs.
     pub fn debug_assert_false(&mut self) {
-        let one = self.load_constant(F::one());
-        let zero = self.load_zero();
-        self.constrain_equal(&one, &zero);
+        let three = self.load_constant(F::from(3));
+        let four = self.load_constant(F::from(4));
+        self.constrain_equal(&three, &four);
     }
 }

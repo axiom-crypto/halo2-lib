@@ -1,7 +1,12 @@
-#[cfg(feature = "halo2-pse")]
-use crate::halo2_proofs::arithmetic::CurveAffine;
-use crate::halo2_proofs::{arithmetic::FieldExt, circuit::Value};
 use core::hash::Hash;
+
+use crate::ff::PrimeField;
+#[cfg(not(feature = "halo2-axiom"))]
+use crate::halo2_proofs::arithmetic::CurveAffine;
+use crate::halo2_proofs::circuit::Value;
+#[cfg(feature = "halo2-axiom")]
+pub use crate::halo2curves::CurveAffineExt;
+
 use num_bigint::BigInt;
 use num_bigint::BigUint;
 use num_bigint::Sign;
@@ -39,7 +44,7 @@ where
 /// Helper trait to represent a field element that can be converted into [u64] limbs.
 ///
 /// Note: Since the number of bits necessary to represent a field element is larger than the number of bits in a u64, we decompose the integer representation of the field element into multiple [u64] values e.g. `limbs`.
-pub trait ScalarField: FieldExt + Hash {
+pub trait ScalarField: PrimeField + Hash {
     /// Returns the base `2<sup>bit_len</sup>` little endian representation of the [ScalarField] element up to `num_limbs` number of limbs (truncates any extra limbs).
     ///
     /// Assumes `bit_len < 64`.
@@ -134,7 +139,7 @@ pub fn log2_ceil(x: u64) -> usize {
 
 /// Returns the modulus of [BigPrimeField].
 pub fn modulus<F: BigPrimeField>() -> BigUint {
-    fe_to_biguint(&-F::one()) + 1u64
+    fe_to_biguint(&-F::ONE) + 1u64
 }
 
 /// Returns the [BigPrimeField] element of 2<sup>n</sup>.
@@ -340,13 +345,10 @@ pub fn compose(input: Vec<BigUint>, bit_len: usize) -> BigUint {
     input.iter().rev().fold(BigUint::zero(), |acc, val| (acc << bit_len) + val)
 }
 
-#[cfg(feature = "halo2-axiom")]
-pub use halo2_proofs_axiom::halo2curves::CurveAffineExt;
-
 /// Helper trait
 #[cfg(feature = "halo2-pse")]
 pub trait CurveAffineExt: CurveAffine {
-    /// Unlike the `Coordinates` trait, this just returns the raw affine (X, Y) coordinantes without checking `is_on_curve`
+    /// Returns the raw affine (X, Y) coordinantes
     fn into_coordinates(self) -> (Self::Base, Self::Base) {
         let coordinates = self.coordinates().unwrap();
         (*coordinates.x(), *coordinates.y())
