@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 use crate::fields::{fp::FpChip, FieldChip, PrimeField, Selectable};
 use crate::halo2_proofs::arithmetic::CurveAffine;
+use ff::Field;
 use group::{Curve, Group};
 use halo2_base::gates::builder::GateThreadBuilder;
 use halo2_base::utils::modulus;

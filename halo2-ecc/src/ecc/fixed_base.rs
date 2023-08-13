@@ -2,6 +2,7 @@
 use super::{ec_add_unequal, ec_select, ec_select_from_bits, EcPoint, EccChip};
 use crate::ecc::{ec_sub_strict, load_random_point};
 use crate::fields::{FieldChip, PrimeField, Selectable};
+use ff::Field;
 use group::Curve;
 use halo2_base::gates::builder::{parallelize_in, GateThreadBuilder};
 use halo2_base::{gates::GateInstructions, utils::CurveAffineExt, AssignedValue, Context};

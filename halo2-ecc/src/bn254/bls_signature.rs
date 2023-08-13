@@ -7,6 +7,7 @@ use crate::fields::FieldChip;
 use crate::fields::PrimeField;
 use crate::halo2_proofs::halo2curves::bn256::Fq12;
 use crate::halo2_proofs::halo2curves::bn256::{G1Affine, G2Affine};
+use ff::Field;
 use halo2_base::{AssignedValue, Context};
 
 // To avoid issues with mutably borrowing twice (not allowed in Rust), we only store fp_chip and construct g2_chip and fp12_chip in scope when needed for temporary mutable borrows

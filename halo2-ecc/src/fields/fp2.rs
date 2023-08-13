@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use ff::PrimeField as _;
 use halo2_base::{utils::modulus, AssignedValue, Context};
 use num_bigint::BigUint;
 

@@ -9,6 +9,7 @@ use crate::{
     fields::fp12::mul_no_carry_w6,
     fields::{FieldChip, PrimeField},
 };
+use ff::Field;
 use halo2_base::Context;
 
 const XI_0: i64 = 9;
