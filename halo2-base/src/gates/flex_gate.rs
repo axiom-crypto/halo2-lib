@@ -162,9 +162,6 @@ pub trait GateInstructions<F: ScalarField> {
     /// Returns a slice of the [ScalarField] field elements 2^i for i in 0..F::NUM_BITS.
     fn pow_of_two(&self) -> &[F];
 
-    /// Converts a [u64] into a scalar field element [ScalarField].
-    fn get_field_element(&self, n: u64) -> F;
-
     /// Constrains and returns `a + b * 1 = out`.
     ///
     /// Defines a vertical gate of form | a | b | 1 | a + b | where (a + b) = out.
@@ -916,17 +913,6 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     /// Returns a slice of the [ScalarField] elements 2<sup>i</sup> for i in 0..F::NUM_BITS.
     fn pow_of_two(&self) -> &[F] {
         &self.pow_of_two
-    }
-
-    /// Returns the the value of `n` as a [ScalarField] element.
-    /// * `n`: the [u64] value to convert
-    fn get_field_element(&self, n: u64) -> F {
-        let get = self.field_element_cache.get(n as usize);
-        if let Some(fe) = get {
-            *fe
-        } else {
-            F::from(n)
-        }
     }
 
     /// Constrains and returns the inner product of `<a, b>`.
