@@ -61,6 +61,11 @@ impl<F: ScalarField> GateThreadBuilder<F> {
         Self { threads, thread_count: 1, witness_gen_only, use_unknown: false }
     }
 
+    /// Creates a new [GateThreadBuilder] depending on the stage of circuit building. If the stage is [CircuitBuilderStage::Prover], the [GateThreadBuilder] is used for witness generation only.
+    pub fn from_stage(stage: CircuitBuilderStage) -> Self {
+        Self::new(stage == CircuitBuilderStage::Prover)
+    }
+
     /// Creates a new [GateThreadBuilder] with `witness_gen_only` set to false.
     ///
     /// Performs the witness assignment computations and then checks using normal programming logic whether the gate constraints are all satisfied.
