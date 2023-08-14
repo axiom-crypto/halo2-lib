@@ -46,7 +46,7 @@ mimalloc = { version = "0.1", default-features = false, optional = true }
 default = ["halo2-axiom", "display"]
 asm = ["halo2_proofs_axiom?/asm"]
 dev-graph = ["halo2_proofs?/dev-graph", "halo2_proofs_axiom?/dev-graph", "plotters"]
-halo2-pse = ["halo2_proofs"]
+halo2-pse = ["halo2_proofs/circuit-params"]
 halo2-axiom = ["halo2_proofs_axiom"]
 display = []
 profile = ["halo2_proofs_axiom?/profile"]

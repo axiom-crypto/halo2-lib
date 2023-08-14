@@ -39,21 +39,13 @@ pub fn div_unsafe_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
     inputs[1].value().invert().unwrap() * *inputs[0].value()
 }
 
-pub fn inner_product_ground_truth<F: ScalarField>(
-    inputs: &(Vec<QuantumCell<F>>, Vec<QuantumCell<F>>),
-) -> F {
-    inputs
-        .0
-        .iter()
-        .zip(inputs.1.iter())
-        .fold(F::ZERO, |acc, (a, b)| acc + (*a.value() * *b.value()))
+pub fn inner_product_ground_truth<F: ScalarField>(a: &[F], b: &[F]) -> F {
+    a.iter().zip(b.iter()).fold(F::ZERO, |acc, (&a, &b)| acc + a * b)
 }
 
-pub fn inner_product_left_last_ground_truth<F: ScalarField>(
-    inputs: &(Vec<QuantumCell<F>>, Vec<QuantumCell<F>>),
-) -> (F, F) {
-    let product = inner_product_ground_truth(inputs);
-    let last = *inputs.0.last().unwrap().value();
+pub fn inner_product_left_last_ground_truth<F: ScalarField>(a: &[F], b: &[F]) -> (F, F) {
+    let product = inner_product_ground_truth(a, b);
+    let last = *a.last().unwrap();
     (product, last)
 }
 

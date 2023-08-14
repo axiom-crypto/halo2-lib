@@ -127,10 +127,10 @@ impl<F: ScalarField> AssignedValue<F> {
         }
     }
 
-    /// Debug helper function for writing negative tests. This will change the **witness** value of the assigned cell
-    /// to `prank_value`. It does not change any constraints.
-    pub fn debug_prank(&mut self, prank_value: F) {
-        self.value = Assigned::Trivial(prank_value);
+    /// Debug helper function for writing negative tests. This will change the **witness** value in `ctx` corresponding to `self.offset`.
+    /// This assumes that `ctx` is the context that `self` lies in.
+    pub fn debug_prank(&self, ctx: &mut Context<F>, prank_value: F) {
+        ctx.advice[self.cell.unwrap().offset] = Assigned::Trivial(prank_value);
     }
 }
 

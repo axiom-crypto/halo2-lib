@@ -25,7 +25,7 @@ use crate::{
 };
 use ark_std::{end_timer, start_timer};
 use halo2_base::gates::builder::{
-    set_lookup_bits, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
+    BaseConfigParams, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
     RangeCircuitBuilder,
 };
 use halo2_base::gates::RangeChip;
@@ -59,7 +59,6 @@ fn ecdsa_test<F: BigPrimeField>(
     msghash: Fq,
     pk: Secp256k1Affine,
 ) {
-    set_lookup_bits(params.lookup_bits);
     let range = RangeChip::<F>::default(params.lookup_bits);
     let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
     let fq_chip = FqChip::<F>::new(&range, params.limb_bits, params.num_limbs);
@@ -78,6 +77,7 @@ fn ecdsa_test<F: BigPrimeField>(
 fn random_ecdsa_circuit(
     params: CircuitParams,
     stage: CircuitBuilderStage,
+    config_params: Option<BaseConfigParams>,
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
     let mut builder = match stage {
@@ -101,16 +101,15 @@ fn random_ecdsa_circuit(
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
     ecdsa_test(builder.main(0), params, r, s, msg_hash, pubkey);
 
+    let config_params = config_params.unwrap_or_else(|| {
+        builder.config(params.degree as usize, Some(20), Some(params.lookup_bits))
+    });
     let circuit = match stage {
-        CircuitBuilderStage::Mock => {
-            builder.config(params.degree as usize, Some(20));
-            RangeCircuitBuilder::mock(builder)
+        CircuitBuilderStage::Mock => RangeCircuitBuilder::mock(builder, config_params),
+        CircuitBuilderStage::Keygen => RangeCircuitBuilder::keygen(builder, config_params),
+        CircuitBuilderStage::Prover => {
+            RangeCircuitBuilder::prover(builder, config_params, break_points.unwrap())
         }
-        CircuitBuilderStage::Keygen => {
-            builder.config(params.degree as usize, Some(20));
-            RangeCircuitBuilder::keygen(builder)
-        }
-        CircuitBuilderStage::Prover => RangeCircuitBuilder::prover(builder, break_points.unwrap()),
     };
     end_timer!(start0);
     circuit
@@ -124,7 +123,7 @@ fn test_secp256k1_ecdsa() {
     )
     .unwrap();
 
-    let circuit = random_ecdsa_circuit(params, CircuitBuilderStage::Mock, None);
+    let circuit = random_ecdsa_circuit(params, CircuitBuilderStage::Mock, None, None);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
@@ -149,7 +148,7 @@ fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
         let params = gen_srs(k);
         println!("{bench_params:?}");
 
-        let circuit = random_ecdsa_circuit(bench_params, CircuitBuilderStage::Keygen, None);
+        let circuit = random_ecdsa_circuit(bench_params, CircuitBuilderStage::Keygen, None, None);
 
         let vk_time = start_timer!(|| "Generating vkey");
         let vk = keygen_vk(&params, &circuit)?;
@@ -160,11 +159,16 @@ fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
         end_timer!(pk_time);
 
         let break_points = circuit.0.break_points.take();
+        let config_params = circuit.0.config_params.clone();
         drop(circuit);
         // create a proof
         let proof_time = start_timer!(|| "Proving time");
-        let circuit =
-            random_ecdsa_circuit(bench_params, CircuitBuilderStage::Prover, Some(break_points));
+        let circuit = random_ecdsa_circuit(
+            bench_params,
+            CircuitBuilderStage::Prover,
+            Some(config_params),
+            Some(break_points),
+        );
         let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
         create_proof::<
             KZGCommitmentScheme<Bn256>,

@@ -56,9 +56,9 @@ fn test_multithread_gates() {
     builder.threads[0].extend(new_threads);
 
     // auto-tune circuit
-    builder.config(k, Some(9));
+    let config_params = builder.config(k, Some(9), None);
     // create circuit
-    let circuit = RangeCircuitBuilder::mock(builder);
+    let circuit = RangeCircuitBuilder::mock(builder, config_params);
 
     MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
 }

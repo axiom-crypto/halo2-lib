@@ -159,14 +159,18 @@ proptest! {
 
     #[test]
     fn prop_test_inner_product(inputs in (vec(rand_witness(), 0..=100), vec(rand_witness(), 0..=100)).prop_filter("Input vectors must have equal length", |(a, b)| a.len() == b.len())) {
-        let ground_truth = inner_product_ground_truth(&inputs);
+        let a = inputs.0.iter().map(|x| *x.value()).collect::<Vec<_>>();
+        let b = inputs.1.iter().map(|x| *x.value()).collect::<Vec<_>>();
+        let ground_truth = inner_product_ground_truth(&a, &b);
         let result = flex_gate::test_inner_product(inputs);
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_inner_product_left_last(inputs in (vec(rand_witness(), 1..=100), vec(rand_witness(), 1..=100)).prop_filter("Input vectors must have equal length", |(a, b)| a.len() == b.len())) {
-        let ground_truth = inner_product_left_last_ground_truth(&inputs);
+        let a = inputs.0.iter().map(|x| *x.value()).collect::<Vec<_>>();
+        let b = inputs.1.iter().map(|x| *x.value()).collect::<Vec<_>>();
+        let ground_truth = inner_product_left_last_ground_truth(&a, &b);
         let result = flex_gate::test_inner_product_left_last(inputs);
         prop_assert_eq!(result, ground_truth);
     }

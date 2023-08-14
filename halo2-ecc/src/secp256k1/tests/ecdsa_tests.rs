@@ -12,10 +12,10 @@ use crate::{
     fields::FieldChip,
 };
 use ark_std::{end_timer, start_timer};
+use halo2_base::gates::builder::BaseConfigParams;
 use halo2_base::{
     gates::builder::{
-        set_lookup_bits, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
-        RangeCircuitBuilder,
+        CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints, RangeCircuitBuilder,
     },
     utils::BigPrimeField,
 };
@@ -38,7 +38,6 @@ fn ecdsa_test<F: BigPrimeField>(
     msghash: Fq,
     pk: Secp256k1Affine,
 ) {
-    set_lookup_bits(params.lookup_bits);
     let range = RangeChip::<F>::default(params.lookup_bits);
     let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
     let fq_chip = FqChip::<F>::new(&range, params.limb_bits, params.num_limbs);
@@ -97,6 +96,7 @@ fn ecdsa_circuit(
     pubkey: Secp256k1Affine,
     params: CircuitParams,
     stage: CircuitBuilderStage,
+    config_params: Option<BaseConfigParams>,
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
     let mut builder = match stage {
@@ -107,16 +107,15 @@ fn ecdsa_circuit(
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
     ecdsa_test(builder.main(0), params, r, s, msg_hash, pubkey);
 
+    let config_params = config_params.unwrap_or_else(|| {
+        builder.config(params.degree as usize, Some(20), Some(params.lookup_bits))
+    });
     let circuit = match stage {
-        CircuitBuilderStage::Mock => {
-            builder.config(params.degree as usize, Some(20));
-            RangeCircuitBuilder::mock(builder)
+        CircuitBuilderStage::Mock => RangeCircuitBuilder::mock(builder, config_params),
+        CircuitBuilderStage::Keygen => RangeCircuitBuilder::keygen(builder, config_params),
+        CircuitBuilderStage::Prover => {
+            RangeCircuitBuilder::prover(builder, config_params, break_points.unwrap())
         }
-        CircuitBuilderStage::Keygen => {
-            builder.config(params.degree as usize, Some(20));
-            RangeCircuitBuilder::keygen(builder)
-        }
-        CircuitBuilderStage::Prover => RangeCircuitBuilder::prover(builder, break_points.unwrap()),
     };
     end_timer!(start0);
     circuit
@@ -133,7 +132,8 @@ fn test_ecdsa_msg_hash_zero() {
 
     let (r, s, msg_hash, pubkey) = custom_parameters_ecdsa(random::<u64>(), 0, random::<u64>());
 
-    let circuit = ecdsa_circuit(r, s, msg_hash, pubkey, params, CircuitBuilderStage::Mock, None);
+    let circuit =
+        ecdsa_circuit(r, s, msg_hash, pubkey, params, CircuitBuilderStage::Mock, None, None);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
@@ -148,7 +148,8 @@ fn test_ecdsa_private_key_zero() {
 
     let (r, s, msg_hash, pubkey) = custom_parameters_ecdsa(0, random::<u64>(), random::<u64>());
 
-    let circuit = ecdsa_circuit(r, s, msg_hash, pubkey, params, CircuitBuilderStage::Mock, None);
+    let circuit =
+        ecdsa_circuit(r, s, msg_hash, pubkey, params, CircuitBuilderStage::Mock, None, None);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
@@ -162,7 +163,8 @@ fn test_ecdsa_random_valid_inputs() {
 
     let (r, s, msg_hash, pubkey) = random_parameters_ecdsa();
 
-    let circuit = ecdsa_circuit(r, s, msg_hash, pubkey, params, CircuitBuilderStage::Mock, None);
+    let circuit =
+        ecdsa_circuit(r, s, msg_hash, pubkey, params, CircuitBuilderStage::Mock, None, None);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
@@ -176,7 +178,8 @@ fn test_ecdsa_custom_valid_inputs(sk: u64, msg_hash: u64, k: u64) {
 
     let (r, s, msg_hash, pubkey) = custom_parameters_ecdsa(sk, msg_hash, k);
 
-    let circuit = ecdsa_circuit(r, s, msg_hash, pubkey, params, CircuitBuilderStage::Mock, None);
+    let circuit =
+        ecdsa_circuit(r, s, msg_hash, pubkey, params, CircuitBuilderStage::Mock, None, None);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
@@ -191,6 +194,7 @@ fn test_ecdsa_custom_valid_inputs_negative_s(sk: u64, msg_hash: u64, k: u64) {
     let (r, s, msg_hash, pubkey) = custom_parameters_ecdsa(sk, msg_hash, k);
     let s = -s;
 
-    let circuit = ecdsa_circuit(r, s, msg_hash, pubkey, params, CircuitBuilderStage::Mock, None);
+    let circuit =
+        ecdsa_circuit(r, s, msg_hash, pubkey, params, CircuitBuilderStage::Mock, None, None);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }

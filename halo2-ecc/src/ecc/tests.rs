@@ -8,7 +8,7 @@ use crate::halo2_proofs::{
     halo2curves::bn256::{Fq, Fr, G1Affine, G2Affine, G1, G2},
     plonk::*,
 };
-use halo2_base::gates::builder::{set_lookup_bits, RangeCircuitBuilder};
+use halo2_base::gates::builder::RangeCircuitBuilder;
 use halo2_base::gates::RangeChip;
 use halo2_base::utils::bigint_to_fe;
 use halo2_base::SKIP_FIRST_PASS;
@@ -26,7 +26,6 @@ fn basic_g1_tests<F: BigPrimeField>(
     P: G1Affine,
     Q: G1Affine,
 ) {
-    set_lookup_bits(lookup_bits);
     let range = RangeChip::<F>::default(lookup_bits);
     let fp_chip = FpChip::<F, Fq>::new(&range, limb_bits, num_limbs);
     let chip = EccChip::new(&fp_chip);
@@ -66,10 +65,11 @@ fn test_ecc() {
     let Q = G1Affine::random(OsRng);
 
     let mut builder = GateThreadBuilder::<Fr>::mock();
-    basic_g1_tests(builder.main(0), k - 1, 88, 3, P, Q);
+    let lookup_bits = k - 1;
+    basic_g1_tests(builder.main(0), lookup_bits, 88, 3, P, Q);
 
-    builder.config(k, Some(20));
-    let circuit = RangeCircuitBuilder::mock(builder);
+    let config_params = builder.config(k, Some(20), Some(lookup_bits));
+    let circuit = RangeCircuitBuilder::mock(builder, config_params);
 
     MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
 }
@@ -90,8 +90,8 @@ fn plot_ecc() {
     let mut builder = GateThreadBuilder::<Fr>::keygen();
     basic_g1_tests(builder.main(0), 22, 88, 3, P, Q);
 
-    builder.config(k, Some(10));
-    let circuit = RangeCircuitBuilder::mock(builder);
+    let config_params = builder.config(k, Some(10), Some(22));
+    let circuit = RangeCircuitBuilder::mock(builder, config_params);
 
     halo2_proofs::dev::CircuitLayout::default().render(k, &circuit, &root).unwrap();
 }

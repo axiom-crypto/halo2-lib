@@ -6,7 +6,7 @@ use crate::group::Curve;
 use halo2_base::{
     gates::{
         builder::{
-            set_lookup_bits, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
+            BaseConfigParams, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
             RangeCircuitBuilder,
         },
         RangeChip,
@@ -53,7 +53,6 @@ fn sm_test<F: BigPrimeField>(
     scalar: Fq,
     window_bits: usize,
 ) {
-    set_lookup_bits(params.lookup_bits);
     let range = RangeChip::<F>::default(params.lookup_bits);
     let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
     let fq_chip = FqChip::<F>::new(&range, params.limb_bits, params.num_limbs);
@@ -81,6 +80,7 @@ fn sm_test<F: BigPrimeField>(
 fn sm_circuit(
     params: CircuitParams,
     stage: CircuitBuilderStage,
+    config_params: Option<BaseConfigParams>,
     break_points: Option<MultiPhaseThreadBreakPoints>,
     base: Secp256k1Affine,
     scalar: Fq,
@@ -90,16 +90,14 @@ fn sm_circuit(
 
     sm_test(builder.main(0), params, base, scalar, 4);
 
+    let config_params =
+        config_params.unwrap_or_else(|| builder.config(k, Some(20), Some(params.lookup_bits)));
     match stage {
-        CircuitBuilderStage::Mock => {
-            builder.config(k, Some(20));
-            RangeCircuitBuilder::mock(builder)
+        CircuitBuilderStage::Mock => RangeCircuitBuilder::mock(builder, config_params),
+        CircuitBuilderStage::Keygen => RangeCircuitBuilder::keygen(builder, config_params),
+        CircuitBuilderStage::Prover => {
+            RangeCircuitBuilder::prover(builder, config_params, break_points.unwrap())
         }
-        CircuitBuilderStage::Keygen => {
-            builder.config(k, Some(20));
-            RangeCircuitBuilder::keygen(builder)
-        }
-        CircuitBuilderStage::Prover => RangeCircuitBuilder::prover(builder, break_points.unwrap()),
     }
 }
 
@@ -114,6 +112,7 @@ fn test_secp_sm_random() {
     let circuit = sm_circuit(
         params,
         CircuitBuilderStage::Mock,
+        None,
         None,
         Secp256k1Affine::random(OsRng),
         Fq::random(OsRng),
@@ -133,7 +132,7 @@ fn test_secp_sm_minus_1() {
     let mut s = -Fq::one();
     let mut n = fe_to_biguint(&s);
     loop {
-        let circuit = sm_circuit(params, CircuitBuilderStage::Mock, None, base, s);
+        let circuit = sm_circuit(params, CircuitBuilderStage::Mock, None, None, base, s);
         MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
         if &n % BigUint::from(2usize) == BigUint::from(0usize) {
             break;
@@ -153,10 +152,10 @@ fn test_secp_sm_0_1() {
 
     let base = Secp256k1Affine::random(OsRng);
     let s = Fq::zero();
-    let circuit = sm_circuit(params, CircuitBuilderStage::Mock, None, base, s);
+    let circuit = sm_circuit(params, CircuitBuilderStage::Mock, None, None, base, s);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 
     let s = Fq::one();
-    let circuit = sm_circuit(params, CircuitBuilderStage::Mock, None, base, s);
+    let circuit = sm_circuit(params, CircuitBuilderStage::Mock, None, None, base, s);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }

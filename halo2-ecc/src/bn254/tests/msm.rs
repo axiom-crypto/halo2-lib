@@ -1,9 +1,10 @@
 use crate::ff::{Field, PrimeField};
 use crate::fields::FpStrategy;
+use halo2_base::gates::builder::BaseConfigParams;
 use halo2_base::{
     gates::{
         builder::{
-            set_lookup_bits, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
+            CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
             RangeCircuitBuilder,
         },
         RangeChip,
@@ -39,7 +40,6 @@ fn msm_test(
     scalars: Vec<Fr>,
     window_bits: usize,
 ) {
-    set_lookup_bits(params.lookup_bits);
     let range = RangeChip::<Fr>::default(params.lookup_bits);
     let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
     let ecc_chip = EccChip::new(&fp_chip);
@@ -78,6 +78,7 @@ fn msm_test(
 fn random_msm_circuit(
     params: MSMCircuitParams,
     stage: CircuitBuilderStage,
+    config_params: Option<BaseConfigParams>,
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
     let k = params.degree as usize;
@@ -92,16 +93,14 @@ fn random_msm_circuit(
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
     msm_test(&mut builder, params, bases, scalars, params.window_bits);
 
+    let config_params =
+        config_params.unwrap_or_else(|| builder.config(k, Some(20), Some(params.lookup_bits)));
     let circuit = match stage {
-        CircuitBuilderStage::Mock => {
-            builder.config(k, Some(20));
-            RangeCircuitBuilder::mock(builder)
+        CircuitBuilderStage::Mock => RangeCircuitBuilder::mock(builder, config_params),
+        CircuitBuilderStage::Keygen => RangeCircuitBuilder::keygen(builder, config_params),
+        CircuitBuilderStage::Prover => {
+            RangeCircuitBuilder::prover(builder, config_params, break_points.unwrap())
         }
-        CircuitBuilderStage::Keygen => {
-            builder.config(k, Some(20));
-            RangeCircuitBuilder::keygen(builder)
-        }
-        CircuitBuilderStage::Prover => RangeCircuitBuilder::prover(builder, break_points.unwrap()),
     };
     end_timer!(start0);
     circuit
@@ -115,7 +114,7 @@ fn test_msm() {
     )
     .unwrap();
 
-    let circuit = random_msm_circuit(params, CircuitBuilderStage::Mock, None);
+    let circuit = random_msm_circuit(params, CircuitBuilderStage::Mock, None, None);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
@@ -141,7 +140,7 @@ fn bench_msm() -> Result<(), Box<dyn std::error::Error>> {
         let params = gen_srs(k);
         println!("{bench_params:?}");
 
-        let circuit = random_msm_circuit(bench_params, CircuitBuilderStage::Keygen, None);
+        let circuit = random_msm_circuit(bench_params, CircuitBuilderStage::Keygen, None, None);
 
         let vk_time = start_timer!(|| "Generating vkey");
         let vk = keygen_vk(&params, &circuit)?;
@@ -151,12 +150,17 @@ fn bench_msm() -> Result<(), Box<dyn std::error::Error>> {
         let pk = keygen_pk(&params, vk, &circuit)?;
         end_timer!(pk_time);
 
+        let config_params = circuit.0.config_params.clone();
         let break_points = circuit.0.break_points.take();
         drop(circuit);
         // create a proof
         let proof_time = start_timer!(|| "Proving time");
-        let circuit =
-            random_msm_circuit(bench_params, CircuitBuilderStage::Prover, Some(break_points));
+        let circuit = random_msm_circuit(
+            bench_params,
+            CircuitBuilderStage::Prover,
+            Some(config_params),
+            Some(break_points),
+        );
         let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
         create_proof::<
             KZGCommitmentScheme<Bn256>,

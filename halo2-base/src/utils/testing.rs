@@ -1,7 +1,7 @@
 //! Utilities for testing
 use crate::{
     gates::{
-        builder::{GateThreadBuilder, RangeCircuitBuilder, BASE_CONFIG_PARAMS},
+        builder::{GateThreadBuilder, RangeCircuitBuilder},
         GateChip,
     },
     halo2_proofs::{
@@ -130,10 +130,6 @@ impl BaseTester {
     ) -> R {
         let mut builder = GateThreadBuilder::mock();
         let range = RangeChip::default(self.lookup_bits.unwrap_or(0));
-        BASE_CONFIG_PARAMS.with(|conf| {
-            conf.borrow_mut().k = self.k as usize;
-            conf.borrow_mut().lookup_bits = self.lookup_bits;
-        });
         // run the function, mutating `builder`
         let res = f(&mut builder, &range);
 
@@ -143,16 +139,12 @@ impl BaseTester {
             .iter()
             .map(|t| t.iter().map(|ctx| ctx.cells_to_lookup.len()).sum::<usize>())
             .sum::<usize>();
-        if t_cells_lookup == 0 {
-            BASE_CONFIG_PARAMS.with(|conf| {
-                conf.borrow_mut().lookup_bits = None;
-            })
-        }
+        let lookup_bits = if t_cells_lookup == 0 { None } else { self.lookup_bits };
 
         // configure the circuit shape, 9 blinding rows seems enough
-        builder.config(self.k as usize, Some(9));
+        let config_params = builder.config(self.k as usize, Some(9), lookup_bits);
         // create circuit
-        let circuit = RangeCircuitBuilder::mock(builder);
+        let circuit = RangeCircuitBuilder::mock(builder, config_params);
         if self.expect_satisfied {
             MockProver::run(self.k, &circuit, vec![]).unwrap().assert_satisfied();
         } else {

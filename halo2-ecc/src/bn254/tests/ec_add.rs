@@ -6,7 +6,7 @@ use super::*;
 use crate::fields::{FieldChip, FpStrategy};
 use crate::group::cofactor::CofactorCurveAffine;
 use crate::halo2_proofs::halo2curves::bn256::G2Affine;
-use halo2_base::gates::builder::{set_lookup_bits, GateThreadBuilder, RangeCircuitBuilder};
+use halo2_base::gates::builder::{GateThreadBuilder, RangeCircuitBuilder};
 use halo2_base::gates::RangeChip;
 use halo2_base::utils::fs::gen_srs;
 use halo2_base::utils::BigPrimeField;
@@ -32,7 +32,6 @@ fn g2_add_test<F: BigPrimeField>(
     params: CircuitParams,
     _points: Vec<G2Affine>,
 ) {
-    set_lookup_bits(params.lookup_bits);
     let range = RangeChip::<F>::default(params.lookup_bits);
     let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
     let fp2_chip = Fp2Chip::<F>::new(&fp_chip);
@@ -64,8 +63,8 @@ fn test_ec_add() {
     let mut builder = GateThreadBuilder::<Fr>::mock();
     g2_add_test(builder.main(0), params, points);
 
-    builder.config(k as usize, Some(20));
-    let circuit = RangeCircuitBuilder::mock(builder);
+    let config_params = builder.config(k as usize, Some(20), Some(params.lookup_bits));
+    let circuit = RangeCircuitBuilder::mock(builder, config_params);
     MockProver::run(k, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
@@ -97,8 +96,8 @@ fn bench_ec_add() -> Result<(), Box<dyn std::error::Error>> {
             let points = vec![G2Affine::generator(); bench_params.batch_size];
             let mut builder = GateThreadBuilder::<Fr>::keygen();
             g2_add_test(builder.main(0), bench_params, points);
-            builder.config(k as usize, Some(20));
-            RangeCircuitBuilder::keygen(builder)
+            let cp = builder.config(k as usize, Some(20), Some(bench_params.lookup_bits));
+            RangeCircuitBuilder::keygen(builder, cp)
         };
         end_timer!(start0);
 
@@ -118,8 +117,8 @@ fn bench_ec_add() -> Result<(), Box<dyn std::error::Error>> {
         let proof_circuit = {
             let mut builder = GateThreadBuilder::<Fr>::prover();
             g2_add_test(builder.main(0), bench_params, points);
-            builder.config(k as usize, Some(20));
-            RangeCircuitBuilder::prover(builder, break_points)
+            let cp = builder.config(k as usize, Some(20), Some(bench_params.lookup_bits));
+            RangeCircuitBuilder::prover(builder, cp, break_points)
         };
         let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
         create_proof::<
