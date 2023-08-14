@@ -1,52 +1,56 @@
-use halo2_base::{
-    gates::GateChip, gates::GateInstructions, utils::CurveAffineExt, AssignedValue, Context,
-};
-use poseidon::PoseidonChip;
-
-use crate::bigint::{big_is_equal, ProperCrtUint, ProperUint};
+use crate::bigint::{big_is_equal, ProperCrtUint};
 use crate::fields::{fp::FpChip, FieldChip, PrimeField};
+use halo2_base::{gates::GateInstructions, utils::CurveAffineExt, AssignedValue, Context};
 
 use super::{fixed_base, scalar_multiply, EcPoint, EccChip};
 
-const T: usize = 3;
-const RATE: usize = 2;
-const R_F: usize = 8;
-const R_P: usize = 57;
-
 // CF is the coordinate field of GA
 // SF is the scalar field of GA
-// p = coordinate field modulus
+// p = base field modulus
 // n = scalar field modulus
-// Uses poseidon hash function for hashing H(r || M)
 /// `pubkey` should not be the identity point
+/// follow spec in https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
 pub fn schnorr_verify_no_pubkey_check<F: PrimeField, CF: PrimeField, SF: PrimeField, GA>(
     chip: &EccChip<F, FpChip<F, CF>>,
     ctx: &mut Context<F>,
     pubkey: EcPoint<F, <FpChip<F, CF> as FieldChip<F>>::FieldPoint>,
-    s: ProperCrtUint<F>,
-    e: ProperCrtUint<F>,
-    msg: ProperCrtUint<F>,
+    r: ProperCrtUint<F>,       // int(sig[0:32]); fail if r ≥ p.
+    s: ProperCrtUint<F>,       // int(sig[32:64]); fail if s ≥ n
+    msgHash: ProperCrtUint<F>, // int(hashBIP0340/challenge(bytes(r) || bytes(P) || m)) mod n
     var_window_bits: usize,
     fixed_window_bits: usize,
 ) -> AssignedValue<F>
 where
     GA: CurveAffineExt<Base = CF, ScalarExt = SF>,
 {
-    // Following https://en.wikipedia.org/wiki/Schnorr_signature
     let base_chip = chip.field_chip;
     let scalar_chip =
         FpChip::<F, SF>::new(base_chip.range, base_chip.limb_bits, base_chip.num_limbs);
-    // create pseidon chip with default parameter
-    let mut poseidon_chip = PoseidonChip::<F, T, RATE>::new(ctx, R_F, R_P).unwrap();
+    // // create pseidon chip with default parameter
+    // let mut poseidon_chip = PoseidonChip::<F, T, RATE>::new(ctx, R_F, R_P).unwrap();
     // create basic gate for arithemtic operations on F
-    let gate = GateChip::<F>::default();
-
-    // check r,s are in [1, n - 1]
+    // check r < p
+    let r_valid = base_chip.is_soft_nonzero(ctx, &r);
+    // check s < n
     let s_valid = scalar_chip.is_soft_nonzero(ctx, &s);
-    let e_valid = scalar_chip.is_soft_nonzero(ctx, &e);
+
+    // compute e = int(hashBIP0340/challenge(bytes(r) || bytes(P) || m)) mod n
+    // let mut hash_input = r.limbs().to_vec();
+    // hash_input.extend(pubkey.x.limbs().to_vec());
+    // hash_input.extend(msg.limbs().to_vec());
+    // poseidon_chip.update(&hash_input);
+    // // how to compute e mod n correctly?
+    // let e: AssignedValue<F> = poseidon_chip.squeeze(ctx, &gate).unwrap();
+    // let e_biguint = fe_to_biguint(e.value());
+    // let e = ProperUint(vec![e]);
+    // let e: ProperCrtUint<F> =
+    //     e.into_crt(ctx, &gate, e_biguint, &scalar_chip.limb_bases, scalar_chip.limb_bits);
+
+    // check e < n
+    let e_valid = scalar_chip.is_soft_nonzero(ctx, &msgHash);
 
     // compute s * G and e * pubkey
-    let u1_mul = fixed_base::scalar_multiply(
+    let s_G = fixed_base::scalar_multiply(
         base_chip,
         ctx,
         &GA::generator(),
@@ -54,31 +58,35 @@ where
         base_chip.limb_bits,
         fixed_window_bits,
     );
-    let u2_mul = scalar_multiply::<_, _, GA>(
+    let e_P = scalar_multiply::<_, _, GA>(
         base_chip,
         ctx,
         pubkey,
-        e.limbs().to_vec(),
+        msgHash.limbs().to_vec(),
         base_chip.limb_bits,
         var_window_bits,
     );
 
-    // compute (x1, y1) = u1 * G + u2 * pubkey and check (r mod n) == x1 as integers
-    // because it is possible for u1 * G == u2 * pubkey, we must use `EccChip::sum`
-    let sum = chip.sum::<GA>(ctx, [u1_mul, u2_mul]);
-    // WARNING: For optimization reasons, does not reduce x1 mod n, which is
-    //          invalid unless p is very close to n in size.
-    // enforce x1 < n
-    let x1 = scalar_chip.enforce_less_than(ctx, sum.x);
-    // compute H(r.x || M)
-    let mut hash_input = x1.inner().limbs().to_vec();
-    hash_input.extend(msg.limbs().to_vec());
-    poseidon_chip.update(&hash_input);
-    let hash = poseidon_chip.squeeze(ctx, &gate).unwrap();
-    let equal_check = big_is_equal::assign(base_chip.gate(), ctx, ProperUint(vec![hash]), e);
+    // check s_G.x != e_P.x
+    let x_eq = base_chip.is_equal(ctx, &s_G.x, &e_P.x);
+    let x_neq = base_chip.gate().not(ctx, x_eq);
 
-    // check (s in [1, n - 1]) and (e in [1, n - 1]) and H((s * G + e * pubkey).x || M) == e
-    let res1 = base_chip.gate().and(ctx, s_valid, e_valid);
-    let res2 = base_chip.gate().and(ctx, res1, equal_check);
-    res2
+    // R = s⋅G - e⋅P
+    let R = chip.sub_unequal(ctx, s_G, e_P, true);
+
+    // how to check if R is at inifinity? infinity means (0, 0)?
+    let is_R_infinity: AssignedValue<F> = base_chip.is_zero(ctx, &R.y);
+    let is_R_not_infinity: AssignedValue<F> = base_chip.gate().not(ctx, is_R_infinity);
+
+    let R_x = scalar_chip.enforce_less_than(ctx, R.x);
+
+    let equal_check = big_is_equal::assign(base_chip.gate(), ctx, R_x.0, r);
+
+    let res1 = base_chip.gate().and(ctx, r_valid, s_valid);
+    let res2 = base_chip.gate().and(ctx, res1, x_neq);
+    let res3 = base_chip.gate().and(ctx, res2, equal_check);
+    let res4: AssignedValue<F> = base_chip.gate().and(ctx, res3, e_valid);
+    let res5: AssignedValue<F> = base_chip.gate().and(ctx, res4, is_R_not_infinity);
+
+    res5
 }
