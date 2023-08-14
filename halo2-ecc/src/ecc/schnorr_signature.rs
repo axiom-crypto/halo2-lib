@@ -26,26 +26,11 @@ where
     let base_chip = chip.field_chip;
     let scalar_chip =
         FpChip::<F, SF>::new(base_chip.range, base_chip.limb_bits, base_chip.num_limbs);
-    // // create pseidon chip with default parameter
-    // let mut poseidon_chip = PoseidonChip::<F, T, RATE>::new(ctx, R_F, R_P).unwrap();
-    // create basic gate for arithemtic operations on F
+
     // check r < p
     let r_valid = base_chip.is_soft_nonzero(ctx, &r);
     // check s < n
     let s_valid = scalar_chip.is_soft_nonzero(ctx, &s);
-
-    // compute e = int(hashBIP0340/challenge(bytes(r) || bytes(P) || m)) mod n
-    // let mut hash_input = r.limbs().to_vec();
-    // hash_input.extend(pubkey.x.limbs().to_vec());
-    // hash_input.extend(msg.limbs().to_vec());
-    // poseidon_chip.update(&hash_input);
-    // // how to compute e mod n correctly?
-    // let e: AssignedValue<F> = poseidon_chip.squeeze(ctx, &gate).unwrap();
-    // let e_biguint = fe_to_biguint(e.value());
-    // let e = ProperUint(vec![e]);
-    // let e: ProperCrtUint<F> =
-    //     e.into_crt(ctx, &gate, e_biguint, &scalar_chip.limb_bases, scalar_chip.limb_bits);
-
     // check e < n
     let e_valid = scalar_chip.is_soft_nonzero(ctx, &msgHash);
 
