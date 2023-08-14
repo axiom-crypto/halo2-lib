@@ -646,7 +646,7 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
     }
 
     fn configure(_: &mut ConstraintSystem<F>) -> Self::Config {
-        unimplemented!("You must use configure_with_params");
+        unreachable!("You must use configure_with_params");
     }
 
     /// Performs the actual computation on the circuit (e.g., witness generation), populating the lookup table and filling in all the advice values for a particular proof.
@@ -778,7 +778,7 @@ impl<F: ScalarField> Circuit<F> for RangeWithInstanceCircuitBuilder<F> {
     }
 
     fn configure(_: &mut ConstraintSystem<F>) -> Self::Config {
-        unimplemented!("You must use configure_with_params")
+        unreachable!("You must use configure_with_params")
     }
 
     fn synthesize(
