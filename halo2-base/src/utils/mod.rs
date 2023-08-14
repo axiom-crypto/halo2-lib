@@ -521,7 +521,10 @@ pub mod fs {
 mod tests {
     use crate::halo2_proofs::halo2curves::bn256::Fr;
     use num_bigint::RandomBits;
-    use rand::{rngs::OsRng, Rng};
+    use rand::{
+        rngs::{OsRng, StdRng},
+        Rng, SeedableRng,
+    };
     use std::ops::Shl;
 
     use super::*;
@@ -596,7 +599,7 @@ mod tests {
 
     #[test]
     fn test_get_lower_32() {
-        let mut rng = OsRng;
+        let mut rng = StdRng::seed_from_u64(0);
         for _ in 0..10_000usize {
             let e: u32 = rng.gen_range(0..u32::MAX);
             assert_eq!(Fr::from(e as u64).get_lower_32(), e);
@@ -606,7 +609,7 @@ mod tests {
 
     #[test]
     fn test_get_lower_64() {
-        let mut rng = OsRng;
+        let mut rng = StdRng::seed_from_u64(0);
         for _ in 0..10_000usize {
             let e: u64 = rng.gen_range(0..u64::MAX);
             assert_eq!(Fr::from(e).get_lower_64(), e);

@@ -593,6 +593,24 @@ impl<F: ScalarField> GateCircuitBuilder<F> {
 pub struct RangeCircuitBuilder<F: ScalarField>(pub GateCircuitBuilder<F>);
 
 impl<F: ScalarField> RangeCircuitBuilder<F> {
+    /// Convenience function to create a new [RangeCircuitBuilder] with a given [CircuitBuilderStage].
+    pub fn from_stage(
+        stage: CircuitBuilderStage,
+        builder: GateThreadBuilder<F>,
+        config_params: BaseConfigParams,
+        break_points: Option<MultiPhaseThreadBreakPoints>,
+    ) -> Self {
+        match stage {
+            CircuitBuilderStage::Keygen => Self::keygen(builder, config_params),
+            CircuitBuilderStage::Mock => Self::mock(builder, config_params),
+            CircuitBuilderStage::Prover => Self::prover(
+                builder,
+                config_params,
+                break_points.expect("break points must be pre-calculated for prover"),
+            ),
+        }
+    }
+
     /// Creates an instance of the [RangeCircuitBuilder] and executes in keygen mode.
     pub fn keygen(builder: GateThreadBuilder<F>, config_params: BaseConfigParams) -> Self {
         Self(GateCircuitBuilder::keygen(builder, config_params))
@@ -678,6 +696,20 @@ pub struct RangeWithInstanceCircuitBuilder<F: ScalarField> {
 }
 
 impl<F: ScalarField> RangeWithInstanceCircuitBuilder<F> {
+    /// Convenience function to create a new [RangeWithInstanceCircuitBuilder] with a given [CircuitBuilderStage].
+    pub fn from_stage(
+        stage: CircuitBuilderStage,
+        builder: GateThreadBuilder<F>,
+        config_params: BaseConfigParams,
+        break_points: Option<MultiPhaseThreadBreakPoints>,
+        assigned_instances: Vec<AssignedValue<F>>,
+    ) -> Self {
+        Self {
+            circuit: RangeCircuitBuilder::from_stage(stage, builder, config_params, break_points),
+            assigned_instances,
+        }
+    }
+
     /// See [`RangeCircuitBuilder::keygen`]
     pub fn keygen(
         builder: GateThreadBuilder<F>,

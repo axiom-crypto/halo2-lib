@@ -45,7 +45,7 @@ impl<F: ScalarField, Fp> From<Reduced<ProperCrtUint<F>, Fp>> for ProperCrtUint<F
     }
 }
 
-// `Fp` always needs to be `BigBigPrimeField`, we may later want support for `F` being just `ScalarField` but for optimization reasons we'll assume it's also `BigBigPrimeField` for now
+// `Fp` always needs to be `BigPrimeField`, we may later want support for `F` being just `ScalarField` but for optimization reasons we'll assume it's also `BigPrimeField` for now
 
 #[derive(Clone, Debug)]
 pub struct FpChip<'range, F: BigPrimeField, Fp: BigPrimeField> {
