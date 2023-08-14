@@ -138,7 +138,6 @@ impl<F: ScalarField> GateThreadBuilder<F> {
     ///
     /// * `k`: The number of in the circuit (i.e. numeber of rows = 2<sup>k</sup>)
     /// * `minimum_rows`: The minimum number of rows in the circuit that cannot be used for witness assignments and contain random `blinding factors` to ensure zk property, defaults to 0.
-    /// * `lookup_bits`: (Optional) Create a lookup table with values [0, 2<sup>lookup_bits</sup>) for range checks.
     pub fn config(&self, k: usize, minimum_rows: Option<usize>) -> BaseConfigParams {
         let max_rows = (1 << k) - minimum_rows.unwrap_or(0);
         let total_advice_per_phase = self
