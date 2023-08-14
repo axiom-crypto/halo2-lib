@@ -425,8 +425,8 @@ impl<F: ScalarField> Context<F> {
     /// The `MockProver` will print out the row, column where it fails, so it serves as a debugging "break point"
     /// so you can add to your code to search for where the actual constraint failure occurs.
     pub fn debug_assert_false(&mut self) {
-        let three = self.load_constant(F::from(3));
-        let four = self.load_constant(F::from(4));
+        let three = self.load_witness(F::from(3));
+        let four = self.load_witness(F::from(4));
         self.constrain_equal(&three, &four);
     }
 }
