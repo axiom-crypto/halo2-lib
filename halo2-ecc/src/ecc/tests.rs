@@ -68,7 +68,8 @@ fn test_ecc() {
     let lookup_bits = k - 1;
     basic_g1_tests(builder.main(0), lookup_bits, 88, 3, P, Q);
 
-    let config_params = builder.config(k, Some(20), Some(lookup_bits));
+    let mut config_params = builder.config(k, Some(20));
+    config_params.lookup_bits = Some(lookup_bits);
     let circuit = RangeCircuitBuilder::mock(builder, config_params);
 
     MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
@@ -90,7 +91,8 @@ fn plot_ecc() {
     let mut builder = GateThreadBuilder::<Fr>::keygen();
     basic_g1_tests(builder.main(0), 22, 88, 3, P, Q);
 
-    let config_params = builder.config(k, Some(10), Some(22));
+    let mut config_params = builder.config(k, Some(10));
+    config_params.lookup_bits = Some(22);
     let circuit = RangeCircuitBuilder::mock(builder, config_params);
 
     halo2_proofs::dev::CircuitLayout::default().render(k, &circuit, &root).unwrap();

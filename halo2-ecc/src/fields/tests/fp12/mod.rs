@@ -45,7 +45,8 @@ fn test_fp12() {
     let lookup_bits = k - 1;
     fp12_mul_test(builder.main(0), lookup_bits, 88, 3, a, b);
 
-    let config_params = builder.config(k, Some(20), Some(lookup_bits));
+    let mut config_params = builder.config(k, Some(20));
+    config_params.lookup_bits = Some(lookup_bits);
     let circuit = RangeCircuitBuilder::mock(builder, config_params);
 
     MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();

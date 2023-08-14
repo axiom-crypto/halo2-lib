@@ -30,7 +30,8 @@ fn fp_chip_test(
     let mut builder = GateThreadBuilder::mock();
     f(builder.main(0), &chip);
 
-    let config_params = builder.config(k, Some(10), Some(lookup_bits));
+    let mut config_params = builder.config(k, Some(10));
+    config_params.lookup_bits = Some(lookup_bits);
     let circuit = RangeCircuitBuilder::mock(builder, config_params);
     MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
 }

@@ -142,7 +142,8 @@ impl BaseTester {
         let lookup_bits = if t_cells_lookup == 0 { None } else { self.lookup_bits };
 
         // configure the circuit shape, 9 blinding rows seems enough
-        let config_params = builder.config(self.k as usize, Some(9), lookup_bits);
+        let mut config_params = builder.config(self.k as usize, Some(9));
+        config_params.lookup_bits = lookup_bits;
         // create circuit
         let circuit = RangeCircuitBuilder::mock(builder, config_params);
         if self.expect_satisfied {

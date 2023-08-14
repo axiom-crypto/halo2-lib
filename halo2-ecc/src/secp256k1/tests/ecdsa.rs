@@ -101,9 +101,9 @@ fn random_ecdsa_circuit(
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
     ecdsa_test(builder.main(0), params, r, s, msg_hash, pubkey);
 
-    let config_params = config_params.unwrap_or_else(|| {
-        builder.config(params.degree as usize, Some(20), Some(params.lookup_bits))
-    });
+    let mut config_params =
+        config_params.unwrap_or_else(|| builder.config(params.degree as usize, Some(20)));
+    config_params.lookup_bits = Some(params.lookup_bits);
     let circuit = match stage {
         CircuitBuilderStage::Mock => RangeCircuitBuilder::mock(builder, config_params),
         CircuitBuilderStage::Keygen => RangeCircuitBuilder::keygen(builder, config_params),

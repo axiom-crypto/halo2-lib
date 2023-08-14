@@ -90,8 +90,8 @@ fn sm_circuit(
 
     sm_test(builder.main(0), params, base, scalar, 4);
 
-    let config_params =
-        config_params.unwrap_or_else(|| builder.config(k, Some(20), Some(params.lookup_bits)));
+    let mut config_params = config_params.unwrap_or_else(|| builder.config(k, Some(20)));
+    config_params.lookup_bits = Some(params.lookup_bits);
     match stage {
         CircuitBuilderStage::Mock => RangeCircuitBuilder::mock(builder, config_params),
         CircuitBuilderStage::Keygen => RangeCircuitBuilder::keygen(builder, config_params),

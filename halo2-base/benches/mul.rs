@@ -36,7 +36,7 @@ fn bench(c: &mut Criterion) {
     // create circuit for keygen
     let mut builder = GateThreadBuilder::new(false);
     mul_bench(builder.main(0), [Fr::zero(); 2]);
-    let config_params = builder.config(K as usize, Some(9), None);
+    let config_params = builder.config(K as usize, Some(9));
     let circuit = RangeCircuitBuilder::keygen(builder, config_params.clone());
 
     let params = ParamsKZG::<Bn256>::setup(K, OsRng);

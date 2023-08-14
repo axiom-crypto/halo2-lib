@@ -37,7 +37,7 @@ fn main() {
     // create circuit for keygen
     let mut builder = GateThreadBuilder::new(false);
     inner_prod_bench(builder.main(0), vec![Fr::zero(); 5], vec![Fr::zero(); 5]);
-    let config_params = builder.config(k as usize, Some(20), None);
+    let config_params = builder.config(k as usize, Some(20));
     let circuit = RangeCircuitBuilder::mock(builder, config_params.clone());
 
     // check the circuit is correct just in case

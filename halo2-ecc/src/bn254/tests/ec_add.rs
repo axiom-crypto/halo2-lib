@@ -63,7 +63,8 @@ fn test_ec_add() {
     let mut builder = GateThreadBuilder::<Fr>::mock();
     g2_add_test(builder.main(0), params, points);
 
-    let config_params = builder.config(k as usize, Some(20), Some(params.lookup_bits));
+    let mut config_params = builder.config(k as usize, Some(20));
+    config_params.lookup_bits = Some(params.lookup_bits);
     let circuit = RangeCircuitBuilder::mock(builder, config_params);
     MockProver::run(k, &circuit, vec![]).unwrap().assert_satisfied();
 }
@@ -96,7 +97,8 @@ fn bench_ec_add() -> Result<(), Box<dyn std::error::Error>> {
             let points = vec![G2Affine::generator(); bench_params.batch_size];
             let mut builder = GateThreadBuilder::<Fr>::keygen();
             g2_add_test(builder.main(0), bench_params, points);
-            let cp = builder.config(k as usize, Some(20), Some(bench_params.lookup_bits));
+            let mut cp = builder.config(k as usize, Some(20));
+            cp.lookup_bits = Some(bench_params.lookup_bits);
             RangeCircuitBuilder::keygen(builder, cp)
         };
         end_timer!(start0);
@@ -108,6 +110,7 @@ fn bench_ec_add() -> Result<(), Box<dyn std::error::Error>> {
         let pk = keygen_pk(&params, vk, &circuit)?;
         end_timer!(pk_time);
 
+        let cp = circuit.0.config_params.clone();
         let break_points = circuit.0.break_points.take();
         drop(circuit);
 
@@ -117,7 +120,6 @@ fn bench_ec_add() -> Result<(), Box<dyn std::error::Error>> {
         let proof_circuit = {
             let mut builder = GateThreadBuilder::<Fr>::prover();
             g2_add_test(builder.main(0), bench_params, points);
-            let cp = builder.config(k as usize, Some(20), Some(bench_params.lookup_bits));
             RangeCircuitBuilder::prover(builder, cp, break_points)
         };
         let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);

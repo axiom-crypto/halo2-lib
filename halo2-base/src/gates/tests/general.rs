@@ -56,7 +56,7 @@ fn test_multithread_gates() {
     builder.threads[0].extend(new_threads);
 
     // auto-tune circuit
-    let config_params = builder.config(k, Some(9), None);
+    let config_params = builder.config(k, Some(9));
     // create circuit
     let circuit = RangeCircuitBuilder::mock(builder, config_params);
 

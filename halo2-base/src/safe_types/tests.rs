@@ -39,8 +39,9 @@ fn test_raw_bytes_to_gen<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
     // get the offsets of the safe value cells for later 'pranking'
     let safe_value_offsets =
         safe_value.value().iter().map(|v| v.cell.unwrap().offset).collect::<Vec<_>>();
-    // set env vars
-    let config_params = builder.config(k as usize, Some(9), Some(lookup_bits));
+
+    let mut config_params = builder.config(k as usize, Some(9));
+    config_params.lookup_bits = Some(lookup_bits);
     let circuit = RangeCircuitBuilder::keygen(builder, config_params.clone());
 
     let params = ParamsKZG::setup(k, OsRng);

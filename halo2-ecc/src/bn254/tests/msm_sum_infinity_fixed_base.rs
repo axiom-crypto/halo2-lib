@@ -70,8 +70,8 @@ fn custom_msm_circuit(
 
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
     msm_test(&mut builder, params, bases, scalars, params.window_bits);
-    let config_params =
-        config_params.unwrap_or_else(|| builder.config(k, Some(20), Some(params.lookup_bits)));
+    let mut config_params = config_params.unwrap_or_else(|| builder.config(k, Some(20)));
+    config_params.lookup_bits = Some(params.lookup_bits);
     let circuit = match stage {
         CircuitBuilderStage::Mock => RangeCircuitBuilder::mock(builder, config_params),
         CircuitBuilderStage::Keygen => RangeCircuitBuilder::keygen(builder, config_params),
