@@ -1,6 +1,7 @@
 use crate::bigint::{big_less_than, CRTInteger};
 use crate::fields::PrimeField;
 use crate::fields::{fp::FpConfig, FieldChip};
+use halo2_base::QuantumCell;
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
     utils::{modulus, CurveAffineExt},
@@ -64,13 +65,15 @@ where
         var_window_bits,
     );
 
-    // check u1 * G and u2 * pubkey are not negatives and not equal
-    //     TODO: Technically they could be equal for a valid signature, but this happens with vanishing probability
-    //           for an ECDSA signature constructed in a standard way
+    // check u1 * G != -(u2 * pubkey) but allow u1 * G == u2 * pubkey
+    // check (u1 * G).x != (u2 * pubkey).x or (u1 * G).y == (u2 * pubkey).y
     // coordinates of u1_mul and u2_mul are in proper bigint form, and lie in but are not constrained to [0, n)
     // we therefore need hard inequality here
-    let u1_u2_x_eq = base_chip.is_equal(ctx, &u1_mul.x, &u2_mul.x);
-    let u1_u2_not_neg = base_chip.range.gate().not(ctx, Existing(u1_u2_x_eq));
+    let x_eq = base_chip.is_equal(ctx, &u1_mul.x, &u2_mul.x);
+    let x_neq = base_chip.gate().not(ctx, QuantumCell::Existing(x_eq));
+    let y_eq = base_chip.is_equal(ctx, &u1_mul.y, &u2_mul.y);
+    let u1g_u2pk_not_neg =
+        base_chip.gate().or(ctx, QuantumCell::Existing(x_neq), QuantumCell::Existing(y_eq));
 
     // compute (x1, y1) = u1 * G + u2 * pubkey and check (r mod n) == x1 as integers
     // WARNING: For optimization reasons, does not reduce x1 mod n, which is
@@ -102,7 +105,7 @@ where
     let res1 = base_chip.range.gate().and(ctx, Existing(r_valid), Existing(s_valid));
     let res2 = base_chip.range.gate().and(ctx, Existing(res1), Existing(u1_small));
     let res3 = base_chip.range.gate().and(ctx, Existing(res2), Existing(u2_small));
-    let res4 = base_chip.range.gate().and(ctx, Existing(res3), Existing(u1_u2_not_neg));
+    let res4 = base_chip.range.gate().and(ctx, Existing(res3), Existing(u1g_u2pk_not_neg));
     let res5 = base_chip.range.gate().and(ctx, Existing(res4), Existing(equal_check));
     res5
 }
