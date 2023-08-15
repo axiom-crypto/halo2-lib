@@ -20,7 +20,7 @@ use halo2_base::halo2_proofs::{circuit::AssignedCell, plonk::Assigned};
 use itertools::Itertools;
 use log::{debug, info};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use std::{cell::RefCell, marker::PhantomData};
+use std::marker::PhantomData;
 
 #[cfg(test)]
 mod tests;
@@ -30,10 +30,6 @@ const ABSORB_LOOKUP_RANGE: usize = 3;
 const THETA_C_LOOKUP_RANGE: usize = 6;
 const RHO_PI_LOOKUP_RANGE: usize = 4;
 const CHI_BASE_LOOKUP_RANGE: usize = 5;
-
-thread_local! {
-    pub static KECCAK_CONFIG_PARAMS: RefCell<KeccakConfigParams> = RefCell::new(Default::default());
-}
 
 fn get_num_bits_per_absorb_lookup(k: u32) -> usize {
     get_num_bits_per_lookup(ABSORB_LOOKUP_RANGE, k)
