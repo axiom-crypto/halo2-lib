@@ -3,15 +3,14 @@ use std::{
     io::{BufRead, BufReader},
 };
 
-use crate::fields::{FpStrategy, PrimeField};
+use crate::ff::{Field, PrimeField};
+use crate::fields::FpStrategy;
 
 use super::*;
-#[allow(unused_imports)]
-use ff::PrimeField as _;
 use halo2_base::{
     gates::{
         builder::{
-            set_lookup_bits, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
+            BaseConfigParams, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
             RangeCircuitBuilder,
         },
         RangeChip,
@@ -43,7 +42,6 @@ fn fixed_base_msm_test(
     bases: Vec<G1Affine>,
     scalars: Vec<Fr>,
 ) {
-    set_lookup_bits(params.lookup_bits);
     let range = RangeChip::<Fr>::default(params.lookup_bits);
     let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
     let ecc_chip = EccChip::new(&fp_chip);
@@ -71,6 +69,7 @@ fn random_fixed_base_msm_circuit(
     params: FixedMSMCircuitParams,
     bases: Vec<G1Affine>, // bases are fixed in vkey so don't randomly generate
     stage: CircuitBuilderStage,
+    config_params: Option<BaseConfigParams>,
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
     let k = params.degree as usize;
@@ -84,16 +83,14 @@ fn random_fixed_base_msm_circuit(
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
     fixed_base_msm_test(&mut builder, params, bases, scalars);
 
+    let mut config_params = config_params.unwrap_or_else(|| builder.config(k, Some(20)));
+    config_params.lookup_bits = Some(params.lookup_bits);
     let circuit = match stage {
-        CircuitBuilderStage::Mock => {
-            builder.config(k, Some(20));
-            RangeCircuitBuilder::mock(builder)
+        CircuitBuilderStage::Mock => RangeCircuitBuilder::mock(builder, config_params),
+        CircuitBuilderStage::Keygen => RangeCircuitBuilder::keygen(builder, config_params),
+        CircuitBuilderStage::Prover => {
+            RangeCircuitBuilder::prover(builder, config_params, break_points.unwrap())
         }
-        CircuitBuilderStage::Keygen => {
-            builder.config(k, Some(20));
-            RangeCircuitBuilder::keygen(builder)
-        }
-        CircuitBuilderStage::Prover => RangeCircuitBuilder::prover(builder, break_points.unwrap()),
     };
     end_timer!(start0);
     circuit
@@ -108,7 +105,8 @@ fn test_fixed_base_msm() {
     .unwrap();
 
     let bases = (0..params.batch_size).map(|_| G1Affine::random(OsRng)).collect_vec();
-    let circuit = random_fixed_base_msm_circuit(params, bases, CircuitBuilderStage::Mock, None);
+    let circuit =
+        random_fixed_base_msm_circuit(params, bases, CircuitBuilderStage::Mock, None, None);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
@@ -124,8 +122,9 @@ fn test_fixed_msm_minus_1() {
     let mut builder = GateThreadBuilder::mock();
     fixed_base_msm_test(&mut builder, params, vec![base], vec![-Fr::one()]);
 
-    builder.config(k, Some(20));
-    let circuit = RangeCircuitBuilder::mock(builder);
+    let mut config_params = builder.config(k, Some(20));
+    config_params.lookup_bits = Some(params.lookup_bits);
+    let circuit = RangeCircuitBuilder::mock(builder, config_params);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
@@ -158,7 +157,9 @@ fn bench_fixed_base_msm() -> Result<(), Box<dyn std::error::Error>> {
             bases.clone(),
             CircuitBuilderStage::Keygen,
             None,
+            None,
         );
+        let cp = circuit.0.config_params.clone();
 
         let vk_time = start_timer!(|| "Generating vkey");
         let vk = keygen_vk(&params, &circuit)?;
@@ -176,6 +177,7 @@ fn bench_fixed_base_msm() -> Result<(), Box<dyn std::error::Error>> {
             bench_params,
             bases,
             CircuitBuilderStage::Prover,
+            Some(cp),
             Some(break_points),
         );
         let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);

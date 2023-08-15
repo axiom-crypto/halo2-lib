@@ -168,7 +168,7 @@ pub fn pack<F: Field>(bits: &[u8]) -> F {
 /// specified bit base
 pub fn pack_with_base<F: Field>(bits: &[u8], base: usize) -> F {
     let base = F::from(base as u64);
-    bits.iter().rev().fold(F::zero(), |acc, &bit| acc * base + F::from(bit as u64))
+    bits.iter().rev().fold(F::ZERO, |acc, &bit| acc * base + F::from(bit as u64))
 }
 
 /// Decodes the bits using the position data found in the part info

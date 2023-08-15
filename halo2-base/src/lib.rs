@@ -1,6 +1,5 @@
 //! Base library to build Halo2 circuits.
 #![feature(generic_const_exprs)]
-#![feature(const_cmp)]
 #![allow(incomplete_features)]
 #![feature(stmt_expr_attributes)]
 #![feature(trait_alias)]
@@ -36,6 +35,7 @@ pub use halo2_proofs;
 #[cfg(feature = "halo2-axiom")]
 pub use halo2_proofs_axiom as halo2_proofs;
 
+use halo2_proofs::halo2curves::ff;
 use halo2_proofs::plonk::Assigned;
 use utils::ScalarField;
 
@@ -126,10 +126,10 @@ impl<F: ScalarField> AssignedValue<F> {
         }
     }
 
-    /// Debug helper function for writing negative tests. This will change the **witness** value of the assigned cell
-    /// to `prank_value`. It does not change any constraints.
-    pub fn debug_prank(&mut self, prank_value: F) {
-        self.value = Assigned::Trivial(prank_value);
+    /// Debug helper function for writing negative tests. This will change the **witness** value in `ctx` corresponding to `self.offset`.
+    /// This assumes that `ctx` is the context that `self` lies in.
+    pub fn debug_prank(&self, ctx: &mut Context<F>, prank_value: F) {
+        ctx.advice[self.cell.unwrap().offset] = Assigned::Trivial(prank_value);
     }
 }
 
@@ -415,7 +415,7 @@ impl<F: ScalarField> Context<F> {
         if let Some(zcell) = &self.zero_cell {
             return *zcell;
         }
-        let zero_cell = self.load_constant(F::zero());
+        let zero_cell = self.load_constant(F::ZERO);
         self.zero_cell = Some(zero_cell);
         zero_cell
     }
@@ -424,8 +424,8 @@ impl<F: ScalarField> Context<F> {
     /// The `MockProver` will print out the row, column where it fails, so it serves as a debugging "break point"
     /// so you can add to your code to search for where the actual constraint failure occurs.
     pub fn debug_assert_false(&mut self) {
-        let one = self.load_constant(F::one());
-        let zero = self.load_zero();
-        self.constrain_equal(&one, &zero);
+        let three = self.load_witness(F::from(3));
+        let four = self.load_witness(F::from(4));
+        self.constrain_equal(&three, &four);
     }
 }

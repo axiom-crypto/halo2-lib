@@ -4,6 +4,7 @@ members = [
     "halo2-ecc",
     "hashes/zkevm-keccak",
 ]
+resolver = "2"
 
 [profile.dev]
 opt-level = 3
@@ -38,8 +39,3 @@ incremental = false
 [profile.flamegraph]
 inherits = "release"
 debug = true
-
-# patch so snark-verifier uses this crate's halo2-base 
-[patch."https://github.com/axiom-crypto/halo2-lib.git"]
-halo2-base = { path = "./halo2-base" }
-halo2-ecc = { path = "./halo2-ecc" }

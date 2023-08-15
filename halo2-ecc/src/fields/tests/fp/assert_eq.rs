@@ -1,7 +1,9 @@
-use ff::Field;
+use crate::ff::Field;
+use crate::{bn254::FpChip, fields::FieldChip};
+
 use halo2_base::{
     gates::{
-        builder::{set_lookup_bits, GateThreadBuilder, RangeCircuitBuilder},
+        builder::{GateThreadBuilder, RangeCircuitBuilder},
         RangeChip,
     },
     halo2_proofs::{
@@ -10,14 +12,11 @@ use halo2_base::{
     },
     utils::testing::{check_proof, gen_proof},
 };
-
-use crate::{bn254::FpChip, fields::FieldChip};
 use rand::thread_rng;
 
 // soundness checks for `` function
 fn test_fp_assert_eq_gen(k: u32, lookup_bits: usize, num_tries: usize) {
     let mut rng = thread_rng();
-    set_lookup_bits(lookup_bits);
 
     // first create proving and verifying key
     let mut builder = GateThreadBuilder::keygen();
@@ -28,9 +27,9 @@ fn test_fp_assert_eq_gen(k: u32, lookup_bits: usize, num_tries: usize) {
     let a = chip.load_private(ctx, Fq::zero());
     let b = chip.load_private(ctx, Fq::zero());
     chip.assert_equal(ctx, &a, &b);
-    // set env vars
-    builder.config(k as usize, Some(9));
-    let circuit = RangeCircuitBuilder::keygen(builder);
+    let mut config_params = builder.config(k as usize, Some(9));
+    config_params.lookup_bits = Some(lookup_bits);
+    let circuit = RangeCircuitBuilder::keygen(builder, config_params.clone());
 
     let params = ParamsKZG::setup(k, &mut rng);
     // generate proving key
@@ -48,7 +47,7 @@ fn test_fp_assert_eq_gen(k: u32, lookup_bits: usize, num_tries: usize) {
         let ctx = builder.main(0);
         let [a, b] = [a, b].map(|x| chip.load_private(ctx, x));
         chip.assert_equal(ctx, &a, &b);
-        let circuit = RangeCircuitBuilder::prover(builder, vec![vec![]]); // no break points
+        let circuit = RangeCircuitBuilder::prover(builder, config_params.clone(), vec![vec![]]); // no break points
         gen_proof(&params, &pk, circuit)
     };
 

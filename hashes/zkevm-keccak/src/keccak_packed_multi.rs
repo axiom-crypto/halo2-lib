@@ -8,8 +8,8 @@ use super::util::{
     NUM_WORDS_TO_ABSORB, NUM_WORDS_TO_SQUEEZE, RATE, RATE_IN_BITS, RHO_MATRIX, ROUND_CST,
 };
 use crate::halo2_proofs::{
-    arithmetic::FieldExt,
     circuit::{Layouter, Region, Value},
+    halo2curves::ff::PrimeField,
     plonk::{
         Advice, Challenge, Column, ConstraintSystem, Error, Expression, Fixed, SecondPhase,
         TableColumn, VirtualCells,
@@ -20,7 +20,7 @@ use halo2_base::halo2_proofs::{circuit::AssignedCell, plonk::Assigned};
 use itertools::Itertools;
 use log::{debug, info};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use std::{cell::RefCell, marker::PhantomData};
+use std::marker::PhantomData;
 
 #[cfg(test)]
 mod tests;
@@ -30,10 +30,6 @@ const ABSORB_LOOKUP_RANGE: usize = 3;
 const THETA_C_LOOKUP_RANGE: usize = 6;
 const RHO_PI_LOOKUP_RANGE: usize = 4;
 const CHI_BASE_LOOKUP_RANGE: usize = 5;
-
-thread_local! {
-    pub static KECCAK_CONFIG_PARAMS: RefCell<KeccakConfigParams> = RefCell::new(Default::default());
-}
 
 fn get_num_bits_per_absorb_lookup(k: u32) -> usize {
     get_num_bits_per_lookup(ABSORB_LOOKUP_RANGE, k)
@@ -67,7 +63,7 @@ pub fn get_num_keccak_f(byte_length: usize) -> usize {
 
 /// AbsorbData
 #[derive(Clone, Default, Debug, PartialEq)]
-pub(crate) struct AbsorbData<F: FieldExt> {
+pub(crate) struct AbsorbData<F: PrimeField> {
     from: F,
     absorb: F,
     result: F,
@@ -75,13 +71,13 @@ pub(crate) struct AbsorbData<F: FieldExt> {
 
 /// SqueezeData
 #[derive(Clone, Default, Debug, PartialEq)]
-pub(crate) struct SqueezeData<F: FieldExt> {
+pub(crate) struct SqueezeData<F: PrimeField> {
     packed: F,
 }
 
 /// KeccakRow
 #[derive(Clone, Debug)]
-pub struct KeccakRow<F: FieldExt> {
+pub struct KeccakRow<F: PrimeField> {
     q_enable: bool,
     // q_enable_row: bool,
     q_round: bool,
@@ -99,7 +95,7 @@ pub struct KeccakRow<F: FieldExt> {
     // hash_rlc: Value<F>,
 }
 
-impl<F: FieldExt> KeccakRow<F> {
+impl<F: PrimeField> KeccakRow<F> {
     pub fn dummy_rows(num_rows: usize) -> Vec<Self> {
         (0..num_rows)
             .map(|idx| KeccakRow {
@@ -110,7 +106,7 @@ impl<F: FieldExt> KeccakRow<F> {
                 q_round_last: false,
                 q_padding: false,
                 q_padding_last: false,
-                round_cst: F::zero(),
+                round_cst: F::ZERO,
                 is_final: false,
                 cell_values: Vec::new(),
             })
@@ -120,7 +116,7 @@ impl<F: FieldExt> KeccakRow<F> {
 
 /// Part
 #[derive(Clone, Debug)]
-pub(crate) struct Part<F: FieldExt> {
+pub(crate) struct Part<F: PrimeField> {
     cell: Cell<F>,
     expr: Expression<F>,
     num_bits: usize,
@@ -128,7 +124,7 @@ pub(crate) struct Part<F: FieldExt> {
 
 /// Part Value
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PartValue<F: FieldExt> {
+pub(crate) struct PartValue<F: PrimeField> {
     value: F,
     rot: i32,
     num_bits: usize,
@@ -139,7 +135,7 @@ pub(crate) struct KeccakRegion<F> {
     pub(crate) rows: Vec<Vec<F>>,
 }
 
-impl<F: FieldExt> KeccakRegion<F> {
+impl<F: PrimeField> KeccakRegion<F> {
     pub(crate) fn new() -> Self {
         Self { rows: Vec::new() }
     }
@@ -150,7 +146,7 @@ impl<F: FieldExt> KeccakRegion<F> {
         }
         let row = &mut self.rows[offset];
         while column >= row.len() {
-            row.push(F::zero());
+            row.push(F::ZERO);
         }
         row[column] = value;
     }
@@ -165,7 +161,7 @@ pub(crate) struct Cell<F> {
     rotation: i32,
 }
 
-impl<F: FieldExt> Cell<F> {
+impl<F: PrimeField> Cell<F> {
     pub(crate) fn new(
         meta: &mut VirtualCells<F>,
         column: Column<Advice>,
@@ -212,13 +208,13 @@ impl<F: FieldExt> Cell<F> {
     }
 }
 
-impl<F: FieldExt> Expr<F> for Cell<F> {
+impl<F: PrimeField> Expr<F> for Cell<F> {
     fn expr(&self) -> Expression<F> {
         self.expression.clone()
     }
 }
 
-impl<F: FieldExt> Expr<F> for &Cell<F> {
+impl<F: PrimeField> Expr<F> for &Cell<F> {
     fn expr(&self) -> Expression<F> {
         self.expression.clone()
     }
@@ -243,7 +239,7 @@ pub(crate) struct CellManager<F> {
     num_unused_cells: usize,
 }
 
-impl<F: FieldExt> CellManager<F> {
+impl<F: PrimeField> CellManager<F> {
     pub(crate) fn new(height: usize) -> Self {
         Self {
             height,
@@ -427,18 +423,18 @@ pub fn assign_fixed_custom<F: Field>(
 
 /// Recombines parts back together
 mod decode {
-    use super::{Expr, FieldExt, Part, PartValue};
+    use super::{Expr, Part, PartValue, PrimeField};
     use crate::halo2_proofs::plonk::Expression;
     use crate::util::BIT_COUNT;
 
-    pub(crate) fn expr<F: FieldExt>(parts: Vec<Part<F>>) -> Expression<F> {
+    pub(crate) fn expr<F: PrimeField>(parts: Vec<Part<F>>) -> Expression<F> {
         parts.iter().rev().fold(0.expr(), |acc, part| {
             acc * F::from(1u64 << (BIT_COUNT * part.num_bits)) + part.expr.clone()
         })
     }
 
-    pub(crate) fn value<F: FieldExt>(parts: Vec<PartValue<F>>) -> F {
-        parts.iter().rev().fold(F::zero(), |acc, part| {
+    pub(crate) fn value<F: PrimeField>(parts: Vec<PartValue<F>>) -> F {
+        parts.iter().rev().fold(F::ZERO, |acc, part| {
             acc * F::from(1u64 << (BIT_COUNT * part.num_bits)) + part.value
         })
     }
@@ -447,14 +443,14 @@ mod decode {
 /// Splits a word into parts
 mod split {
     use super::{
-        decode, BaseConstraintBuilder, CellManager, Expr, Field, FieldExt, KeccakRegion, Part,
-        PartValue,
+        decode, BaseConstraintBuilder, CellManager, Expr, Field, KeccakRegion, Part, PartValue,
+        PrimeField,
     };
     use crate::halo2_proofs::plonk::{ConstraintSystem, Expression};
     use crate::util::{pack, pack_part, unpack, WordParts};
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn expr<F: FieldExt>(
+    pub(crate) fn expr<F: PrimeField>(
         meta: &mut ConstraintSystem<F>,
         cell_manager: &mut CellManager<F>,
         cb: &mut BaseConstraintBuilder<F>,
@@ -519,8 +515,8 @@ mod split {
 // table layout in `output_cells` regardless of rotation.
 mod split_uniform {
     use super::{
-        decode, target_part_sizes, BaseConstraintBuilder, Cell, CellManager, Expr, FieldExt,
-        KeccakRegion, Part, PartValue,
+        decode, target_part_sizes, BaseConstraintBuilder, Cell, CellManager, Expr, KeccakRegion,
+        Part, PartValue, PrimeField,
     };
     use crate::halo2_proofs::plonk::{ConstraintSystem, Expression};
     use crate::util::{
@@ -528,7 +524,7 @@ mod split_uniform {
     };
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn expr<F: FieldExt>(
+    pub(crate) fn expr<F: PrimeField>(
         meta: &mut ConstraintSystem<F>,
         output_cells: &[Cell<F>],
         cell_manager: &mut CellManager<F>,
@@ -688,12 +684,12 @@ mod split_uniform {
 
 // Transform values using a lookup table
 mod transform {
-    use super::{transform_to, CellManager, Field, FieldExt, KeccakRegion, Part, PartValue};
+    use super::{transform_to, CellManager, Field, KeccakRegion, Part, PartValue, PrimeField};
     use crate::halo2_proofs::plonk::{ConstraintSystem, TableColumn};
     use itertools::Itertools;
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn expr<F: FieldExt>(
+    pub(crate) fn expr<F: PrimeField>(
         name: &'static str,
         meta: &mut ConstraintSystem<F>,
         cell_manager: &mut CellManager<F>,
@@ -747,12 +743,12 @@ mod transform {
 
 // Transfroms values to cells
 mod transform_to {
-    use super::{Cell, Expr, Field, FieldExt, KeccakRegion, Part, PartValue};
+    use super::{Cell, Expr, Field, KeccakRegion, Part, PartValue, PrimeField};
     use crate::halo2_proofs::plonk::{ConstraintSystem, TableColumn};
     use crate::util::{pack, to_bytes, unpack};
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn expr<F: FieldExt>(
+    pub(crate) fn expr<F: PrimeField>(
         name: &'static str,
         meta: &mut ConstraintSystem<F>,
         cells: &[Cell<F>],
@@ -1609,19 +1605,19 @@ impl<F: Field> KeccakCircuitConfig<F> {
 
 /// Computes and assigns the input RLC values (but not the output RLC values:
 /// see `multi_keccak_phase1`).
-pub fn keccak_phase1<'v, F: Field>(
+pub fn keccak_phase1<F: Field>(
     region: &mut Region<F>,
     keccak_table: &KeccakTable,
     bytes: &[u8],
     challenge: Value<F>,
-    input_rlcs: &mut Vec<KeccakAssignedValue<'v, F>>,
+    input_rlcs: &mut Vec<KeccakAssignedValue<F>>,
     offset: &mut usize,
     rows_per_round: usize,
 ) {
     let num_chunks = get_num_keccak_f(bytes.len());
 
     let mut byte_idx = 0;
-    let mut data_rlc = Value::known(F::zero());
+    let mut data_rlc = Value::known(F::ZERO);
 
     for _ in 0..num_chunks {
         for round in 0..NUM_ROUNDS + 1 {
@@ -1662,7 +1658,7 @@ pub fn keccak_phase0<F: Field>(
     let num_rows_per_round = parameters.rows_per_round;
 
     let mut bits = into_bits(bytes);
-    let mut s = [[F::zero(); 5]; 5];
+    let mut s = [[F::ZERO; 5]; 5];
     let absorb_positions = get_absorb_positions();
     let num_bytes_in_last_block = bytes.len() % RATE;
     let two = F::from(2u64);
@@ -1679,7 +1675,7 @@ pub fn keccak_phase0<F: Field>(
 
     let mut cell_managers = Vec::with_capacity(NUM_ROUNDS + 1);
     let mut regions = Vec::with_capacity(NUM_ROUNDS + 1);
-    let mut hash_words = [F::zero(); NUM_WORDS_TO_SQUEEZE];
+    let mut hash_words = [F::ZERO; NUM_WORDS_TO_SQUEEZE];
 
     for (idx, chunk) in chunks.enumerate() {
         let is_final_block = idx == num_chunks - 1;
@@ -1784,7 +1780,7 @@ pub fn keccak_phase0<F: Field>(
                     bc.push(bc_norm);
                 }
                 cell_manager.start_region();
-                let mut os = [[F::zero(); 5]; 5];
+                let mut os = [[F::ZERO; 5]; 5];
                 for i in 0..5 {
                     let t = decode::value(bc[(i + 4) % 5].clone())
                         + decode::value(rotate(bc[(i + 1) % 5].clone(), 1, part_size));
@@ -1847,7 +1843,7 @@ pub fn keccak_phase0<F: Field>(
                 // Chi
                 let part_size_base = get_num_bits_per_base_chi_lookup(k);
                 let three_packed = pack::<F>(&vec![3u8; part_size_base]);
-                let mut os = [[F::zero(); 5]; 5];
+                let mut os = [[F::ZERO; 5]; 5];
                 for j in 0..5 {
                     for i in 0..5 {
                         let mut s_parts = Vec::new();
@@ -1988,7 +1984,7 @@ pub fn multi_keccak_phase1<'a, 'v, F: Field>(
     let rows_per_round = parameters.rows_per_round;
     for idx in 0..rows_per_round {
         [keccak_table.input_rlc, keccak_table.output_rlc]
-            .map(|column| assign_advice_custom(region, column, idx, Value::known(F::zero())));
+            .map(|column| assign_advice_custom(region, column, idx, Value::known(F::ZERO)));
     }
 
     let mut offset = rows_per_round;

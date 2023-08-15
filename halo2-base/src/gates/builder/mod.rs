@@ -24,16 +24,6 @@ pub type ThreadBreakPoints = Vec<usize>;
 /// Vector of vectors tracking the thread break points across different halo2 phases
 pub type MultiPhaseThreadBreakPoints = Vec<ThreadBreakPoints>;
 
-thread_local! {
-    /// This is used as a thread-safe way to auto-configure a circuit's shape and then pass the configuration to `Circuit::configure`.
-    pub static BASE_CONFIG_PARAMS: RefCell<BaseConfigParams> = RefCell::new(Default::default());
-}
-
-/// Sets the thread-local number of bits to be range checkable via a lookup table with entries [0, 2<sup>lookup_bits</sup>)
-pub fn set_lookup_bits(lookup_bits: usize) {
-    BASE_CONFIG_PARAMS.with(|conf| conf.borrow_mut().lookup_bits = Some(lookup_bits));
-}
-
 /// Stores the cell values loaded during the Keygen phase of a halo2 proof and breakpoints for multi-threading
 #[derive(Clone, Debug, Default)]
 pub struct KeygenAssignments<F: ScalarField> {
@@ -69,6 +59,11 @@ impl<F: ScalarField> GateThreadBuilder<F> {
         // start with a main thread in phase 0
         threads[0].push(Context::new(witness_gen_only, 0));
         Self { threads, thread_count: 1, witness_gen_only, use_unknown: false }
+    }
+
+    /// Creates a new [GateThreadBuilder] depending on the stage of circuit building. If the stage is [CircuitBuilderStage::Prover], the [GateThreadBuilder] is used for witness generation only.
+    pub fn from_stage(stage: CircuitBuilderStage) -> Self {
+        Self::new(stage == CircuitBuilderStage::Prover)
     }
 
     /// Creates a new [GateThreadBuilder] with `witness_gen_only` set to false.
@@ -173,7 +168,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
         .len();
         let num_fixed = (total_fixed + (1 << k) - 1) >> k;
 
-        let mut params = BaseConfigParams {
+        let params = BaseConfigParams {
             strategy: GateStrategy::Vertical,
             num_advice_per_phase,
             num_lookup_advice_per_phase,
@@ -181,10 +176,6 @@ impl<F: ScalarField> GateThreadBuilder<F> {
             k,
             lookup_bits: None,
         };
-        BASE_CONFIG_PARAMS.with(|conf| {
-            params.lookup_bits = conf.borrow().lookup_bits;
-            *conf.borrow_mut() = params.clone();
-        });
         #[cfg(feature = "display")]
         {
             for phase in 0..MAX_PHASE {
@@ -492,25 +483,40 @@ pub struct GateCircuitBuilder<F: ScalarField> {
     pub builder: RefCell<GateThreadBuilder<F>>, // `RefCell` is just to trick circuit `synthesize` to take ownership of the inner builder
     /// Break points for threads within the circuit
     pub break_points: RefCell<MultiPhaseThreadBreakPoints>, // `RefCell` allows the circuit to record break points in a keygen call of `synthesize` for use in later witness gen
+    /// Configuration parameters for the circuit shape
+    pub config_params: BaseConfigParams,
 }
 
 impl<F: ScalarField> GateCircuitBuilder<F> {
     /// Creates a new [GateCircuitBuilder] with `use_unknown` of [GateThreadBuilder] set to true.
-    pub fn keygen(builder: GateThreadBuilder<F>) -> Self {
-        Self { builder: RefCell::new(builder.unknown(true)), break_points: RefCell::new(vec![]) }
+    pub fn keygen(builder: GateThreadBuilder<F>, config_params: BaseConfigParams) -> Self {
+        Self {
+            builder: RefCell::new(builder.unknown(true)),
+            config_params,
+            break_points: Default::default(),
+        }
     }
 
     /// Creates a new [GateCircuitBuilder] with `use_unknown` of [GateThreadBuilder] set to false.
-    pub fn mock(builder: GateThreadBuilder<F>) -> Self {
-        Self { builder: RefCell::new(builder.unknown(false)), break_points: RefCell::new(vec![]) }
+    pub fn mock(builder: GateThreadBuilder<F>, config_params: BaseConfigParams) -> Self {
+        Self {
+            builder: RefCell::new(builder.unknown(false)),
+            config_params,
+            break_points: Default::default(),
+        }
     }
 
-    /// Creates a new [GateCircuitBuilder].
+    /// Creates a new [GateCircuitBuilder] with a pinned circuit configuration given by `config_params` and `break_points`.
     pub fn prover(
         builder: GateThreadBuilder<F>,
+        config_params: BaseConfigParams,
         break_points: MultiPhaseThreadBreakPoints,
     ) -> Self {
-        Self { builder: RefCell::new(builder), break_points: RefCell::new(break_points) }
+        Self {
+            builder: RefCell::new(builder),
+            config_params,
+            break_points: RefCell::new(break_points),
+        }
     }
 
     /// Synthesizes from the [GateCircuitBuilder] by populating the advice column and assigning new threads if witness generation is performed.
@@ -555,12 +561,8 @@ impl<F: ScalarField> GateCircuitBuilder<F> {
                         // If we are only generating witness, we can skip the first pass and assign threads directly
                         let builder = self.builder.take();
                         let break_points = self.break_points.take();
-                        for (phase, (threads, break_points)) in builder
-                            .threads
-                            .into_iter()
-                            .zip(break_points.into_iter())
-                            .enumerate()
-                            .take(1)
+                        for (phase, (threads, break_points)) in
+                            builder.threads.into_iter().zip(break_points).enumerate().take(1)
                         {
                             assign_threads_in(
                                 phase,
@@ -585,28 +587,52 @@ impl<F: ScalarField> GateCircuitBuilder<F> {
 pub struct RangeCircuitBuilder<F: ScalarField>(pub GateCircuitBuilder<F>);
 
 impl<F: ScalarField> RangeCircuitBuilder<F> {
+    /// Convenience function to create a new [RangeCircuitBuilder] with a given [CircuitBuilderStage].
+    pub fn from_stage(
+        stage: CircuitBuilderStage,
+        builder: GateThreadBuilder<F>,
+        config_params: BaseConfigParams,
+        break_points: Option<MultiPhaseThreadBreakPoints>,
+    ) -> Self {
+        match stage {
+            CircuitBuilderStage::Keygen => Self::keygen(builder, config_params),
+            CircuitBuilderStage::Mock => Self::mock(builder, config_params),
+            CircuitBuilderStage::Prover => Self::prover(
+                builder,
+                config_params,
+                break_points.expect("break points must be pre-calculated for prover"),
+            ),
+        }
+    }
+
     /// Creates an instance of the [RangeCircuitBuilder] and executes in keygen mode.
-    pub fn keygen(builder: GateThreadBuilder<F>) -> Self {
-        Self(GateCircuitBuilder::keygen(builder))
+    pub fn keygen(builder: GateThreadBuilder<F>, config_params: BaseConfigParams) -> Self {
+        Self(GateCircuitBuilder::keygen(builder, config_params))
     }
 
     /// Creates a mock instance of the [RangeCircuitBuilder].
-    pub fn mock(builder: GateThreadBuilder<F>) -> Self {
-        Self(GateCircuitBuilder::mock(builder))
+    pub fn mock(builder: GateThreadBuilder<F>, config_params: BaseConfigParams) -> Self {
+        Self(GateCircuitBuilder::mock(builder, config_params))
     }
 
     /// Creates an instance of the [RangeCircuitBuilder] and executes in prover mode.
     pub fn prover(
         builder: GateThreadBuilder<F>,
+        config_params: BaseConfigParams,
         break_points: MultiPhaseThreadBreakPoints,
     ) -> Self {
-        Self(GateCircuitBuilder::prover(builder, break_points))
+        Self(GateCircuitBuilder::prover(builder, config_params, break_points))
     }
 }
 
 impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
     type Config = BaseConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
+    type Params = BaseConfigParams;
+
+    fn params(&self) -> Self::Params {
+        self.0.config_params.clone()
+    }
 
     /// Creates a new instance of the [RangeCircuitBuilder] without witnesses by setting the witness_gen_only flag to false
     fn without_witnesses(&self) -> Self {
@@ -614,11 +640,12 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
     }
 
     /// Configures a new circuit using [`BaseConfigParams`]
-    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        let params = BASE_CONFIG_PARAMS
-            .try_with(|config| config.borrow().clone())
-            .expect("You need to call config() to configure the halo2-base circuit shape first");
+    fn configure_with_params(meta: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config {
         BaseConfig::configure(meta, params)
+    }
+
+    fn configure(_: &mut ConstraintSystem<F>) -> Self::Config {
+        unreachable!("You must use configure_with_params");
     }
 
     /// Performs the actual computation on the circuit (e.g., witness generation), populating the lookup table and filling in all the advice values for a particular proof.
@@ -663,36 +690,54 @@ pub struct RangeWithInstanceCircuitBuilder<F: ScalarField> {
 }
 
 impl<F: ScalarField> RangeWithInstanceCircuitBuilder<F> {
+    /// Convenience function to create a new [RangeWithInstanceCircuitBuilder] with a given [CircuitBuilderStage].
+    pub fn from_stage(
+        stage: CircuitBuilderStage,
+        builder: GateThreadBuilder<F>,
+        config_params: BaseConfigParams,
+        break_points: Option<MultiPhaseThreadBreakPoints>,
+        assigned_instances: Vec<AssignedValue<F>>,
+    ) -> Self {
+        Self {
+            circuit: RangeCircuitBuilder::from_stage(stage, builder, config_params, break_points),
+            assigned_instances,
+        }
+    }
+
     /// See [`RangeCircuitBuilder::keygen`]
     pub fn keygen(
         builder: GateThreadBuilder<F>,
+        config_params: BaseConfigParams,
         assigned_instances: Vec<AssignedValue<F>>,
     ) -> Self {
-        Self { circuit: RangeCircuitBuilder::keygen(builder), assigned_instances }
+        Self { circuit: RangeCircuitBuilder::keygen(builder, config_params), assigned_instances }
     }
 
     /// See [`RangeCircuitBuilder::mock`]
-    pub fn mock(builder: GateThreadBuilder<F>, assigned_instances: Vec<AssignedValue<F>>) -> Self {
-        Self { circuit: RangeCircuitBuilder::mock(builder), assigned_instances }
+    pub fn mock(
+        builder: GateThreadBuilder<F>,
+        config_params: BaseConfigParams,
+        assigned_instances: Vec<AssignedValue<F>>,
+    ) -> Self {
+        Self { circuit: RangeCircuitBuilder::mock(builder, config_params), assigned_instances }
     }
 
     /// See [`RangeCircuitBuilder::prover`]
     pub fn prover(
         builder: GateThreadBuilder<F>,
-        assigned_instances: Vec<AssignedValue<F>>,
+        config_params: BaseConfigParams,
         break_points: MultiPhaseThreadBreakPoints,
+        assigned_instances: Vec<AssignedValue<F>>,
     ) -> Self {
-        Self { circuit: RangeCircuitBuilder::prover(builder, break_points), assigned_instances }
+        Self {
+            circuit: RangeCircuitBuilder::prover(builder, config_params, break_points),
+            assigned_instances,
+        }
     }
 
     /// Creates a new instance of the [RangeWithInstanceCircuitBuilder].
     pub fn new(circuit: RangeCircuitBuilder<F>, assigned_instances: Vec<AssignedValue<F>>) -> Self {
         Self { circuit, assigned_instances }
-    }
-
-    /// Calls [`GateThreadBuilder::config`]
-    pub fn config(&self, k: u32, minimum_rows: Option<usize>) -> BaseConfigParams {
-        self.circuit.0.builder.borrow().config(k as usize, minimum_rows)
     }
 
     /// Gets the break points of the circuit.
@@ -714,16 +759,25 @@ impl<F: ScalarField> RangeWithInstanceCircuitBuilder<F> {
 impl<F: ScalarField> Circuit<F> for RangeWithInstanceCircuitBuilder<F> {
     type Config = PublicBaseConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
+    type Params = BaseConfigParams;
+
+    fn params(&self) -> Self::Params {
+        self.circuit.0.config_params.clone()
+    }
 
     fn without_witnesses(&self) -> Self {
         unimplemented!()
     }
 
-    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        let base = RangeCircuitBuilder::configure(meta);
+    fn configure_with_params(meta: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config {
+        let base = BaseConfig::configure(meta, params);
         let instance = meta.instance_column();
         meta.enable_equality(instance);
         PublicBaseConfig { base, instance }
+    }
+
+    fn configure(_: &mut ConstraintSystem<F>) -> Self::Config {
+        unreachable!("You must use configure_with_params")
     }
 
     fn synthesize(

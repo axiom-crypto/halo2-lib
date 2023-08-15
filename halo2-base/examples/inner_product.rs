@@ -1,10 +1,7 @@
-#![allow(unused_imports)]
-#![allow(unused_variables)]
 use halo2_base::gates::builder::{GateThreadBuilder, RangeCircuitBuilder};
-use halo2_base::gates::flex_gate::{FlexGateConfig, GateChip, GateInstructions, GateStrategy};
+use halo2_base::gates::flex_gate::{GateChip, GateInstructions};
 use halo2_base::halo2_proofs::{
     arithmetic::Field,
-    circuit::*,
     dev::MockProver,
     halo2curves::bn256::{Bn256, Fr, G1Affine},
     plonk::*,
@@ -18,21 +15,9 @@ use halo2_base::halo2_proofs::{
     transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer},
 };
 use halo2_base::utils::ScalarField;
-use halo2_base::{
-    Context,
-    QuantumCell::{Existing, Witness},
-    SKIP_FIRST_PASS,
-};
+use halo2_base::{Context, QuantumCell::Existing};
 use itertools::Itertools;
 use rand::rngs::OsRng;
-use std::marker::PhantomData;
-
-use criterion::{criterion_group, criterion_main};
-use criterion::{BenchmarkId, Criterion};
-
-use pprof::criterion::{Output, PProfProfiler};
-// Thanks to the example provided by @jebbow in his article
-// https://www.jibbow.com/posts/criterion-flamegraphs/
 
 const K: u32 = 19;
 
@@ -52,8 +37,8 @@ fn main() {
     // create circuit for keygen
     let mut builder = GateThreadBuilder::new(false);
     inner_prod_bench(builder.main(0), vec![Fr::zero(); 5], vec![Fr::zero(); 5]);
-    builder.config(k as usize, Some(20));
-    let circuit = RangeCircuitBuilder::mock(builder);
+    let config_params = builder.config(k as usize, Some(20));
+    let circuit = RangeCircuitBuilder::mock(builder, config_params.clone());
 
     // check the circuit is correct just in case
     MockProver::run(k, &circuit, vec![]).unwrap().assert_satisfied();
@@ -68,7 +53,7 @@ fn main() {
     let a = (0..5).map(|_| Fr::random(OsRng)).collect_vec();
     let b = (0..5).map(|_| Fr::random(OsRng)).collect_vec();
     inner_prod_bench(builder.main(0), a, b);
-    let circuit = RangeCircuitBuilder::prover(builder, break_points);
+    let circuit = RangeCircuitBuilder::prover(builder, config_params, break_points);
 
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
     create_proof::<

@@ -16,13 +16,11 @@ pub mod vector;
 #[cfg(test)]
 mod tests;
 
-pub trait PrimeField = BigPrimeField;
-
 /// Trait for common functionality for finite field chips.
 /// Primarily intended to emulate a "non-native" finite field using "native" values in a prime field `F`.
 /// Most functions are designed for the case when the non-native field is larger than the native field, but
 /// the trait can still be implemented and used in other cases.
-pub trait FieldChip<F: PrimeField>: Clone + Send + Sync {
+pub trait FieldChip<F: BigPrimeField>: Clone + Send + Sync {
     const PRIME_FIELD_NUM_BITS: u32;
 
     /// A representation of a field element that is used for intermediate computations.
@@ -211,7 +209,7 @@ pub trait FieldChip<F: PrimeField>: Clone + Send + Sync {
     ) -> Self::FieldPoint {
         let b = b.into();
         let b_is_zero = self.is_zero(ctx, b.clone());
-        self.gate().assert_is_const(ctx, &b_is_zero, &F::zero());
+        self.gate().assert_is_const(ctx, &b_is_zero, &F::ZERO);
 
         self.divide_unsafe(ctx, a.into(), b)
     }
@@ -253,7 +251,7 @@ pub trait FieldChip<F: PrimeField>: Clone + Send + Sync {
     ) -> Self::FieldPoint {
         let b = b.into();
         let b_is_zero = self.is_zero(ctx, b.clone());
-        self.gate().assert_is_const(ctx, &b_is_zero, &F::zero());
+        self.gate().assert_is_const(ctx, &b_is_zero, &F::ZERO);
 
         self.neg_divide_unsafe(ctx, a.into(), b)
     }
@@ -296,9 +294,9 @@ pub trait Selectable<F: ScalarField, Pt> {
 }
 
 // Common functionality for prime field chips
-pub trait PrimeFieldChip<F: PrimeField>: FieldChip<F>
+pub trait PrimeFieldChip<F: BigPrimeField>: FieldChip<F>
 where
-    Self::FieldType: PrimeField,
+    Self::FieldType: BigPrimeField,
 {
     fn num_limbs(&self) -> usize;
     fn limb_mask(&self) -> &BigUint;
@@ -307,7 +305,7 @@ where
 
 // helper trait so we can actually construct and read the Fp2 struct
 // needs to be implemented for Fp2 struct for use cases below
-pub trait FieldExtConstructor<Fp: ff::PrimeField, const DEGREE: usize> {
+pub trait FieldExtConstructor<Fp: crate::ff::PrimeField, const DEGREE: usize> {
     fn new(c: [Fp; DEGREE]) -> Self;
 
     fn coeffs(&self) -> Vec<Fp>;

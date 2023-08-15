@@ -1,6 +1,6 @@
 [package]
 name = "halo2-ecc"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 
 [dependencies]
@@ -16,10 +16,6 @@ serde_json = "1.0"
 rayon = "1.6.1"
 test-case = "3.1.0"
 
-# arithmetic
-ff = "0.12"
-group = "0.12"
-
 halo2-base = { path = "../halo2-base", default-features = false }
 
 [dev-dependencies]
@@ -33,6 +29,7 @@ halo2-base = { path = "../halo2-base", default-features = false, features = ["te
 default = ["jemallocator", "halo2-axiom", "display"]
 dev-graph = ["halo2-base/dev-graph"]
 display = ["halo2-base/display"]
+asm = ["halo2-base/asm"]
 halo2-pse = ["halo2-base/halo2-pse"]
 halo2-axiom = ["halo2-base/halo2-axiom"]
 jemallocator = ["halo2-base/jemallocator"]

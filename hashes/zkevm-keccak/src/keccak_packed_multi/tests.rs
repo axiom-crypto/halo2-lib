@@ -18,13 +18,14 @@ use crate::halo2_proofs::{
         Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
     },
 };
-use halo2_base::SKIP_FIRST_PASS;
+use halo2_base::{halo2_proofs::halo2curves::ff::FromUniformBytes, SKIP_FIRST_PASS};
 use rand_core::OsRng;
 use test_case::test_case;
 
 /// KeccakCircuit
 #[derive(Default, Clone, Debug)]
 pub struct KeccakCircuit<F: Field> {
+    config: KeccakConfigParams,
     inputs: Vec<Vec<u8>>,
     num_rows: Option<usize>,
     _marker: PhantomData<F>,
@@ -34,18 +35,26 @@ pub struct KeccakCircuit<F: Field> {
 impl<F: Field> Circuit<F> for KeccakCircuit<F> {
     type Config = KeccakCircuitConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
+    type Params = KeccakConfigParams;
+
+    fn params(&self) -> Self::Params {
+        self.config
+    }
 
     fn without_witnesses(&self) -> Self {
         Self::default()
     }
 
-    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+    fn configure_with_params(meta: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config {
         // MockProver complains if you only have columns in SecondPhase, so let's just make an empty column in FirstPhase
         meta.advice_column();
 
         let challenge = meta.challenge_usable_after(FirstPhase);
-        let params = KECCAK_CONFIG_PARAMS.with(|conf| *conf.borrow());
         KeccakCircuitConfig::new(meta, challenge, params)
+    }
+
+    fn configure(_: &mut ConstraintSystem<F>) -> Self::Config {
+        unreachable!()
     }
 
     fn synthesize(
@@ -95,13 +104,18 @@ impl<F: Field> Circuit<F> for KeccakCircuit<F> {
 
 impl<F: Field> KeccakCircuit<F> {
     /// Creates a new circuit instance
-    pub fn new(num_rows: Option<usize>, inputs: Vec<Vec<u8>>) -> Self {
-        KeccakCircuit { inputs, num_rows, _marker: PhantomData }
+    pub fn new(config: KeccakConfigParams, num_rows: Option<usize>, inputs: Vec<Vec<u8>>) -> Self {
+        KeccakCircuit { config, inputs, num_rows, _marker: PhantomData }
     }
 }
 
-fn verify<F: Field>(k: u32, inputs: Vec<Vec<u8>>, _success: bool) {
-    let circuit = KeccakCircuit::new(Some(2usize.pow(k) - 109), inputs);
+fn verify<F: Field + Ord + FromUniformBytes<64>>(
+    config: KeccakConfigParams,
+    inputs: Vec<Vec<u8>>,
+    _success: bool,
+) {
+    let k = config.k;
+    let circuit = KeccakCircuit::new(config, Some(2usize.pow(k) - 109), inputs);
 
     let prover = MockProver::<F>::run(k, &circuit, vec![]).unwrap();
     prover.assert_satisfied();
@@ -109,10 +123,6 @@ fn verify<F: Field>(k: u32, inputs: Vec<Vec<u8>>, _success: bool) {
 
 #[test_case(14, 28; "k: 14, rows_per_round: 28")]
 fn packed_multi_keccak_simple(k: u32, rows_per_round: usize) {
-    KECCAK_CONFIG_PARAMS.with(|conf| {
-        conf.borrow_mut().k = k;
-        conf.borrow_mut().rows_per_round = rows_per_round;
-    });
     let _ = env_logger::builder().is_test(true).try_init();
 
     let inputs = vec![
@@ -122,15 +132,12 @@ fn packed_multi_keccak_simple(k: u32, rows_per_round: usize) {
         (0u8..136).collect::<Vec<_>>(),
         (0u8..200).collect::<Vec<_>>(),
     ];
-    verify::<Fr>(k, inputs, true);
+    verify::<Fr>(KeccakConfigParams { k, rows_per_round }, inputs, true);
 }
 
 #[test_case(14, 25 ; "k: 14, rows_per_round: 25")]
+#[test_case(18, 9 ; "k: 18, rows_per_round: 9")]
 fn packed_multi_keccak_prover(k: u32, rows_per_round: usize) {
-    KECCAK_CONFIG_PARAMS.with(|conf| {
-        conf.borrow_mut().k = k;
-        conf.borrow_mut().rows_per_round = rows_per_round;
-    });
     let _ = env_logger::builder().is_test(true).try_init();
 
     let params = ParamsKZG::<Bn256>::setup(k, OsRng);
@@ -142,7 +149,8 @@ fn packed_multi_keccak_prover(k: u32, rows_per_round: usize) {
         (0u8..136).collect::<Vec<_>>(),
         (0u8..200).collect::<Vec<_>>(),
     ];
-    let circuit = KeccakCircuit::new(Some(2usize.pow(k)), inputs);
+    let circuit =
+        KeccakCircuit::new(KeccakConfigParams { k, rows_per_round }, Some(2usize.pow(k)), inputs);
 
     let vk = keygen_vk(&params, &circuit).unwrap();
     let pk = keygen_pk(&params, vk, &circuit).unwrap();

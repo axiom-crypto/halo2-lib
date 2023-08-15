@@ -1,7 +1,12 @@
-#[cfg(feature = "halo2-pse")]
-use crate::halo2_proofs::arithmetic::CurveAffine;
-use crate::halo2_proofs::{arithmetic::FieldExt, circuit::Value};
 use core::hash::Hash;
+
+use crate::ff::PrimeField;
+#[cfg(not(feature = "halo2-axiom"))]
+use crate::halo2_proofs::arithmetic::CurveAffine;
+use crate::halo2_proofs::circuit::Value;
+#[cfg(feature = "halo2-axiom")]
+pub use crate::halo2_proofs::halo2curves::CurveAffineExt;
+
 use num_bigint::BigInt;
 use num_bigint::BigUint;
 use num_bigint::Sign;
@@ -39,7 +44,7 @@ where
 /// Helper trait to represent a field element that can be converted into [u64] limbs.
 ///
 /// Note: Since the number of bits necessary to represent a field element is larger than the number of bits in a u64, we decompose the integer representation of the field element into multiple [u64] values e.g. `limbs`.
-pub trait ScalarField: FieldExt + Hash {
+pub trait ScalarField: PrimeField + From<bool> + Hash + PartialEq + PartialOrd {
     /// Returns the base `2<sup>bit_len</sup>` little endian representation of the [ScalarField] element up to `num_limbs` number of limbs (truncates any extra limbs).
     ///
     /// Assumes `bit_len < 64`.
@@ -59,13 +64,34 @@ pub trait ScalarField: FieldExt + Hash {
         repr.as_mut()[..bytes.len()].copy_from_slice(bytes);
         Self::from_repr(repr).unwrap()
     }
+
+    /// Gets the least significant 32 bits of the field element.
+    fn get_lower_32(&self) -> u32 {
+        let bytes = self.to_bytes_le();
+        let mut lower_32 = 0u32;
+        for (i, byte) in bytes.into_iter().enumerate().take(4) {
+            lower_32 |= (byte as u32) << (i * 8);
+        }
+        lower_32
+    }
+
+    /// Gets the least significant 64 bits of the field element.
+    fn get_lower_64(&self) -> u64 {
+        let bytes = self.to_bytes_le();
+        let mut lower_64 = 0u64;
+        for (i, byte) in bytes.into_iter().enumerate().take(8) {
+            lower_64 |= (byte as u64) << (i * 8);
+        }
+        lower_64
+    }
 }
 // See below for implementations
 
 // Later: will need to separate BigPrimeField from ScalarField when Goldilocks is introduced
 
+/// [ScalarField] that is ~256 bits long
 #[cfg(feature = "halo2-pse")]
-pub trait BigPrimeField = FieldExt<Repr = [u8; 32]> + ScalarField;
+pub trait BigPrimeField = PrimeField<Repr = [u8; 32]> + ScalarField;
 
 /// Converts an [Iterator] of u64 digits into `number_of_limbs` limbs of `bit_len` bits returned as a [Vec].
 ///
@@ -134,7 +160,7 @@ pub fn log2_ceil(x: u64) -> usize {
 
 /// Returns the modulus of [BigPrimeField].
 pub fn modulus<F: BigPrimeField>() -> BigUint {
-    fe_to_biguint(&-F::one()) + 1u64
+    fe_to_biguint(&-F::ONE) + 1u64
 }
 
 /// Returns the [BigPrimeField] element of 2<sup>n</sup>.
@@ -340,13 +366,10 @@ pub fn compose(input: Vec<BigUint>, bit_len: usize) -> BigUint {
     input.iter().rev().fold(BigUint::zero(), |acc, val| (acc << bit_len) + val)
 }
 
-#[cfg(feature = "halo2-axiom")]
-pub use halo2_proofs_axiom::halo2curves::CurveAffineExt;
-
 /// Helper trait
 #[cfg(feature = "halo2-pse")]
 pub trait CurveAffineExt: CurveAffine {
-    /// Unlike the `Coordinates` trait, this just returns the raw affine (X, Y) coordinantes without checking `is_on_curve`
+    /// Returns the raw affine (X, Y) coordinantes
     fn into_coordinates(self) -> (Self::Base, Self::Base) {
         let coordinates = self.coordinates().unwrap();
         (*coordinates.x(), *coordinates.y())
@@ -357,12 +380,12 @@ impl<C: CurveAffine> CurveAffineExt for C {}
 
 mod scalar_field_impls {
     use super::{decompose_u64_digits_to_limbs, ScalarField};
+    #[cfg(feature = "halo2-pse")]
+    use crate::ff::PrimeField;
     use crate::halo2_proofs::halo2curves::{
         bn256::{Fq as bn254Fq, Fr as bn254Fr},
         secp256k1::{Fp as secpFp, Fq as secpFq},
     };
-    #[cfg(feature = "halo2-pse")]
-    use ff::PrimeField;
 
     /// To ensure `ScalarField` is only implemented for `ff:Field` where `Repr` is little endian, we use the following macro
     /// to implement the trait for each field.
@@ -382,6 +405,18 @@ mod scalar_field_impls {
                 fn to_bytes_le(&self) -> Vec<u8> {
                     let tmp: [u64; 4] = (*self).into();
                     tmp.iter().flat_map(|x| x.to_le_bytes()).collect()
+                }
+
+                #[inline(always)]
+                fn get_lower_32(&self) -> u32 {
+                    let tmp: [u64; 4] = (*self).into();
+                    tmp[0] as u32
+                }
+
+                #[inline(always)]
+                fn get_lower_64(&self) -> u64 {
+                    let tmp: [u64; 4] = (*self).into();
+                    tmp[0]
                 }
             }
         };
@@ -487,7 +522,10 @@ pub mod fs {
 mod tests {
     use crate::halo2_proofs::halo2curves::bn256::Fr;
     use num_bigint::RandomBits;
-    use rand::{rngs::OsRng, Rng};
+    use rand::{
+        rngs::{OsRng, StdRng},
+        Rng, SeedableRng,
+    };
     use std::ops::Shl;
 
     use super::*;
@@ -558,5 +596,24 @@ mod tests {
     #[test]
     fn test_log2_ceil_zero() {
         assert_eq!(log2_ceil(0), 0);
+    }
+
+    #[test]
+    fn test_get_lower_32() {
+        let mut rng = StdRng::seed_from_u64(0);
+        for _ in 0..10_000usize {
+            let e: u32 = rng.gen_range(0..u32::MAX);
+            assert_eq!(Fr::from(e as u64).get_lower_32(), e);
+        }
+        assert_eq!(Fr::from((1u64 << 32_i32) + 1).get_lower_32(), 1);
+    }
+
+    #[test]
+    fn test_get_lower_64() {
+        let mut rng = StdRng::seed_from_u64(0);
+        for _ in 0..10_000usize {
+            let e: u64 = rng.gen_range(0..u64::MAX);
+            assert_eq!(Fr::from(e).get_lower_64(), e);
+        }
     }
 }

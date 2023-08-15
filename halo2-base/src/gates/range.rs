@@ -293,7 +293,7 @@ pub trait RangeInstructions<F: ScalarField> {
             (bit_length(b) + self.lookup_bits() - 1) / self.lookup_bits() * self.lookup_bits();
 
         self.range_check(ctx, a, range_bits);
-        self.check_less_than(ctx, a, Constant(self.gate().get_field_element(b)), range_bits)
+        self.check_less_than(ctx, a, Constant(F::from(b)), range_bits)
     }
 
     /// Performs a range check that `a` has at most `bit_length(b)` bits and then constrains that `a` is less than `b`.
@@ -341,7 +341,7 @@ pub trait RangeInstructions<F: ScalarField> {
             (bit_length(b) + self.lookup_bits() - 1) / self.lookup_bits() * self.lookup_bits();
 
         self.range_check(ctx, a, range_bits);
-        self.is_less_than(ctx, a, Constant(self.gate().get_field_element(b)), range_bits)
+        self.is_less_than(ctx, a, Constant(F::from(b)), range_bits)
     }
 
     /// Performs a range check that `a` has at most `ceil(b.bits() / lookup_bits) * lookup_bits` bits and then constrains that `a` is in `[0,b)`.
@@ -448,7 +448,7 @@ pub trait RangeInstructions<F: ScalarField> {
         let [div_lo, div_hi, div, rem] = [-5, -4, -2, -1].map(|i| ctx.get(i));
         self.range_check(ctx, div_lo, b_num_bits);
         if a_num_bits <= b_num_bits {
-            self.gate().assert_is_const(ctx, &div_hi, &F::zero());
+            self.gate().assert_is_const(ctx, &div_hi, &F::ZERO);
         } else {
             self.range_check(ctx, div_hi, a_num_bits - b_num_bits);
         }
@@ -481,7 +481,7 @@ pub trait RangeInstructions<F: ScalarField> {
     ) -> AssignedValue<F> {
         let a_big = fe_to_biguint(a.value());
         let bit_v = F::from(a_big.bit(0));
-        let two = self.gate().get_field_element(2u64);
+        let two = F::from(2u64);
         let h_v = F::from_bytes_le(&(a_big >> 1usize).to_bytes_le());
 
         ctx.assign_region([Witness(bit_v), Witness(h_v), Constant(two), Existing(a)], [0]);
@@ -519,7 +519,7 @@ impl<F: ScalarField> RangeChip<F> {
         let mut running_base = limb_base;
         let num_bases = F::CAPACITY as usize / lookup_bits;
         let mut limb_bases = Vec::with_capacity(num_bases + 1);
-        limb_bases.extend([Constant(F::one()), Constant(running_base)]);
+        limb_bases.extend([Constant(F::ONE), Constant(running_base)]);
         for _ in 2..=num_bases {
             running_base *= &limb_base;
             limb_bases.push(Constant(running_base));
@@ -570,7 +570,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
     /// * `ceil(range_bits / lookup_bits) * lookup_bits <= F::CAPACITY`
     fn range_check(&self, ctx: &mut Context<F>, a: AssignedValue<F>, range_bits: usize) {
         if range_bits == 0 {
-            self.gate.assert_is_const(ctx, &a, &F::zero());
+            self.gate.assert_is_const(ctx, &a, &F::ZERO);
             return;
         }
         // the number of limbs
@@ -640,10 +640,10 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
                 let cells = [
                     Witness(shift_a_val - b.value()),
                     b,
-                    Constant(F::one()),
+                    Constant(F::ONE),
                     Witness(shift_a_val),
                     Constant(-pow_of_two),
-                    Constant(F::one()),
+                    Constant(F::ONE),
                     a,
                 ];
                 ctx.assign_region(cells, [0, 3]);
@@ -689,10 +689,10 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
                     [
                         Witness(shifted_val),
                         b,
-                        Constant(F::one()),
+                        Constant(F::ONE),
                         Witness(shift_a_val),
                         Constant(-pow_padded),
-                        Constant(F::one()),
+                        Constant(F::ONE),
                         a,
                     ],
                     [0, 3],
