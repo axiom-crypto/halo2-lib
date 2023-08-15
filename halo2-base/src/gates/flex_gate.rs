@@ -864,28 +864,6 @@ pub trait GateInstructions<F: ScalarField> {
         let out = self.mul(ctx, eval.unwrap(), z);
         (out, z)
     }
-
-    /// Bitwise right rotate a by BIT bits. BIT and NUM_BITS must be determined at compile time.
-    ///
-    /// Assumes 'a' is a NUM_BITS bit integer and NUM_BITS <= 128.
-    /// * `ctx`: [Context] to add the constraints to
-    /// * `a`: a [AssignedValue] value.
-    fn const_right_rotate_unsafe<const BIT: usize, const NUM_BITS: usize>(
-        &self,
-        ctx: &mut Context<F>,
-        a: AssignedValue<F>,
-    ) -> AssignedValue<F>;
-
-    /// Bitwise left rotate a by BIT bits. BIT and NUM_BITS must be determined at compile time.
-    ///
-    /// Assumes 'a' is a NUM_BITS bit integer and NUM_BITS <= 128.
-    /// * `ctx`: [Context] to add the constraints to
-    /// * `a`: a [AssignedValue] value.
-    fn const_left_rotate_unsafe<const BIT: usize, const NUM_BITS: usize>(
-        &self,
-        ctx: &mut Context<F>,
-        a: AssignedValue<F>,
-    ) -> AssignedValue<F>;
 }
 
 /// A chip that implements the [GateInstructions] trait supporting basic arithmetic operations.
@@ -966,29 +944,6 @@ impl<F: ScalarField> GateChip<F> {
             ctx.assign_region(cells, (0..len).map(|i| 3 * i as isize));
         };
         b_starts_with_one
-    }
-
-    /// Bitwise right rotate a by <bit> bits. This function should never be called directly
-    /// because const bitwise rotation must be determined at compile time.
-    ///
-    /// Assumes 'a' is a <num_bits> bit integer and <num_bits> <= 128.
-    fn const_right_rotate_unsafe_internal(
-        &self,
-        ctx: &mut Context<F>,
-        a: AssignedValue<F>,
-        bit: usize,
-        num_bits: usize,
-    ) -> AssignedValue<F> {
-        // Add a constrain a = l_witness << bit | r_wintess
-        let val = a.value().get_lower_128();
-        let val_l = val >> bit;
-        let val_r = val - (val_l << bit);
-        let l_witness = Witness(F::from_u128(val_l));
-        let r_witness = Witness(F::from_u128(val_r));
-        let val_witness = self.mul_add(ctx, l_witness, Constant(self.pow_of_two()[bit]), r_witness);
-        ctx.constrain_equal(&a, &val_witness);
-        // Return (r_witness << (num_bits - bit)) | l_witness
-        self.mul_add(ctx, r_witness, Constant(self.pow_of_two()[num_bits - bit]), l_witness)
     }
 }
 
@@ -1232,28 +1187,5 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
             self.assert_bit(ctx, *bit_cell);
         }
         bit_cells
-    }
-
-    fn const_right_rotate_unsafe<const BIT: usize, const NUM_BITS: usize>(
-        &self,
-        ctx: &mut Context<F>,
-        a: AssignedValue<F>,
-    ) -> AssignedValue<F> {
-        if BIT == 0 {
-            return a;
-        };
-        self.const_right_rotate_unsafe_internal(ctx, a, BIT, NUM_BITS)
-    }
-
-    fn const_left_rotate_unsafe<const BIT: usize, const NUM_BITS: usize>(
-        &self,
-        ctx: &mut Context<F>,
-        a: AssignedValue<F>,
-    ) -> AssignedValue<F> {
-        if BIT == 0 {
-            return a;
-        };
-        // left rotate by BIT == right rotate by (NUM_BITS - BIT)
-        self.const_right_rotate_unsafe_internal(ctx, a, NUM_BITS - BIT, NUM_BITS)
     }
 }

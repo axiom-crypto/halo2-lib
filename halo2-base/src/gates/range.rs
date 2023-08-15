@@ -426,6 +426,28 @@ pub trait RangeInstructions<F: ScalarField> {
         self.gate().assert_bit(ctx, bit);
         bit
     }
+
+    /// Bitwise right rotate a by BIT bits. BIT and NUM_BITS must be determined at compile time.
+    ///
+    /// Assumes 'a' is a NUM_BITS bit integer and 0 < NUM_BITS <= 128.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: a [AssignedValue] value.
+    fn const_right_rotate<const BIT: usize, const NUM_BITS: usize>(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+    ) -> AssignedValue<F>;
+
+    /// Bitwise left rotate a by BIT bits. BIT and NUM_BITS must be determined at compile time.
+    ///
+    /// Assumes 'a' is a NUM_BITS bit integer and 0 < NUM_BITS <= 128.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: a [AssignedValue] value.
+    fn const_left_rotate<const BIT: usize, const NUM_BITS: usize>(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+    ) -> AssignedValue<F>;
 }
 
 /// A chip that implements RangeInstructions which provides methods to constrain a field element `x` is within a range of bits.
@@ -471,6 +493,33 @@ impl<F: ScalarField> RangeChip<F> {
     /// * lookup_bits: number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>)
     pub fn default(lookup_bits: usize) -> Self {
         Self::new(RangeStrategy::Vertical, lookup_bits)
+    }
+
+    /// Bitwise right rotate a by <bit> bits. This function should never be called directly
+    /// because const bitwise rotation must be determined at compile time.
+    ///
+    /// Assumes 'a' is a <num_bits> bit integer and 0 < <num_bits> <= 128.
+    fn const_right_rotate_internal(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+        bit: usize,
+        num_bits: usize,
+    ) -> AssignedValue<F> {
+        assert!(0 < num_bits && num_bits <= 128);
+        assert!(a.value().cmp(&F::from_u128(u128::MAX >> (128 - num_bits))).is_le());
+        // Add a constrain a = l_witness << bit | r_wintess
+        let val = a.value().get_lower_128();
+        let val_l = val >> bit;
+        let val_r = val - (val_l << bit);
+        let l_witness = ctx.load_witness(F::from_u128(val_l));
+        let r_witness = ctx.load_witness(F::from_u128(val_r));
+        let val_witness = self.gate.mul_add(ctx, l_witness, Constant(self.gate.pow_of_two()[bit]), r_witness);
+        self.range_check(ctx, l_witness, num_bits - bit);
+        self.range_check(ctx, r_witness, bit);
+        ctx.constrain_equal(&a, &val_witness);
+        // Return (r_witness << (num_bits - bit)) | l_witness
+        self.gate.mul_add(ctx, r_witness, Constant(self.gate.pow_of_two()[num_bits - bit]), l_witness)
     }
 }
 
@@ -642,5 +691,30 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         self.range_check(ctx, shifted_cell, padded_bits + self.lookup_bits);
         // ctx.cells_to_lookup.last() will have the (k + 1)-th limb of `a - b + 2^{k * limb_bits}`, which is zero iff `a < b`
         self.gate.is_zero(ctx, *ctx.cells_to_lookup.last().unwrap())
+    }
+
+    fn const_right_rotate<const BIT: usize, const NUM_BITS: usize>(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+    ) -> AssignedValue<F> {
+        let bit_to_shift = BIT % NUM_BITS;
+        if bit_to_shift == 0 {
+            return a;
+        };
+        self.const_right_rotate_internal(ctx, a, bit_to_shift, NUM_BITS)
+    }
+
+    fn const_left_rotate<const BIT: usize, const NUM_BITS: usize>(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+    ) -> AssignedValue<F> {
+        let bit_to_shift = BIT % NUM_BITS;
+        if bit_to_shift == 0 {
+            return a;
+        };
+        // left rotate by bit_to_shift == right rotate by (NUM_BITS - bit_to_shift)
+        self.const_right_rotate_internal(ctx, a, NUM_BITS - bit_to_shift, NUM_BITS)
     }
 }
