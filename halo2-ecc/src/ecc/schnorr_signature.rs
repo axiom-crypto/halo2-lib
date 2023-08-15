@@ -34,7 +34,7 @@ where
     // check e < n
     let e_valid = scalar_chip.is_soft_nonzero(ctx, &msgHash);
 
-    // compute s * G and e * pubkey
+    // compute s * G and msgHash * pubkey
     let s_G = fixed_base::scalar_multiply(
         base_chip,
         ctx,
