@@ -5,7 +5,7 @@ use crate::ff::PrimeField;
 use crate::halo2_proofs::arithmetic::CurveAffine;
 use crate::halo2_proofs::circuit::Value;
 #[cfg(feature = "halo2-axiom")]
-pub use crate::halo2curves::CurveAffineExt;
+pub use crate::halo2_proofs::halo2curves::CurveAffineExt;
 
 use num_bigint::BigInt;
 use num_bigint::BigUint;
@@ -89,6 +89,7 @@ pub trait ScalarField: PrimeField + From<bool> + Hash + PartialEq + PartialOrd {
 
 // Later: will need to separate BigPrimeField from ScalarField when Goldilocks is introduced
 
+/// [ScalarField] that is ~256 bits long
 #[cfg(feature = "halo2-pse")]
 pub trait BigPrimeField = PrimeField<Repr = [u8; 32]> + ScalarField;
 
@@ -379,12 +380,12 @@ impl<C: CurveAffine> CurveAffineExt for C {}
 
 mod scalar_field_impls {
     use super::{decompose_u64_digits_to_limbs, ScalarField};
+    #[cfg(feature = "halo2-pse")]
+    use crate::ff::PrimeField;
     use crate::halo2_proofs::halo2curves::{
         bn256::{Fq as bn254Fq, Fr as bn254Fr},
         secp256k1::{Fp as secpFp, Fq as secpFq},
     };
-    #[cfg(feature = "halo2-pse")]
-    use ff::PrimeField;
 
     /// To ensure `ScalarField` is only implemented for `ff:Field` where `Repr` is little endian, we use the following macro
     /// to implement the trait for each field.

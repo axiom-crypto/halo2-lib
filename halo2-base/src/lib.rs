@@ -35,7 +35,6 @@ pub use halo2_proofs;
 #[cfg(feature = "halo2-axiom")]
 pub use halo2_proofs_axiom as halo2_proofs;
 
-use halo2_proofs::halo2curves;
 use halo2_proofs::halo2curves::ff;
 use halo2_proofs::plonk::Assigned;
 use utils::ScalarField;

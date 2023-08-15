@@ -5,6 +5,7 @@ use crate::{
         GateChip,
     },
     halo2_proofs::{
+        dev::MockProver,
         halo2curves::bn256::{Bn256, Fr, G1Affine},
         plonk::{create_proof, verify_proof, Circuit, ProvingKey, VerifyingKey},
         poly::commitment::ParamsProver,
@@ -19,7 +20,6 @@ use crate::{
     safe_types::RangeChip,
     Context,
 };
-use halo2_proofs_axiom::dev::MockProver;
 use rand::{rngs::StdRng, SeedableRng};
 
 /// helper function to generate a proof with real prover
