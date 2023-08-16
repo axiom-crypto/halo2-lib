@@ -19,6 +19,10 @@ pub fn sub_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
     *inputs[0].value() - *inputs[1].value()
 }
 
+pub fn sub_mul_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
+    *inputs[0].value() - *inputs[1].value() * *inputs[2].value()
+}
+
 pub fn neg_ground_truth<F: ScalarField>(input: QuantumCell<F>) -> F {
     -(*input.value())
 }
@@ -32,28 +36,20 @@ pub fn mul_add_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
 }
 
 pub fn mul_not_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
-    (F::one() - *inputs[0].value()) * *inputs[1].value()
+    (F::ONE - *inputs[0].value()) * *inputs[1].value()
 }
 
 pub fn div_unsafe_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
     inputs[1].value().invert().unwrap() * *inputs[0].value()
 }
 
-pub fn inner_product_ground_truth<F: ScalarField>(
-    inputs: &(Vec<QuantumCell<F>>, Vec<QuantumCell<F>>),
-) -> F {
-    inputs
-        .0
-        .iter()
-        .zip(inputs.1.iter())
-        .fold(F::zero(), |acc, (a, b)| acc + (*a.value() * *b.value()))
+pub fn inner_product_ground_truth<F: ScalarField>(a: &[F], b: &[F]) -> F {
+    a.iter().zip(b.iter()).fold(F::ZERO, |acc, (&a, &b)| acc + a * b)
 }
 
-pub fn inner_product_left_last_ground_truth<F: ScalarField>(
-    inputs: &(Vec<QuantumCell<F>>, Vec<QuantumCell<F>>),
-) -> (F, F) {
-    let product = inner_product_ground_truth(inputs);
-    let last = *inputs.0.last().unwrap().value();
+pub fn inner_product_left_last_ground_truth<F: ScalarField>(a: &[F], b: &[F]) -> (F, F) {
+    let product = inner_product_ground_truth(a, b);
+    let last = *a.last().unwrap();
     (product, last)
 }
 
@@ -62,7 +58,7 @@ pub fn inner_product_with_sums_ground_truth<F: ScalarField>(
 ) -> Vec<F> {
     let (a, b) = &input;
     let mut result = Vec::new();
-    let mut sum = F::zero();
+    let mut sum = F::ZERO;
     // TODO: convert to fold
     for (ai, bi) in a.iter().zip(b) {
         let product = *ai.value() * *bi.value();
@@ -75,9 +71,10 @@ pub fn inner_product_with_sums_ground_truth<F: ScalarField>(
 pub fn sum_products_with_coeff_and_var_ground_truth<F: ScalarField>(
     input: &(Vec<(F, QuantumCell<F>, QuantumCell<F>)>, QuantumCell<F>),
 ) -> F {
-    let expected = input.0.iter().fold(F::zero(), |acc, (coeff, cell1, cell2)| {
-        acc + *coeff * *cell1.value() * *cell2.value()
-    }) + *input.1.value();
+    let expected =
+        input.0.iter().fold(F::ZERO, |acc, (coeff, cell1, cell2)| {
+            acc + *coeff * *cell1.value() * *cell2.value()
+        }) + *input.1.value();
     expected
 }
 
@@ -86,7 +83,7 @@ pub fn and_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
 }
 
 pub fn not_ground_truth<F: ScalarField>(a: &QuantumCell<F>) -> F {
-    F::one() - *a.value()
+    F::ONE - *a.value()
 }
 
 pub fn select_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
@@ -100,7 +97,7 @@ pub fn or_and_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
 
 pub fn idx_to_indicator_ground_truth<F: ScalarField>(inputs: (QuantumCell<F>, usize)) -> Vec<F> {
     let (idx, size) = inputs;
-    let mut indicator = vec![F::zero(); size];
+    let mut indicator = vec![F::ZERO; size];
     let mut idx_value = size + 1;
     for i in 0..size as u64 {
         if F::from(i) == *idx.value() {
@@ -109,7 +106,7 @@ pub fn idx_to_indicator_ground_truth<F: ScalarField>(inputs: (QuantumCell<F>, us
         }
     }
     if idx_value < size {
-        indicator[idx_value] = F::one();
+        indicator[idx_value] = F::ONE;
     }
     indicator
 }
@@ -118,7 +115,7 @@ pub fn select_by_indicator_ground_truth<F: ScalarField>(
     inputs: &(Vec<QuantumCell<F>>, QuantumCell<F>),
 ) -> F {
     let mut idx_value = inputs.0.len() + 1;
-    let mut indicator = vec![F::zero(); inputs.0.len()];
+    let mut indicator = vec![F::ZERO; inputs.0.len()];
     for i in 0..inputs.0.len() as u64 {
         if F::from(i) == *inputs.1.value() {
             idx_value = i as usize;
@@ -126,10 +123,10 @@ pub fn select_by_indicator_ground_truth<F: ScalarField>(
         }
     }
     if idx_value < inputs.0.len() {
-        indicator[idx_value] = F::one();
+        indicator[idx_value] = F::ONE;
     }
     // take cross product of indicator and inputs.0
-    inputs.0.iter().zip(indicator.iter()).fold(F::zero(), |acc, (a, b)| acc + (*a.value() * *b))
+    inputs.0.iter().zip(indicator.iter()).fold(F::ZERO, |acc, (a, b)| acc + (*a.value() * *b))
 }
 
 pub fn select_from_idx_ground_truth<F: ScalarField>(
@@ -142,22 +139,22 @@ pub fn select_from_idx_ground_truth<F: ScalarField>(
             return *inputs.0[i as usize].value();
         }
     }
-    F::zero()
+    F::ZERO
 }
 
 pub fn is_zero_ground_truth<F: ScalarField>(x: F) -> F {
     if x.is_zero().into() {
-        F::one()
+        F::ONE
     } else {
-        F::zero()
+        F::ZERO
     }
 }
 
 pub fn is_equal_ground_truth<F: ScalarField>(inputs: &[QuantumCell<F>]) -> F {
     if inputs[0].value() == inputs[1].value() {
-        F::one()
+        F::ONE
     } else {
-        F::zero()
+        F::ZERO
     }
 }
 
@@ -166,17 +163,13 @@ pub fn lagrange_eval_ground_truth<F: ScalarField>(inputs: &[F]) -> (F, F) {
 }
 */
 
-pub fn get_field_element_ground_truth<F: ScalarField>(n: u64) -> F {
-    F::from(n)
-}
-
 // Range Chip Ground Truths
 
 pub fn is_less_than_ground_truth<F: ScalarField>(inputs: (F, F)) -> F {
     if inputs.0 < inputs.1 {
-        F::one()
+        F::ONE
     } else {
-        F::zero()
+        F::ZERO
     }
 }
 

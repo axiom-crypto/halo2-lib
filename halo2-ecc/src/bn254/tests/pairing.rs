@@ -9,13 +9,13 @@ use crate::{fields::FpStrategy, halo2_proofs::halo2curves::bn256::G2Affine};
 use halo2_base::{
     gates::{
         builder::{
-            CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
+            BaseConfigParams, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
             RangeCircuitBuilder,
         },
         RangeChip,
     },
     halo2_proofs::poly::kzg::multiopen::{ProverGWC, VerifierGWC},
-    utils::fs::gen_srs,
+    utils::{fs::gen_srs, BigPrimeField},
     Context,
 };
 use rand_core::OsRng;
@@ -32,13 +32,12 @@ struct PairingCircuitParams {
     num_limbs: usize,
 }
 
-fn pairing_test<F: PrimeField>(
+fn pairing_test<F: BigPrimeField>(
     ctx: &mut Context<F>,
     params: PairingCircuitParams,
     P: G1Affine,
     Q: G2Affine,
 ) {
-    std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
     let range = RangeChip::<F>::default(params.lookup_bits);
     let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
     let chip = PairingChip::new(&fp_chip);
@@ -61,6 +60,7 @@ fn pairing_test<F: PrimeField>(
 fn random_pairing_circuit(
     params: PairingCircuitParams,
     stage: CircuitBuilderStage,
+    config_params: Option<BaseConfigParams>,
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
     let k = params.degree as usize;
@@ -76,16 +76,14 @@ fn random_pairing_circuit(
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
     pairing_test::<Fr>(builder.main(0), params, P, Q);
 
+    let mut config_params = config_params.unwrap_or_else(|| builder.config(k, Some(20)));
+    config_params.lookup_bits = Some(params.lookup_bits);
     let circuit = match stage {
-        CircuitBuilderStage::Mock => {
-            builder.config(k, Some(20));
-            RangeCircuitBuilder::mock(builder)
+        CircuitBuilderStage::Mock => RangeCircuitBuilder::mock(builder, config_params),
+        CircuitBuilderStage::Keygen => RangeCircuitBuilder::keygen(builder, config_params),
+        CircuitBuilderStage::Prover => {
+            RangeCircuitBuilder::prover(builder, config_params, break_points.unwrap())
         }
-        CircuitBuilderStage::Keygen => {
-            builder.config(k, Some(20));
-            RangeCircuitBuilder::keygen(builder)
-        }
-        CircuitBuilderStage::Prover => RangeCircuitBuilder::prover(builder, break_points.unwrap()),
     };
     end_timer!(start0);
     circuit
@@ -99,7 +97,7 @@ fn test_pairing() {
     )
     .unwrap();
 
-    let circuit = random_pairing_circuit(params, CircuitBuilderStage::Mock, None);
+    let circuit = random_pairing_circuit(params, CircuitBuilderStage::Mock, None, None);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
@@ -124,7 +122,7 @@ fn bench_pairing() -> Result<(), Box<dyn std::error::Error>> {
         println!("---------------------- degree = {k} ------------------------------",);
 
         let params = gen_srs(k);
-        let circuit = random_pairing_circuit(bench_params, CircuitBuilderStage::Keygen, None);
+        let circuit = random_pairing_circuit(bench_params, CircuitBuilderStage::Keygen, None, None);
 
         let vk_time = start_timer!(|| "Generating vkey");
         let vk = keygen_vk(&params, &circuit)?;
@@ -135,11 +133,16 @@ fn bench_pairing() -> Result<(), Box<dyn std::error::Error>> {
         end_timer!(pk_time);
 
         let break_points = circuit.0.break_points.take();
+        let config_params = circuit.0.config_params.clone();
         drop(circuit);
         // create a proof
         let proof_time = start_timer!(|| "Proving time");
-        let circuit =
-            random_pairing_circuit(bench_params, CircuitBuilderStage::Prover, Some(break_points));
+        let circuit = random_pairing_circuit(
+            bench_params,
+            CircuitBuilderStage::Prover,
+            Some(config_params),
+            Some(break_points),
+        );
         let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
         create_proof::<
             KZGCommitmentScheme<Bn256>,

@@ -8,8 +8,8 @@ use super::util::{
     NUM_WORDS_TO_ABSORB, NUM_WORDS_TO_SQUEEZE, RATE, RATE_IN_BITS, RHO_MATRIX, ROUND_CST,
 };
 use crate::halo2_proofs::{
-    arithmetic::FieldExt,
     circuit::{Layouter, Region, Value},
+    halo2curves::ff::PrimeField,
     plonk::{
         Advice, Challenge, Column, ConstraintSystem, Error, Expression, Fixed, SecondPhase,
         TableColumn, VirtualCells,
@@ -20,7 +20,6 @@ use halo2_base::halo2_proofs::{circuit::AssignedCell, plonk::Assigned};
 use itertools::Itertools;
 use log::{debug, info};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use std::env::var;
 use std::marker::PhantomData;
 
 #[cfg(test)]
@@ -32,36 +31,29 @@ const THETA_C_LOOKUP_RANGE: usize = 6;
 const RHO_PI_LOOKUP_RANGE: usize = 4;
 const CHI_BASE_LOOKUP_RANGE: usize = 5;
 
-pub fn get_num_rows_per_round() -> usize {
-    var("KECCAK_ROWS")
-        .unwrap_or_else(|_| "25".to_string())
-        .parse()
-        .expect("Cannot parse KECCAK_ROWS env var as usize")
+fn get_num_bits_per_absorb_lookup(k: u32) -> usize {
+    get_num_bits_per_lookup(ABSORB_LOOKUP_RANGE, k)
 }
 
-fn get_num_bits_per_absorb_lookup() -> usize {
-    get_num_bits_per_lookup(ABSORB_LOOKUP_RANGE)
+fn get_num_bits_per_theta_c_lookup(k: u32) -> usize {
+    get_num_bits_per_lookup(THETA_C_LOOKUP_RANGE, k)
 }
 
-fn get_num_bits_per_theta_c_lookup() -> usize {
-    get_num_bits_per_lookup(THETA_C_LOOKUP_RANGE)
+fn get_num_bits_per_rho_pi_lookup(k: u32) -> usize {
+    get_num_bits_per_lookup(CHI_BASE_LOOKUP_RANGE.max(RHO_PI_LOOKUP_RANGE), k)
 }
 
-fn get_num_bits_per_rho_pi_lookup() -> usize {
-    get_num_bits_per_lookup(CHI_BASE_LOOKUP_RANGE.max(RHO_PI_LOOKUP_RANGE))
-}
-
-fn get_num_bits_per_base_chi_lookup() -> usize {
-    get_num_bits_per_lookup(CHI_BASE_LOOKUP_RANGE.max(RHO_PI_LOOKUP_RANGE))
+fn get_num_bits_per_base_chi_lookup(k: u32) -> usize {
+    get_num_bits_per_lookup(CHI_BASE_LOOKUP_RANGE.max(RHO_PI_LOOKUP_RANGE), k)
 }
 
 /// The number of keccak_f's that can be done in this circuit
 ///
 /// `num_rows` should be number of usable rows without blinding factors
-pub fn get_keccak_capacity(num_rows: usize) -> usize {
+pub fn get_keccak_capacity(num_rows: usize, rows_per_round: usize) -> usize {
     // - 1 because we have a dummy round at the very beginning of multi_keccak
-    // - NUM_WORDS_TO_ABSORB because `absorb_data_next` and `absorb_result_next` query `NUM_WORDS_TO_ABSORB * get_num_rows_per_round()` beyond any row where `q_absorb == 1`
-    (num_rows / get_num_rows_per_round() - 1 - NUM_WORDS_TO_ABSORB) / (NUM_ROUNDS + 1)
+    // - NUM_WORDS_TO_ABSORB because `absorb_data_next` and `absorb_result_next` query `NUM_WORDS_TO_ABSORB * num_rows_per_round` beyond any row where `q_absorb == 1`
+    (num_rows / rows_per_round - 1 - NUM_WORDS_TO_ABSORB) / (NUM_ROUNDS + 1)
 }
 
 pub fn get_num_keccak_f(byte_length: usize) -> usize {
@@ -71,7 +63,7 @@ pub fn get_num_keccak_f(byte_length: usize) -> usize {
 
 /// AbsorbData
 #[derive(Clone, Default, Debug, PartialEq)]
-pub(crate) struct AbsorbData<F: FieldExt> {
+pub(crate) struct AbsorbData<F: PrimeField> {
     from: F,
     absorb: F,
     result: F,
@@ -79,13 +71,13 @@ pub(crate) struct AbsorbData<F: FieldExt> {
 
 /// SqueezeData
 #[derive(Clone, Default, Debug, PartialEq)]
-pub(crate) struct SqueezeData<F: FieldExt> {
+pub(crate) struct SqueezeData<F: PrimeField> {
     packed: F,
 }
 
 /// KeccakRow
 #[derive(Clone, Debug)]
-pub struct KeccakRow<F: FieldExt> {
+pub struct KeccakRow<F: PrimeField> {
     q_enable: bool,
     // q_enable_row: bool,
     q_round: bool,
@@ -103,7 +95,7 @@ pub struct KeccakRow<F: FieldExt> {
     // hash_rlc: Value<F>,
 }
 
-impl<F: FieldExt> KeccakRow<F> {
+impl<F: PrimeField> KeccakRow<F> {
     pub fn dummy_rows(num_rows: usize) -> Vec<Self> {
         (0..num_rows)
             .map(|idx| KeccakRow {
@@ -114,7 +106,7 @@ impl<F: FieldExt> KeccakRow<F> {
                 q_round_last: false,
                 q_padding: false,
                 q_padding_last: false,
-                round_cst: F::zero(),
+                round_cst: F::ZERO,
                 is_final: false,
                 cell_values: Vec::new(),
             })
@@ -124,7 +116,7 @@ impl<F: FieldExt> KeccakRow<F> {
 
 /// Part
 #[derive(Clone, Debug)]
-pub(crate) struct Part<F: FieldExt> {
+pub(crate) struct Part<F: PrimeField> {
     cell: Cell<F>,
     expr: Expression<F>,
     num_bits: usize,
@@ -132,7 +124,7 @@ pub(crate) struct Part<F: FieldExt> {
 
 /// Part Value
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PartValue<F: FieldExt> {
+pub(crate) struct PartValue<F: PrimeField> {
     value: F,
     rot: i32,
     num_bits: usize,
@@ -143,7 +135,7 @@ pub(crate) struct KeccakRegion<F> {
     pub(crate) rows: Vec<Vec<F>>,
 }
 
-impl<F: FieldExt> KeccakRegion<F> {
+impl<F: PrimeField> KeccakRegion<F> {
     pub(crate) fn new() -> Self {
         Self { rows: Vec::new() }
     }
@@ -154,7 +146,7 @@ impl<F: FieldExt> KeccakRegion<F> {
         }
         let row = &mut self.rows[offset];
         while column >= row.len() {
-            row.push(F::zero());
+            row.push(F::ZERO);
         }
         row[column] = value;
     }
@@ -169,7 +161,7 @@ pub(crate) struct Cell<F> {
     rotation: i32,
 }
 
-impl<F: FieldExt> Cell<F> {
+impl<F: PrimeField> Cell<F> {
     pub(crate) fn new(
         meta: &mut VirtualCells<F>,
         column: Column<Advice>,
@@ -216,13 +208,13 @@ impl<F: FieldExt> Cell<F> {
     }
 }
 
-impl<F: FieldExt> Expr<F> for Cell<F> {
+impl<F: PrimeField> Expr<F> for Cell<F> {
     fn expr(&self) -> Expression<F> {
         self.expression.clone()
     }
 }
 
-impl<F: FieldExt> Expr<F> for &Cell<F> {
+impl<F: PrimeField> Expr<F> for &Cell<F> {
     fn expr(&self) -> Expression<F> {
         self.expression.clone()
     }
@@ -247,7 +239,7 @@ pub(crate) struct CellManager<F> {
     num_unused_cells: usize,
 }
 
-impl<F: FieldExt> CellManager<F> {
+impl<F: PrimeField> CellManager<F> {
     pub(crate) fn new(height: usize) -> Self {
         Self {
             height,
@@ -431,18 +423,18 @@ pub fn assign_fixed_custom<F: Field>(
 
 /// Recombines parts back together
 mod decode {
-    use super::{Expr, FieldExt, Part, PartValue};
+    use super::{Expr, Part, PartValue, PrimeField};
     use crate::halo2_proofs::plonk::Expression;
     use crate::util::BIT_COUNT;
 
-    pub(crate) fn expr<F: FieldExt>(parts: Vec<Part<F>>) -> Expression<F> {
+    pub(crate) fn expr<F: PrimeField>(parts: Vec<Part<F>>) -> Expression<F> {
         parts.iter().rev().fold(0.expr(), |acc, part| {
             acc * F::from(1u64 << (BIT_COUNT * part.num_bits)) + part.expr.clone()
         })
     }
 
-    pub(crate) fn value<F: FieldExt>(parts: Vec<PartValue<F>>) -> F {
-        parts.iter().rev().fold(F::zero(), |acc, part| {
+    pub(crate) fn value<F: PrimeField>(parts: Vec<PartValue<F>>) -> F {
+        parts.iter().rev().fold(F::ZERO, |acc, part| {
             acc * F::from(1u64 << (BIT_COUNT * part.num_bits)) + part.value
         })
     }
@@ -451,14 +443,14 @@ mod decode {
 /// Splits a word into parts
 mod split {
     use super::{
-        decode, BaseConstraintBuilder, CellManager, Expr, Field, FieldExt, KeccakRegion, Part,
-        PartValue,
+        decode, BaseConstraintBuilder, CellManager, Expr, Field, KeccakRegion, Part, PartValue,
+        PrimeField,
     };
     use crate::halo2_proofs::plonk::{ConstraintSystem, Expression};
     use crate::util::{pack, pack_part, unpack, WordParts};
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn expr<F: FieldExt>(
+    pub(crate) fn expr<F: PrimeField>(
         meta: &mut ConstraintSystem<F>,
         cell_manager: &mut CellManager<F>,
         cb: &mut BaseConstraintBuilder<F>,
@@ -523,8 +515,8 @@ mod split {
 // table layout in `output_cells` regardless of rotation.
 mod split_uniform {
     use super::{
-        decode, target_part_sizes, BaseConstraintBuilder, Cell, CellManager, Expr, FieldExt,
-        KeccakRegion, Part, PartValue,
+        decode, target_part_sizes, BaseConstraintBuilder, Cell, CellManager, Expr, KeccakRegion,
+        Part, PartValue, PrimeField,
     };
     use crate::halo2_proofs::plonk::{ConstraintSystem, Expression};
     use crate::util::{
@@ -532,7 +524,7 @@ mod split_uniform {
     };
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn expr<F: FieldExt>(
+    pub(crate) fn expr<F: PrimeField>(
         meta: &mut ConstraintSystem<F>,
         output_cells: &[Cell<F>],
         cell_manager: &mut CellManager<F>,
@@ -692,12 +684,12 @@ mod split_uniform {
 
 // Transform values using a lookup table
 mod transform {
-    use super::{transform_to, CellManager, Field, FieldExt, KeccakRegion, Part, PartValue};
+    use super::{transform_to, CellManager, Field, KeccakRegion, Part, PartValue, PrimeField};
     use crate::halo2_proofs::plonk::{ConstraintSystem, TableColumn};
     use itertools::Itertools;
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn expr<F: FieldExt>(
+    pub(crate) fn expr<F: PrimeField>(
         name: &'static str,
         meta: &mut ConstraintSystem<F>,
         cell_manager: &mut CellManager<F>,
@@ -751,12 +743,12 @@ mod transform {
 
 // Transfroms values to cells
 mod transform_to {
-    use super::{Cell, Expr, Field, FieldExt, KeccakRegion, Part, PartValue};
+    use super::{Cell, Expr, Field, KeccakRegion, Part, PartValue, PrimeField};
     use crate::halo2_proofs::plonk::{ConstraintSystem, TableColumn};
     use crate::util::{pack, to_bytes, unpack};
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn expr<F: FieldExt>(
+    pub(crate) fn expr<F: PrimeField>(
         name: &'static str,
         meta: &mut ConstraintSystem<F>,
         cells: &[Cell<F>],
@@ -814,6 +806,15 @@ mod transform_to {
     }
 }
 
+/// Configuration parameters to define [`KeccakCircuitConfig`]
+#[derive(Copy, Clone, Debug, Default)]
+pub struct KeccakConfigParams {
+    /// The circuit degree, i.e., circuit has 2<sup>k</sup> rows
+    pub k: u32,
+    /// The number of rows to use for each round in the keccak_f permutation
+    pub rows_per_round: usize,
+}
+
 /// KeccakConfig
 #[derive(Clone, Debug)]
 pub struct KeccakCircuitConfig<F> {
@@ -836,6 +837,10 @@ pub struct KeccakCircuitConfig<F> {
     normalize_6: [TableColumn; 2],
     chi_base_table: [TableColumn; 2],
     pack_table: [TableColumn; 2],
+
+    // config parameters for convenience
+    pub parameters: KeccakConfigParams,
+
     _marker: PhantomData<F>,
 }
 
@@ -844,7 +849,14 @@ impl<F: Field> KeccakCircuitConfig<F> {
         self.challenge
     }
     /// Return a new KeccakCircuitConfig
-    pub fn new(meta: &mut ConstraintSystem<F>, challenge: Challenge) -> Self {
+    pub fn new(
+        meta: &mut ConstraintSystem<F>,
+        challenge: Challenge,
+        parameters: KeccakConfigParams,
+    ) -> Self {
+        let k = parameters.k;
+        let num_rows_per_round = parameters.rows_per_round;
+
         let q_enable = meta.fixed_column();
         // let q_enable_row = meta.fixed_column();
         let q_first = meta.fixed_column();
@@ -867,8 +879,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
         let chi_base_table = array_init::array_init(|_| meta.lookup_table_column());
         let pack_table = array_init::array_init(|_| meta.lookup_table_column());
 
-        let num_rows_per_round = get_num_rows_per_round();
-        let mut cell_manager = CellManager::new(get_num_rows_per_round());
+        let mut cell_manager = CellManager::new(num_rows_per_round);
         let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
         let mut total_lookup_counter = 0;
 
@@ -919,7 +930,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
         // rlc.
         cell_manager.start_region();
         let mut lookup_counter = 0;
-        let part_size = get_num_bits_per_absorb_lookup();
+        let part_size = get_num_bits_per_absorb_lookup(k);
         let input = absorb_from.expr() + absorb_data.expr();
         let absorb_fat =
             split::expr(meta, &mut cell_manager, &mut cb, input, 0, part_size, false, None);
@@ -978,7 +989,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
         // that allows us to also calculate the rotated value "for free".
         cell_manager.start_region();
         let mut lookup_counter = 0;
-        let part_size_c = get_num_bits_per_theta_c_lookup();
+        let part_size_c = get_num_bits_per_theta_c_lookup(k);
         let mut c_parts = Vec::new();
         for s in s.iter() {
             // Calculate c and split into parts
@@ -1038,7 +1049,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
         // `s[j][2 * i + 3 * j) % 5] = normalize(rot(s[i][j], RHOM[i][j]))`.
         cell_manager.start_region();
         let mut lookup_counter = 0;
-        let part_size = get_num_bits_per_base_chi_lookup();
+        let part_size = get_num_bits_per_base_chi_lookup(k);
         // To combine the rho/pi/chi steps we have to ensure a specific layout so
         // query those cells here first.
         // For chi we have to do `s[i][j] ^ ((~s[(i+1)%5][j]) & s[(i+2)%5][j])`. `j`
@@ -1123,7 +1134,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
         // s[(i+2)%5][j])` five times, on each row (no selector needed).
         // This is calculated by making use of `CHI_BASE_LOOKUP_TABLE`.
         let mut lookup_counter = 0;
-        let part_size_base = get_num_bits_per_base_chi_lookup();
+        let part_size_base = get_num_bits_per_base_chi_lookup(k);
         for idx in 0..num_columns {
             // First fetch the cells we wan to use
             let mut input: [Expression<F>; 5] = array_init::array_init(|_| 0.expr());
@@ -1165,7 +1176,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
         // iota
         // Simply do the single xor on state [0][0].
         cell_manager.start_region();
-        let part_size = get_num_bits_per_absorb_lookup();
+        let part_size = get_num_bits_per_absorb_lookup(k);
         let input = s[0][0].clone() + round_cst_expr.clone();
         let iota_parts =
             split::expr(meta, &mut cell_manager, &mut cb, input, 0, part_size, false, None);
@@ -1508,13 +1519,13 @@ impl<F: Field> KeccakCircuitConfig<F> {
         #[cfg(not(feature = "display"))]
         info!("Total Keccak Columns: {}", cell_manager.get_width());
         info!("num unused cells: {}", cell_manager.get_num_unused_cells());
-        info!("part_size absorb: {}", get_num_bits_per_absorb_lookup());
-        info!("part_size theta: {}", get_num_bits_per_theta_c_lookup());
-        info!("part_size theta c: {}", get_num_bits_per_lookup(THETA_C_LOOKUP_RANGE));
-        info!("part_size theta t: {}", get_num_bits_per_lookup(4));
-        info!("part_size rho/pi: {}", get_num_bits_per_rho_pi_lookup());
-        info!("part_size chi base: {}", get_num_bits_per_base_chi_lookup());
-        info!("uniform part sizes: {:?}", target_part_sizes(get_num_bits_per_theta_c_lookup()));
+        info!("part_size absorb: {}", get_num_bits_per_absorb_lookup(k));
+        info!("part_size theta: {}", get_num_bits_per_theta_c_lookup(k));
+        info!("part_size theta c: {}", get_num_bits_per_lookup(THETA_C_LOOKUP_RANGE, k));
+        info!("part_size theta t: {}", get_num_bits_per_lookup(4, k));
+        info!("part_size rho/pi: {}", get_num_bits_per_rho_pi_lookup(k));
+        info!("part_size chi base: {}", get_num_bits_per_base_chi_lookup(k));
+        info!("uniform part sizes: {:?}", target_part_sizes(get_num_bits_per_theta_c_lookup(k)));
 
         KeccakCircuitConfig {
             challenge,
@@ -1534,6 +1545,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
             normalize_6,
             chi_base_table,
             pack_table,
+            parameters,
             _marker: PhantomData,
         }
     }
@@ -1576,15 +1588,15 @@ impl<F: Field> KeccakCircuitConfig<F> {
         assign_fixed_custom(region, self.round_cst, offset, row.round_cst);
     }
 
-    pub fn load_aux_tables(&self, layouter: &mut impl Layouter<F>) -> Result<(), Error> {
-        load_normalize_table(layouter, "normalize_6", &self.normalize_6, 6u64)?;
-        load_normalize_table(layouter, "normalize_4", &self.normalize_4, 4u64)?;
-        load_normalize_table(layouter, "normalize_3", &self.normalize_3, 3u64)?;
+    pub fn load_aux_tables(&self, layouter: &mut impl Layouter<F>, k: u32) -> Result<(), Error> {
+        load_normalize_table(layouter, "normalize_6", &self.normalize_6, 6u64, k)?;
+        load_normalize_table(layouter, "normalize_4", &self.normalize_4, 4u64, k)?;
+        load_normalize_table(layouter, "normalize_3", &self.normalize_3, 3u64, k)?;
         load_lookup_table(
             layouter,
             "chi base",
             &self.chi_base_table,
-            get_num_bits_per_base_chi_lookup(),
+            get_num_bits_per_base_chi_lookup(k),
             &CHI_BASE_LOOKUP_TABLE,
         )?;
         load_pack_table(layouter, &self.pack_table)
@@ -1593,19 +1605,19 @@ impl<F: Field> KeccakCircuitConfig<F> {
 
 /// Computes and assigns the input RLC values (but not the output RLC values:
 /// see `multi_keccak_phase1`).
-pub fn keccak_phase1<'v, F: Field>(
+pub fn keccak_phase1<F: Field>(
     region: &mut Region<F>,
     keccak_table: &KeccakTable,
     bytes: &[u8],
     challenge: Value<F>,
-    input_rlcs: &mut Vec<KeccakAssignedValue<'v, F>>,
+    input_rlcs: &mut Vec<KeccakAssignedValue<F>>,
     offset: &mut usize,
+    rows_per_round: usize,
 ) {
     let num_chunks = get_num_keccak_f(bytes.len());
-    let num_rows_per_round = get_num_rows_per_round();
 
     let mut byte_idx = 0;
-    let mut data_rlc = Value::known(F::zero());
+    let mut data_rlc = Value::known(F::ZERO);
 
     for _ in 0..num_chunks {
         for round in 0..NUM_ROUNDS + 1 {
@@ -1629,7 +1641,7 @@ pub fn keccak_phase1<'v, F: Field>(
                 input_rlcs.push(input_rlc);
             }
 
-            *offset += num_rows_per_round;
+            *offset += rows_per_round;
         }
     }
 }
@@ -1640,12 +1652,15 @@ pub fn keccak_phase0<F: Field>(
     rows: &mut Vec<KeccakRow<F>>,
     squeeze_digests: &mut Vec<[F; NUM_WORDS_TO_SQUEEZE]>,
     bytes: &[u8],
+    parameters: KeccakConfigParams,
 ) {
+    let k = parameters.k;
+    let num_rows_per_round = parameters.rows_per_round;
+
     let mut bits = into_bits(bytes);
-    let mut s = [[F::zero(); 5]; 5];
+    let mut s = [[F::ZERO; 5]; 5];
     let absorb_positions = get_absorb_positions();
     let num_bytes_in_last_block = bytes.len() % RATE;
-    let num_rows_per_round = get_num_rows_per_round();
     let two = F::from(2u64);
 
     // Padding
@@ -1660,7 +1675,7 @@ pub fn keccak_phase0<F: Field>(
 
     let mut cell_managers = Vec::with_capacity(NUM_ROUNDS + 1);
     let mut regions = Vec::with_capacity(NUM_ROUNDS + 1);
-    let mut hash_words = [F::zero(); NUM_WORDS_TO_SQUEEZE];
+    let mut hash_words = [F::ZERO; NUM_WORDS_TO_SQUEEZE];
 
     for (idx, chunk) in chunks.enumerate() {
         let is_final_block = idx == num_chunks - 1;
@@ -1705,7 +1720,7 @@ pub fn keccak_phase0<F: Field>(
 
             // Absorb
             cell_manager.start_region();
-            let part_size = get_num_bits_per_absorb_lookup();
+            let part_size = get_num_bits_per_absorb_lookup(k);
             let input = absorb_row.from + absorb_row.absorb;
             let absorb_fat =
                 split::value(&mut cell_manager, &mut region, input, 0, part_size, false, None);
@@ -1743,7 +1758,7 @@ pub fn keccak_phase0<F: Field>(
 
             if round != NUM_ROUNDS {
                 // Theta
-                let part_size = get_num_bits_per_theta_c_lookup();
+                let part_size = get_num_bits_per_theta_c_lookup(k);
                 let mut bcf = Vec::new();
                 for s in &s {
                     let c = s[0] + s[1] + s[2] + s[3] + s[4];
@@ -1765,7 +1780,7 @@ pub fn keccak_phase0<F: Field>(
                     bc.push(bc_norm);
                 }
                 cell_manager.start_region();
-                let mut os = [[F::zero(); 5]; 5];
+                let mut os = [[F::ZERO; 5]; 5];
                 for i in 0..5 {
                     let t = decode::value(bc[(i + 4) % 5].clone())
                         + decode::value(rotate(bc[(i + 1) % 5].clone(), 1, part_size));
@@ -1777,7 +1792,7 @@ pub fn keccak_phase0<F: Field>(
                 cell_manager.start_region();
 
                 // Rho/Pi
-                let part_size = get_num_bits_per_base_chi_lookup();
+                let part_size = get_num_bits_per_base_chi_lookup(k);
                 let target_word_sizes = target_part_sizes(part_size);
                 let num_word_parts = target_word_sizes.len();
                 let mut rho_pi_chi_cells: [[[Vec<Cell<F>>; 5]; 5]; 3] =
@@ -1826,9 +1841,9 @@ pub fn keccak_phase0<F: Field>(
                 cell_manager.start_region();
 
                 // Chi
-                let part_size_base = get_num_bits_per_base_chi_lookup();
+                let part_size_base = get_num_bits_per_base_chi_lookup(k);
                 let three_packed = pack::<F>(&vec![3u8; part_size_base]);
-                let mut os = [[F::zero(); 5]; 5];
+                let mut os = [[F::ZERO; 5]; 5];
                 for j in 0..5 {
                     for i in 0..5 {
                         let mut s_parts = Vec::new();
@@ -1858,7 +1873,7 @@ pub fn keccak_phase0<F: Field>(
                 cell_manager.start_region();
 
                 // iota
-                let part_size = get_num_bits_per_absorb_lookup();
+                let part_size = get_num_bits_per_absorb_lookup(k);
                 let input = s[0][0] + pack_u64::<F>(ROUND_CST[round]);
                 let iota_parts = split::value::<F>(
                     &mut cell_manager,
@@ -1961,28 +1976,45 @@ pub fn multi_keccak_phase1<'a, 'v, F: Field>(
     bytes: impl IntoIterator<Item = &'a [u8]>,
     challenge: Value<F>,
     squeeze_digests: Vec<[F; NUM_WORDS_TO_SQUEEZE]>,
+    parameters: KeccakConfigParams,
 ) -> (Vec<KeccakAssignedValue<'v, F>>, Vec<KeccakAssignedValue<'v, F>>) {
     let mut input_rlcs = Vec::with_capacity(squeeze_digests.len());
     let mut output_rlcs = Vec::with_capacity(squeeze_digests.len());
 
-    let num_rows_per_round = get_num_rows_per_round();
-    for idx in 0..num_rows_per_round {
+    let rows_per_round = parameters.rows_per_round;
+    for idx in 0..rows_per_round {
         [keccak_table.input_rlc, keccak_table.output_rlc]
-            .map(|column| assign_advice_custom(region, column, idx, Value::known(F::zero())));
+            .map(|column| assign_advice_custom(region, column, idx, Value::known(F::ZERO)));
     }
 
-    let mut offset = num_rows_per_round;
+    let mut offset = rows_per_round;
     for bytes in bytes {
-        keccak_phase1(region, keccak_table, bytes, challenge, &mut input_rlcs, &mut offset);
+        keccak_phase1(
+            region,
+            keccak_table,
+            bytes,
+            challenge,
+            &mut input_rlcs,
+            &mut offset,
+            rows_per_round,
+        );
     }
     debug_assert!(input_rlcs.len() <= squeeze_digests.len());
     while input_rlcs.len() < squeeze_digests.len() {
-        keccak_phase1(region, keccak_table, &[], challenge, &mut input_rlcs, &mut offset);
+        keccak_phase1(
+            region,
+            keccak_table,
+            &[],
+            challenge,
+            &mut input_rlcs,
+            &mut offset,
+            rows_per_round,
+        );
     }
 
-    offset = num_rows_per_round;
+    offset = rows_per_round;
     for hash_words in squeeze_digests {
-        offset += num_rows_per_round * NUM_ROUNDS;
+        offset += rows_per_round * NUM_ROUNDS;
         let hash_rlc = hash_words
             .into_iter()
             .flat_map(|a| to_bytes::value(&unpack(a)))
@@ -1991,7 +2023,7 @@ pub fn multi_keccak_phase1<'a, 'v, F: Field>(
             .unwrap();
         let output_rlc = assign_advice_custom(region, keccak_table.output_rlc, offset, hash_rlc);
         output_rlcs.push(output_rlc);
-        offset += num_rows_per_round;
+        offset += rows_per_round;
     }
 
     (input_rlcs, output_rlcs)
@@ -2001,8 +2033,9 @@ pub fn multi_keccak_phase1<'a, 'v, F: Field>(
 pub fn multi_keccak_phase0<F: Field>(
     bytes: &[Vec<u8>],
     capacity: Option<usize>,
+    parameters: KeccakConfigParams,
 ) -> (Vec<KeccakRow<F>>, Vec<[F; NUM_WORDS_TO_SQUEEZE]>) {
-    let num_rows_per_round = get_num_rows_per_round();
+    let num_rows_per_round = parameters.rows_per_round;
     let mut rows =
         Vec::with_capacity((1 + capacity.unwrap_or(0) * (NUM_ROUNDS + 1)) * num_rows_per_round);
     // Dummy first row so that the initial data is absorbed
@@ -2015,7 +2048,7 @@ pub fn multi_keccak_phase0<F: Field>(
             let num_keccak_f = get_num_keccak_f(bytes.len());
             let mut squeeze_digests = Vec::with_capacity(num_keccak_f);
             let mut rows = Vec::with_capacity(num_keccak_f * (NUM_ROUNDS + 1) * num_rows_per_round);
-            keccak_phase0(&mut rows, &mut squeeze_digests, bytes);
+            keccak_phase0(&mut rows, &mut squeeze_digests, bytes, parameters);
             (rows, squeeze_digests)
         })
         .collect::<Vec<_>>();
@@ -2028,11 +2061,11 @@ pub fn multi_keccak_phase0<F: Field>(
 
     if let Some(capacity) = capacity {
         // Pad with no data hashes to the expected capacity
-        while rows.len() < (1 + capacity * (NUM_ROUNDS + 1)) * get_num_rows_per_round() {
-            keccak_phase0(&mut rows, &mut squeeze_digests, &[]);
+        while rows.len() < (1 + capacity * (NUM_ROUNDS + 1)) * num_rows_per_round {
+            keccak_phase0(&mut rows, &mut squeeze_digests, &[], parameters);
         }
         // Check that we are not over capacity
-        if rows.len() > (1 + capacity * (NUM_ROUNDS + 1)) * get_num_rows_per_round() {
+        if rows.len() > (1 + capacity * (NUM_ROUNDS + 1)) * num_rows_per_round {
             panic!("{:?}", Error::BoundsFailure);
         }
     }

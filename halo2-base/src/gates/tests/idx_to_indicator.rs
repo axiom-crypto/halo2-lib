@@ -1,6 +1,7 @@
+use crate::ff::Field;
 use crate::{
     gates::{
-        builder::{GateCircuitBuilder, GateThreadBuilder},
+        builder::{GateThreadBuilder, RangeCircuitBuilder},
         GateChip, GateInstructions,
     },
     halo2_proofs::{
@@ -12,7 +13,6 @@ use crate::{
     utils::testing::{check_proof, gen_proof},
     QuantumCell::Witness,
 };
-use ff::Field;
 use itertools::Itertools;
 use rand::{rngs::OsRng, thread_rng, Rng};
 
@@ -25,9 +25,8 @@ fn test_idx_to_indicator_gen(k: u32, len: usize) {
     let indicator = gate.idx_to_indicator(builder.main(0), dummy_idx, len);
     // get the offsets of the indicator cells for later 'pranking'
     let ind_offsets = indicator.iter().map(|ind| ind.cell.unwrap().offset).collect::<Vec<_>>();
-    // set env vars
-    builder.config(k as usize, Some(9));
-    let circuit = GateCircuitBuilder::keygen(builder);
+    let config_params = builder.config(k as usize, Some(9));
+    let circuit = RangeCircuitBuilder::keygen(builder, config_params.clone());
 
     let params = ParamsKZG::setup(k, OsRng);
     // generate proving key
@@ -46,7 +45,7 @@ fn test_idx_to_indicator_gen(k: u32, len: usize) {
         for (offset, witness) in ind_offsets.iter().zip_eq(ind_witnesses) {
             builder.main(0).advice[*offset] = Assigned::Trivial(*witness);
         }
-        let circuit = GateCircuitBuilder::prover(builder, vec![vec![]]); // no break points
+        let circuit = RangeCircuitBuilder::prover(builder, config_params.clone(), vec![vec![]]); // no break points
         gen_proof(&params, &pk, circuit)
     };
 

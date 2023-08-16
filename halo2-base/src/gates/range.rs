@@ -19,7 +19,7 @@ use num_integer::Integer;
 use num_traits::One;
 use std::{cmp::Ordering, ops::Shl};
 
-use super::flex_gate::GateChip;
+use super::{builder::BaseConfigParams, flex_gate::GateChip};
 
 /// Specifies the gate strategy for the range chip
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -33,6 +33,73 @@ pub enum RangeStrategy {
     ///
     /// Using `a + b * c` instead of `a * b + c` allows for "chaining" of gates, i.e., the output of one gate becomes `a` in the next gate.
     Vertical, // vanilla implementation with vertical basic gate(s)
+}
+
+/// Smart Halo2 circuit config that has different variants depending on whether you need range checks or not.
+/// The difference is that to enable range checks, the Halo2 config needs to add a lookup table.
+#[derive(Clone, Debug)]
+pub enum BaseConfig<F: ScalarField> {
+    /// Config for a circuit that does not use range checks
+    WithoutRange(FlexGateConfig<F>),
+    /// Config for a circuit that does use range checks
+    WithRange(RangeConfig<F>),
+}
+
+impl<F: ScalarField> BaseConfig<F> {
+    /// Generates a new `BaseConfig` depending on `params`.
+    /// - It will generate a `RangeConfig` is `params` has `lookup_bits` not None **and** `num_lookup_advice_per_phase` are not all empty or zero (i.e., if `params` indicates that the circuit actually requires a lookup table).
+    /// - Otherwise it will generate a `FlexGateConfig`.
+    pub fn configure(meta: &mut ConstraintSystem<F>, params: BaseConfigParams) -> Self {
+        let total_lookup_advice_cols = params.num_lookup_advice_per_phase.iter().sum::<usize>();
+        if params.lookup_bits.is_some() && total_lookup_advice_cols != 0 {
+            // We only add a lookup table if lookup bits is not None
+            Self::WithRange(RangeConfig::configure(
+                meta,
+                match params.strategy {
+                    GateStrategy::Vertical => RangeStrategy::Vertical,
+                },
+                &params.num_advice_per_phase,
+                &params.num_lookup_advice_per_phase,
+                params.num_fixed,
+                params.lookup_bits.unwrap(),
+                params.k,
+            ))
+        } else {
+            Self::WithoutRange(FlexGateConfig::configure(
+                meta,
+                params.strategy,
+                &params.num_advice_per_phase,
+                params.num_fixed,
+                params.k,
+            ))
+        }
+    }
+
+    /// Returns the inner [`FlexGateConfig`]
+    pub fn gate(&self) -> &FlexGateConfig<F> {
+        match self {
+            Self::WithoutRange(config) => config,
+            Self::WithRange(config) => &config.gate,
+        }
+    }
+
+    /// Returns a slice of the special advice columns with lookup enabled, per phase.
+    /// Returns empty slice if there are no lookups enabled.
+    pub fn lookup_advice(&self) -> &[Vec<Column<Advice>>] {
+        match self {
+            Self::WithoutRange(_) => &[],
+            Self::WithRange(config) => &config.lookup_advice,
+        }
+    }
+
+    /// Returns a slice of the selector column to enable lookup -- this is only in the situation where there is a single advice column of any kind -- per phase
+    /// Returns empty slice if there are no lookups enabled.
+    pub fn q_lookup(&self) -> &[Option<Selector>] {
+        match self {
+            Self::WithoutRange(_) => &[],
+            Self::WithRange(config) => &config.q_lookup,
+        }
+    }
 }
 
 /// Configuration for Range Chip
@@ -78,10 +145,12 @@ impl<F: ScalarField> RangeConfig<F> {
         num_lookup_advice: &[usize],
         num_fixed: usize,
         lookup_bits: usize,
-        // params.k()
         circuit_degree: usize,
     ) -> Self {
         assert!(lookup_bits <= 28);
+        // sanity check: only create lookup table if there are lookup_advice columns
+        assert!(!num_lookup_advice.is_empty(), "You are creating a RangeConfig but don't seem to need a lookup table, please double-check if you're using lookups correctly. Consider setting lookup_bits = None in BaseConfigParams");
+
         let lookup = meta.lookup_table_column();
 
         let gate = FlexGateConfig::configure(
@@ -118,11 +187,8 @@ impl<F: ScalarField> RangeConfig<F> {
 
         let mut config =
             Self { lookup_advice, q_lookup, lookup, lookup_bits, gate, _strategy: range_strategy };
+        config.create_lookup(meta);
 
-        // sanity check: only create lookup table if there are lookup_advice columns
-        if !num_lookup_advice.is_empty() {
-            config.create_lookup(meta);
-        }
         config.gate.max_rows = (1 << circuit_degree) - meta.minimum_rows();
         assert!(
             (1 << lookup_bits) <= config.gate.max_rows,
@@ -227,7 +293,7 @@ pub trait RangeInstructions<F: ScalarField> {
             (bit_length(b) + self.lookup_bits() - 1) / self.lookup_bits() * self.lookup_bits();
 
         self.range_check(ctx, a, range_bits);
-        self.check_less_than(ctx, a, Constant(self.gate().get_field_element(b)), range_bits)
+        self.check_less_than(ctx, a, Constant(F::from(b)), range_bits)
     }
 
     /// Performs a range check that `a` has at most `bit_length(b)` bits and then constrains that `a` is less than `b`.
@@ -275,7 +341,7 @@ pub trait RangeInstructions<F: ScalarField> {
             (bit_length(b) + self.lookup_bits() - 1) / self.lookup_bits() * self.lookup_bits();
 
         self.range_check(ctx, a, range_bits);
-        self.is_less_than(ctx, a, Constant(self.gate().get_field_element(b)), range_bits)
+        self.is_less_than(ctx, a, Constant(F::from(b)), range_bits)
     }
 
     /// Performs a range check that `a` has at most `ceil(b.bits() / lookup_bits) * lookup_bits` bits and then constrains that `a` is in `[0,b)`.
@@ -382,7 +448,7 @@ pub trait RangeInstructions<F: ScalarField> {
         let [div_lo, div_hi, div, rem] = [-5, -4, -2, -1].map(|i| ctx.get(i));
         self.range_check(ctx, div_lo, b_num_bits);
         if a_num_bits <= b_num_bits {
-            self.gate().assert_is_const(ctx, &div_hi, &F::zero());
+            self.gate().assert_is_const(ctx, &div_hi, &F::ZERO);
         } else {
             self.range_check(ctx, div_hi, a_num_bits - b_num_bits);
         }
@@ -415,7 +481,7 @@ pub trait RangeInstructions<F: ScalarField> {
     ) -> AssignedValue<F> {
         let a_big = fe_to_biguint(a.value());
         let bit_v = F::from(a_big.bit(0));
-        let two = self.gate().get_field_element(2u64);
+        let two = F::from(2u64);
         let h_v = F::from_bytes_le(&(a_big >> 1usize).to_bytes_le());
 
         ctx.assign_region([Witness(bit_v), Witness(h_v), Constant(two), Existing(a)], [0]);
@@ -428,13 +494,11 @@ pub trait RangeInstructions<F: ScalarField> {
     }
 }
 
-/// A chip that implements RangeInstructions which provides methods to constrain a field element `x` is within a range of bits.
+/// # RangeChip
+/// This chip provides methods that rely on "range checking" that a field element `x` is within a range of bits.
+/// Range checks are done using a lookup table with the numbers [0, 2<sup>lookup_bits</sup>).
 #[derive(Clone, Debug)]
 pub struct RangeChip<F: ScalarField> {
-    /// # RangeChip
-    /// Provides methods to constrain a field element `x` is within a range of  bits.
-    /// Declares a lookup table of [0, 2<sup>lookup_bits</sup>) and constrains whether a field element appears in this table.
-
     /// [GateStrategy] for advice values in this chip.
     strategy: RangeStrategy,
     /// Underlying [GateChip] for this chip.
@@ -455,7 +519,7 @@ impl<F: ScalarField> RangeChip<F> {
         let mut running_base = limb_base;
         let num_bases = F::CAPACITY as usize / lookup_bits;
         let mut limb_bases = Vec::with_capacity(num_bases + 1);
-        limb_bases.extend([Constant(F::one()), Constant(running_base)]);
+        limb_bases.extend([Constant(F::ONE), Constant(running_base)]);
         for _ in 2..=num_bases {
             running_base *= &limb_base;
             limb_bases.push(Constant(running_base));
@@ -487,7 +551,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         self.strategy
     }
 
-    /// Defines the number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>).
+    /// Returns the number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>).
     fn lookup_bits(&self) -> usize {
         self.lookup_bits
     }
@@ -506,7 +570,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
     /// * `ceil(range_bits / lookup_bits) * lookup_bits <= F::CAPACITY`
     fn range_check(&self, ctx: &mut Context<F>, a: AssignedValue<F>, range_bits: usize) {
         if range_bits == 0 {
-            self.gate.assert_is_const(ctx, &a, &F::zero());
+            self.gate.assert_is_const(ctx, &a, &F::ZERO);
             return;
         }
         // the number of limbs
@@ -576,10 +640,10 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
                 let cells = [
                     Witness(shift_a_val - b.value()),
                     b,
-                    Constant(F::one()),
+                    Constant(F::ONE),
                     Witness(shift_a_val),
                     Constant(-pow_of_two),
-                    Constant(F::one()),
+                    Constant(F::ONE),
                     a,
                 ];
                 ctx.assign_region(cells, [0, 3]);
@@ -625,10 +689,10 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
                     [
                         Witness(shifted_val),
                         b,
-                        Constant(F::one()),
+                        Constant(F::ONE),
                         Witness(shift_a_val),
                         Constant(-pow_padded),
-                        Constant(F::one()),
+                        Constant(F::ONE),
                         a,
                     ],
                     [0, 3],

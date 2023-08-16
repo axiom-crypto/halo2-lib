@@ -1,7 +1,8 @@
-use ff::PrimeField;
+use crate::ff::PrimeField;
 use halo2_base::gates::{
     builder::{
-        CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints, RangeCircuitBuilder,
+        BaseConfigParams, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
+        RangeCircuitBuilder,
     },
     RangeChip,
 };
@@ -17,7 +18,6 @@ fn msm_test(
     scalars: Vec<Fr>,
     window_bits: usize,
 ) {
-    std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
     let range = RangeChip::<Fr>::default(params.lookup_bits);
     let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
     let ecc_chip = EccChip::new(&fp_chip);
@@ -56,6 +56,7 @@ fn msm_test(
 fn custom_msm_circuit(
     params: MSMCircuitParams,
     stage: CircuitBuilderStage,
+    config_params: Option<BaseConfigParams>,
     break_points: Option<MultiPhaseThreadBreakPoints>,
     bases: Vec<G1Affine>,
     scalars: Vec<Fr>,
@@ -69,17 +70,14 @@ fn custom_msm_circuit(
 
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
     msm_test(&mut builder, params, bases, scalars, params.window_bits);
-
+    let mut config_params = config_params.unwrap_or_else(|| builder.config(k, Some(20)));
+    config_params.lookup_bits = Some(params.lookup_bits);
     let circuit = match stage {
-        CircuitBuilderStage::Mock => {
-            builder.config(k, Some(20));
-            RangeCircuitBuilder::mock(builder)
+        CircuitBuilderStage::Mock => RangeCircuitBuilder::mock(builder, config_params),
+        CircuitBuilderStage::Keygen => RangeCircuitBuilder::keygen(builder, config_params),
+        CircuitBuilderStage::Prover => {
+            RangeCircuitBuilder::prover(builder, config_params, break_points.unwrap())
         }
-        CircuitBuilderStage::Keygen => {
-            builder.config(k, Some(20));
-            RangeCircuitBuilder::keygen(builder)
-        }
-        CircuitBuilderStage::Prover => RangeCircuitBuilder::prover(builder, break_points.unwrap()),
     };
     end_timer!(start0);
     circuit
@@ -98,7 +96,7 @@ fn test_fb_msm1() {
     let bases = vec![random_point, random_point, random_point];
     let scalars = vec![Fr::one(), Fr::one(), -Fr::one() - Fr::one()];
 
-    let circuit = custom_msm_circuit(params, CircuitBuilderStage::Mock, None, bases, scalars);
+    let circuit = custom_msm_circuit(params, CircuitBuilderStage::Mock, None, None, bases, scalars);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
@@ -115,7 +113,7 @@ fn test_fb_msm2() {
     let bases = vec![random_point, random_point, (random_point + random_point).to_affine()];
     let scalars = vec![Fr::one(), Fr::one(), -Fr::one()];
 
-    let circuit = custom_msm_circuit(params, CircuitBuilderStage::Mock, None, bases, scalars);
+    let circuit = custom_msm_circuit(params, CircuitBuilderStage::Mock, None, None, bases, scalars);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
@@ -137,7 +135,7 @@ fn test_fb_msm3() {
     ];
     let scalars = vec![Fr::one(), Fr::one(), Fr::one(), -Fr::one()];
 
-    let circuit = custom_msm_circuit(params, CircuitBuilderStage::Mock, None, bases, scalars);
+    let circuit = custom_msm_circuit(params, CircuitBuilderStage::Mock, None, None, bases, scalars);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
@@ -159,7 +157,7 @@ fn test_fb_msm4() {
     ];
     let scalars = vec![Fr::one(), Fr::one(), Fr::one(), -Fr::one()];
 
-    let circuit = custom_msm_circuit(params, CircuitBuilderStage::Mock, None, bases, scalars);
+    let circuit = custom_msm_circuit(params, CircuitBuilderStage::Mock, None, None, bases, scalars);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
@@ -178,6 +176,6 @@ fn test_fb_msm5() {
         vec![random_point, random_point, random_point, (random_point + random_point).to_affine()];
     let scalars = vec![-Fr::one(), -Fr::one(), Fr::one(), Fr::one()];
 
-    let circuit = custom_msm_circuit(params, CircuitBuilderStage::Mock, None, bases, scalars);
+    let circuit = custom_msm_circuit(params, CircuitBuilderStage::Mock, None, None, bases, scalars);
     MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
 }

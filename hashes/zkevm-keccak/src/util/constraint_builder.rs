@@ -1,5 +1,5 @@
 use super::expression::Expr;
-use crate::halo2_proofs::{arithmetic::FieldExt, plonk::Expression};
+use crate::halo2_proofs::{halo2curves::ff::PrimeField, plonk::Expression};
 
 #[derive(Default)]
 pub struct BaseConstraintBuilder<F> {
@@ -8,7 +8,7 @@ pub struct BaseConstraintBuilder<F> {
     pub condition: Option<Expression<F>>,
 }
 
-impl<F: FieldExt> BaseConstraintBuilder<F> {
+impl<F: PrimeField> BaseConstraintBuilder<F> {
     pub(crate) fn new(max_degree: usize) -> Self {
         BaseConstraintBuilder { constraints: Vec::new(), max_degree, condition: None }
     }

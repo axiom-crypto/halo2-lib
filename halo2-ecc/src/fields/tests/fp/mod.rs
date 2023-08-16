@@ -1,7 +1,6 @@
-use std::env::set_var;
-
+use crate::ff::{Field as _, PrimeField as _};
 use crate::fields::fp::FpChip;
-use crate::fields::{FieldChip, PrimeField};
+use crate::fields::FieldChip;
 use crate::halo2_proofs::{
     dev::MockProver,
     halo2curves::bn256::{Fq, Fr},
@@ -25,15 +24,15 @@ fn fp_chip_test(
     num_limbs: usize,
     f: impl Fn(&mut Context<Fr>, &FpChip<Fr, Fq>),
 ) {
-    set_var("LOOKUP_BITS", lookup_bits.to_string());
     let range = RangeChip::<Fr>::default(lookup_bits);
     let chip = FpChip::<Fr, Fq>::new(&range, limb_bits, num_limbs);
 
     let mut builder = GateThreadBuilder::mock();
     f(builder.main(0), &chip);
 
-    builder.config(k, Some(10));
-    let circuit = RangeCircuitBuilder::mock(builder);
+    let mut config_params = builder.config(k, Some(10));
+    config_params.lookup_bits = Some(lookup_bits);
+    let circuit = RangeCircuitBuilder::mock(builder, config_params);
     MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
@@ -86,7 +85,7 @@ fn plot_fp() {
     let mut builder = GateThreadBuilder::keygen();
     fp_mul_test(builder.main(0), k - 1, 88, 3, a, b);
 
-    builder.config(k, Some(10));
-    let circuit = RangeCircuitBuilder::keygen(builder);
+    let config_params = builder.config(k, Some(10), Some(k - 1));
+    let circuit = RangeCircuitBuilder::keygen(builder, config_params);
     halo2_proofs::dev::CircuitLayout::default().render(k as u32, &circuit, &root).unwrap();
 }

@@ -16,7 +16,6 @@ use crate::{
 };
 use itertools::Itertools;
 use rand::rngs::OsRng;
-use std::env;
 
 // soundness checks for `raw_bytes_to` function
 fn test_raw_bytes_to_gen<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
@@ -28,7 +27,6 @@ fn test_raw_bytes_to_gen<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
     // first create proving and verifying key
     let mut builder = GateThreadBuilder::<Fr>::keygen();
     let lookup_bits = 3;
-    env::set_var("LOOKUP_BITS", lookup_bits.to_string());
     let range_chip = RangeChip::<Fr>::default(lookup_bits);
     let safe_type_chip = SafeTypeChip::new(&range_chip);
 
@@ -41,9 +39,10 @@ fn test_raw_bytes_to_gen<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
     // get the offsets of the safe value cells for later 'pranking'
     let safe_value_offsets =
         safe_value.value().iter().map(|v| v.cell.unwrap().offset).collect::<Vec<_>>();
-    // set env vars
-    builder.config(k as usize, Some(9));
-    let circuit = RangeCircuitBuilder::keygen(builder);
+
+    let mut config_params = builder.config(k as usize, Some(9));
+    config_params.lookup_bits = Some(lookup_bits);
+    let circuit = RangeCircuitBuilder::keygen(builder, config_params.clone());
 
     let params = ParamsKZG::setup(k, OsRng);
     // generate proving key
@@ -64,7 +63,7 @@ fn test_raw_bytes_to_gen<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
         for (offset, witness) in safe_value_offsets.iter().zip_eq(outputs) {
             builder.main(0).advice[*offset] = Assigned::<Fr>::Trivial(*witness);
         }
-        let circuit = RangeCircuitBuilder::prover(builder, vec![vec![]]); // no break points
+        let circuit = RangeCircuitBuilder::prover(builder, config_params, vec![vec![]]); // no break points
         gen_proof(&params, &pk, circuit)
     };
     let pf = gen_pf(raw_bytes, outputs);

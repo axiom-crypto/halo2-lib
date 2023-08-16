@@ -18,11 +18,14 @@ use crate::halo2_proofs::{
         Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
     },
 };
+use halo2_base::{halo2_proofs::halo2curves::ff::FromUniformBytes, SKIP_FIRST_PASS};
 use rand_core::OsRng;
+use test_case::test_case;
 
 /// KeccakCircuit
 #[derive(Default, Clone, Debug)]
 pub struct KeccakCircuit<F: Field> {
+    config: KeccakConfigParams,
     inputs: Vec<Vec<u8>>,
     num_rows: Option<usize>,
     _marker: PhantomData<F>,
@@ -32,17 +35,26 @@ pub struct KeccakCircuit<F: Field> {
 impl<F: Field> Circuit<F> for KeccakCircuit<F> {
     type Config = KeccakCircuitConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
+    type Params = KeccakConfigParams;
+
+    fn params(&self) -> Self::Params {
+        self.config
+    }
 
     fn without_witnesses(&self) -> Self {
         Self::default()
     }
 
-    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+    fn configure_with_params(meta: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config {
         // MockProver complains if you only have columns in SecondPhase, so let's just make an empty column in FirstPhase
         meta.advice_column();
 
         let challenge = meta.challenge_usable_after(FirstPhase);
-        KeccakCircuitConfig::new(meta, challenge)
+        KeccakCircuitConfig::new(meta, challenge, params)
+    }
+
+    fn configure(_: &mut ConstraintSystem<F>) -> Self::Config {
+        unreachable!()
     }
 
     fn synthesize(
@@ -50,9 +62,10 @@ impl<F: Field> Circuit<F> for KeccakCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        config.load_aux_tables(&mut layouter)?;
+        let params = config.parameters;
+        config.load_aux_tables(&mut layouter, params.k)?;
         let mut challenge = layouter.get_challenge(config.challenge);
-        let mut first_pass = true;
+        let mut first_pass = SKIP_FIRST_PASS;
         layouter.assign_region(
             || "keccak circuit",
             |mut region| {
@@ -60,7 +73,11 @@ impl<F: Field> Circuit<F> for KeccakCircuit<F> {
                     first_pass = false;
                     return Ok(());
                 }
-                let (witness, squeeze_digests) = multi_keccak_phase0(&self.inputs, self.capacity());
+                let (witness, squeeze_digests) = multi_keccak_phase0(
+                    &self.inputs,
+                    self.num_rows.map(|nr| get_keccak_capacity(nr, params.rows_per_round)),
+                    params,
+                );
                 config.assign(&mut region, &witness);
 
                 #[cfg(feature = "halo2-axiom")]
@@ -74,7 +91,9 @@ impl<F: Field> Circuit<F> for KeccakCircuit<F> {
                     self.inputs.iter().map(|v| v.as_slice()),
                     challenge,
                     squeeze_digests,
+                    params,
                 );
+                println!("finished keccak circuit");
                 Ok(())
             },
         )?;
@@ -85,30 +104,27 @@ impl<F: Field> Circuit<F> for KeccakCircuit<F> {
 
 impl<F: Field> KeccakCircuit<F> {
     /// Creates a new circuit instance
-    pub fn new(num_rows: Option<usize>, inputs: Vec<Vec<u8>>) -> Self {
-        KeccakCircuit { inputs, num_rows, _marker: PhantomData }
-    }
-
-    /// The number of keccak_f's that can be done in this circuit
-    pub fn capacity(&self) -> Option<usize> {
-        // Subtract two for unusable rows
-        self.num_rows.map(|num_rows| num_rows / ((NUM_ROUNDS + 1) * get_num_rows_per_round()) - 2)
+    pub fn new(config: KeccakConfigParams, num_rows: Option<usize>, inputs: Vec<Vec<u8>>) -> Self {
+        KeccakCircuit { config, inputs, num_rows, _marker: PhantomData }
     }
 }
 
-fn verify<F: Field>(k: u32, inputs: Vec<Vec<u8>>, _success: bool) {
-    let circuit = KeccakCircuit::new(Some(2usize.pow(k)), inputs);
+fn verify<F: Field + Ord + FromUniformBytes<64>>(
+    config: KeccakConfigParams,
+    inputs: Vec<Vec<u8>>,
+    _success: bool,
+) {
+    let k = config.k;
+    let circuit = KeccakCircuit::new(config, Some(2usize.pow(k) - 109), inputs);
 
     let prover = MockProver::<F>::run(k, &circuit, vec![]).unwrap();
     prover.assert_satisfied();
 }
 
-/// Cmdline: KECCAK_ROWS=28 KECCAK_DEGREE=14 RUST_LOG=info cargo test -- --nocapture packed_multi_keccak_simple
-#[test]
-fn packed_multi_keccak_simple() {
+#[test_case(14, 28; "k: 14, rows_per_round: 28")]
+fn packed_multi_keccak_simple(k: u32, rows_per_round: usize) {
     let _ = env_logger::builder().is_test(true).try_init();
 
-    let k = 14;
     let inputs = vec![
         vec![],
         (0u8..1).collect::<Vec<_>>(),
@@ -116,14 +132,14 @@ fn packed_multi_keccak_simple() {
         (0u8..136).collect::<Vec<_>>(),
         (0u8..200).collect::<Vec<_>>(),
     ];
-    verify::<Fr>(k, inputs, true);
+    verify::<Fr>(KeccakConfigParams { k, rows_per_round }, inputs, true);
 }
 
-#[test]
-fn packed_multi_keccak_prover() {
+#[test_case(14, 25 ; "k: 14, rows_per_round: 25")]
+#[test_case(18, 9 ; "k: 18, rows_per_round: 9")]
+fn packed_multi_keccak_prover(k: u32, rows_per_round: usize) {
     let _ = env_logger::builder().is_test(true).try_init();
 
-    let k: u32 = var("KECCAK_DEGREE").unwrap_or_else(|_| "14".to_string()).parse().unwrap();
     let params = ParamsKZG::<Bn256>::setup(k, OsRng);
 
     let inputs = vec![
@@ -133,7 +149,8 @@ fn packed_multi_keccak_prover() {
         (0u8..136).collect::<Vec<_>>(),
         (0u8..200).collect::<Vec<_>>(),
     ];
-    let circuit = KeccakCircuit::new(Some(2usize.pow(k)), inputs);
+    let circuit =
+        KeccakCircuit::new(KeccakConfigParams { k, rows_per_round }, Some(2usize.pow(k)), inputs);
 
     let vk = keygen_vk(&params, &circuit).unwrap();
     let pk = keygen_pk(&params, vk, &circuit).unwrap();
@@ -141,6 +158,7 @@ fn packed_multi_keccak_prover() {
     let verifier_params: ParamsVerifierKZG<Bn256> = params.verifier_params().clone();
     let mut transcript = Blake2bWrite::<_, G1Affine, Challenge255<_>>::init(vec![]);
 
+    let start = std::time::Instant::now();
     create_proof::<
         KZGCommitmentScheme<Bn256>,
         ProverSHPLONK<'_, Bn256>,
@@ -151,6 +169,7 @@ fn packed_multi_keccak_prover() {
     >(&params, &pk, &[circuit], &[&[]], OsRng, &mut transcript)
     .expect("proof generation should not fail");
     let proof = transcript.finalize();
+    dbg!(start.elapsed());
 
     let mut verifier_transcript = Blake2bRead::<_, G1Affine, Challenge255<_>>::init(&proof[..]);
     let strategy = SingleStrategy::new(&params);
