@@ -4,6 +4,7 @@ use super::*;
 /// This is a separate struct from [`CompactSafeType`] with the same behavior. Because
 /// we know only one [`AssignedValue`] is needed to hold the boolean value, we avoid
 /// using [`CompactSafeType`] to avoid the additional heap allocation from a length 1 vector.
+#[derive(Clone, Copy, Debug)]
 pub struct SafeBool<F: ScalarField>(pub(super) AssignedValue<F>);
 
 /// SafeType for byte (8 bits).
@@ -11,6 +12,7 @@ pub struct SafeBool<F: ScalarField>(pub(super) AssignedValue<F>);
 /// This is a separate struct from [`CompactSafeType`] with the same behavior. Because
 /// we know only one [`AssignedValue`] is needed to hold the boolean value, we avoid
 /// using [`CompactSafeType`] to avoid the additional heap allocation from a length 1 vector.
+#[derive(Clone, Copy, Debug)]
 pub struct SafeByte<F: ScalarField>(pub(super) AssignedValue<F>);
 
 macro_rules! safe_primitive_impls {

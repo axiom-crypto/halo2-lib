@@ -19,6 +19,7 @@ use crate::{
         },
     },
     safe_types::SafeTypeChip,
+    utils::testing::base_test,
 };
 use rand::rngs::OsRng;
 use std::{env::set_var, vec};
@@ -28,19 +29,14 @@ use std::{env::set_var, vec};
 // Circuit Satisfied for valid inputs
 #[test]
 fn pos_var_assigned_bytes() {
-    set_var("LOOKUP_BITS", "8");
-    let mut builder = GateThreadBuilder::mock();
-    let range = RangeChip::default(8);
-    let safe = SafeTypeChip::new(&range);
-    let ctx = builder.main(0);
-    let fake_bytes = ctx.assign_witnesses(
-        vec![255u64, 255u64, 255u64, 255u64].into_iter().map(Fr::from).collect::<Vec<_>>(),
-    );
-    let var_len = ctx.load_witness(Fr::from(3u64));
-    safe.raw_var_bytes_to::<4>(ctx, fake_bytes, var_len);
-    builder.config(10, Some(9));
-    let circuit = RangeCircuitBuilder::mock(builder);
-    MockProver::run(10 as u32, &circuit, vec![]).unwrap().assert_satisfied();
+    base_test().k(10).lookup_bits(8).run(|ctx, range| {
+        let safe = SafeTypeChip::new(&range);
+        let fake_bytes = ctx.assign_witnesses(
+            vec![255u64, 255u64, 255u64, 255u64].into_iter().map(Fr::from).collect::<Vec<_>>(),
+        );
+        let var_len = ctx.load_witness(Fr::from(3u64));
+        safe.raw_var_bytes_to::<4>(ctx, fake_bytes, var_len);
+    });
 }
 
 // Checks circuit is unsatisfied for AssignedValue<F>'s are not in range 0..256

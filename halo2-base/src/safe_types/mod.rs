@@ -12,8 +12,10 @@ use std::{
     cmp::{max, min},
 };
 
+mod bytes;
 mod primitives;
 
+pub use bytes::*;
 pub use primitives::*;
 
 #[cfg(test)]
@@ -99,51 +101,6 @@ pub type SafeUint256<F> = CompactSafeType<F, 256>;
 pub type SafeAddress<F> = SafeType<F, 1, 160>;
 /// SafeType for bytes32.
 pub type SafeBytes32<F> = SafeType<F, 1, 256>;
-
-/// Represents a variable length byte array by wrapping a vector of AssignedValue<F>'s.
-///
-/// The number of elements within the array may vary in circuit from `0..MAX_VAR_LEN`, with the assigned witness `var_len`
-/// representing in circuit the number of significant elements present within the byte array from `0..=var_len`.
-///
-/// * Range checks that each AssignedValue<F> of the vector is within byte range 0~255.
-/// * Asserts that bytes.len() == MAX_VAR_LEN and var_len < MAX_VAR_LEN.
-///
-/// Note: The minimum value of MAX_VAR_LEN (and length of the byte array) is 1 i.e. for var_len = 32, max_var_len must be 33.
-#[derive(Debug, Clone)]
-pub struct VariableByteArray<F: ScalarField, const MAX_VAR_LEN: usize> {
-    /// Vector of AssignedValue<F>'s witnesses representing the byte array.
-    bytes: Vec<AssignedValue<F>>,
-    /// AssignedValue<F> witness representing the variable elements within the byte array from 0..var_len.
-    pub var_len: AssignedValue<F>,
-}
-
-impl<F: ScalarField, const MAX_VAR_LEN: usize> VariableByteArray<F, MAX_VAR_LEN> {
-    fn new(bytes: Vec<AssignedValue<F>>, var_len: AssignedValue<F>) -> Self {
-        assert!(bytes.len() == MAX_VAR_LEN, "len of bytes must equal max_var_len");
-        Self { bytes, var_len }
-    }
-
-    pub fn var_len_to_usize(&self) -> usize {
-        self.var_len.value().get_lower_32() as usize
-    }
-
-    pub fn bytes(&self) -> &[AssignedValue<F>] {
-        self.bytes.as_slice()
-    }
-
-    pub fn len(&self) -> usize {
-        self.bytes.len()
-    }
-}
-
-impl<F: ScalarField, const MAX_VAR_LEN: usize> IntoIterator for VariableByteArray<F, MAX_VAR_LEN> {
-    type Item = AssignedValue<F>;
-    type IntoIter = ::std::vec::IntoIter<AssignedValue<F>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.bytes.into_iter()
-    }
-}
 
 /// Chip for SafeType
 pub struct SafeTypeChip<'a, F: ScalarField> {
