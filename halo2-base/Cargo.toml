@@ -20,6 +20,9 @@ halo2_proofs_axiom = { git = "https://github.com/axiom-crypto/halo2.git", packag
 # Use PSE halo2 and halo2curves for compatibility when feature = "halo2-pse" is on
 halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", rev = "f348757", optional = true }
 
+# This is Scroll's audited poseidon circuit. We only use it for the Native Poseidon spec. We do not use the halo2 circuit at all (and it wouldn't even work because the halo2_proofs tag is not compatbile).
+# We forked it to upgrade to ff v0.13 and removed the circuit module
+poseidon-rs = { git = "https://github.com/axiom-crypto/poseidon-circuit.git", rev = "1aee4a1" }
 # plotting circuit layout
 plotters = { version = "0.3.0", optional = true }
 tabbycat = { version = "0.1", features = ["attributes"], optional = true }

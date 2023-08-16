@@ -41,6 +41,8 @@ use utils::ScalarField;
 
 /// Module that contains the main API for creating and working with circuits.
 pub mod gates;
+/// Module for the Poseidon hash function.
+pub mod poseidon;
 /// Module for SafeType which enforce value range and realted functions.
 pub mod safe_types;
 /// Utility functions for converting between different types of field elements.
