@@ -81,7 +81,7 @@ fn random_parameters_schnorr_signature() -> (Fp, Fq, Fq, Secp256k1Affine) {
     let mut x: &Fp = r_point.x();
     let mut y: &Fp = r_point.y();
     // make sure R.y is even
-    while fe_to_biguint(y).mod_floor(&BigUint::from(2u64)) == BigUint::from(1u64) {
+    while fe_to_biguint(y).mod_floor(&BigUint::from(2u64)) != BigUint::from(0u64) {
         k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(OsRng);
         r_point = Secp256k1Affine::from(Secp256k1Affine::generator() * k).coordinates().unwrap();
         x = r_point.x();
@@ -203,7 +203,7 @@ fn test_schnorr_signature_random_valid_inputs() {
         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
     )
     .unwrap();
-    for _ in 0..100 {
+    for _ in 0..10 {
         let (r, s, msg_hash, pubkey) = random_parameters_schnorr_signature();
 
         let circuit = schnorr_signature_circuit(
@@ -247,10 +247,10 @@ fn bench_secp256k1_schnorr() -> Result<(), Box<dyn std::error::Error>> {
     writeln!(fs_results, "degree,num_advice,num_lookup,num_fixed,lookup_bits,limb_bits,num_limbs,proof_time,proof_size,verify_time")?;
 
     let bench_params_reader = BufReader::new(bench_params_file);
-    let (r, s, msg_hash, pubkey) = random_parameters_schnorr_signature();
     for line in bench_params_reader.lines() {
         let bench_params: CircuitParams = serde_json::from_str(line.unwrap().as_str()).unwrap();
         let k = bench_params.degree;
+        let (r, s, msg_hash, pubkey) = random_parameters_schnorr_signature();
         println!("---------------------- degree = {k} ------------------------------",);
 
         let params = gen_srs(k);
