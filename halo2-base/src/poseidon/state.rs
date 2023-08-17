@@ -1,3 +1,5 @@
+use std::iter;
+
 use crate::{
     gates::GateInstructions,
     poseidon::mds::SparseMDSMatrix,
@@ -61,7 +63,6 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE
         pre_constants: &[F; T],
     ) {
         assert!(inputs.len() < T);
-        let offset = inputs.len() + 1;
 
         // Explanation of what's going on: before each round of the poseidon permutation,
         // two things have to be added to the state: inputs (the absorbed elements) and
@@ -77,20 +78,19 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE
 
         // adding pre-constants and inputs to the elements for which both are available
         for ((x, constant), input) in
-            self.s.iter_mut().skip(1).zip(pre_constants.iter().skip(1)).zip(inputs.iter())
+            self.s.iter_mut().zip(pre_constants.iter()).skip(1).zip(inputs.iter())
         {
             *x = gate.sum(ctx, [Existing(*x), Existing(*input), Constant(*constant)]);
         }
 
+        let offset = inputs.len() + 1;
         // adding only pre-constants when no input is left
         for (i, (x, constant)) in
-            self.s.iter_mut().skip(offset).zip(pre_constants.iter().skip(offset)).enumerate()
+            self.s.iter_mut().zip(pre_constants.iter()).skip(offset).enumerate()
         {
-            *x = gate.add(
-                ctx,
-                Existing(*x),
-                Constant(if i == 0 { F::ONE + constant } else { *constant }),
-            );
+            *x = gate.add(ctx, *x, Constant(if i == 0 { F::ONE + constant } else { *constant }));
+            // the if idx == 0 { F::one() } else { F::zero() } is to pad the input with a single 1 and then 0s
+            // this is the padding suggested in pg 31 of https://eprint.iacr.org/2019/458.pdf and in Section 4.2 (Variable-Input-Length Hashing. The padding consists of one field element being 1, and the remaining elements being 0.)
         }
     }
 
@@ -116,16 +116,19 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE
         gate: &impl GateInstructions<F>,
         mds: &SparseMDSMatrix<F, T, RATE>,
     ) {
-        let sum =
-            gate.inner_product(ctx, self.s.iter().copied(), mds.row.iter().map(|c| Constant(*c)));
-        let mut res = vec![sum];
-
-        for (e, x) in mds.col_hat.iter().zip(self.s.iter().skip(1)) {
-            res.push(gate.mul_add(ctx, self.s[0], Constant(*e), *x));
-        }
-
-        for (x, new_x) in self.s.iter_mut().zip(res) {
-            *x = new_x
-        }
+        self.s = iter::once(gate.inner_product(
+            ctx,
+            self.s.iter().copied(),
+            mds.row.iter().map(|c| Constant(*c)),
+        ))
+        .chain(
+            mds.col_hat
+                .iter()
+                .zip(self.s.iter().skip(1))
+                .map(|(coeff, state)| gate.mul_add(ctx, self.s[0], Constant(*coeff), *state)),
+        )
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
     }
 }

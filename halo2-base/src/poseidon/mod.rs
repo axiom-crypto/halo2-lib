@@ -1,3 +1,5 @@
+use std::mem;
+
 use crate::{
     gates::GateInstructions,
     poseidon::{spec::OptimizedPoseidonSpec, state::PoseidonState},
@@ -27,7 +29,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasherChip<F, T,
     pub fn new<const R_F: usize, const R_P: usize, const SECURE_MDS: usize>(
         ctx: &mut Context<F>,
     ) -> Self {
-        let init_state = PoseidonState::<F, T, RATE>::default(ctx);
+        let init_state = PoseidonState::default(ctx);
         let state = init_state.clone();
         Self {
             init_state,
@@ -35,6 +37,12 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasherChip<F, T,
             spec: OptimizedPoseidonSpec::new::<R_F, R_P, SECURE_MDS>(),
             absorbing: Vec::new(),
         }
+    }
+
+    /// Initialize a poseidon hasher from an existing spec.
+    pub fn from_spec(ctx: &mut Context<F>, spec: OptimizedPoseidonSpec<F, T, RATE>) -> Self {
+        let init_state = PoseidonState::default(ctx);
+        Self { spec, state: init_state.clone(), init_state, absorbing: Vec::new() }
     }
 
     /// Reset state to default and clear the buffer.
@@ -55,17 +63,13 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasherChip<F, T,
         ctx: &mut Context<F>,
         gate: &impl GateInstructions<F>,
     ) -> AssignedValue<F> {
-        let mut input_elements = vec![];
-        input_elements.append(&mut self.absorbing);
-
-        let mut padding_offset = 0;
+        let input_elements = mem::take(&mut self.absorbing);
+        let exact = input_elements.len() % RATE == 0;
 
         for chunk in input_elements.chunks(RATE) {
-            padding_offset = RATE - chunk.len();
             self.permutation(ctx, gate, chunk.to_vec());
         }
-
-        if padding_offset == 0 {
+        if exact {
             self.permutation(ctx, gate, vec![]);
         }
 
@@ -80,25 +84,27 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasherChip<F, T,
     ) {
         let r_f = self.spec.r_f / 2;
         let mds = &self.spec.mds_matrices.mds.0;
+        let pre_sparse_mds = &self.spec.mds_matrices.pre_sparse_mds.0;
+        let sparse_matrices = &self.spec.mds_matrices.sparse_matrices;
 
+        // First half of the full round
         let constants = &self.spec.constants.start;
         self.state.absorb_with_pre_constants(ctx, gate, inputs, &constants[0]);
         for constants in constants.iter().skip(1).take(r_f - 1) {
             self.state.sbox_full(ctx, gate, constants);
             self.state.apply_mds(ctx, gate, mds);
         }
-
-        let pre_sparse_mds = &self.spec.mds_matrices.pre_sparse_mds.0;
         self.state.sbox_full(ctx, gate, constants.last().unwrap());
         self.state.apply_mds(ctx, gate, pre_sparse_mds);
 
-        let sparse_matrices = &self.spec.mds_matrices.sparse_matrices;
+        // Partial rounds
         let constants = &self.spec.constants.partial;
         for (constant, sparse_mds) in constants.iter().zip(sparse_matrices.iter()) {
             self.state.sbox_part(ctx, gate, constant);
             self.state.apply_sparse_mds(ctx, gate, sparse_mds);
         }
 
+        // Second half of the full rounds
         let constants = &self.spec.constants.end;
         for constants in constants.iter() {
             self.state.sbox_full(ctx, gate, constants);
