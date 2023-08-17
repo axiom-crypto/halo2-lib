@@ -3,17 +3,11 @@ use halo2_base::gates::flex_gate::{GateChip, GateInstructions};
 use halo2_base::halo2_proofs::{
     arithmetic::Field,
     dev::MockProver,
-    halo2curves::bn256::{Bn256, Fr, G1Affine},
+    halo2curves::bn256::{Bn256, Fr},
     plonk::*,
-    poly::kzg::multiopen::VerifierSHPLONK,
-    poly::kzg::strategy::SingleStrategy,
-    poly::kzg::{
-        commitment::{KZGCommitmentScheme, ParamsKZG},
-        multiopen::ProverSHPLONK,
-    },
-    transcript::{Blake2bRead, TranscriptReadBuffer},
-    transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer},
+    poly::kzg::commitment::ParamsKZG,
 };
+use halo2_base::utils::testing::{check_proof, gen_proof};
 use halo2_base::utils::ScalarField;
 use halo2_base::{Context, QuantumCell::Existing};
 use itertools::Itertools;
@@ -55,26 +49,6 @@ fn main() {
     inner_prod_bench(builder.main(0), a, b);
     let circuit = RangeCircuitBuilder::prover(builder, config_params, break_points);
 
-    let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-    create_proof::<
-        KZGCommitmentScheme<Bn256>,
-        ProverSHPLONK<'_, Bn256>,
-        Challenge255<G1Affine>,
-        _,
-        Blake2bWrite<Vec<u8>, G1Affine, Challenge255<_>>,
-        _,
-    >(&params, &pk, &[circuit], &[&[]], OsRng, &mut transcript)
-    .expect("prover should not fail");
-
-    let strategy = SingleStrategy::new(&params);
-    let proof = transcript.finalize();
-    let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
-    verify_proof::<
-        KZGCommitmentScheme<Bn256>,
-        VerifierSHPLONK<'_, Bn256>,
-        Challenge255<G1Affine>,
-        Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
-        _,
-    >(&params, pk.get_vk(), strategy, &[&[]], &mut transcript)
-    .unwrap();
+    let proof = gen_proof(&params, &pk, circuit);
+    check_proof(&params, pk.get_vk(), &proof, true);
 }

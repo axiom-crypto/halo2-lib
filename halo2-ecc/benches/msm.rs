@@ -1,21 +1,20 @@
 use ark_std::{end_timer, start_timer};
-use halo2_base::gates::{
-    builder::{
-        BaseConfigParams, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
-        RangeCircuitBuilder,
-    },
-    RangeChip,
-};
 use halo2_base::halo2_proofs::halo2curves::ff::PrimeField as _;
 use halo2_base::halo2_proofs::{
     arithmetic::Field,
     halo2curves::bn256::{Bn256, Fr, G1Affine},
     plonk::*,
-    poly::kzg::{
-        commitment::{KZGCommitmentScheme, ParamsKZG},
-        multiopen::ProverSHPLONK,
+    poly::kzg::commitment::ParamsKZG,
+};
+use halo2_base::{
+    gates::{
+        builder::{
+            BaseConfigParams, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
+            RangeCircuitBuilder,
+        },
+        RangeChip,
     },
-    transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer},
+    utils::testing::gen_proof,
 };
 use halo2_ecc::{bn254::FpChip, ecc::EccChip};
 use rand::rngs::OsRng;
@@ -145,16 +144,7 @@ fn bench(c: &mut Criterion) {
                     Some(break_points.clone()),
                 );
 
-                let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-                create_proof::<
-                    KZGCommitmentScheme<Bn256>,
-                    ProverSHPLONK<'_, Bn256>,
-                    Challenge255<G1Affine>,
-                    _,
-                    Blake2bWrite<Vec<u8>, G1Affine, Challenge255<_>>,
-                    _,
-                >(params, pk, &[circuit], &[&[]], &mut rng, &mut transcript)
-                .expect("prover should not fail");
+                gen_proof(params, pk, circuit);
             })
         },
     );

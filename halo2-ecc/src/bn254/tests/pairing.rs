@@ -14,8 +14,11 @@ use halo2_base::{
         },
         RangeChip,
     },
-    halo2_proofs::poly::kzg::multiopen::{ProverGWC, VerifierGWC},
-    utils::{fs::gen_srs, BigPrimeField},
+    utils::{
+        fs::gen_srs,
+        testing::{check_proof, gen_proof},
+        BigPrimeField,
+    },
     Context,
 };
 use rand_core::OsRng;
@@ -103,7 +106,6 @@ fn test_pairing() {
 
 #[test]
 fn bench_pairing() -> Result<(), Box<dyn std::error::Error>> {
-    let rng = OsRng;
     let config_path = "configs/bn254/bench_pairing.config";
     let bench_params_file =
         File::open(config_path).unwrap_or_else(|e| panic!("{config_path} does not exist: {e:?}"));
@@ -143,48 +145,13 @@ fn bench_pairing() -> Result<(), Box<dyn std::error::Error>> {
             Some(config_params),
             Some(break_points),
         );
-        let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-        create_proof::<
-            KZGCommitmentScheme<Bn256>,
-            ProverGWC<'_, Bn256>,
-            Challenge255<G1Affine>,
-            _,
-            Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
-            _,
-        >(&params, &pk, &[circuit], &[&[]], rng, &mut transcript)?;
-        let proof = transcript.finalize();
+        let proof = gen_proof(&params, &pk, circuit);
         end_timer!(proof_time);
 
-        let proof_size = {
-            let path = format!(
-                "data/pairing_circuit_proof_{}_{}_{}_{}_{}_{}_{}.data",
-                bench_params.degree,
-                bench_params.num_advice,
-                bench_params.num_lookup_advice,
-                bench_params.num_fixed,
-                bench_params.lookup_bits,
-                bench_params.limb_bits,
-                bench_params.num_limbs
-            );
-            let mut fd = File::create(&path)?;
-            fd.write_all(&proof)?;
-            let size = fd.metadata().unwrap().len();
-            fs::remove_file(path)?;
-            size
-        };
+        let proof_size = proof.len();
 
         let verify_time = start_timer!(|| "Verify time");
-        let verifier_params = params.verifier_params();
-        let strategy = SingleStrategy::new(&params);
-        let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
-        verify_proof::<
-            KZGCommitmentScheme<Bn256>,
-            VerifierGWC<'_, Bn256>,
-            Challenge255<G1Affine>,
-            Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
-            SingleStrategy<'_, Bn256>,
-        >(verifier_params, pk.get_vk(), strategy, &[&[]], &mut transcript)
-        .unwrap();
+        check_proof(&params, pk.get_vk(), &proof, true);
         end_timer!(verify_time);
 
         writeln!(

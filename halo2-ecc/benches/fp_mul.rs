@@ -9,15 +9,11 @@ use halo2_base::{
     },
     halo2_proofs::{
         arithmetic::Field,
-        halo2curves::bn256::{Bn256, Fq, Fr, G1Affine},
+        halo2curves::bn256::{Bn256, Fq, Fr},
         plonk::*,
-        poly::kzg::{
-            commitment::{KZGCommitmentScheme, ParamsKZG},
-            multiopen::ProverSHPLONK,
-        },
-        transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer},
+        poly::kzg::commitment::ParamsKZG,
     },
-    utils::BigPrimeField,
+    utils::{testing::gen_proof, BigPrimeField},
     Context,
 };
 use halo2_ecc::fields::fp::FpChip;
@@ -59,11 +55,7 @@ fn fp_mul_circuit(
 ) -> RangeCircuitBuilder<Fr> {
     let k = K as usize;
     let lookup_bits = k - 1;
-    let mut builder = match stage {
-        CircuitBuilderStage::Mock => GateThreadBuilder::mock(),
-        CircuitBuilderStage::Prover => GateThreadBuilder::prover(),
-        CircuitBuilderStage::Keygen => GateThreadBuilder::keygen(),
-    };
+    let mut builder = GateThreadBuilder::from_stage(stage);
 
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
     fp_mul_bench(builder.main(0), lookup_bits, 88, 3, a, b);
@@ -107,16 +99,7 @@ fn bench(c: &mut Criterion) {
                     Some(break_points.clone()),
                 );
 
-                let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-                create_proof::<
-                    KZGCommitmentScheme<Bn256>,
-                    ProverSHPLONK<'_, Bn256>,
-                    Challenge255<G1Affine>,
-                    _,
-                    Blake2bWrite<Vec<u8>, G1Affine, Challenge255<_>>,
-                    _,
-                >(params, pk, &[circuit], &[&[]], OsRng, &mut transcript)
-                .expect("prover should not fail");
+                gen_proof(params, pk, circuit);
             })
         },
     );

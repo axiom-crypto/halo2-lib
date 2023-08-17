@@ -3,14 +3,11 @@ use halo2_base::gates::flex_gate::{GateChip, GateInstructions};
 use halo2_base::halo2_proofs::{
     arithmetic::Field,
     dev::MockProver,
-    halo2curves::bn256::{Bn256, Fr, G1Affine},
+    halo2curves::bn256::{Bn256, Fr},
     plonk::*,
-    poly::kzg::{
-        commitment::{KZGCommitmentScheme, ParamsKZG},
-        multiopen::ProverSHPLONK,
-    },
-    transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer},
+    poly::kzg::commitment::ParamsKZG,
 };
+use halo2_base::utils::testing::gen_proof;
 use halo2_base::utils::ScalarField;
 use halo2_base::{Context, QuantumCell::Existing};
 use itertools::Itertools;
@@ -71,16 +68,7 @@ fn bench(c: &mut Criterion) {
                     break_points.clone(),
                 );
 
-                let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-                create_proof::<
-                    KZGCommitmentScheme<Bn256>,
-                    ProverSHPLONK<'_, Bn256>,
-                    Challenge255<G1Affine>,
-                    _,
-                    Blake2bWrite<Vec<u8>, G1Affine, Challenge255<_>>,
-                    _,
-                >(params, pk, &[circuit], &[&[]], OsRng, &mut transcript)
-                .expect("prover should not fail");
+                gen_proof(params, pk, circuit);
             })
         },
     );

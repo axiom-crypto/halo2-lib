@@ -22,7 +22,8 @@ use crate::{
 };
 use rand::{rngs::StdRng, SeedableRng};
 
-/// helper function to generate a proof with real prover
+/// Helper function to generate a proof with real prover using SHPLONK KZG multi-open polynomical commitment scheme
+/// and Blake2b as the hash function for Fiat-Shamir.
 pub fn gen_proof(
     params: &ParamsKZG<Bn256>,
     pk: &ProvingKey<G1Affine>,
@@ -42,7 +43,8 @@ pub fn gen_proof(
     transcript.finalize()
 }
 
-/// helper function to verify a proof
+/// Helper function to verify a proof (generated using [`gen_proof`]) using SHPLONK KZG multi-open polynomical commitment scheme
+/// and Blake2b as the hash function for Fiat-Shamir.
 pub fn check_proof(
     params: &ParamsKZG<Bn256>,
     vk: &VerifyingKey<G1Affine>,
@@ -59,6 +61,7 @@ pub fn check_proof(
         Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
         SingleStrategy<'_, Bn256>,
     >(verifier_params, vk, strategy, &[&[]], &mut transcript);
+    // Just FYI, because strategy is `SingleStrategy`, the output `res` is `Result<(), Error>`, so there is no need to call `res.finalize()`.
 
     if expect_satisfied {
         assert!(res.is_ok());
