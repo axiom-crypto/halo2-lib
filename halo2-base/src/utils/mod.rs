@@ -1,6 +1,6 @@
 use core::hash::Hash;
 
-use crate::ff::PrimeField;
+use crate::ff::{FromUniformBytes, PrimeField};
 #[cfg(not(feature = "halo2-axiom"))]
 use crate::halo2_proofs::arithmetic::CurveAffine;
 use crate::halo2_proofs::circuit::Value;
@@ -44,7 +44,7 @@ where
 /// Helper trait to represent a field element that can be converted into [u64] limbs.
 ///
 /// Note: Since the number of bits necessary to represent a field element is larger than the number of bits in a u64, we decompose the integer representation of the field element into multiple [u64] values e.g. `limbs`.
-pub trait ScalarField: PrimeField + From<bool> + Hash + PartialEq + PartialOrd {
+pub trait ScalarField: PrimeField + FromUniformBytes<64> + From<bool> + Hash + Ord {
     /// Returns the base `2<sup>bit_len</sup>` little endian representation of the [ScalarField] element up to `num_limbs` number of limbs (truncates any extra limbs).
     ///
     /// Assumes `bit_len < 64`.
