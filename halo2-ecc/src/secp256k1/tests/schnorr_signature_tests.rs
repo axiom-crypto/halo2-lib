@@ -22,10 +22,14 @@ use crate::{
     fields::{FieldChip, PrimeField},
 };
 use ark_std::{end_timer, start_timer};
-use halo2_base::gates::builder::{
-    CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints, RangeCircuitBuilder,
-};
 use halo2_base::utils::fs::gen_srs;
+use halo2_base::{
+    gates::builder::{
+        CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints, RangeCircuitBuilder,
+    },
+    utils::fe_to_bigint,
+};
+use num_bigint::BigInt;
 
 use halo2_base::gates::RangeChip;
 use halo2_base::Context;
@@ -69,10 +73,19 @@ fn random_parameters_schnorr_signature() -> (Fp, Fq, Fq, Secp256k1Affine) {
     let pubkey = Secp256k1Affine::from(Secp256k1Affine::generator() * sk);
     let msg_hash = <Secp256k1Affine as CurveAffine>::ScalarExt::random(OsRng);
 
-    let k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(OsRng);
+    let mut k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(OsRng);
 
-    let r_point = Secp256k1Affine::from(Secp256k1Affine::generator() * k).coordinates().unwrap();
-    let x: &Fp = r_point.x();
+    let mut r_point =
+        Secp256k1Affine::from(Secp256k1Affine::generator() * k).coordinates().unwrap();
+    let mut x: &Fp = r_point.x();
+    let mut y: &Fp = r_point.y();
+    // make sure R.y is even
+    while fe_to_bigint(y) % 2 == BigInt::from(1) {
+        k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(OsRng);
+        r_point = Secp256k1Affine::from(Secp256k1Affine::generator() * k).coordinates().unwrap();
+        x = r_point.x();
+        y = r_point.y();
+    }
 
     let r = *x;
     let s = k + sk * msg_hash;

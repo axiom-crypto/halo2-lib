@@ -1,8 +1,8 @@
 use super::{FieldChip, PrimeField, PrimeFieldChip, Selectable};
 use crate::bigint::{
-    add_no_carry, big_is_equal, big_is_zero, carry_mod, check_carry_mod_to_zero, mul_no_carry,
-    scalar_mul_and_add_no_carry, scalar_mul_no_carry, select, select_by_indicator, sub,
-    sub_no_carry, CRTInteger, FixedCRTInteger, OverflowInteger, ProperCrtUint, ProperUint,
+    add_no_carry, big_is_equal, big_is_even, big_is_zero, carry_mod, check_carry_mod_to_zero,
+    mul_no_carry, scalar_mul_and_add_no_carry, scalar_mul_no_carry, select, select_by_indicator,
+    sub, sub_no_carry, CRTInteger, FixedCRTInteger, OverflowInteger, ProperCrtUint, ProperUint,
 };
 use crate::halo2_proofs::halo2curves::CurveAffine;
 use halo2_base::gates::RangeChip;
@@ -130,6 +130,19 @@ impl<'range, F: PrimeField, Fp: PrimeField> FpChip<'range, F, Fp> {
             self.limb_bits,
             self.native_modulus(),
         )
+    }
+
+    // assuming `a` has been range checked to be a proper BigInt
+    // constrain the witness `a` to be `< p`
+    // then check if `a[0]` is even
+    pub fn is_even(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<ProperCrtUint<F>>,
+    ) -> AssignedValue<F> {
+        let a = a.into();
+        self.enforce_less_than_p(ctx, a.clone());
+        big_is_even::positive(self.gate(), ctx, a.0.truncation)
     }
 }
 

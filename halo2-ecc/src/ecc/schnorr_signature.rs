@@ -52,26 +52,32 @@ where
         var_window_bits,
     );
 
-    // check s_G.x != e_P.x
+    // check s_G.x != e_P.x, which is a requirement for sub_unequal
     let x_eq = base_chip.is_equal(ctx, &s_G.x, &e_P.x);
     let x_neq = base_chip.gate().not(ctx, x_eq);
 
     // R = s⋅G - e⋅P
     let R = chip.sub_unequal(ctx, s_G, e_P, true);
 
-    // how to check if R is at inifinity? infinity means (0, 0)?
-    let is_R_infinity: AssignedValue<F> = base_chip.is_zero(ctx, &R.y);
-    let is_R_not_infinity: AssignedValue<F> = base_chip.gate().not(ctx, is_R_infinity);
+    // how to check if R is at inifinity? infinity means y = 0 && x == 0
+    let is_R_x_not_zero: AssignedValue<F> = base_chip.is_soft_nonzero(ctx, &R.x);
+    let is_R_y_not_zero: AssignedValue<F> = base_chip.is_soft_nonzero(ctx, &R.y);
+    let is_R_not_infinity = base_chip.gate().or(ctx, is_R_x_not_zero, is_R_y_not_zero);
 
+    // check R.y is even
+    let R_y = R.y;
+    let R_y_is_even: AssignedValue<F> = base_chip.is_even(ctx, &R_y);
+
+    // check R.x == r
     let R_x = scalar_chip.enforce_less_than(ctx, R.x);
-
     let equal_check = big_is_equal::assign(base_chip.gate(), ctx, R_x.0, r);
 
     let res1 = base_chip.gate().and(ctx, r_valid, s_valid);
-    let res2 = base_chip.gate().and(ctx, res1, x_neq);
-    let res3 = base_chip.gate().and(ctx, res2, equal_check);
-    let res4: AssignedValue<F> = base_chip.gate().and(ctx, res3, e_valid);
-    let res5: AssignedValue<F> = base_chip.gate().and(ctx, res4, is_R_not_infinity);
+    let res2: AssignedValue<F> = base_chip.gate().and(ctx, res1, e_valid);
+    let res3 = base_chip.gate().and(ctx, res2, x_neq);
+    let res4: AssignedValue<F> = base_chip.gate().and(ctx, res3, is_R_not_infinity);
+    let res5: AssignedValue<F> = base_chip.gate().and(ctx, res4, R_y_is_even);
+    let res6 = base_chip.gate().and(ctx, res5, equal_check);
 
-    res5
+    res6
 }
