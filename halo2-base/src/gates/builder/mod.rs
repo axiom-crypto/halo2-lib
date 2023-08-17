@@ -623,6 +623,13 @@ impl<F: ScalarField> RangeCircuitBuilder<F> {
     ) -> Self {
         Self(GateCircuitBuilder::prover(builder, config_params, break_points))
     }
+
+    /// Auto-configures the circuit configuration parameters. Mutates the configuration parameters of the circuit
+    /// and also returns a copy of the new configuration.
+    pub fn config(&mut self, minimum_rows: Option<usize>) -> BaseConfigParams {
+        self.0.config_params = self.0.builder.borrow().config(self.0.config_params.k, minimum_rows);
+        self.0.config_params.clone()
+    }
 }
 
 impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
@@ -753,6 +760,12 @@ impl<F: ScalarField> RangeWithInstanceCircuitBuilder<F> {
     /// Gets the instances.
     pub fn instance(&self) -> Vec<F> {
         self.assigned_instances.iter().map(|v| *v.value()).collect()
+    }
+
+    /// Auto-configures the circuit configuration parameters. Mutates the configuration parameters of the circuit
+    /// and also returns a copy of the new configuration.
+    pub fn config(&mut self, minimum_rows: Option<usize>) -> BaseConfigParams {
+        self.circuit.config(minimum_rows)
     }
 }
 
