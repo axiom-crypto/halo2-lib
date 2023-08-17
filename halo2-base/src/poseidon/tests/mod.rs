@@ -62,7 +62,7 @@ fn test_poseidon_against_test_vectors() {
             "6549537674122432311777789598043107870002137484850126429160507761192163713804",
         ];
         for (word, expected) in state_0.into_iter().zip(expected.iter()) {
-            assert_eq!(word.value.evaluate(), Fr::from_str_vartime(expected).unwrap());
+            assert_eq!(word.value(), &Fr::from_str_vartime(expected).unwrap());
         }
     }
 
@@ -90,7 +90,7 @@ fn test_poseidon_against_test_vectors() {
             "3372108894677221197912083238087960099443657816445944159266857514496320565191",
         ];
         for (word, expected) in state_0.into_iter().zip(expected.iter()) {
-            assert_eq!(word.value.evaluate(), Fr::from_str_vartime(expected).unwrap());
+            assert_eq!(word.value(), &Fr::from_str_vartime(expected).unwrap());
         }
     }
 }

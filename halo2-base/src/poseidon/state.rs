@@ -124,7 +124,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE
             res.push(gate.mul_add(ctx, self.s[0], Constant(*e), *x));
         }
 
-        for (x, new_x) in self.s.iter_mut().zip(res.into_iter()) {
+        for (x, new_x) in self.s.iter_mut().zip(res) {
             *x = new_x
         }
     }

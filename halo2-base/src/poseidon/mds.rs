@@ -1,3 +1,4 @@
+#![allow(clippy::needless_range_loop)]
 use crate::utils::ScalarField;
 
 /// The type used to hold the MDS matrix
