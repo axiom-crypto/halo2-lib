@@ -38,6 +38,8 @@ criterion = "0.4"
 criterion-macro = "0.4"
 test-case = "3.1.0"
 proptest = "1.1.0"
+# native poseidon for testing
+pse-poseidon = { git = "https://github.com/axiom-crypto/pse-poseidon.git" }
 
 # memory allocation
 [target.'cfg(not(target_env = "msvc"))'.dependencies]

@@ -6,6 +6,8 @@ use crate::{
 
 use itertools::Itertools;
 
+mod compatibility;
+
 #[test]
 fn test_mds() {
     let spec = OptimizedPoseidonSpec::<Fr, 3, 2>::new::<8, 57, 0>();
