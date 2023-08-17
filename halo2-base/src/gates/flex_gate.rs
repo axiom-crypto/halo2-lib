@@ -6,10 +6,12 @@ use crate::{
         },
         poly::Rotation,
     },
-    utils::{bigint_to_fe, fe_to_bigint, ScalarField},
+    utils::{biguint_to_fe, fe_to_biguint, ScalarField},
     AssignedValue, Context,
     QuantumCell::{self, Constant, Existing, Witness, WitnessFraction},
 };
+use num_bigint::BigUint;
+use num_integer::Integer;
 use serde::{Deserialize, Serialize};
 use std::{
     iter::{self},
@@ -791,10 +793,12 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: [QuantumCell] value to be constrained
     fn is_even(&self, ctx: &mut Context<F>, a: AssignedValue<F>) -> AssignedValue<F> {
-        let x = fe_to_bigint(a.value());
-        let div = bigint_to_fe(&(&x / 2));
-        let rem = bigint_to_fe(&(&x % 2));
-        let one_minus_rem = bigint_to_fe(&(1 - &x % 2));
+        let x = fe_to_biguint(a.value());
+        let (div, rem) = x.div_mod_floor(&BigUint::from(2u64));
+
+        let one_minus_rem = biguint_to_fe(&(BigUint::from(1u64) - &rem));
+        let div = biguint_to_fe(&div);
+        let rem = biguint_to_fe(&rem);
 
         let cells = [
             Witness(rem),

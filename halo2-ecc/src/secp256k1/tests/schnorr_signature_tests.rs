@@ -27,12 +27,13 @@ use halo2_base::{
     gates::builder::{
         CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints, RangeCircuitBuilder,
     },
-    utils::fe_to_bigint,
+    utils::fe_to_biguint,
 };
-use num_bigint::BigInt;
+use num_bigint::BigUint;
 
 use halo2_base::gates::RangeChip;
 use halo2_base::Context;
+use num_integer::Integer;
 use rand::random;
 use rand_core::OsRng;
 use std::fs::File;
@@ -80,7 +81,7 @@ fn random_parameters_schnorr_signature() -> (Fp, Fq, Fq, Secp256k1Affine) {
     let mut x: &Fp = r_point.x();
     let mut y: &Fp = r_point.y();
     // make sure R.y is even
-    while fe_to_bigint(y) % 2 == BigInt::from(1) {
+    while fe_to_biguint(y).mod_floor(&BigUint::from(2u64)) == BigUint::from(1u64) {
         k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(OsRng);
         r_point = Secp256k1Affine::from(Secp256k1Affine::generator() * k).coordinates().unwrap();
         x = r_point.x();
@@ -202,12 +203,20 @@ fn test_schnorr_signature_random_valid_inputs() {
         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
     )
     .unwrap();
+    for _ in 0..100 {
+        let (r, s, msg_hash, pubkey) = random_parameters_schnorr_signature();
 
-    let (r, s, msg_hash, pubkey) = random_parameters_schnorr_signature();
-
-    let circuit =
-        schnorr_signature_circuit(r, s, msg_hash, pubkey, params, CircuitBuilderStage::Mock, None);
-    MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
+        let circuit = schnorr_signature_circuit(
+            r,
+            s,
+            msg_hash,
+            pubkey,
+            params,
+            CircuitBuilderStage::Mock,
+            None,
+        );
+        MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
+    }
 }
 
 #[test_case(1, 1, 1; "")]
@@ -246,7 +255,6 @@ fn bench_secp256k1_schnorr() -> Result<(), Box<dyn std::error::Error>> {
 
         let params = gen_srs(k);
         println!("{bench_params:?}");
-
         let circuit = schnorr_signature_circuit(
             r,
             s,
