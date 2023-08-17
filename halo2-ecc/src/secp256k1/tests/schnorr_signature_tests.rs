@@ -238,6 +238,7 @@ fn bench_secp256k1_schnorr() -> Result<(), Box<dyn std::error::Error>> {
     writeln!(fs_results, "degree,num_advice,num_lookup,num_fixed,lookup_bits,limb_bits,num_limbs,proof_time,proof_size,verify_time")?;
 
     let bench_params_reader = BufReader::new(bench_params_file);
+    let (r, s, msg_hash, pubkey) = random_parameters_schnorr_signature();
     for line in bench_params_reader.lines() {
         let bench_params: CircuitParams = serde_json::from_str(line.unwrap().as_str()).unwrap();
         let k = bench_params.degree;
@@ -246,7 +247,6 @@ fn bench_secp256k1_schnorr() -> Result<(), Box<dyn std::error::Error>> {
         let params = gen_srs(k);
         println!("{bench_params:?}");
 
-        let (r, s, msg_hash, pubkey) = random_parameters_schnorr_signature();
         let circuit = schnorr_signature_circuit(
             r,
             s,
@@ -268,7 +268,6 @@ fn bench_secp256k1_schnorr() -> Result<(), Box<dyn std::error::Error>> {
         drop(circuit);
         // create a proof
         let proof_time = start_timer!(|| "Proving time");
-        let (r, s, msg_hash, pubkey) = random_parameters_schnorr_signature();
         let circuit = schnorr_signature_circuit(
             r,
             s,
