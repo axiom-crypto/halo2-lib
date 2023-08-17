@@ -183,8 +183,39 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
 
     /// Unsafe method that directly converts `input` to [`SafeByte`] **without any checks**.
     /// This should **only** be used if an external library needs to convert their types to [`SafeByte`].
-    pub fn unsafe_to_byte(&self, input: AssignedValue<F>) -> SafeByte<F> {
+    pub fn unsafe_to_byte(input: AssignedValue<F>) -> SafeByte<F> {
         SafeByte(input)
+    }
+
+    /// Unsafe method that directly converts `inputs` to [`VarLenBytes`] **without any checks**.
+    /// This should **only** be used if an external library needs to convert their types to [`SafeByte`].
+    pub fn unsafe_to_var_len_bytes<const MAX_LEN: usize>(
+        inputs: [AssignedValue<F>; MAX_LEN],
+        len: AssignedValue<F>,
+    ) -> VarLenBytes<F, MAX_LEN> {
+        VarLenBytes::<F, MAX_LEN>::new(inputs.map(|input| Self::unsafe_to_byte(input)), len)
+    }
+
+    /// Unsafe method that directly converts `inputs` to [`VarLenBytesVec`] **without any checks**.
+    /// This should **only** be used if an external library needs to convert their types to [`SafeByte`].
+    pub fn unsafe_to_var_len_bytes_vec(
+        inputs: RawAssignedValues<F>,
+        len: AssignedValue<F>,
+        max_len: usize,
+    ) -> VarLenBytesVec<F> {
+        VarLenBytesVec::<F>::new(
+            inputs.iter().map(|input| Self::unsafe_to_byte(*input)).collect_vec(),
+            len,
+            max_len,
+        )
+    }
+
+    /// Unsafe method that directly converts `inputs` to [`FixLenBytes`] **without any checks**.
+    /// This should **only** be used if an external library needs to convert their types to [`SafeByte`].
+    pub fn unsafe_to_fix_len_bytes<const MAX_LEN: usize>(
+        inputs: [AssignedValue<F>; MAX_LEN],
+    ) -> FixLenBytes<F, MAX_LEN> {
+        FixLenBytes::<F, MAX_LEN>::new(inputs.map(|input| Self::unsafe_to_byte(input)))
     }
 
     /// Converts a slice of AssignedValue(treated as little-endian) to VarLenBytes.

@@ -24,9 +24,8 @@ impl<F: ScalarField, const MAX_LEN: usize> VarLenBytes<F, MAX_LEN> {
     // VarLenBytes can be only created by SafeChip.
     pub(super) fn new(bytes: [SafeByte<F>; MAX_LEN], len: AssignedValue<F>) -> Self {
         assert!(
-            len.value().le(&F::from_u128(MAX_LEN as u128)),
-            "Invalid length which exceeds MAX_LEN {}",
-            MAX_LEN
+            len.value().le(&F::from(MAX_LEN as u64)),
+            "Invalid length which exceeds MAX_LEN {MAX_LEN}",
         );
         Self { bytes, len }
     }
@@ -37,10 +36,10 @@ impl<F: ScalarField, const MAX_LEN: usize> VarLenBytes<F, MAX_LEN> {
     }
 }
 
-/// Represents a variable length byte array in circuit. Not encourged to use because `MAX_LEN` cannot be verified at compile time.
+/// Represents a variable length byte array in circuit. Not encouraged to use because `MAX_LEN` cannot be verified at compile time.
 ///
 /// Each element is guaranteed to be a byte, given by type [`SafeByte`].
-/// To represent a variable length array, we must know the maximum possible length `MAX_LEN` the array could be -- this is some additional context the user must provide.
+/// To represent a variable length array, we must know the maximum possible length `MAX_LEN` the array could be -- this is provided when constructing and `bytes.len()` == `MAX_LEN` is enforced.
 /// Then we right pad the array with 0s to the maximum length (we do **not** constrain that these paddings must be 0s).
 #[derive(Debug, Clone, Getters)]
 pub struct VarLenBytesVec<F: ScalarField> {

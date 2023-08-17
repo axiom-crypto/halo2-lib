@@ -5,19 +5,12 @@ use crate::{
     },
     halo2_proofs::{
         dev::MockProver,
-        halo2curves::bn256::{Bn256, Fr, G1Affine},
-        plonk::{create_proof, keygen_pk, keygen_vk, verify_proof},
-        poly::commitment::ParamsProver,
-        poly::kzg::{
-            commitment::KZGCommitmentScheme, commitment::ParamsKZG, multiopen::ProverSHPLONK,
-            multiopen::VerifierSHPLONK, strategy::SingleStrategy,
-        },
-        transcript::{
-            Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
-        },
+        halo2curves::bn256::{Bn256, Fr},
+        plonk::{keygen_pk, keygen_vk},
+        poly::kzg::commitment::ParamsKZG,
     },
     safe_types::SafeTypeChip,
-    utils::testing::base_test,
+    utils::testing::{base_test, check_proof, gen_proof},
     Context,
 };
 use rand::rngs::OsRng;
@@ -31,7 +24,7 @@ fn mock_circuit_test<FM: FnMut(&mut Context<Fr>, SafeTypeChip<'_, Fr>)>(mut f: F
     let ctx = builder.main(0);
     f(ctx, safe);
     let mut params = builder.config(10, Some(9));
-    params.lookup_bits = Some(3);
+    params.lookup_bits = Some(8);
     let circuit = RangeCircuitBuilder::mock(builder, params);
     MockProver::run(10 as u32, &circuit, vec![]).unwrap().assert_satisfied();
 }
@@ -137,7 +130,7 @@ fn pos_prover_satisfied() {
     const PROVER_MAX_LEN: usize = 4;
     let keygen_inputs = (vec![1u64, 2u64, 3u64, 4u64], 3);
     let proof_inputs = (vec![1u64, 2u64, 3u64, 4u64], 3);
-    prover_satisfied::<KEYGEN_MAX_LEN, PROVER_MAX_LEN>(keygen_inputs, proof_inputs).unwrap();
+    prover_satisfied::<KEYGEN_MAX_LEN, PROVER_MAX_LEN>(keygen_inputs, proof_inputs);
 }
 
 #[test]
@@ -146,7 +139,7 @@ fn pos_diff_len_same_max_len() {
     const PROVER_MAX_LEN: usize = 4;
     let keygen_inputs = (vec![1u64, 2u64, 3u64, 4u64], 3);
     let proof_inputs = (vec![1u64, 2u64, 3u64, 4u64], 2);
-    prover_satisfied::<KEYGEN_MAX_LEN, PROVER_MAX_LEN>(keygen_inputs, proof_inputs).unwrap();
+    prover_satisfied::<KEYGEN_MAX_LEN, PROVER_MAX_LEN>(keygen_inputs, proof_inputs);
 }
 
 #[test]
@@ -156,7 +149,7 @@ fn neg_different_proof_max_len() {
     const PROVER_MAX_LEN: usize = 3;
     let keygen_inputs = (vec![1u64, 2u64, 3u64, 4u64], 4);
     let proof_inputs = (vec![1u64, 2u64, 3u64], 3);
-    prover_satisfied::<KEYGEN_MAX_LEN, PROVER_MAX_LEN>(keygen_inputs, proof_inputs).unwrap();
+    prover_satisfied::<KEYGEN_MAX_LEN, PROVER_MAX_LEN>(keygen_inputs, proof_inputs);
 }
 
 //test circuit
@@ -189,36 +182,15 @@ fn var_byte_array_circuit<const MAX_LEN: usize>(
 fn prover_satisfied<const KEYGEN_MAX_LEN: usize, const PROVER_MAX_LEN: usize>(
     keygen_inputs: (Vec<u64>, usize),
     proof_inputs: (Vec<u64>, usize),
-) -> Result<(), Box<dyn std::error::Error>> {
+) {
     let k = 11;
     let rng = OsRng;
     let params = ParamsKZG::<Bn256>::setup(k as u32, rng);
     let keygen_circuit = var_byte_array_circuit::<KEYGEN_MAX_LEN>(k, false, keygen_inputs);
     let vk = keygen_vk(&params, &keygen_circuit).unwrap();
-    let pk = keygen_pk(&params, vk, &keygen_circuit).unwrap();
-    let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+    let pk = keygen_pk(&params, vk.clone(), &keygen_circuit).unwrap();
 
     let proof_circuit = var_byte_array_circuit::<PROVER_MAX_LEN>(k, true, proof_inputs);
-    create_proof::<
-        KZGCommitmentScheme<Bn256>,
-        ProverSHPLONK<'_, Bn256>,
-        Challenge255<G1Affine>,
-        _,
-        Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
-        _,
-    >(&params, &pk, &[proof_circuit], &[&[]], rng, &mut transcript)?;
-    let proof = transcript.finalize();
-
-    let verifier_params = params.verifier_params();
-    let strategy = SingleStrategy::new(&params);
-    let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
-    verify_proof::<
-        KZGCommitmentScheme<Bn256>,
-        VerifierSHPLONK<'_, Bn256>,
-        Challenge255<G1Affine>,
-        Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
-        SingleStrategy<'_, Bn256>,
-    >(verifier_params, pk.get_vk(), strategy, &[&[]], &mut transcript)
-    .unwrap();
-    Ok(())
+    let proof = gen_proof(&params, &pk, proof_circuit);
+    check_proof(&params, &vk, &proof[..], true);
 }
