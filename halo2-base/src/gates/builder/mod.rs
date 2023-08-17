@@ -627,7 +627,9 @@ impl<F: ScalarField> RangeCircuitBuilder<F> {
     /// Auto-configures the circuit configuration parameters. Mutates the configuration parameters of the circuit
     /// and also returns a copy of the new configuration.
     pub fn config(&mut self, minimum_rows: Option<usize>) -> BaseConfigParams {
+        let lookup_bits = self.0.config_params.lookup_bits;
         self.0.config_params = self.0.builder.borrow().config(self.0.config_params.k, minimum_rows);
+        self.0.config_params.lookup_bits = lookup_bits;
         self.0.config_params.clone()
     }
 }
