@@ -50,7 +50,7 @@ fn test_poseidon_against_test_vectors() {
         const T: usize = 3;
         const RATE: usize = 2;
 
-        let mut hasher = PoseidonHasherChip::<Fr, T, RATE>::new::<R_F, R_P, 0>(ctx);
+        let mut hasher = PoseidonHasher::<Fr, T, RATE>::new::<R_F, R_P, 0>(ctx);
 
         let state = [0u64, 1, 2];
         hasher.state =
@@ -76,7 +76,7 @@ fn test_poseidon_against_test_vectors() {
         const T: usize = 5;
         const RATE: usize = 4;
 
-        let mut hasher = PoseidonHasherChip::<Fr, T, RATE>::new::<R_F, R_P, 0>(ctx);
+        let mut hasher = PoseidonHasher::<Fr, T, RATE>::new::<R_F, R_P, 0>(ctx);
 
         let state = [0u64, 1, 2, 3, 4];
         hasher.state =

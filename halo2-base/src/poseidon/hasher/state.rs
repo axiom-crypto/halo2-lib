@@ -2,7 +2,7 @@ use std::iter;
 
 use crate::{
     gates::GateInstructions,
-    poseidon::mds::SparseMDSMatrix,
+    poseidon::hasher::mds::SparseMDSMatrix,
     utils::ScalarField,
     AssignedValue, Context,
     QuantumCell::{Constant, Existing},
