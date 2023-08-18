@@ -3,11 +3,22 @@ pub use crate::{
         flex_gate::GateInstructions,
         range::{RangeChip, RangeInstructions},
     },
+    safe_types::VarLenBytes,
     utils::ScalarField,
     AssignedValue, Context,
     QuantumCell::{self, Constant, Existing, Witness},
 };
-use std::cmp::{max, min};
+use std::{
+    borrow::{Borrow, BorrowMut},
+    cmp::{max, min},
+};
+
+mod bytes;
+mod primitives;
+
+pub use bytes::*;
+use itertools::Itertools;
+pub use primitives::*;
 
 #[cfg(test)]
 pub mod tests;
@@ -54,9 +65,17 @@ impl<F: ScalarField, const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>
         Self { value: raw_values }
     }
 
-    /// Return values in littile-endian.
-    pub fn value(&self) -> &RawAssignedValues<F> {
+    /// Return values in little-endian.
+    pub fn value(&self) -> &[AssignedValue<F>] {
         &self.value
+    }
+}
+
+impl<F: ScalarField, const BYTES_PER_ELE: usize, const TOTAL_BITS: usize> AsRef<[AssignedValue<F>]>
+    for SafeType<F, BYTES_PER_ELE, TOTAL_BITS>
+{
+    fn as_ref(&self) -> &[AssignedValue<F>] {
+        self.value()
     }
 }
 
@@ -64,10 +83,8 @@ impl<F: ScalarField, const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>
 /// (2^(F::NUM_BITS) - 1) might not be a valid value for F. e.g. max value of F is a prime in [2^(F::NUM_BITS-1), 2^(F::NUM_BITS) - 1]
 #[allow(type_alias_bounds)]
 type CompactSafeType<F: ScalarField, const TOTAL_BITS: usize> =
-    SafeType<F, { ((F::NUM_BITS - 1) / 8) as usize }, TOTAL_BITS>;
+    SafeType<F, { (F::CAPACITY / 8) as usize }, TOTAL_BITS>;
 
-/// SafeType for bool.
-pub type SafeBool<F> = CompactSafeType<F, 1>;
 /// SafeType for uint8.
 pub type SafeUint8<F> = CompactSafeType<F, 8>;
 /// SafeType for uint16.
@@ -98,7 +115,7 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
         Self { range_chip }
     }
 
-    /// Convert a vector of AssignedValue(treated as little-endian) to a SafeType.
+    /// Convert a vector of AssignedValue (treated as little-endian) to a SafeType.
     /// The number of bytes of inputs must equal to the number of bytes of outputs.
     /// This function also add contraints that a AssignedValue in inputs must be in the range of a byte.
     pub fn raw_bytes_to<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
@@ -134,6 +151,123 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
         SafeType::<F, BYTES_PER_ELE, TOTAL_BITS>::new(value)
     }
 
+    /// Constrains that the `input` is a boolean value (either 0 or 1) and wraps it in [`SafeBool`].
+    pub fn assert_bool(&self, ctx: &mut Context<F>, input: AssignedValue<F>) -> SafeBool<F> {
+        self.range_chip.gate().assert_bit(ctx, input);
+        SafeBool(input)
+    }
+
+    /// Load a boolean value as witness and constrain it is either 0 or 1.
+    pub fn load_bool(&self, ctx: &mut Context<F>, input: bool) -> SafeBool<F> {
+        let input = ctx.load_witness(F::from(input));
+        self.assert_bool(ctx, input)
+    }
+
+    /// Unsafe method that directly converts `input` to [`SafeBool`] **without any checks**.
+    /// This should **only** be used if an external library needs to convert their types to [`SafeBool`].
+    pub fn unsafe_to_bool(&self, input: AssignedValue<F>) -> SafeBool<F> {
+        SafeBool(input)
+    }
+
+    /// Constrains that the `input` is a byte value and wraps it in [`SafeByte`].
+    pub fn assert_byte(&self, ctx: &mut Context<F>, input: AssignedValue<F>) -> SafeByte<F> {
+        self.range_chip.range_check(ctx, input, BITS_PER_BYTE);
+        SafeByte(input)
+    }
+
+    /// Load a boolean value as witness and constrain it is either 0 or 1.
+    pub fn load_byte(&self, ctx: &mut Context<F>, input: u8) -> SafeByte<F> {
+        let input = ctx.load_witness(F::from(input as u64));
+        self.assert_byte(ctx, input)
+    }
+
+    /// Unsafe method that directly converts `input` to [`SafeByte`] **without any checks**.
+    /// This should **only** be used if an external library needs to convert their types to [`SafeByte`].
+    pub fn unsafe_to_byte(input: AssignedValue<F>) -> SafeByte<F> {
+        SafeByte(input)
+    }
+
+    /// Unsafe method that directly converts `inputs` to [`VarLenBytes`] **without any checks**.
+    /// This should **only** be used if an external library needs to convert their types to [`SafeByte`].
+    pub fn unsafe_to_var_len_bytes<const MAX_LEN: usize>(
+        inputs: [AssignedValue<F>; MAX_LEN],
+        len: AssignedValue<F>,
+    ) -> VarLenBytes<F, MAX_LEN> {
+        VarLenBytes::<F, MAX_LEN>::new(inputs.map(|input| Self::unsafe_to_byte(input)), len)
+    }
+
+    /// Unsafe method that directly converts `inputs` to [`VarLenBytesVec`] **without any checks**.
+    /// This should **only** be used if an external library needs to convert their types to [`SafeByte`].
+    pub fn unsafe_to_var_len_bytes_vec(
+        inputs: RawAssignedValues<F>,
+        len: AssignedValue<F>,
+        max_len: usize,
+    ) -> VarLenBytesVec<F> {
+        VarLenBytesVec::<F>::new(
+            inputs.iter().map(|input| Self::unsafe_to_byte(*input)).collect_vec(),
+            len,
+            max_len,
+        )
+    }
+
+    /// Unsafe method that directly converts `inputs` to [`FixLenBytes`] **without any checks**.
+    /// This should **only** be used if an external library needs to convert their types to [`SafeByte`].
+    pub fn unsafe_to_fix_len_bytes<const MAX_LEN: usize>(
+        inputs: [AssignedValue<F>; MAX_LEN],
+    ) -> FixLenBytes<F, MAX_LEN> {
+        FixLenBytes::<F, MAX_LEN>::new(inputs.map(|input| Self::unsafe_to_byte(input)))
+    }
+
+    /// Converts a slice of AssignedValue(treated as little-endian) to VarLenBytes.
+    ///
+    /// * ctx: Circuit [Context]<F> to assign witnesses to.
+    /// * inputs: Slice representing the byte array.
+    /// * len: [AssignedValue]<F> witness representing the variable elements within the byte array from 0..=len.
+    /// * MAX_LEN: [usize] representing the maximum length of the byte array and the number of elements it must contain.
+    pub fn raw_to_var_len_bytes<const MAX_LEN: usize>(
+        &self,
+        ctx: &mut Context<F>,
+        inputs: [AssignedValue<F>; MAX_LEN],
+        len: AssignedValue<F>,
+    ) -> VarLenBytes<F, MAX_LEN> {
+        self.range_chip.check_less_than_safe(ctx, len, MAX_LEN as u64);
+        VarLenBytes::<F, MAX_LEN>::new(inputs.map(|input| self.assert_byte(ctx, input)), len)
+    }
+
+    /// Converts a vector of AssignedValue(treated as little-endian) to VarLenBytesVec. Not encourged to use because `MAX_LEN` cannot be verified at compile time.
+    ///
+    /// * ctx: Circuit [Context]<F> to assign witnesses to.
+    /// * inputs: Vector representing the byte array.
+    /// * len: [AssignedValue]<F> witness representing the variable elements within the byte array from 0..=len.
+    /// * max_len: [usize] representing the maximum length of the byte array and the number of elements it must contain.
+    pub fn raw_to_var_len_bytes_vec(
+        &self,
+        ctx: &mut Context<F>,
+        inputs: RawAssignedValues<F>,
+        len: AssignedValue<F>,
+        max_len: usize,
+    ) -> VarLenBytesVec<F> {
+        self.range_chip.check_less_than_safe(ctx, len, max_len as u64);
+        VarLenBytesVec::<F>::new(
+            inputs.iter().map(|input| self.assert_byte(ctx, *input)).collect_vec(),
+            len,
+            max_len,
+        )
+    }
+
+    /// Converts a slice of AssignedValue(treated as little-endian) to FixLenBytes.
+    ///
+    /// * ctx: Circuit [Context]<F> to assign witnesses to.
+    /// * inputs: Slice representing the byte array.
+    /// * LEN: length of the byte array.
+    pub fn raw_to_fix_len_bytes<const LEN: usize>(
+        &self,
+        ctx: &mut Context<F>,
+        inputs: [AssignedValue<F>; LEN],
+    ) -> FixLenBytes<F, LEN> {
+        FixLenBytes::<F, LEN>::new(inputs.map(|input| self.assert_byte(ctx, input)))
+    }
+
     fn add_bytes_constraints(
         &self,
         ctx: &mut Context<F>,
@@ -148,6 +282,6 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
         }
     }
 
-    // TODO: Add comprasion. e.g. is_less_than(SafeUint8, SafeUint8) -> SafeBool
+    // TODO: Add comparison. e.g. is_less_than(SafeUint8, SafeUint8) -> SafeBool
     // TODO: Add type castings. e.g. uint256 -> bytes32/uint32 -> uint64
 }

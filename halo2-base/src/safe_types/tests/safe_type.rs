@@ -3,7 +3,6 @@ use crate::{
     utils::testing::{check_proof, gen_proof},
 };
 
-use super::*;
 use crate::{
     gates::{
         builder::{GateThreadBuilder, RangeCircuitBuilder},
@@ -13,6 +12,7 @@ use crate::{
         plonk::keygen_pk,
         plonk::{keygen_vk, Assigned},
     },
+    safe_types::*,
 };
 use itertools::Itertools;
 use rand::rngs::OsRng;
