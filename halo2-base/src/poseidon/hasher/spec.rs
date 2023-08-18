@@ -1,4 +1,4 @@
-use crate::{poseidon::mds::*, utils::ScalarField};
+use crate::{poseidon::hasher::mds::*, utils::ScalarField};
 
 use poseidon_rs::poseidon::primitives::Spec as PoseidonSpec; // trait
 use std::marker::PhantomData;

@@ -3,7 +3,7 @@ use std::{cmp::max, iter::zip};
 use crate::{
     gates::{builder::GateThreadBuilder, GateChip},
     halo2_proofs::halo2curves::bn256::Fr,
-    poseidon::PoseidonHasherChip,
+    poseidon::hasher::PoseidonHasher,
     utils::ScalarField,
 };
 use pse_poseidon::Poseidon;
@@ -31,7 +31,7 @@ fn poseidon_compatiblity_verification<
     // constructing native and in-circuit Poseidon sponges
     let mut native_sponge = Poseidon::<F, T, RATE>::new(R_F, R_P);
     // assuming SECURE_MDS = 0
-    let mut circuit_sponge = PoseidonHasherChip::<F, T, RATE>::new::<R_F, R_P, 0>(ctx);
+    let mut circuit_sponge = PoseidonHasher::<F, T, RATE>::new::<R_F, R_P, 0>(ctx);
 
     // preparing to interleave absorptions and squeezings
     let n_iterations = max(absorptions.len(), squeezings.len());
