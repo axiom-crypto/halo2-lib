@@ -26,7 +26,7 @@ fn mock_circuit_test<FM: FnMut(&mut Context<Fr>, SafeTypeChip<'_, Fr>)>(mut f: F
     let mut params = builder.config(10, Some(9));
     params.lookup_bits = Some(8);
     let circuit = RangeCircuitBuilder::mock(builder, params);
-    MockProver::run(10 as u32, &circuit, vec![]).unwrap().assert_satisfied();
+    MockProver::run(10, &circuit, vec![]).unwrap().assert_satisfied();
 }
 
 // =========== Mock Prover ===========
@@ -35,7 +35,7 @@ fn mock_circuit_test<FM: FnMut(&mut Context<Fr>, SafeTypeChip<'_, Fr>)>(mut f: F
 #[test]
 fn pos_var_len_bytes() {
     base_test().k(10).lookup_bits(8).run(|ctx, range| {
-        let safe = SafeTypeChip::new(&range);
+        let safe = SafeTypeChip::new(range);
         let fake_bytes = ctx.assign_witnesses(
             vec![255u64, 255u64, 255u64, 255u64].into_iter().map(Fr::from).collect::<Vec<_>>(),
         );
@@ -74,7 +74,7 @@ fn neg_var_len_bytes_len_less_than_max_len() {
 #[test]
 fn pos_var_len_bytes_vec() {
     base_test().k(10).lookup_bits(8).run(|ctx, range| {
-        let safe = SafeTypeChip::new(&range);
+        let safe = SafeTypeChip::new(range);
         let fake_bytes = ctx.assign_witnesses(
             vec![255u64, 255u64, 255u64, 255u64].into_iter().map(Fr::from).collect::<Vec<_>>(),
         );
@@ -115,7 +115,7 @@ fn neg_var_len_bytes_vec_len_less_than_max_len() {
 #[test]
 fn pos_fix_len_bytes_vec() {
     base_test().k(10).lookup_bits(8).run(|ctx, range| {
-        let safe = SafeTypeChip::new(&range);
+        let safe = SafeTypeChip::new(range);
         let fake_bytes = ctx.assign_witnesses(
             vec![255u64, 255u64, 255u64, 255u64].into_iter().map(Fr::from).collect::<Vec<_>>(),
         );
@@ -171,11 +171,10 @@ fn var_byte_array_circuit<const MAX_LEN: usize>(
     safe.raw_to_var_len_bytes::<MAX_LEN>(ctx, fake_bytes.try_into().unwrap(), len);
     let mut params = builder.config(k, Some(9));
     params.lookup_bits = Some(lookup_bits);
-    let circuit = match phase {
+    match phase {
         true => RangeCircuitBuilder::prover(builder, params, vec![vec![]]),
         false => RangeCircuitBuilder::keygen(builder, params),
-    };
-    circuit
+    }
 }
 
 //Prover test

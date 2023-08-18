@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: ["main", "develop", "community-edition"]
+    branches: ["main"]
   pull_request:
     branches: ["main", "develop", "community-edition"]
 
@@ -31,8 +31,8 @@ jobs:
           mv configs/bn254/bench_fixed_msm.t.config configs/bn254/bench_fixed_msm.config
           mv configs/bn254/bench_msm.t.config configs/bn254/bench_msm.config
           mv configs/bn254/bench_pairing.t.config configs/bn254/bench_pairing.config
+          mv configs/secp256k1/bench_ecdsa.t.config configs/secp256k1/bench_ecdsa.config
           cargo test --release -- --nocapture bench_secp256k1_ecdsa
-          cargo test --release -- --nocapture bench_ec_add
           cargo test --release -- --nocapture bench_fixed_base_msm
           cargo test --release -- --nocapture bench_msm
           cargo test --release -- --nocapture bench_pairing
