@@ -179,8 +179,8 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE
         // - To the first element for which no input is left (if any), an extra 1 is added.
 
         // Adding preconstants to the current state.
-        for i in 0..T {
-            self.s[i] = gate.add(ctx, self.s[i], Constant(pre_constants[i]));
+        for (i, pre_const) in pre_constants.iter().enumerate() {
+            self.s[i] = gate.add(ctx, self.s[i], Constant(*pre_const));
         }
 
         // Generate a mask array where a[i] = i < len for i = 0..RATE.

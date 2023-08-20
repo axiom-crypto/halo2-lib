@@ -26,8 +26,8 @@ pub fn test_sub(inputs: &[QuantumCell<Fr>]) -> Fr {
     base_test().run_gate(|ctx, chip| *chip.sub(ctx, inputs[0], inputs[1]).value())
 }
 
-#[test_case(Witness(Fr::from(10))=> Fr::from(11); "dec(): 10 -> 9")]
-#[test_case(Witness(Fr::from(1))=> Fr::from(2); "dec(): 1 -> 0")]
+#[test_case(Witness(Fr::from(10))=> Fr::from(9); "dec(): 10 -> 9")]
+#[test_case(Witness(Fr::from(1))=> Fr::from(0); "dec(): 1 -> 0")]
 pub fn test_dec(input: QuantumCell<Fr>) -> Fr {
     base_test().run_gate(|ctx, chip| *chip.dec(ctx, input).value())
 }
