@@ -14,10 +14,22 @@ pub fn test_add(inputs: &[QuantumCell<Fr>]) -> Fr {
     base_test().run_gate(|ctx, chip| *chip.add(ctx, inputs[0], inputs[1]).value())
 }
 
+#[test_case(Witness(Fr::from(10))=> Fr::from(11); "inc(): 10 -> 11")]
+#[test_case(Witness(Fr::from(1))=> Fr::from(2); "inc(): 1 -> 2")]
+pub fn test_inc(input: QuantumCell<Fr>) -> Fr {
+    base_test().run_gate(|ctx, chip| *chip.inc(ctx, input).value())
+}
+
 #[test_case(&[10, 12].map(Fr::from).map(Witness)=> -Fr::from(2) ; "sub(): 10 - 12 == -2")]
 #[test_case(&[1, 1].map(Fr::from).map(Witness)=> Fr::from(0) ; "sub(): 1 - 1 == 0")]
 pub fn test_sub(inputs: &[QuantumCell<Fr>]) -> Fr {
     base_test().run_gate(|ctx, chip| *chip.sub(ctx, inputs[0], inputs[1]).value())
+}
+
+#[test_case(Witness(Fr::from(10))=> Fr::from(11); "dec(): 10 -> 9")]
+#[test_case(Witness(Fr::from(1))=> Fr::from(2); "dec(): 1 -> 0")]
+pub fn test_dec(input: QuantumCell<Fr>) -> Fr {
+    base_test().run_gate(|ctx, chip| *chip.dec(ctx, input).value())
 }
 
 #[test_case(&[1, 1, 1].map(Fr::from).map(Witness) => Fr::from(0) ; "sub_mul(): 1 - 1 * 1 == 0")]

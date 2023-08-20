@@ -3,7 +3,7 @@ use std::{cmp::max, iter::zip};
 use crate::{
     gates::{builder::GateThreadBuilder, GateChip},
     halo2_proofs::halo2curves::bn256::Fr,
-    poseidon::hasher::PoseidonHasher,
+    poseidon::hasher::PoseidonSponge,
     utils::ScalarField,
 };
 use pse_poseidon::Poseidon;
@@ -11,7 +11,7 @@ use rand::Rng;
 
 // make interleaved calls to absorb and squeeze elements and
 // check that the result is the same in-circuit and natively
-fn poseidon_compatiblity_verification<
+fn sponge_compatiblity_verification<
     F: ScalarField,
     const T: usize,
     const RATE: usize,
@@ -31,7 +31,7 @@ fn poseidon_compatiblity_verification<
     // constructing native and in-circuit Poseidon sponges
     let mut native_sponge = Poseidon::<F, T, RATE>::new(R_F, R_P);
     // assuming SECURE_MDS = 0
-    let mut circuit_sponge = PoseidonHasher::<F, T, RATE>::new::<R_F, R_P, 0>(ctx);
+    let mut circuit_sponge = PoseidonSponge::<F, T, RATE>::new::<R_F, R_P, 0>(ctx);
 
     // preparing to interleave absorptions and squeezings
     let n_iterations = max(absorptions.len(), squeezings.len());
@@ -85,33 +85,33 @@ fn random_list_usize(len: usize, max: usize) -> Vec<usize> {
 }
 
 #[test]
-fn test_poseidon_compatibility_squeezing_only() {
+fn test_sponge_compatibility_squeezing_only() {
     let absorptions = Vec::new();
     let squeezings = random_list_usize(10, 7);
 
-    poseidon_compatiblity_verification::<Fr, 3, 2, 8, 57>(absorptions, squeezings);
+    sponge_compatiblity_verification::<Fr, 3, 2, 8, 57>(absorptions, squeezings);
 }
 
 #[test]
-fn test_poseidon_compatibility_absorbing_only() {
+fn test_sponge_compatibility_absorbing_only() {
     let absorptions = random_nested_list_f(8, 5);
     let squeezings = Vec::new();
 
-    poseidon_compatiblity_verification::<Fr, 3, 2, 8, 57>(absorptions, squeezings);
+    sponge_compatiblity_verification::<Fr, 3, 2, 8, 57>(absorptions, squeezings);
 }
 
 #[test]
-fn test_poseidon_compatibility_interleaved() {
+fn test_sponge_compatibility_interleaved() {
     let absorptions = random_nested_list_f(10, 5);
     let squeezings = random_list_usize(7, 10);
 
-    poseidon_compatiblity_verification::<Fr, 3, 2, 8, 57>(absorptions, squeezings);
+    sponge_compatiblity_verification::<Fr, 3, 2, 8, 57>(absorptions, squeezings);
 }
 
 #[test]
-fn test_poseidon_compatibility_other_params() {
+fn test_sponge_compatibility_other_params() {
     let absorptions = random_nested_list_f(10, 10);
     let squeezings = random_list_usize(10, 10);
 
-    poseidon_compatiblity_verification::<Fr, 5, 4, 8, 120>(absorptions, squeezings);
+    sponge_compatiblity_verification::<Fr, 5, 4, 8, 120>(absorptions, squeezings);
 }
