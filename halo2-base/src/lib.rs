@@ -135,6 +135,12 @@ impl<F: ScalarField> AssignedValue<F> {
     }
 }
 
+impl<F: ScalarField> AsRef<AssignedValue<F>> for AssignedValue<F> {
+    fn as_ref(&self) -> &AssignedValue<F> {
+        self
+    }
+}
+
 /// Represents a single thread of an execution trace.
 /// * We keep the naming [Context] for historical reasons.
 #[derive(Clone, Debug)]

@@ -727,6 +727,35 @@ pub trait GateInstructions<F: ScalarField> {
         self.select_by_indicator(ctx, cells, ind)
     }
 
+    /// `array2d` is an array of fixed length arrays.
+    /// Assumes:
+    /// * `array2d.len() == indicator.len()`
+    /// * `array2d[i].len() == array2d[j].len()` for all `i,j`.
+    /// * the values of `indicator` are boolean and that `indicator` has at most one `1` bit.
+    /// * the lengths of `array2d` and `indicator` are the same.
+    ///
+    /// Returns the "dot product" of `array2d` with `indicator` as a fixed length (1d) array of length `array2d[0].len()`.
+    fn select_array_by_indicator<AR, AV>(
+        &self,
+        ctx: &mut Context<F>,
+        array2d: &[AR],
+        indicator: &[AssignedValue<F>],
+    ) -> Vec<AssignedValue<F>>
+    where
+        AR: AsRef<[AV]>,
+        AV: AsRef<AssignedValue<F>>,
+    {
+        (0..array2d[0].as_ref().len())
+            .map(|j| {
+                self.select_by_indicator(
+                    ctx,
+                    array2d.iter().map(|array_i| *array_i.as_ref()[j].as_ref()),
+                    indicator.iter().copied(),
+                )
+            })
+            .collect()
+    }
+
     /// Constrains that a cell is equal to 0 and returns `1` if `a = 0`, otherwise `0`.
     ///
     /// Defines a vertical gate of form `| out | a | inv | 1 | 0 | a | out | 0 |`, where out = 1 if a = 0, otherwise out = 0.

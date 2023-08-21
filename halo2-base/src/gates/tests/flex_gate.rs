@@ -4,6 +4,7 @@ use crate::utils::biguint_to_fe;
 use crate::utils::testing::base_test;
 use crate::QuantumCell::Witness;
 use crate::{gates::flex_gate::GateInstructions, QuantumCell};
+use itertools::Itertools;
 use num_bigint::BigUint;
 use test_case::test_case;
 
@@ -154,6 +155,19 @@ pub fn test_select_by_indicator(array: Vec<QuantumCell<Fr>>, idx: QuantumCell<Fr
 #[test_case((0..3).map(Fr::from).map(Witness).collect(), Witness(Fr::from(1)) => Fr::from(1); "select_from_idx(): [0, 1, 2] -> 1")]
 pub fn test_select_from_idx(array: Vec<QuantumCell<Fr>>, idx: QuantumCell<Fr>) -> Fr {
     base_test().run_gate(|ctx, chip| *chip.select_from_idx(ctx, array, idx).value())
+}
+
+#[test_case(vec![vec![1,2,3], vec![4,5,6], vec![7,8,9]].into_iter().map(|a| a.into_iter().map(Fr::from).collect_vec()).collect_vec(), 
+Fr::from(1) => 
+[4,5,6].map(Fr::from).to_vec(); 
+"select_array_by_indicator(1): [[1,2,3], [4,5,6], [7,8,9]] -> [4,5,6]")]
+pub fn test_select_array_by_indicator(array2d: Vec<Vec<Fr>>, idx: Fr) -> Vec<Fr> {
+    base_test().run_gate(|ctx, chip| {
+        let array2d = array2d.into_iter().map(|a| ctx.assign_witnesses(a)).collect_vec();
+        let idx = ctx.load_witness(idx);
+        let ind = chip.idx_to_indicator(ctx, idx, array2d.len());
+        chip.select_array_by_indicator(ctx, &array2d, &ind).iter().map(|a| *a.value()).collect()
+    })
 }
 
 #[test_case(Fr::zero() => Fr::from(1); "is_zero(): 0 -> 1")]
