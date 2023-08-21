@@ -151,6 +151,15 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
         SafeType::<F, BYTES_PER_ELE, TOTAL_BITS>::new(value)
     }
 
+    /// Unsafe method that directly converts `input` to [`SafeType`] **without any checks**.
+    /// This should **only** be used if an external library needs to convert their types to [`SafeType`].
+    pub fn unsafe_to_safe_type<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
+        inputs: RawAssignedValues<F>,
+    ) -> SafeType<F, BYTES_PER_ELE, TOTAL_BITS> {
+        assert_eq!(inputs.len(), SafeType::<F, BYTES_PER_ELE, TOTAL_BITS>::VALUE_LENGTH);
+        SafeType::<F, BYTES_PER_ELE, TOTAL_BITS>::new(inputs)
+    }
+
     /// Constrains that the `input` is a boolean value (either 0 or 1) and wraps it in [`SafeBool`].
     pub fn assert_bool(&self, ctx: &mut Context<F>, input: AssignedValue<F>) -> SafeBool<F> {
         self.range_chip.gate().assert_bit(ctx, input);
