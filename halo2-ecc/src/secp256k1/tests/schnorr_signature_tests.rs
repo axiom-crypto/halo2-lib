@@ -345,5 +345,6 @@ fn bench_secp256k1_schnorr() -> Result<(), Box<dyn std::error::Error>> {
             verify_time.time.elapsed()
         )?;
     }
+
     Ok(())
 }
