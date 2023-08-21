@@ -165,7 +165,7 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
 
     /// Unsafe method that directly converts `input` to [`SafeBool`] **without any checks**.
     /// This should **only** be used if an external library needs to convert their types to [`SafeBool`].
-    pub fn unsafe_to_bool(&self, input: AssignedValue<F>) -> SafeBool<F> {
+    pub fn unsafe_to_bool(input: AssignedValue<F>) -> SafeBool<F> {
         SafeBool(input)
     }
 

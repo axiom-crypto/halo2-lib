@@ -1,7 +1,7 @@
 #![allow(clippy::len_without_is_empty)]
 use crate::AssignedValue;
 
-use super::{SafeByte, ScalarField};
+use super::{SafeByte, SafeType, ScalarField};
 
 use getset::Getters;
 
@@ -86,5 +86,24 @@ impl<F: ScalarField, const LEN: usize> FixLenBytes<F, LEN> {
     /// Returns the length of the byte array.
     pub fn len(&self) -> usize {
         LEN
+    }
+}
+
+impl<F: ScalarField, const TOTAL_BITS: usize> From<SafeType<F, 1, TOTAL_BITS>>
+    for FixLenBytes<F, { SafeType::<F, 1, TOTAL_BITS>::VALUE_LENGTH }>
+{
+    fn from(bytes: SafeType<F, 1, TOTAL_BITS>) -> Self {
+        let bytes = bytes.value.into_iter().map(|b| SafeByte(b)).collect::<Vec<_>>();
+        Self::new(bytes.try_into().unwrap())
+    }
+}
+
+impl<F: ScalarField, const TOTAL_BITS: usize>
+    From<FixLenBytes<F, { SafeType::<F, 1, TOTAL_BITS>::VALUE_LENGTH }>>
+    for SafeType<F, 1, TOTAL_BITS>
+{
+    fn from(bytes: FixLenBytes<F, { SafeType::<F, 1, TOTAL_BITS>::VALUE_LENGTH }>) -> Self {
+        let bytes = bytes.bytes.into_iter().map(|b| b.0).collect::<Vec<_>>();
+        Self::new(bytes)
     }
 }
