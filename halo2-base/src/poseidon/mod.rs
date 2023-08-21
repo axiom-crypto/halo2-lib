@@ -75,7 +75,7 @@ impl<'a, F: ScalarField, const T: usize, const RATE: usize> PoseidonInstructions
         self.hasher.hash_var_len_array(
             ctx,
             self.range_chip,
-            &inputs.bytes().map(|sb| *sb.as_ref()).to_vec(),
+            inputs.bytes().map(|sb| *sb.as_ref()).as_ref(),
             *inputs_len,
         )
     }
@@ -108,7 +108,7 @@ impl<'a, F: ScalarField, const T: usize, const RATE: usize> PoseidonInstructions
         self.hasher.hash_fix_len_array(
             ctx,
             self.range_chip,
-            &inputs.bytes().map(|sb| *sb.as_ref()).to_vec(),
+            inputs.bytes().map(|sb| *sb.as_ref()).as_ref(),
         )
     }
 }

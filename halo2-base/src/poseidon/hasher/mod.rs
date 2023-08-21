@@ -44,7 +44,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasherConsts<F, 
     ) -> Self {
         let init_state = PoseidonState::default(ctx);
         let mut state = init_state.clone();
-        let empty_hash = fix_len_array_squeeze(ctx, gate, &vec![], &mut state, spec);
+        let empty_hash = fix_len_array_squeeze(ctx, gate, &[], &mut state, spec);
         Self { init_state, empty_hash }
     }
 }
@@ -139,7 +139,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
         &self,
         ctx: &mut Context<F>,
         range: &impl RangeInstructions<F>,
-        inputs: &Vec<AssignedValue<F>>,
+        inputs: &[AssignedValue<F>],
     ) -> AssignedValue<F>
     where
         F: BigPrimeField,
