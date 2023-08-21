@@ -205,7 +205,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE
             }
         }
         // If len == 0, inputs_mask is all 0. Then the extra 1 should be added into s[1].
-        let empty_extra_one = gate.sub(ctx, Constant(F::from(1)), inputs_mask[0]);
+        let empty_extra_one = gate.not(ctx, inputs_mask[0]);
         self.s[1] = gate.add(ctx, self.s[1], empty_extra_one);
     }
 

@@ -76,7 +76,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
         &self,
         ctx: &mut Context<F>,
         range: &impl RangeInstructions<F>,
-        inputs: &Vec<AssignedValue<F>>,
+        inputs: &[AssignedValue<F>],
         len: AssignedValue<F>,
     ) -> AssignedValue<F>
     where
@@ -204,7 +204,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonSponge<F, T, RAT
 fn fix_len_array_squeeze<F: ScalarField, const T: usize, const RATE: usize>(
     ctx: &mut Context<F>,
     gate: &impl GateInstructions<F>,
-    input_elements: &Vec<AssignedValue<F>>,
+    input_elements: &[AssignedValue<F>],
     state: &mut PoseidonState<F, T, RATE>,
     spec: &OptimizedPoseidonSpec<F, T, RATE>,
 ) -> AssignedValue<F> {
