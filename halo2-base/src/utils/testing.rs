@@ -1,7 +1,7 @@
 //! Utilities for testing
 use crate::{
     gates::{
-        builder::{GateThreadBuilder, RangeCircuitBuilder},
+        builder::{BaseConfigParams, GateThreadBuilder, RangeCircuitBuilder},
         GateChip,
     },
     halo2_proofs::{
@@ -20,7 +20,11 @@ use crate::{
     safe_types::RangeChip,
     Context,
 };
+use ark_std::{end_timer, perf_trace::TimerInfo, start_timer};
+use halo2_proofs_axiom::plonk::{keygen_pk, keygen_vk};
 use rand::{rngs::StdRng, SeedableRng};
+
+use super::fs::gen_srs;
 
 /// Helper function to generate a proof with real prover using SHPLONK KZG multi-open polynomical commitment scheme
 /// and Blake2b as the hash function for Fiat-Shamir.
@@ -149,7 +153,6 @@ impl BaseTester {
     }
 
     /// Run a mock test by providing a closure that uses a `builder` and `RangeChip`.
-    /// - `expect_satisfied`: flag for whether you expect the test to pass or fail. Failure means a constraint system failure -- the tester does not catch system panics.
     pub fn run_builder<R>(
         &self,
         f: impl FnOnce(&mut GateThreadBuilder<Fr>, &RangeChip<Fr>) -> R,
@@ -179,4 +182,79 @@ impl BaseTester {
         }
         res
     }
+
+    /// Runs keygen, real prover, and verifier by providing a closure that uses a `builder` and `RangeChip`.
+    ///
+    /// Must provide `init_input` for use during key generation, which is preferably not equal to `logic_input`.
+    /// These are the inputs to the closure, not necessary public inputs to the circuit.
+    ///
+    /// Currently for testing, no public instances.
+    pub fn bench_builder<I: Clone>(
+        &self,
+        init_input: I,
+        logic_input: I,
+        f: impl Fn(&mut GateThreadBuilder<Fr>, &RangeChip<Fr>, I),
+    ) -> BenchStats {
+        let mut builder = GateThreadBuilder::keygen();
+        let range = RangeChip::default(self.lookup_bits.unwrap_or(0));
+        // run the function, mutating `builder`
+        f(&mut builder, &range, init_input);
+
+        // helper check: if your function didn't use lookups, turn lookup table "off"
+        let t_cells_lookup = builder
+            .threads
+            .iter()
+            .map(|t| t.iter().map(|ctx| ctx.cells_to_lookup.len()).sum::<usize>())
+            .sum::<usize>();
+        let lookup_bits = if t_cells_lookup == 0 { None } else { self.lookup_bits };
+
+        // configure the circuit shape, 9 blinding rows seems enough
+        let mut config_params = builder.config(self.k as usize, Some(9));
+        config_params.lookup_bits = lookup_bits;
+        dbg!(&config_params);
+        let circuit = RangeCircuitBuilder::keygen(builder, config_params.clone());
+
+        let params = gen_srs(config_params.k as u32);
+        let vk_time = start_timer!(|| "Generating vkey");
+        let vk = keygen_vk(&params, &circuit).unwrap();
+        end_timer!(vk_time);
+        let pk_time = start_timer!(|| "Generating pkey");
+        let pk = keygen_pk(&params, vk, &circuit).unwrap();
+        end_timer!(pk_time);
+
+        let break_points = circuit.0.break_points.borrow().clone();
+        drop(circuit);
+        // create real proof
+        let proof_time = start_timer!(|| "Proving time");
+        let mut builder = GateThreadBuilder::prover();
+        let range = RangeChip::default(self.lookup_bits.unwrap_or(0));
+        f(&mut builder, &range, logic_input);
+        let circuit = RangeCircuitBuilder::prover(builder, config_params.clone(), break_points);
+        let proof = gen_proof(&params, &pk, circuit);
+        end_timer!(proof_time);
+
+        let proof_size = proof.len();
+
+        let verify_time = start_timer!(|| "Verify time");
+        check_proof(&params, pk.get_vk(), &proof, self.expect_satisfied);
+        end_timer!(verify_time);
+
+        BenchStats { config_params, vk_time, pk_time, proof_time, proof_size, verify_time }
+    }
+}
+
+/// Bench stats
+pub struct BenchStats {
+    /// Config params
+    pub config_params: BaseConfigParams,
+    /// Vkey gen time
+    pub vk_time: TimerInfo,
+    /// Pkey gen time
+    pub pk_time: TimerInfo,
+    /// Proving time
+    pub proof_time: TimerInfo,
+    /// Proof size in bytes
+    pub proof_size: usize,
+    /// Verify time
+    pub verify_time: TimerInfo,
 }
