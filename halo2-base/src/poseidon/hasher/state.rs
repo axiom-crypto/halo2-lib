@@ -28,13 +28,15 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE
 
     /// Perform permutation on this state.
     ///
+    /// ATTETION: inputs.len() needs to be fixed at compile time.
+    /// Assume len <= inputs.len().
     /// `inputs` is right padded.
     /// If `len` is `None`, treat `inputs` as a fixed length array.
     pub fn permutation(
         &mut self,
         ctx: &mut Context<F>,
         gate: &impl GateInstructions<F>,
-        inputs: &Vec<AssignedValue<F>>,
+        inputs: &[AssignedValue<F>],
         len: Option<AssignedValue<F>>,
         spec: &OptimizedPoseidonSpec<F, T, RATE>,
     ) {
@@ -123,7 +125,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE
         &mut self,
         ctx: &mut Context<F>,
         gate: &impl GateInstructions<F>,
-        inputs: &Vec<AssignedValue<F>>,
+        inputs: &[AssignedValue<F>],
         pre_constants: &[F; T],
     ) {
         assert!(inputs.len() < T);

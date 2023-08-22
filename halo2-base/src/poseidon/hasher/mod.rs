@@ -105,7 +105,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
                 is_last_perm,
             );
 
-            state.permutation(ctx, range.gate(), &chunk.to_vec(), Some(len_chunk), &self.spec);
+            state.permutation(ctx, range.gate(), chunk, Some(len_chunk), &self.spec);
             result_state.select(
                 ctx,
                 range.gate(),
@@ -120,7 +120,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
                 Constant(F::from((max_len / RATE + 1) as u64)),
             );
             let len_chunk = ctx.load_zero();
-            state.permutation(ctx, range.gate(), &vec![], Some(len_chunk), &self.spec);
+            state.permutation(ctx, range.gate(), &[], Some(len_chunk), &self.spec);
             result_state.select(
                 ctx,
                 range.gate(),
@@ -201,6 +201,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonSponge<F, T, RAT
     }
 }
 
+/// ATTETION: input_elements.len() needs to be fixed at compile time.
 fn fix_len_array_squeeze<F: ScalarField, const T: usize, const RATE: usize>(
     ctx: &mut Context<F>,
     gate: &impl GateInstructions<F>,
@@ -211,10 +212,10 @@ fn fix_len_array_squeeze<F: ScalarField, const T: usize, const RATE: usize>(
     let exact = input_elements.len() % RATE == 0;
 
     for chunk in input_elements.chunks(RATE) {
-        state.permutation(ctx, gate, &chunk.to_vec(), None, spec);
+        state.permutation(ctx, gate, chunk, None, spec);
     }
     if exact {
-        state.permutation(ctx, gate, &vec![], None, spec);
+        state.permutation(ctx, gate, &[], None, spec);
     }
 
     state.s[1]
