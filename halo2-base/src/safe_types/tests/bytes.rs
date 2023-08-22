@@ -36,11 +36,15 @@ fn mock_circuit_test<FM: FnMut(&mut Context<Fr>, SafeTypeChip<'_, Fr>)>(mut f: F
 fn pos_var_len_bytes() {
     base_test().k(10).lookup_bits(8).run(|ctx, range| {
         let safe = SafeTypeChip::new(range);
-        let fake_bytes = ctx.assign_witnesses(
+        let bytes = ctx.assign_witnesses(
             vec![255u64, 255u64, 255u64, 255u64].into_iter().map(Fr::from).collect::<Vec<_>>(),
         );
         let len = ctx.load_witness(Fr::from(3u64));
-        safe.raw_to_var_len_bytes::<4>(ctx, fake_bytes.try_into().unwrap(), len);
+        safe.raw_to_var_len_bytes::<4>(ctx, bytes.clone().try_into().unwrap(), len);
+
+        // check edge case len == MAX_LEN
+        let len = ctx.load_witness(Fr::from(4u64));
+        safe.raw_to_var_len_bytes::<4>(ctx, bytes.try_into().unwrap(), len);
     });
 }
 
@@ -57,7 +61,7 @@ fn neg_var_len_bytes_witness_values_not_bytes() {
     });
 }
 
-//Checks assertion len < max_len
+// Checks assertion len <= max_len
 #[test]
 #[should_panic]
 fn neg_var_len_bytes_len_less_than_max_len() {
@@ -75,11 +79,15 @@ fn neg_var_len_bytes_len_less_than_max_len() {
 fn pos_var_len_bytes_vec() {
     base_test().k(10).lookup_bits(8).run(|ctx, range| {
         let safe = SafeTypeChip::new(range);
-        let fake_bytes = ctx.assign_witnesses(
+        let bytes = ctx.assign_witnesses(
             vec![255u64, 255u64, 255u64, 255u64].into_iter().map(Fr::from).collect::<Vec<_>>(),
         );
         let len = ctx.load_witness(Fr::from(3u64));
-        safe.raw_to_var_len_bytes_vec(ctx, fake_bytes, len, 4);
+        safe.raw_to_var_len_bytes_vec(ctx, bytes.clone(), len, 4);
+
+        // check edge case len == MAX_LEN
+        let len = ctx.load_witness(Fr::from(4u64));
+        safe.raw_to_var_len_bytes_vec(ctx, bytes, len, 4);
     });
 }
 
@@ -97,7 +105,7 @@ fn neg_var_len_bytes_vec_witness_values_not_bytes() {
     });
 }
 
-//Checks assertion len != max_len
+// Checks assertion len <= max_len
 #[test]
 #[should_panic]
 fn neg_var_len_bytes_vec_len_less_than_max_len() {
@@ -106,7 +114,7 @@ fn neg_var_len_bytes_vec_len_less_than_max_len() {
         let fake_bytes = ctx.assign_witnesses(
             vec![500u64, 500u64, 500u64, 500u64].into_iter().map(Fr::from).collect::<Vec<_>>(),
         );
-        let max_len = 5;
+        let max_len = 4;
         safe.raw_to_var_len_bytes_vec(ctx, fake_bytes, len, max_len);
     });
 }
