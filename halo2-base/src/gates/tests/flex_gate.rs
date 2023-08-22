@@ -157,9 +157,9 @@ pub fn test_select_from_idx(array: Vec<QuantumCell<Fr>>, idx: QuantumCell<Fr>) -
     base_test().run_gate(|ctx, chip| *chip.select_from_idx(ctx, array, idx).value())
 }
 
-#[test_case(vec![vec![1,2,3], vec![4,5,6], vec![7,8,9]].into_iter().map(|a| a.into_iter().map(Fr::from).collect_vec()).collect_vec(), 
-Fr::from(1) => 
-[4,5,6].map(Fr::from).to_vec(); 
+#[test_case(vec![vec![1,2,3], vec![4,5,6], vec![7,8,9]].into_iter().map(|a| a.into_iter().map(Fr::from).collect_vec()).collect_vec(),
+Fr::from(1) =>
+[4,5,6].map(Fr::from).to_vec();
 "select_array_by_indicator(1): [[1,2,3], [4,5,6], [7,8,9]] -> [4,5,6]")]
 pub fn test_select_array_by_indicator(array2d: Vec<Vec<Fr>>, idx: Fr) -> Vec<Fr> {
     base_test().run_gate(|ctx, chip| {
