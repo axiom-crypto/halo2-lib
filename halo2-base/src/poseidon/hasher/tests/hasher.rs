@@ -2,11 +2,12 @@ use crate::{
     gates::{builder::GateThreadBuilder, range::RangeInstructions, RangeChip},
     halo2_proofs::halo2curves::bn256::Fr,
     poseidon::hasher::{spec::OptimizedPoseidonSpec, PoseidonHasher},
-    utils::{BigPrimeField, ScalarField},
+    utils::{testing::base_test, BigPrimeField, ScalarField},
 };
 use pse_poseidon::Poseidon;
 use rand::Rng;
 
+#[derive(Clone)]
 struct Payload<F: ScalarField> {
     // Represent value of a right-padded witness array with a variable length
     pub values: Vec<F>,
@@ -60,8 +61,17 @@ fn random_payload<F: ScalarField>(max_len: usize, len: usize, max_value: usize) 
     Payload { values, len }
 }
 
+fn random_payload_without_len<F: ScalarField>(max_len: usize, max_value: usize) -> Payload<F> {
+    let mut rng = rand::thread_rng();
+    let mut values = Vec::new();
+    for _ in 0..max_len {
+        values.push(F::from(rng.gen_range(0..=max_value) as u64));
+    }
+    Payload { values, len: rng.gen_range(0..=max_len) }
+}
+
 #[test]
-fn test_poseidon_hasher() {
+fn test_poseidon_hasher_compatiblity() {
     {
         const T: usize = 3;
         const RATE: usize = 2;
@@ -89,5 +99,31 @@ fn test_poseidon_hasher() {
             random_payload(RATE * 5 + 1, RATE * 5 + 1, usize::MAX),
         ];
         hasher_compatiblity_verification::<Fr, T, RATE, 8, 57>(payloads);
+    }
+}
+
+#[test]
+fn test_poseidon_hasher_with_prover() {
+    {
+        const T: usize = 3;
+        const RATE: usize = 2;
+        const R_F: usize = 8;
+        const R_P: usize = 57;
+
+        let max_lens = vec![0, RATE * 2, RATE * 5, RATE * 2 + 1, RATE * 5 + 1];
+        for max_len in max_lens {
+            let init_input = random_payload_without_len(max_len, usize::MAX);
+            let logic_input = random_payload_without_len(max_len, usize::MAX);
+            base_test().k(12).bench_builder(init_input, logic_input, |builder, range, payload| {
+                let ctx = builder.main(0);
+                // Construct in-circuit Poseidon hasher. Assuming SECURE_MDS = 0.
+                let spec = OptimizedPoseidonSpec::<Fr, T, RATE>::new::<R_F, R_P, 0>();
+                let mut hasher = PoseidonHasher::<Fr, T, RATE>::new(spec);
+                hasher.initialize_consts(ctx, range.gate());
+                let inputs = ctx.assign_witnesses(payload.values);
+                let len = ctx.load_witness(Fr::from(payload.len as u64));
+                hasher.hash_var_len_array(ctx, range, &inputs, len);
+            });
+        }
     }
 }
