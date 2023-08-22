@@ -1,16 +1,13 @@
 //! Utility traits, functions used in the crate.
 
-use crate::halo2_proofs::{
-    circuit::{Layouter, Value},
-    plonk::{Error, TableColumn},
+use crate::{
+    halo2_proofs::{
+        circuit::{Layouter, Value},
+        plonk::{Error, TableColumn},
+    },
+    util::eth_types::{Field, ToScalar, Word},
 };
 use itertools::Itertools;
-
-pub mod constraint_builder;
-pub mod eth_types;
-pub mod expression;
-
-use eth_types::{Field, ToScalar, Word};
 
 pub const NUM_BITS_PER_BYTE: usize = 8;
 pub const NUM_BYTES_PER_WORD: usize = 8;
@@ -90,7 +87,26 @@ pub struct WordParts {
 
 /// Packs bits into bytes
 pub mod to_bytes {
-    pub(crate) fn value(bits: &[u8]) -> Vec<u8> {
+    use crate::util::eth_types::Field;
+    use crate::util::expression::Expr;
+    use halo2_base::halo2_proofs::plonk::Expression;
+
+    pub fn expr<F: Field>(bits: &[Expression<F>]) -> Vec<Expression<F>> {
+        debug_assert!(bits.len() % 8 == 0, "bits not a multiple of 8");
+        let mut bytes = Vec::new();
+        for byte_bits in bits.chunks(8) {
+            let mut value = 0.expr();
+            let mut multiplier = F::ONE;
+            for byte in byte_bits.iter() {
+                value = value + byte.expr() * multiplier;
+                multiplier *= F::from(2);
+            }
+            bytes.push(value);
+        }
+        bytes
+    }
+
+    pub fn value(bits: &[u8]) -> Vec<u8> {
         debug_assert!(bits.len() % 8 == 0, "bits not a multiple of 8");
         let mut bytes = Vec::new();
         for byte_bits in bits.chunks(8) {
@@ -125,10 +141,28 @@ pub fn rotate_left(bits: &[u8], count: usize) -> [u8; NUM_BITS_PER_WORD] {
     rotated.try_into().unwrap()
 }
 
+/// Encodes the data using rlc
+pub mod compose_rlc {
+    use crate::halo2_proofs::plonk::Expression;
+    use crate::util::eth_types::Field;
+
+    #[allow(dead_code)]
+    pub(crate) fn expr<F: Field>(expressions: &[Expression<F>], r: F) -> Expression<F> {
+        let mut rlc = expressions[0].clone();
+        let mut multiplier = r;
+        for expression in expressions[1..].iter() {
+            rlc = rlc + expression.clone() * multiplier;
+            multiplier *= r;
+        }
+        rlc
+    }
+}
+
 /// Scatters a value into a packed word constant
 pub mod scatter {
-    use super::{eth_types::Field, pack};
+    use super::pack;
     use crate::halo2_proofs::plonk::Expression;
+    use crate::util::eth_types::Field;
 
     pub(crate) fn expr<F: Field>(value: u8, count: usize) -> Expression<F> {
         Expression::Constant(pack(&vec![value; count]))

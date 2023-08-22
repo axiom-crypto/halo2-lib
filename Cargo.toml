@@ -1,14 +1,10 @@
 [workspace]
-members = [
-    "halo2-base",
-    "halo2-ecc",
-    "hashes/zkevm-keccak",
-]
+members = ["halo2-base", "halo2-ecc", "hashes/zkevm"]
 resolver = "2"
 
 [profile.dev]
 opt-level = 3
-debug = 1 # change to 0 or 2 for more or less debug info
+debug = 1              # change to 0 or 2 for more or less debug info
 overflow-checks = true
 incremental = true
 
@@ -29,7 +25,7 @@ codegen-units = 16
 opt-level = 3
 debug = false
 debug-assertions = false
-lto = "fat" 
+lto = "fat"
 # `codegen-units = 1` can lead to WORSE performance - always bench to find best profile for your machine!
 # codegen-units = 1
 panic = "unwind"

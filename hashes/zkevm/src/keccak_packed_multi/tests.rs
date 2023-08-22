@@ -78,7 +78,18 @@ impl<F: Field> Circuit<F> for KeccakCircuit<F> {
                     self.num_rows.map(|nr| get_keccak_capacity(nr, params.rows_per_round)),
                     params,
                 );
-                config.assign(&mut region, &witness);
+                let lengths = config.assign(&mut region, &witness);
+                // only look at last row in each round
+                // first round is dummy, so ignore
+                // only look at last round per absorb of RATE_IN_BITS
+                for length in lengths
+                    .into_iter()
+                    .step_by(config.parameters.rows_per_round)
+                    .step_by(NUM_ROUNDS + 1)
+                    .skip(1)
+                {
+                    println!("len: {:?}", length.value());
+                }
 
                 #[cfg(feature = "halo2-axiom")]
                 {
