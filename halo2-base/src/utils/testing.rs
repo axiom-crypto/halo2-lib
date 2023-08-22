@@ -24,10 +24,11 @@ use rand::{rngs::StdRng, SeedableRng};
 
 /// Helper function to generate a proof with real prover using SHPLONK KZG multi-open polynomical commitment scheme
 /// and Blake2b as the hash function for Fiat-Shamir.
-pub fn gen_proof(
+pub fn gen_proof_with_instances(
     params: &ParamsKZG<Bn256>,
     pk: &ProvingKey<G1Affine>,
     circuit: impl Circuit<Fr>,
+    instances: &[&[Fr]],
 ) -> Vec<u8> {
     let rng = StdRng::seed_from_u64(0);
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
@@ -38,17 +39,28 @@ pub fn gen_proof(
         _,
         Blake2bWrite<Vec<u8>, G1Affine, _>,
         _,
-    >(params, pk, &[circuit], &[&[]], rng, &mut transcript)
+    >(params, pk, &[circuit], &[instances], rng, &mut transcript)
     .expect("prover should not fail");
     transcript.finalize()
 }
 
-/// Helper function to verify a proof (generated using [`gen_proof`]) using SHPLONK KZG multi-open polynomical commitment scheme
+/// For testing use only: Helper function to generate a proof **without public instances** with real prover using SHPLONK KZG multi-open polynomical commitment scheme
 /// and Blake2b as the hash function for Fiat-Shamir.
-pub fn check_proof(
+pub fn gen_proof(
+    params: &ParamsKZG<Bn256>,
+    pk: &ProvingKey<G1Affine>,
+    circuit: impl Circuit<Fr>,
+) -> Vec<u8> {
+    gen_proof_with_instances(params, pk, circuit, &[])
+}
+
+/// Helper function to verify a proof (generated using [`gen_proof_with_instances`]) using SHPLONK KZG multi-open polynomical commitment scheme
+/// and Blake2b as the hash function for Fiat-Shamir.
+pub fn check_proof_with_instances(
     params: &ParamsKZG<Bn256>,
     vk: &VerifyingKey<G1Affine>,
     proof: &[u8],
+    instances: &[&[Fr]],
     expect_satisfied: bool,
 ) {
     let verifier_params = params.verifier_params();
@@ -60,7 +72,7 @@ pub fn check_proof(
         Challenge255<G1Affine>,
         Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
         SingleStrategy<'_, Bn256>,
-    >(verifier_params, vk, strategy, &[&[]], &mut transcript);
+    >(verifier_params, vk, strategy, &[instances], &mut transcript);
     // Just FYI, because strategy is `SingleStrategy`, the output `res` is `Result<(), Error>`, so there is no need to call `res.finalize()`.
 
     if expect_satisfied {
@@ -68,6 +80,17 @@ pub fn check_proof(
     } else {
         assert!(res.is_err());
     }
+}
+
+/// For testing only: Helper function to verify a proof (generated using [`gen_proof`]) without public instances using SHPLONK KZG multi-open polynomical commitment scheme
+/// and Blake2b as the hash function for Fiat-Shamir.
+pub fn check_proof(
+    params: &ParamsKZG<Bn256>,
+    vk: &VerifyingKey<G1Affine>,
+    proof: &[u8],
+    expect_satisfied: bool,
+) {
+    check_proof_with_instances(params, vk, proof, &[], expect_satisfied);
 }
 
 /// Helper to facilitate easier writing of tests using `RangeChip` and `RangeCircuitBuilder`.
