@@ -231,7 +231,7 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
     ///
     /// * ctx: Circuit [Context]<F> to assign witnesses to.
     /// * inputs: Slice representing the byte array.
-    /// * len: [AssignedValue]<F> witness representing the variable elements within the byte array from 0..=len.
+    /// * len: [AssignedValue]<F> witness representing the variable length of the byte array. Constrained to be `<= MAX_LEN`.
     /// * MAX_LEN: [usize] representing the maximum length of the byte array and the number of elements it must contain.
     pub fn raw_to_var_len_bytes<const MAX_LEN: usize>(
         &self,
@@ -239,15 +239,15 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
         inputs: [AssignedValue<F>; MAX_LEN],
         len: AssignedValue<F>,
     ) -> VarLenBytes<F, MAX_LEN> {
-        self.range_chip.check_less_than_safe(ctx, len, MAX_LEN as u64);
+        self.range_chip.check_less_than_safe(ctx, len, MAX_LEN as u64 + 1);
         VarLenBytes::<F, MAX_LEN>::new(inputs.map(|input| self.assert_byte(ctx, input)), len)
     }
 
-    /// Converts a vector of AssignedValue(treated as little-endian) to VarLenBytesVec. Not encourged to use because `MAX_LEN` cannot be verified at compile time.
+    /// Converts a vector of AssignedValue to [VarLenBytesVec]. Not encouraged to use because `MAX_LEN` cannot be verified at compile time.
     ///
     /// * ctx: Circuit [Context]<F> to assign witnesses to.
-    /// * inputs: Vector representing the byte array.
-    /// * len: [AssignedValue]<F> witness representing the variable elements within the byte array from 0..=len.
+    /// * inputs: Vector representing the byte array, right padded to `max_len`. See [VarLenBytesVec] for details about padding.
+    /// * len: [AssignedValue]<F> witness representing the variable length of the byte array. Constrained to be `<= max_len`.
     /// * max_len: [usize] representing the maximum length of the byte array and the number of elements it must contain.
     pub fn raw_to_var_len_bytes_vec(
         &self,
@@ -256,7 +256,7 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
         len: AssignedValue<F>,
         max_len: usize,
     ) -> VarLenBytesVec<F> {
-        self.range_chip.check_less_than_safe(ctx, len, max_len as u64);
+        self.range_chip.check_less_than_safe(ctx, len, max_len as u64 + 1);
         VarLenBytesVec::<F>::new(
             inputs.iter().map(|input| self.assert_byte(ctx, *input)).collect_vec(),
             len,

@@ -55,11 +55,11 @@ impl<F: ScalarField> VarLenBytesVec<F> {
     // VarLenBytesVec can be only created by SafeChip.
     pub(super) fn new(bytes: Vec<SafeByte<F>>, len: AssignedValue<F>, max_len: usize) -> Self {
         assert!(
-            len.value().le(&F::from_u128(max_len as u128)),
+            len.value().le(&F::from(max_len as u64)),
             "Invalid length which exceeds MAX_LEN {}",
             max_len
         );
-        assert!(bytes.len() == max_len, "bytes is not padded correctly");
+        assert_eq!(bytes.len(), max_len, "bytes is not padded correctly");
         Self { bytes, len }
     }
 
