@@ -2,7 +2,7 @@
 use crate::{
     gates::{
         builder::{BaseConfigParams, GateThreadBuilder, RangeCircuitBuilder},
-        GateChip,
+        GateChip, RangeChip,
     },
     halo2_proofs::{
         dev::MockProver,
@@ -17,7 +17,6 @@ use crate::{
             Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
         },
     },
-    safe_types::RangeChip,
     Context,
 };
 use ark_std::{end_timer, perf_trace::TimerInfo, start_timer};

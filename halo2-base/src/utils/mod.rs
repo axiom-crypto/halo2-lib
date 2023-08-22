@@ -13,6 +13,8 @@ use num_bigint::Sign;
 use num_traits::Signed;
 use num_traits::{One, Zero};
 
+/// Helper functions for raw halo2 operations to unify slight differences in API for halo2-axiom and halo2-pse
+pub mod halo2;
 #[cfg(any(test, feature = "test-utils"))]
 pub mod testing;
 

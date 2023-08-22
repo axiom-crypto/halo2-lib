@@ -1,23 +1,24 @@
-pub use crate::{
-    gates::{
-        flex_gate::GateInstructions,
-        range::{RangeChip, RangeInstructions},
-    },
-    safe_types::VarLenBytes,
-    utils::ScalarField,
-    AssignedValue, Context,
-    QuantumCell::{self, Constant, Existing, Witness},
-};
 use std::{
     borrow::{Borrow, BorrowMut},
     cmp::{max, min},
 };
 
+use crate::{
+    gates::{
+        flex_gate::GateInstructions,
+        range::{RangeChip, RangeInstructions},
+    },
+    utils::ScalarField,
+    AssignedValue, Context,
+    QuantumCell::Witness,
+};
+
+use itertools::Itertools;
+
 mod bytes;
 mod primitives;
 
 pub use bytes::*;
-use itertools::Itertools;
 pub use primitives::*;
 
 #[cfg(test)]

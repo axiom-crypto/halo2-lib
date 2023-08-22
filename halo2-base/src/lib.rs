@@ -1,12 +1,15 @@
 //! Base library to build Halo2 circuits.
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 #![feature(stmt_expr_attributes)]
 #![feature(trait_alias)]
+#![feature(associated_type_defaults)]
+#![allow(incomplete_features)]
 #![deny(clippy::perf)]
 #![allow(clippy::too_many_arguments)]
 #![warn(clippy::default_numeric_fallback)]
 #![warn(missing_docs)]
+
+use std::any::TypeId;
 
 // Different memory allocator options:
 #[cfg(feature = "jemallocator")]
@@ -38,6 +41,7 @@ pub use halo2_proofs_axiom as halo2_proofs;
 use halo2_proofs::halo2curves::ff;
 use halo2_proofs::plonk::Assigned;
 use utils::ScalarField;
+use virtual_region::copy_constraints::SharedCopyConstraintManager;
 
 /// Module that contains the main API for creating and working with circuits.
 pub mod gates;
@@ -47,6 +51,7 @@ pub mod poseidon;
 pub mod safe_types;
 /// Utility functions for converting between different types of field elements.
 pub mod utils;
+pub mod virtual_region;
 
 /// Constant representing whether the Layouter calls `synthesize` once just to get region shape.
 #[cfg(feature = "halo2-axiom")]
@@ -97,19 +102,27 @@ impl<F: ScalarField> QuantumCell<F> {
 }
 
 /// Pointer to the position of a cell at `offset` in an advice column within a [Context] of `context_id`.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct ContextCell {
+    /// The [TypeId] of the virtual region that this cell belongs to.
+    pub type_id: TypeId,
     /// Identifier of the [Context] that this cell belongs to.
     pub context_id: usize,
     /// Relative offset of the cell within this [Context] advice column.
     pub offset: usize,
 }
 
+impl ContextCell {
+    pub fn new(type_id: TypeId, context_id: usize, offset: usize) -> Self {
+        Self { type_id, context_id, offset }
+    }
+}
+
 /// Pointer containing cell value and location within [Context].
 ///
 /// Note: Performs a copy of the value, should only be used when you are about to assign the value again elsewhere.
 #[derive(Clone, Copy, Debug)]
-pub struct AssignedValue<F: ScalarField> {
+pub struct AssignedValue<F: crate::ff::Field> {
     /// Value of the cell.
     pub value: Assigned<F>, // we don't use reference to avoid issues with lifetimes (you can't safely borrow from vector and push to it at the same time).
     // only needed during vkey, pkey gen to fetch the actual cell from the relevant context
@@ -149,24 +162,20 @@ pub struct Context<F: ScalarField> {
     /// * If witness gen is performed many operations can be skipped for optimization.
     witness_gen_only: bool,
 
+    /// Identifier for what virtual region this context is in
+    pub type_id: TypeId,
     /// Identifier to reference cells from this [Context].
     pub context_id: usize,
 
     /// Single column of advice cells.
     pub advice: Vec<Assigned<F>>,
 
+    /// Slight optimization: since zero is so commonly used, keep a reference to the zero cell.
+    zero_cell: Option<AssignedValue<F>>,
+
     /// [Vec] tracking all cells that lookup is enabled for.
     /// * When there is more than 1 advice column all `advice` cells will be copied to a single lookup enabled column to perform lookups.
     pub cells_to_lookup: Vec<AssignedValue<F>>,
-
-    /// Cell that represents the zero value as AssignedValue<F>
-    pub zero_cell: Option<AssignedValue<F>>,
-
-    // To save time from re-allocating new temporary vectors that get quickly dropped (e.g., for some range checks), we keep a vector with high capacity around that we `clear` before use each time
-    // This is NOT THREAD SAFE
-    // Need to use RefCell to avoid borrow rules
-    // Need to use Rc to borrow this and mutably borrow self at same time
-    // preallocated_vec_to_assign: Rc<RefCell<Vec<AssignedValue<'a, F>>>>,
 
     // ========================================
     // General principle: we don't need to optimize anything specific to `witness_gen_only == false` because it is only done during keygen
@@ -175,38 +184,39 @@ pub struct Context<F: ScalarField> {
     /// * Assumed to have the same length as `advice`
     pub selector: Vec<bool>,
 
-    // TODO: gates that use fixed columns as selectors?
-    /// A [Vec] tracking equality constraints between pairs of [Context] `advice` cells.
-    ///
-    /// Assumes both `advice` cells are in the same [Context].
-    pub advice_equality_constraints: Vec<(ContextCell, ContextCell)>,
-
-    /// A [Vec] tracking pairs equality constraints between Fixed values and [Context] `advice` cells.
-    ///
-    /// Assumes the constant and `advice` cell are in the same [Context].
-    pub constant_equality_constraints: Vec<(F, ContextCell)>,
+    /// Global shared thread-safe manager for all copy (equality) constraints between virtual advice, constants, and raw external Halo2 cells.
+    pub copy_manager: SharedCopyConstraintManager<F>,
 }
 
 impl<F: ScalarField> Context<F> {
     /// Creates a new [Context] with the given `context_id` and witness generation enabled/disabled by the `witness_gen_only` flag.
     /// * `witness_gen_only`: flag to determine whether public key generation or only witness generation is being performed.
     /// * `context_id`: identifier to reference advice cells from this [Context] later.
-    pub fn new(witness_gen_only: bool, context_id: usize) -> Self {
+    pub fn new(
+        witness_gen_only: bool,
+        type_id: TypeId,
+        context_id: usize,
+        copy_manager: SharedCopyConstraintManager<F>,
+    ) -> Self {
         Self {
             witness_gen_only,
+            type_id,
             context_id,
             advice: Vec::new(),
-            cells_to_lookup: Vec::new(),
-            zero_cell: None,
             selector: Vec::new(),
-            advice_equality_constraints: Vec::new(),
-            constant_equality_constraints: Vec::new(),
+            zero_cell: None,
+            cells_to_lookup: Vec::new(),
+            copy_manager,
         }
     }
 
     /// Returns the `witness_gen_only` flag of the [Context]
     pub fn witness_gen_only(&self) -> bool {
         self.witness_gen_only
+    }
+
+    fn latest_cell(&self) -> ContextCell {
+        ContextCell::new(self.type_id, self.context_id, self.advice.len() - 1)
     }
 
     /// Pushes a [QuantumCell<F>] to the end of the `advice` column ([Vec] of advice cells) in this [Context].
@@ -218,9 +228,12 @@ impl<F: ScalarField> Context<F> {
                 self.advice.push(acell.value);
                 // If witness generation is not performed, enforce equality constraints between the existing cell and the new cell
                 if !self.witness_gen_only {
-                    let new_cell =
-                        ContextCell { context_id: self.context_id, offset: self.advice.len() - 1 };
-                    self.advice_equality_constraints.push((new_cell, acell.cell.unwrap()));
+                    let new_cell = self.latest_cell();
+                    self.copy_manager
+                        .lock()
+                        .unwrap()
+                        .advice_equalities
+                        .push((new_cell, acell.cell.unwrap()));
                 }
             }
             QuantumCell::Witness(val) => {
@@ -233,9 +246,8 @@ impl<F: ScalarField> Context<F> {
                 self.advice.push(Assigned::Trivial(c));
                 // If witness generation is not performed, enforce equality constraints between the existing cell and the new cell
                 if !self.witness_gen_only {
-                    let new_cell =
-                        ContextCell { context_id: self.context_id, offset: self.advice.len() - 1 };
-                    self.constant_equality_constraints.push((c, new_cell));
+                    let new_cell = self.latest_cell();
+                    self.copy_manager.lock().unwrap().constant_equalities.push((c, new_cell));
                 }
             }
         }
@@ -244,10 +256,7 @@ impl<F: ScalarField> Context<F> {
     /// Returns the [AssignedValue] of the last cell in the `advice` column of [Context] or [None] if `advice` is empty
     pub fn last(&self) -> Option<AssignedValue<F>> {
         self.advice.last().map(|v| {
-            let cell = (!self.witness_gen_only).then_some(ContextCell {
-                context_id: self.context_id,
-                offset: self.advice.len() - 1,
-            });
+            let cell = (!self.witness_gen_only).then_some(self.latest_cell());
             AssignedValue { value: *v, cell }
         })
     }
@@ -264,8 +273,11 @@ impl<F: ScalarField> Context<F> {
             offset as usize
         };
         assert!(offset < self.advice.len());
-        let cell =
-            (!self.witness_gen_only).then_some(ContextCell { context_id: self.context_id, offset });
+        let cell = (!self.witness_gen_only).then_some(ContextCell::new(
+            self.type_id,
+            self.context_id,
+            offset,
+        ));
         AssignedValue { value: self.advice[offset], cell }
     }
 
@@ -275,7 +287,11 @@ impl<F: ScalarField> Context<F> {
     /// * Assumes both cells are `advice` cells
     pub fn constrain_equal(&mut self, a: &AssignedValue<F>, b: &AssignedValue<F>) {
         if !self.witness_gen_only {
-            self.advice_equality_constraints.push((a.cell.unwrap(), b.cell.unwrap()));
+            self.copy_manager
+                .lock()
+                .unwrap()
+                .advice_equalities
+                .push((a.cell.unwrap(), b.cell.unwrap()));
         }
     }
 
@@ -355,25 +371,28 @@ impl<F: ScalarField> Context<F> {
         if !self.witness_gen_only {
             // Add equality constraints between cells in the advice column.
             for (offset1, offset2) in equality_offsets {
-                self.advice_equality_constraints.push((
-                    ContextCell {
-                        context_id: self.context_id,
-                        offset: row_offset.wrapping_add_signed(offset1),
-                    },
-                    ContextCell {
-                        context_id: self.context_id,
-                        offset: row_offset.wrapping_add_signed(offset2),
-                    },
+                self.copy_manager.lock().unwrap().advice_equalities.push((
+                    ContextCell::new(
+                        self.type_id,
+                        self.context_id,
+                        row_offset.wrapping_add_signed(offset1),
+                    ),
+                    ContextCell::new(
+                        self.type_id,
+                        self.context_id,
+                        row_offset.wrapping_add_signed(offset2),
+                    ),
                 ));
             }
             // Add equality constraints between cells in the advice column and external cells (Fixed column).
             for (cell, offset) in external_equality {
-                self.advice_equality_constraints.push((
+                self.copy_manager.lock().unwrap().advice_equalities.push((
                     cell.unwrap(),
-                    ContextCell {
-                        context_id: self.context_id,
-                        offset: row_offset.wrapping_add_signed(offset),
-                    },
+                    ContextCell::new(
+                        self.type_id,
+                        self.context_id,
+                        row_offset.wrapping_add_signed(offset),
+                    ),
                 ));
             }
         }
@@ -391,8 +410,11 @@ impl<F: ScalarField> Context<F> {
             .iter()
             .enumerate()
             .map(|(i, v)| {
-                let cell = (!self.witness_gen_only)
-                    .then_some(ContextCell { context_id: self.context_id, offset: row_offset + i });
+                let cell = (!self.witness_gen_only).then_some(ContextCell::new(
+                    self.type_id,
+                    self.context_id,
+                    row_offset + i,
+                ));
                 AssignedValue { value: *v, cell }
             })
             .collect()
