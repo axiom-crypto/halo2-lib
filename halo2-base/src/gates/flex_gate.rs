@@ -180,6 +180,14 @@ pub trait GateInstructions<F: ScalarField> {
         ctx.assign_region_last([a, b, Constant(F::ONE), Witness(out_val)], [0])
     }
 
+    /// Constrains and returns `out = a + 1`.
+    ///
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: [QuantumCell] value
+    fn inc(&self, ctx: &mut Context<F>, a: impl Into<QuantumCell<F>>) -> AssignedValue<F> {
+        self.add(ctx, a, Constant(F::ONE))
+    }
+
     /// Constrains and returns `a + b * (-1) = out`.
     ///
     /// Defines a vertical gate of form | a - b | b | 1 | a |, where (a - b) = out.
@@ -198,6 +206,14 @@ pub trait GateInstructions<F: ScalarField> {
         // slightly better to not have to compute -F::ONE since F::ONE is cached
         ctx.assign_region([Witness(out_val), b, Constant(F::ONE), a], [0]);
         ctx.get(-4)
+    }
+
+    /// Constrains and returns `out = a - 1`.
+    ///
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: [QuantumCell] value
+    fn dec(&self, ctx: &mut Context<F>, a: impl Into<QuantumCell<F>>) -> AssignedValue<F> {
+        self.sub(ctx, a, Constant(F::ONE))
     }
 
     /// Constrains and returns  `a - b * c = out`.
