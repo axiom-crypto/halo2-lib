@@ -1,6 +1,7 @@
 use crate::ff::{Field, PrimeField};
 use crate::fields::FpStrategy;
 use halo2_base::gates::builder::BaseConfigParams;
+use halo2_base::utils::testing::{check_proof, gen_proof};
 use halo2_base::{
     gates::{
         builder::{
@@ -135,7 +136,6 @@ fn bench_msm() -> Result<(), Box<dyn std::error::Error>> {
         let bench_params: MSMCircuitParams = serde_json::from_str(line.unwrap().as_str()).unwrap();
         let k = bench_params.degree;
         println!("---------------------- degree = {k} ------------------------------",);
-        let rng = OsRng;
 
         let params = gen_srs(k);
         println!("{bench_params:?}");
@@ -161,50 +161,13 @@ fn bench_msm() -> Result<(), Box<dyn std::error::Error>> {
             Some(config_params),
             Some(break_points),
         );
-        let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-        create_proof::<
-            KZGCommitmentScheme<Bn256>,
-            ProverSHPLONK<'_, Bn256>,
-            Challenge255<G1Affine>,
-            _,
-            Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
-            _,
-        >(&params, &pk, &[circuit], &[&[]], rng, &mut transcript)?;
-        let proof = transcript.finalize();
+        let proof = gen_proof(&params, &pk, circuit);
         end_timer!(proof_time);
 
-        let proof_size = {
-            let path = format!(
-                "data/msm_circuit_proof_{}_{}_{}_{}_{}_{}_{}_{}_{}.data",
-                bench_params.degree,
-                bench_params.num_advice,
-                bench_params.num_lookup_advice,
-                bench_params.num_fixed,
-                bench_params.lookup_bits,
-                bench_params.limb_bits,
-                bench_params.num_limbs,
-                bench_params.batch_size,
-                bench_params.window_bits
-            );
-            let mut fd = File::create(&path)?;
-            fd.write_all(&proof)?;
-            let size = fd.metadata().unwrap().len();
-            fs::remove_file(path)?;
-            size
-        };
+        let proof_size = proof.len();
 
         let verify_time = start_timer!(|| "Verify time");
-        let verifier_params = params.verifier_params();
-        let strategy = SingleStrategy::new(&params);
-        let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
-        verify_proof::<
-            KZGCommitmentScheme<Bn256>,
-            VerifierSHPLONK<'_, Bn256>,
-            Challenge255<G1Affine>,
-            Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
-            SingleStrategy<'_, Bn256>,
-        >(verifier_params, pk.get_vk(), strategy, &[&[]], &mut transcript)
-        .unwrap();
+        check_proof(&params, pk.get_vk(), &proof, true);
         end_timer!(verify_time);
 
         writeln!(
@@ -221,7 +184,7 @@ fn bench_msm() -> Result<(), Box<dyn std::error::Error>> {
             bench_params.window_bits,
             proof_time.time.elapsed(),
             proof_size,
-            verify_time.time.elapsed()
+            verify_time.time.elapsed(),
         )?;
     }
     Ok(())

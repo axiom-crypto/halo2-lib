@@ -15,6 +15,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 log = "0.4"
 getset = "0.1.2"
+ark-std = { version = "0.3.0", features = ["print-trace"], optional = true }
 
 # Use Axiom's custom halo2 monorepo for faster proving when feature = "halo2-axiom" is on
 halo2_proofs_axiom = { git = "https://github.com/axiom-crypto/halo2.git", package = "halo2_proofs", optional = true }
@@ -60,7 +61,7 @@ halo2-pse = ["halo2_proofs/circuit-params"]
 halo2-axiom = ["halo2_proofs_axiom"]
 display = []
 profile = ["halo2_proofs_axiom?/profile"]
-test-utils = ["dep:rand"]
+test-utils = ["dep:rand", "ark-std"]
 
 [[bench]]
 name = "mul"
@@ -69,3 +70,7 @@ harness = false
 [[bench]]
 name = "inner_product"
 harness = false
+
+[[example]]
+name = "inner_product"
+features = ["test-utils"]
