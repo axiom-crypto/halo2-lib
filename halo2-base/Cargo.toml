@@ -73,4 +73,4 @@ harness = false
 
 [[example]]
 name = "inner_product"
-features = ["test-utils"]
+required-features = ["test-utils"]
