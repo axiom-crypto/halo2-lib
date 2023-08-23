@@ -1,7 +1,4 @@
-use super::{
-    flex_gate::{FlexGateConfig, MAX_PHASE},
-    range::BaseConfig,
-};
+use super::{flex_gate::FlexGateConfig, range::BaseConfig};
 use crate::{
     halo2_proofs::{
         circuit::{self, Layouter, Region, SimpleFloorPlanner, Value},
@@ -10,6 +7,7 @@ use crate::{
     utils::ScalarField,
     AssignedValue, Context, SKIP_FIRST_PASS,
 };
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
@@ -338,22 +336,9 @@ pub struct GateCircuitBuilder<F: ScalarField> {
 }
 
 impl<F: ScalarField> GateCircuitBuilder<F> {
-    /// Creates a new [GateCircuitBuilder] with `use_unknown` of [GateThreadBuilder] set to true.
-    pub fn keygen(builder: GateThreadBuilder<F>, config_params: BaseConfigParams) -> Self {
-        Self {
-            builder: RefCell::new(builder.unknown(true)),
-            config_params,
-            break_points: Default::default(),
-        }
-    }
-
-    /// Creates a new [GateCircuitBuilder] with `use_unknown` of [GateThreadBuilder] set to false.
-    pub fn mock(builder: GateThreadBuilder<F>, config_params: BaseConfigParams) -> Self {
-        Self {
-            builder: RefCell::new(builder.unknown(false)),
-            config_params,
-            break_points: Default::default(),
-        }
+    /// Creates a new [GateCircuitBuilder]
+    pub fn new(builder: GateThreadBuilder<F>, config_params: BaseConfigParams) -> Self {
+        Self { builder: RefCell::new(builder), config_params }
     }
 
     /// Creates a new [GateCircuitBuilder] with a pinned circuit configuration given by `config_params` and `break_points`.
@@ -362,11 +347,10 @@ impl<F: ScalarField> GateCircuitBuilder<F> {
         config_params: BaseConfigParams,
         break_points: MultiPhaseThreadBreakPoints,
     ) -> Self {
-        Self {
-            builder: RefCell::new(builder),
-            config_params,
-            break_points: RefCell::new(break_points),
+        for (pm, bp) in builder.phase_manager.iter().zip_eq(break_points) {
+            pm.break_points.set(bp);
         }
+        Self { builder: RefCell::new(builder), config_params }
     }
 
     /// Synthesizes from the [GateCircuitBuilder] by populating the advice column and assigning new threads if witness generation is performed.

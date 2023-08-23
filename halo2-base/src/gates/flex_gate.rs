@@ -17,7 +17,7 @@ use std::{
 };
 
 /// The maximum number of phases in halo2.
-pub const MAX_PHASE: usize = 3;
+const MAX_PHASE: usize = 3;
 
 /// # Vertical Gate Strategy:
 /// `q_0 * (a + b * c - d) = 0`
@@ -307,7 +307,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `constant`: constant value to constrain `a` to be equal to
     fn assert_is_const(&self, ctx: &mut Context<F>, a: &AssignedValue<F>, constant: &F) {
         if !ctx.witness_gen_only {
-            ctx.constant_equality_constraints.push((*constant, a.cell.unwrap()));
+            ctx.copy_manager.lock().unwrap().constant_equalities.push((*constant, a.cell.unwrap()));
         }
     }
 

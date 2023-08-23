@@ -21,15 +21,13 @@ use crate::{
 };
 
 /// Virtual region manager for [Vec<BasicGateConfig>] in a single challenge phase.
+/// This is the core manager for [Context]s.
 #[derive(Clone, Debug, Default, Getters)]
-pub struct SinglePhaseGateManager<F: ScalarField> {
+pub struct SinglePhaseCoreManager<F: ScalarField> {
     /// Virtual columns. These cannot be shared across CPU threads while keeping the circuit deterministic.
     pub threads: Vec<Context<F>>,
     /// Global shared copy manager
     pub copy_manager: SharedCopyConstraintManager<F>,
-    /// Max number of threads across all phases
-    #[getset(get = "pub")]
-    thread_count: usize,
     /// Flag for witness generation. If true, the gate thread builder is used for witness generation only.
     #[getset(get = "pub")]
     witness_gen_only: bool,
@@ -42,29 +40,24 @@ pub struct SinglePhaseGateManager<F: ScalarField> {
     pub break_points: OnceCell<ThreadBreakPoints>,
 }
 
-impl<F: ScalarField> SinglePhaseGateManager<F> {
+impl<F: ScalarField> SinglePhaseCoreManager<F> {
     /// Creates a new [GateThreadBuilder] and spawns a main thread.
     /// * `witness_gen_only`: If true, the [GateThreadBuilder] is used for witness generation only.
     ///     * If true, the gate thread builder only does witness asignments and does not store constraint information -- this should only be used for the real prover.
     ///     * If false, the gate thread builder is used for keygen and mock prover (it can also be used for real prover) and the builder stores circuit information (e.g. copy constraints, fixed columns, enabled selectors).
     ///         * These values are fixed for the circuit at key generation time, and they do not need to be re-computed by the prover in the actual proving phase.
-    pub fn new(witness_gen_only: bool) -> Self {
+    pub fn new(witness_gen_only: bool, copy_manager: SharedCopyConstraintManager<F>) -> Self {
         let mut builder = Self {
             threads: vec![],
-            thread_count: 0,
             witness_gen_only,
             use_unknown: false,
             phase: 0,
+            copy_manager,
             ..Default::default()
         };
         // start with a main thread in phase 0
         builder.new_thread();
         builder
-    }
-
-    /// Sets a new copy manager
-    pub fn copy_manager(self, copy_manager: SharedCopyConstraintManager<F>) -> Self {
-        Self { copy_manager, ..self }
     }
 
     /// Sets the phase to `phase`
@@ -73,8 +66,12 @@ impl<F: ScalarField> SinglePhaseGateManager<F> {
     }
 
     /// Creates a new [GateThreadBuilder] depending on the stage of circuit building. If the stage is [CircuitBuilderStage::Prover], the [GateThreadBuilder] is used for witness generation only.
-    pub fn from_stage(stage: CircuitBuilderStage) -> Self {
-        Self::new(stage.witness_gen_only()).unknown(stage == CircuitBuilderStage::Keygen)
+    pub fn from_stage(
+        stage: CircuitBuilderStage,
+        copy_manager: SharedCopyConstraintManager<F>,
+    ) -> Self {
+        Self::new(stage.witness_gen_only(), copy_manager)
+            .unknown(stage == CircuitBuilderStage::Keygen)
     }
 
     /// Creates a new [GateThreadBuilder] with `use_unknown` flag set.
@@ -92,14 +89,12 @@ impl<F: ScalarField> SinglePhaseGateManager<F> {
         }
     }
 
-    /// Creates a new thread id by incrementing the `thread count`
-    pub fn get_new_thread_id(&mut self) -> usize {
-        let thread_id = self.thread_count;
-        self.thread_count += 1;
-        thread_id
+    /// Returns the number of threads
+    pub fn thread_count(&self) -> usize {
+        self.threads.len()
     }
 
-    fn type_of(&self) -> TypeId {
+    pub fn type_of(&self) -> TypeId {
         match self.phase {
             0 => TypeId::of::<(Self, FirstPhase)>(),
             1 => TypeId::of::<(Self, SecondPhase)>(),
@@ -108,17 +103,16 @@ impl<F: ScalarField> SinglePhaseGateManager<F> {
         }
     }
 
+    /// Creates new context but does not append to `self.threads`
+    pub(crate) fn new_context(&self, context_id: usize) -> Context<F> {
+        Context::new(self.witness_gen_only, self.type_of(), context_id, self.copy_manager.clone())
+    }
+
     /// Spawns a new thread for a new given `phase`. Returns a mutable reference to the [Context] of the new thread.
     /// * `phase`: The phase (index) of the gate thread.
     pub fn new_thread(&mut self) -> &mut Context<F> {
-        let context_id = self.thread_count;
-        self.thread_count += 1;
-        self.threads.push(Context::new(
-            self.witness_gen_only,
-            TypeId::of::<Self>(),
-            context_id,
-            self.copy_manager.clone(),
-        ));
+        let context_id = self.thread_count();
+        self.threads.push(self.new_context(context_id));
         self.threads.last_mut().unwrap()
     }
 
@@ -128,7 +122,7 @@ impl<F: ScalarField> SinglePhaseGateManager<F> {
     }
 }
 
-impl<F: ScalarField> VirtualRegionManager<F> for SinglePhaseGateManager<F> {
+impl<F: ScalarField> VirtualRegionManager<F> for SinglePhaseCoreManager<F> {
     type Config = Vec<BasicGateConfig<F>>;
 
     fn assign_raw(&self, config: &Self::Config, region: &mut Region<F>) {

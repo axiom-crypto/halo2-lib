@@ -157,6 +157,8 @@ impl<F: ScalarField> AsRef<AssignedValue<F>> for AssignedValue<F> {
 
 /// Represents a single thread of an execution trace.
 /// * We keep the naming [Context] for historical reasons.
+///
+/// [Context] is CPU thread-local.
 #[derive(Clone, Debug)]
 pub struct Context<F: ScalarField> {
     /// Flag to determine whether only witness generation or proving and verification key generation is being performed.

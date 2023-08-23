@@ -8,13 +8,13 @@ use crate::{
     Context,
 };
 
-use super::SinglePhaseGateManager;
+use super::SinglePhaseCoreManager;
 
 /// Virtual region manager for [FlexGateConfig] in multiple phases.
 #[derive(Clone, Debug, Default, Getters)]
 pub struct GateThreadBuilder<F: ScalarField> {
     /// Virtual region for each challenge phase. These cannot be shared across threads while keeping circuit deterministic.
-    pub phase_manager: Vec<SinglePhaseGateManager<F>>,
+    pub phase_manager: Vec<SinglePhaseCoreManager<F>>,
     /// Global shared copy manager
     pub copy_manager: SharedCopyConstraintManager<F>,
     /// Flag for witness generation. If true, the gate thread builder is used for witness generation only.
@@ -26,19 +26,17 @@ pub struct GateThreadBuilder<F: ScalarField> {
 }
 
 impl<F: ScalarField> GateThreadBuilder<F> {
-    /// Creates a new [GateThreadBuilder] and spawns a main thread in phase 0.
+    /// Creates a new [GateThreadBuilder] with a default [SinglePhaseCoreManager] in phase 0.
+    /// Creates an empty [SharedCopyConstraintManager] and sets `witness_gen_only` flag.
     /// * `witness_gen_only`: If true, the [GateThreadBuilder] is used for witness generation only.
     ///     * If true, the gate thread builder only does witness asignments and does not store constraint information -- this should only be used for the real prover.
     ///     * If false, the gate thread builder is used for keygen and mock prover (it can also be used for real prover) and the builder stores circuit information (e.g. copy constraints, fixed columns, enabled selectors).
     ///         * These values are fixed for the circuit at key generation time, and they do not need to be re-computed by the prover in the actual proving phase.
     pub fn new(witness_gen_only: bool) -> Self {
-        let phase_manager = vec![SinglePhaseGateManager::new(witness_gen_only)];
-        Self {
-            phase_manager,
-            witness_gen_only,
-            use_unknown: false,
-            copy_manager: Default::default(),
-        }
+        let copy_manager = SharedCopyConstraintManager::default();
+        let phase_manager =
+            vec![SinglePhaseCoreManager::new(witness_gen_only, copy_manager.clone())];
+        Self { phase_manager, witness_gen_only, use_unknown: false, copy_manager }
     }
 
     /// Creates a new [GateThreadBuilder] depending on the stage of circuit building. If the stage is [CircuitBuilderStage::Prover], the [GateThreadBuilder] is used for witness generation only.
@@ -83,8 +81,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
     fn touch(&mut self, phase: usize) {
         while self.phase_manager.len() <= phase {
             let _phase = self.phase_manager.len();
-            let pm = SinglePhaseGateManager::new(self.witness_gen_only)
-                .copy_manager(self.copy_manager.clone())
+            let pm = SinglePhaseCoreManager::new(self.witness_gen_only, self.copy_manager.clone())
                 .in_phase(_phase);
             self.phase_manager.push(pm);
         }
