@@ -36,7 +36,6 @@ use halo2_base::Context;
 use num_integer::Integer;
 use rand::random;
 use rand::rngs::StdRng;
-use rand_core::OsRng;
 use rand_core::SeedableRng;
 use std::fs::File;
 use std::io::BufReader;
@@ -72,11 +71,12 @@ fn schnorr_signature_test<F: PrimeField>(
 }
 
 fn random_parameters_schnorr_signature() -> (Fp, Fq, Fq, Secp256k1Affine) {
-    let sk = <Secp256k1Affine as CurveAffine>::ScalarExt::random(OsRng);
+    let sk = <Secp256k1Affine as CurveAffine>::ScalarExt::random(StdRng::from_seed([0u8; 32]));
     let pubkey = Secp256k1Affine::from(Secp256k1Affine::generator() * sk);
-    let msg_hash = <Secp256k1Affine as CurveAffine>::ScalarExt::random(OsRng);
+    let msg_hash =
+        <Secp256k1Affine as CurveAffine>::ScalarExt::random(StdRng::from_seed([0u8; 32]));
 
-    let mut k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(OsRng);
+    let mut k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(StdRng::from_seed([0u8; 32]));
 
     let mut r_point =
         Secp256k1Affine::from(Secp256k1Affine::generator() * k).coordinates().unwrap();
@@ -84,7 +84,7 @@ fn random_parameters_schnorr_signature() -> (Fp, Fq, Fq, Secp256k1Affine) {
     let mut y: &Fp = r_point.y();
     // make sure R.y is even
     while fe_to_biguint(y).mod_floor(&BigUint::from(2u64)) != BigUint::from(0u64) {
-        k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(OsRng);
+        k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(StdRng::from_seed([0u8; 32]));
         r_point = Secp256k1Affine::from(Secp256k1Affine::generator() * k).coordinates().unwrap();
         x = r_point.x();
         y = r_point.y();

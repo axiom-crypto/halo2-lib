@@ -6,12 +6,10 @@ use crate::{
         },
         poly::Rotation,
     },
-    utils::{biguint_to_fe, fe_to_biguint, ScalarField},
+    utils::ScalarField,
     AssignedValue, Context,
     QuantumCell::{self, Constant, Existing, Witness, WitnessFraction},
 };
-use num_bigint::BigUint;
-use num_integer::Integer;
 use serde::{Deserialize, Serialize};
 use std::{
     iter::{self},
