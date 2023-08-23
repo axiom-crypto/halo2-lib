@@ -35,7 +35,9 @@ use halo2_base::gates::RangeChip;
 use halo2_base::Context;
 use num_integer::Integer;
 use rand::random;
+use rand::rngs::StdRng;
 use rand_core::OsRng;
+use rand_core::SeedableRng;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::Write;
@@ -236,7 +238,7 @@ fn test_schnorr_signature_custom_valid_inputs(sk: u64, msg_hash: u64, k: u64) {
 
 #[test]
 fn bench_secp256k1_schnorr() -> Result<(), Box<dyn std::error::Error>> {
-    let mut rng = OsRng;
+    let mut rng = StdRng::from_seed([0u8; 32]);
     let config_path = "configs/secp256k1/bench_schnorr.config";
     let bench_params_file =
         File::open(config_path).unwrap_or_else(|e| panic!("{config_path} does not exist: {e:?}"));
@@ -345,6 +347,5 @@ fn bench_secp256k1_schnorr() -> Result<(), Box<dyn std::error::Error>> {
             verify_time.time.elapsed()
         )?;
     }
-
     Ok(())
 }

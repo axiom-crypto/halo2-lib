@@ -124,6 +124,26 @@ impl<'range, F: PrimeField, Fp: PrimeField> FpChip<'range, F, Fp> {
         self.gate().assert_is_const(ctx, &borrow.unwrap(), &F::one());
     }
 
+    /// Given proper CRT integer `a`, returns 1 iff `a < modulus::<F>()`
+    /// # Assumptions
+    /// * `a` is proper representation of BigUint
+    pub fn is_less_than_p(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<ProperCrtUint<F>>,
+    ) -> AssignedValue<F> {
+        let a = a.into();
+
+        // underflow != 0 iff carry < p
+        let p = self.load_constant_uint(ctx, self.p.to_biguint().unwrap());
+        let (_, underflow) =
+            sub::crt::<F>(self.range(), ctx, a, p, self.limb_bits, self.limb_bases[1]);
+        let is_underflow_zero = self.gate().is_zero(ctx, underflow);
+        let no_underflow = self.gate().not(ctx, is_underflow_zero);
+
+        no_underflow
+    }
+
     pub fn load_constant_uint(&self, ctx: &mut Context<F>, a: BigUint) -> ProperCrtUint<F> {
         FixedCRTInteger::from_native(a, self.num_limbs, self.limb_bits).assign(
             ctx,
@@ -142,7 +162,7 @@ impl<'range, F: PrimeField, Fp: PrimeField> FpChip<'range, F, Fp> {
     ) -> AssignedValue<F> {
         let a = a.into();
         self.enforce_less_than_p(ctx, a.clone());
-        big_is_even::positive(self.gate(), ctx, a.0.truncation)
+        big_is_even::positive(self.range(), ctx, a.0.truncation, self.limb_bits)
     }
 }
 

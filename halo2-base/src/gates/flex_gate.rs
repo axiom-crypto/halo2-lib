@@ -789,35 +789,6 @@ pub trait GateInstructions<F: ScalarField> {
         ctx.get(-2)
     }
 
-    /// Constrains that a cell value is even and returns `1` if `a is even`, otherwise `0`.
-    /// * `ctx`: [Context] to add the constraints to
-    /// * `a`: [QuantumCell] value to be constrained
-    fn is_even(&self, ctx: &mut Context<F>, a: AssignedValue<F>) -> AssignedValue<F> {
-        let x = fe_to_biguint(a.value());
-        let (div, rem) = x.div_mod_floor(&BigUint::from(2u64));
-
-        let one_minus_rem = biguint_to_fe(&(BigUint::from(1u64) - &rem));
-        let div = biguint_to_fe(&div);
-        let rem = biguint_to_fe(&rem);
-
-        let cells = [
-            Witness(rem),
-            Witness(one_minus_rem),
-            Constant(F::one()),
-            Constant(F::one()),
-            Constant(F::zero()),
-            Witness(one_minus_rem),
-            Witness(rem),
-            Constant(F::zero()),
-            Witness(rem),
-            Constant(F::from(2)),
-            Witness(div),
-            Existing(a),
-        ];
-        ctx.assign_region_smart(cells, [0, 4, 8], [(0, 6), (6, 8), (1, 5)], []);
-        ctx.get(-7)
-    }
-
     /// Constrains that the value of two cells are equal: b - a = 0, returns `1` if `a = b`, otherwise `0`.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: [QuantumCell] value
