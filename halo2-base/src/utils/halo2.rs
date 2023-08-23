@@ -14,7 +14,7 @@ pub fn raw_assign_advice<'v, F: Field>(
     region: &mut Region<F>,
     column: Column<Advice>,
     offset: usize,
-    value: Value<F>,
+    value: Value<impl Into<Assigned<F>>>,
 ) -> Halo2AssignedCell<'v, F> {
     #[cfg(feature = "halo2-axiom")]
     {

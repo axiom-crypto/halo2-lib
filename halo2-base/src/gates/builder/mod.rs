@@ -1,5 +1,5 @@
 use super::{
-    flex_gate::{FlexGateConfig, GateStrategy, MAX_PHASE},
+    flex_gate::{FlexGateConfig, MAX_PHASE},
     range::BaseConfig,
 };
 use crate::{
@@ -17,123 +17,17 @@ use std::{
 };
 
 mod parallelize;
+pub mod threads;
+
 pub use parallelize::*;
+pub use threads::multi_phase::{GateStatistics, GateThreadBuilder};
 
 /// Vector of thread advice column break points
 pub type ThreadBreakPoints = Vec<usize>;
 /// Vector of vectors tracking the thread break points across different halo2 phases
 pub type MultiPhaseThreadBreakPoints = Vec<ThreadBreakPoints>;
 
-/// Stores the cell values loaded during the Keygen phase of a halo2 proof and breakpoints for multi-threading
-#[derive(Clone, Debug, Default)]
-pub struct KeygenAssignments<F: ScalarField> {
-    /// Advice assignments
-    pub assigned_advices: HashMap<(usize, usize), (circuit::Cell, usize)>, // (key = ContextCell, value = (circuit::Cell, row offset))
-    /// Constant assignments in Fixes Assignments
-    pub assigned_constants: HashMap<F, circuit::Cell>, // (key = constant, value = circuit::Cell)
-    /// Advice column break points for threads in each phase.
-    pub break_points: MultiPhaseThreadBreakPoints,
-}
-
-/// Builds the process for gate threading
-#[derive(Clone, Debug, Default)]
-pub struct GateThreadBuilder<F: ScalarField> {
-    /// Threads for each challenge phase
-    pub threads: [Vec<Context<F>>; MAX_PHASE],
-    /// Max number of threads
-    thread_count: usize,
-    /// Flag for witness generation. If true, the gate thread builder is used for witness generation only.
-    pub witness_gen_only: bool,
-    /// The `unknown` flag is used during key generation. If true, during key generation witness [Value]s are replaced with Value::unknown() for safety.
-    use_unknown: bool,
-}
-
-impl<F: ScalarField> GateThreadBuilder<F> {
-    /// Creates a new [GateThreadBuilder] and spawns a main thread in phase 0.
-    /// * `witness_gen_only`: If true, the [GateThreadBuilder] is used for witness generation only.
-    ///     * If true, the gate thread builder only does witness asignments and does not store constraint information -- this should only be used for the real prover.
-    ///     * If false, the gate thread builder is used for keygen and mock prover (it can also be used for real prover) and the builder stores circuit information (e.g. copy constraints, fixed columns, enabled selectors).
-    ///         * These values are fixed for the circuit at key generation time, and they do not need to be re-computed by the prover in the actual proving phase.
-    pub fn new(witness_gen_only: bool) -> Self {
-        let mut threads = [(); MAX_PHASE].map(|_| vec![]);
-        // start with a main thread in phase 0
-        threads[0].push(Context::new(witness_gen_only, 0));
-        Self { threads, thread_count: 1, witness_gen_only, use_unknown: false }
-    }
-
-    /// Creates a new [GateThreadBuilder] depending on the stage of circuit building. If the stage is [CircuitBuilderStage::Prover], the [GateThreadBuilder] is used for witness generation only.
-    pub fn from_stage(stage: CircuitBuilderStage) -> Self {
-        Self::new(stage == CircuitBuilderStage::Prover)
-    }
-
-    /// Creates a new [GateThreadBuilder] with `witness_gen_only` set to false.
-    ///
-    /// Performs the witness assignment computations and then checks using normal programming logic whether the gate constraints are all satisfied.
-    pub fn mock() -> Self {
-        Self::new(false)
-    }
-
-    /// Creates a new [GateThreadBuilder] with `witness_gen_only` set to false.
-    ///
-    /// Performs the witness assignment computations and generates prover and verifier keys.
-    pub fn keygen() -> Self {
-        Self::new(false)
-    }
-
-    /// Creates a new [GateThreadBuilder] with `witness_gen_only` set to true.
-    ///
-    /// Performs the witness assignment computations and then runs the proving system.
-    pub fn prover() -> Self {
-        Self::new(true)
-    }
-
-    /// Creates a new [GateThreadBuilder] with `use_unknown` flag set.
-    /// * `use_unknown`: If true, during key generation witness [Value]s are replaced with Value::unknown() for safety.
-    pub fn unknown(self, use_unknown: bool) -> Self {
-        Self { use_unknown, ..self }
-    }
-
-    /// Returns a mutable reference to the [Context] of a gate thread. Spawns a new thread for the given phase, if none exists.
-    /// * `phase`: The challenge phase (as an index) of the gate thread.
-    pub fn main(&mut self, phase: usize) -> &mut Context<F> {
-        if self.threads[phase].is_empty() {
-            self.new_thread(phase)
-        } else {
-            self.threads[phase].last_mut().unwrap()
-        }
-    }
-
-    /// Returns the `witness_gen_only` flag.
-    pub fn witness_gen_only(&self) -> bool {
-        self.witness_gen_only
-    }
-
-    /// Returns the `use_unknown` flag.
-    pub fn use_unknown(&self) -> bool {
-        self.use_unknown
-    }
-
-    /// Returns the current number of threads in the [GateThreadBuilder].
-    pub fn thread_count(&self) -> usize {
-        self.thread_count
-    }
-
-    /// Creates a new thread id by incrementing the `thread count`
-    pub fn get_new_thread_id(&mut self) -> usize {
-        let thread_id = self.thread_count;
-        self.thread_count += 1;
-        thread_id
-    }
-
-    /// Spawns a new thread for a new given `phase`. Returns a mutable reference to the [Context] of the new thread.
-    /// * `phase`: The phase (index) of the gate thread.
-    pub fn new_thread(&mut self, phase: usize) -> &mut Context<F> {
-        let thread_id = self.thread_count;
-        self.thread_count += 1;
-        self.threads[phase].push(Context::new(self.witness_gen_only, thread_id));
-        self.threads[phase].last_mut().unwrap()
-    }
-
+/*
     /// Auto-calculates configuration parameters for the circuit
     ///
     /// * `k`: The number of in the circuit (i.e. numeber of rows = 2<sup>k</sup>)
@@ -284,30 +178,6 @@ impl<F: ScalarField> GateThreadBuilder<F> {
                         row_offset += 1;
                     }
                 }
-                // Assign fixed cells
-                for (c, _) in ctx.constant_equality_constraints.iter() {
-                    if assigned_constants.get(c).is_none() {
-                        #[cfg(feature = "halo2-axiom")]
-                        let cell =
-                            region.assign_fixed(config.constants[fixed_col], fixed_offset, c);
-                        #[cfg(not(feature = "halo2-axiom"))]
-                        let cell = region
-                            .assign_fixed(
-                                || "",
-                                config.constants[fixed_col],
-                                fixed_offset,
-                                || Value::known(*c),
-                            )
-                            .unwrap()
-                            .cell();
-                        assigned_constants.insert(*c, cell);
-                        fixed_col += 1;
-                        if fixed_col >= config.constants.len() {
-                            fixed_col = 0;
-                            fixed_offset += 1;
-                        }
-                    }
-                }
             }
             break_points.push(break_point);
         }
@@ -316,23 +186,6 @@ impl<F: ScalarField> GateThreadBuilder<F> {
             let mut lookup_offset = 0;
             let mut lookup_col = 0;
             for ctx in threads {
-                for (left, right) in &ctx.advice_equality_constraints {
-                    let (left, _) = assigned_advices[&(left.context_id, left.offset)];
-                    let (right, _) = assigned_advices[&(right.context_id, right.offset)];
-                    #[cfg(feature = "halo2-axiom")]
-                    region.constrain_equal(&left, &right);
-                    #[cfg(not(feature = "halo2-axiom"))]
-                    region.constrain_equal(left, right).unwrap();
-                }
-                for (left, right) in &ctx.constant_equality_constraints {
-                    let left = assigned_constants[left];
-                    let (right, _) = assigned_advices[&(right.context_id, right.offset)];
-                    #[cfg(feature = "halo2-axiom")]
-                    region.constrain_equal(&left, &right);
-                    #[cfg(not(feature = "halo2-axiom"))]
-                    region.constrain_equal(left, right).unwrap();
-                }
-
                 for advice in &ctx.cells_to_lookup {
                     // if q_lookup is Some, that means there should be a single advice column and it has lookup enabled
                     let cell = advice.cell.unwrap();
@@ -456,22 +309,21 @@ pub fn assign_threads_in<F: ScalarField>(
         }
     }
 }
+*/
 
 /// A Config struct defining the parameters for a halo2-base circuit
 /// - this is used to configure either FlexGateConfig or RangeConfig.
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct BaseConfigParams {
-    /// The gate strategy used for the advice column of the circuit and applied at every row.
-    pub strategy: GateStrategy,
     /// Specifies the number of rows in the circuit to be 2<sup>k</sup>
     pub k: usize,
     /// The number of advice columns per phase
     pub num_advice_per_phase: Vec<usize>,
-    /// The number of advice columns that do not have lookup enabled per phase
-    pub num_lookup_advice_per_phase: Vec<usize>,
     /// The number of fixed columns per phase
     pub num_fixed: usize,
     /// The number of bits that can be ranged checked using a special lookup table with values [0, 2<sup>lookup_bits</sup>), if using.
+    /// The number of special advice columns that have range lookup enabled per phase
+    pub num_lookup_advice_per_phase: Vec<usize>,
     /// This is `None` if no lookup table is used.
     pub lookup_bits: Option<usize>,
 }
@@ -481,8 +333,6 @@ pub struct BaseConfigParams {
 pub struct GateCircuitBuilder<F: ScalarField> {
     /// The Thread Builder for the circuit
     pub builder: RefCell<GateThreadBuilder<F>>, // `RefCell` is just to trick circuit `synthesize` to take ownership of the inner builder
-    /// Break points for threads within the circuit
-    pub break_points: RefCell<MultiPhaseThreadBreakPoints>, // `RefCell` allows the circuit to record break points in a keygen call of `synthesize` for use in later witness gen
     /// Configuration parameters for the circuit shape
     pub config_params: BaseConfigParams,
 }
@@ -841,4 +691,10 @@ pub enum CircuitBuilderStage {
     Prover,
     /// Mock Circuit
     Mock,
+}
+
+impl CircuitBuilderStage {
+    pub fn witness_gen_only(&self) -> bool {
+        matches!(self, CircuitBuilderStage::Prover)
+    }
 }

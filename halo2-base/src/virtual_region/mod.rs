@@ -6,5 +6,7 @@
 
 /// Shared copy constraints across different virtual regions
 pub mod copy_constraints;
+/// Virtual region manager for lookup tables
+pub mod lookups;
 /// Virtual region manager
 pub mod manager;

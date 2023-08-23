@@ -44,6 +44,7 @@ use utils::ScalarField;
 use virtual_region::copy_constraints::SharedCopyConstraintManager;
 
 /// Module that contains the main API for creating and working with circuits.
+/// `gates` is misleading because we currently only use one custom gate throughout.
 pub mod gates;
 /// Module for the Poseidon hash function.
 pub mod poseidon;
