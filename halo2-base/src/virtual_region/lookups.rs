@@ -70,6 +70,14 @@ impl<F: Field + Ord, const ADVICE_COLS: usize> LookupAnyManager<F, ADVICE_COLS> 
     }
 }
 
+impl<F: Field + Ord, const ADVICE_COLS: usize> Drop for LookupAnyManager<F, ADVICE_COLS> {
+    fn drop(&mut self) {
+        if self.total_rows() > 0 {
+            panic!("LookupAnyManager was not assigned!");
+        }
+    }
+}
+
 impl<F: Field + Ord, const ADVICE_COLS: usize> VirtualRegionManager<F>
     for LookupAnyManager<F, ADVICE_COLS>
 {

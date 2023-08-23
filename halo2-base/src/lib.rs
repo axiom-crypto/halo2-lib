@@ -11,6 +11,7 @@
 
 use std::any::TypeId;
 
+use getset::CopyGetters;
 // Different memory allocator options:
 #[cfg(feature = "jemallocator")]
 use jemallocator::Jemalloc;
@@ -159,26 +160,25 @@ impl<F: ScalarField> AsRef<AssignedValue<F>> for AssignedValue<F> {
 /// * We keep the naming [Context] for historical reasons.
 ///
 /// [Context] is CPU thread-local.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, CopyGetters)]
 pub struct Context<F: ScalarField> {
     /// Flag to determine whether only witness generation or proving and verification key generation is being performed.
     /// * If witness gen is performed many operations can be skipped for optimization.
+    #[getset(get_copy = "pub")]
     witness_gen_only: bool,
-
+    #[getset(get_copy = "pub")]
+    phase: usize,
     /// Identifier for what virtual region this context is in
-    pub type_id: TypeId,
+    type_id: TypeId,
     /// Identifier to reference cells from this [Context].
-    pub context_id: usize,
+    #[getset(get_copy = "pub")]
+    context_id: usize,
 
     /// Single column of advice cells.
     pub advice: Vec<Assigned<F>>,
 
     /// Slight optimization: since zero is so commonly used, keep a reference to the zero cell.
     zero_cell: Option<AssignedValue<F>>,
-
-    /// [Vec] tracking all cells that lookup is enabled for.
-    /// * When there is more than 1 advice column all `advice` cells will be copied to a single lookup enabled column to perform lookups.
-    pub cells_to_lookup: Vec<AssignedValue<F>>,
 
     // ========================================
     // General principle: we don't need to optimize anything specific to `witness_gen_only == false` because it is only done during keygen
@@ -197,25 +197,21 @@ impl<F: ScalarField> Context<F> {
     /// * `context_id`: identifier to reference advice cells from this [Context] later.
     pub fn new(
         witness_gen_only: bool,
+        phase: usize,
         type_id: TypeId,
         context_id: usize,
         copy_manager: SharedCopyConstraintManager<F>,
     ) -> Self {
         Self {
             witness_gen_only,
+            phase,
             type_id,
             context_id,
             advice: Vec::new(),
             selector: Vec::new(),
             zero_cell: None,
-            cells_to_lookup: Vec::new(),
             copy_manager,
         }
-    }
-
-    /// Returns the `witness_gen_only` flag of the [Context]
-    pub fn witness_gen_only(&self) -> bool {
-        self.witness_gen_only
     }
 
     fn latest_cell(&self) -> ContextCell {

@@ -1,6 +1,6 @@
 use std::{any::TypeId, cell::OnceCell};
 
-use getset::Getters;
+use getset::CopyGetters;
 
 use crate::{
     gates::{
@@ -22,19 +22,19 @@ use crate::{
 
 /// Virtual region manager for [Vec<BasicGateConfig>] in a single challenge phase.
 /// This is the core manager for [Context]s.
-#[derive(Clone, Debug, Default, Getters)]
+#[derive(Clone, Debug, Default, CopyGetters)]
 pub struct SinglePhaseCoreManager<F: ScalarField> {
     /// Virtual columns. These cannot be shared across CPU threads while keeping the circuit deterministic.
     pub threads: Vec<Context<F>>,
     /// Global shared copy manager
     pub copy_manager: SharedCopyConstraintManager<F>,
     /// Flag for witness generation. If true, the gate thread builder is used for witness generation only.
-    #[getset(get = "pub")]
+    #[getset(get_copy = "pub")]
     witness_gen_only: bool,
     /// The `unknown` flag is used during key generation. If true, during key generation witness [Value]s are replaced with Value::unknown() for safety.
-    #[getset(get = "pub")]
+    #[getset(get_copy = "pub")]
     pub(crate) use_unknown: bool,
-    #[getset(get = "pub", set)]
+    #[getset(get_copy = "pub", set)]
     pub(crate) phase: usize,
     pub usable_rows: OnceCell<usize>,
     pub break_points: OnceCell<ThreadBreakPoints>,
@@ -105,7 +105,13 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
 
     /// Creates new context but does not append to `self.threads`
     pub(crate) fn new_context(&self, context_id: usize) -> Context<F> {
-        Context::new(self.witness_gen_only, self.type_of(), context_id, self.copy_manager.clone())
+        Context::new(
+            self.witness_gen_only,
+            self.phase,
+            self.type_of(),
+            context_id,
+            self.copy_manager.clone(),
+        )
     }
 
     /// Spawns a new thread for a new given `phase`. Returns a mutable reference to the [Context] of the new thread.

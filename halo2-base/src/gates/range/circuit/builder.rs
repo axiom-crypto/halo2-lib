@@ -1,4 +1,4 @@
-use super::{flex_gate::FlexGateConfig, range::BaseConfig};
+use crate::gates::{flex_gate::FlexGateConfig, range::BaseConfig};
 use crate::{
     halo2_proofs::{
         circuit::{self, Layouter, Region, SimpleFloorPlanner, Value},
@@ -13,17 +13,6 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
 };
-
-mod parallelize;
-pub mod threads;
-
-pub use parallelize::*;
-pub use threads::multi_phase::{GateStatistics, GateThreadBuilder};
-
-/// Vector of thread advice column break points
-pub type ThreadBreakPoints = Vec<usize>;
-/// Vector of vectors tracking the thread break points across different halo2 phases
-pub type MultiPhaseThreadBreakPoints = Vec<ThreadBreakPoints>;
 
 /*
     /// Auto-calculates configuration parameters for the circuit
@@ -308,23 +297,6 @@ pub fn assign_threads_in<F: ScalarField>(
     }
 }
 */
-
-/// A Config struct defining the parameters for a halo2-base circuit
-/// - this is used to configure either FlexGateConfig or RangeConfig.
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
-pub struct BaseConfigParams {
-    /// Specifies the number of rows in the circuit to be 2<sup>k</sup>
-    pub k: usize,
-    /// The number of advice columns per phase
-    pub num_advice_per_phase: Vec<usize>,
-    /// The number of fixed columns per phase
-    pub num_fixed: usize,
-    /// The number of bits that can be ranged checked using a special lookup table with values [0, 2<sup>lookup_bits</sup>), if using.
-    /// The number of special advice columns that have range lookup enabled per phase
-    pub num_lookup_advice_per_phase: Vec<usize>,
-    /// This is `None` if no lookup table is used.
-    pub lookup_bits: Option<usize>,
-}
 
 /// A wrapper struct to auto-build a circuit from a `GateThreadBuilder`.
 #[derive(Clone, Debug)]

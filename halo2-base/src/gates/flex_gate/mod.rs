@@ -16,8 +16,17 @@ use std::{
     marker::PhantomData,
 };
 
+pub mod threads;
+
+pub use threads::multi_phase::{GateStatistics, GateThreadBuilder};
+
+/// Vector of thread advice column break points
+pub type ThreadBreakPoints = Vec<usize>;
+/// Vector of vectors tracking the thread break points across different halo2 phases
+pub type MultiPhaseThreadBreakPoints = Vec<ThreadBreakPoints>;
+
 /// The maximum number of phases in halo2.
-const MAX_PHASE: usize = 3;
+pub(super) const MAX_PHASE: usize = 3;
 
 /// # Vertical Gate Strategy:
 /// `q_0 * (a + b * c - d) = 0`

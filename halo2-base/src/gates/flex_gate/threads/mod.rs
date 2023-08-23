@@ -1,4 +1,4 @@
-//! Module for managing the virtual region corresponding to [FlexGateConfig]
+//! Module for managing the virtual region corresponding to [super::FlexGateConfig]
 //!
 //! In the virtual region we have virtual columns. Each virtual column is referred to as a "thread"
 //! because it can be generated in a separate CPU thread. The virtual region manager will collect all
