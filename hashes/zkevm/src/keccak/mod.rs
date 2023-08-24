@@ -799,6 +799,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
     }
 }
 
+#[allow(dead_code)]
 pub struct KeccakAssignedRow<'v, F: Field> {
     pub(crate) is_final: KeccakAssignedValue<'v, F>,
     pub(crate) length: KeccakAssignedValue<'v, F>,
