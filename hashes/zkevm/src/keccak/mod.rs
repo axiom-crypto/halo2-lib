@@ -1,7 +1,7 @@
 use self::{cell_manager::*, keccak_packed_multi::*, param::*, table::*, util::*};
 use super::util::{
     constraint_builder::BaseConstraintBuilder,
-    eth_types::Field,
+    eth_types::{self, Field},
     expression::{and, not, select, Expr},
 };
 use crate::{
@@ -14,7 +14,10 @@ use crate::{
         },
         poly::Rotation,
     },
-    util::expression::sum,
+    util::{
+        expression::sum,
+        word::{self, Word, WordExpr},
+    },
 };
 use itertools::Itertools;
 use log::{debug, info};
@@ -42,12 +45,19 @@ pub struct KeccakConfigParams {
 #[derive(Clone, Debug)]
 pub struct KeccakCircuitConfig<F> {
     challenge: Challenge,
+    // Bool. True on 1st row of each round.
     q_enable: Column<Fixed>,
+    // Bool. True on 1st row.
     q_first: Column<Fixed>,
+    // Bool. True on 1st row of all rounds except last rounds.
     q_round: Column<Fixed>,
+    // Bool. True on 1st row of last rounds.
     q_absorb: Column<Fixed>,
+    // Bool. True on 1st row of last rounds.
     q_round_last: Column<Fixed>,
+    // Bool. True on 1st row of padding rounds.
     q_padding: Column<Fixed>,
+    // Bool. True on 1st row of last padding rounds.
     q_padding_last: Column<Fixed>,
 
     pub keccak_table: KeccakTable,
@@ -93,7 +103,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
         let is_final = keccak_table.is_enabled;
         let input_len = keccak_table.input_len;
         let data_rlc = keccak_table.input_rlc;
-        let hash_rlc = keccak_table.output_rlc;
+        let hash_word = keccak_table.output;
 
         let normalize_3 = array_init::array_init(|_| meta.lookup_table_column());
         let normalize_4 = array_init::array_init(|_| meta.lookup_table_column());
@@ -528,10 +538,15 @@ impl<F: Field> KeccakCircuitConfig<F> {
                 });
             }
 
-            let challenge_expr = meta.query_challenge(challenge);
-            let rlc =
-                hash_bytes.into_iter().reduce(|rlc, x| rlc * challenge_expr.clone() + x).unwrap();
-            cb.require_equal("hash rlc check", rlc, meta.query_advice(hash_rlc, Rotation::cur()));
+            let hash_bytes_le = hash_bytes.into_iter().rev().collect::<Vec<_>>();
+            // cb.require_equal("hash rlc check", rlc, meta.query_advice(hash_rlc, Rotation::cur()));
+            cb.condition(start_new_hash, |cb| {
+                cb.require_equal_word(
+                    "output check",
+                    word::Word32::new(hash_bytes_le.try_into().expect("32 limbs")).to_word(),
+                    hash_word.map(|col| meta.query_advice(col, Rotation::cur())),
+                );
+            });
             cb.gate(meta.query_fixed(q_round_last, Rotation::cur()))
         });
 
@@ -784,13 +799,20 @@ impl<F: Field> KeccakCircuitConfig<F> {
     }
 }
 
+pub struct KeccakAssignedRow<'v, F: Field> {
+    pub(crate) is_final: KeccakAssignedValue<'v, F>,
+    pub(crate) length: KeccakAssignedValue<'v, F>,
+    pub(crate) hash_lo: KeccakAssignedValue<'v, F>,
+    pub(crate) hash_hi: KeccakAssignedValue<'v, F>,
+}
+
 impl<F: Field> KeccakCircuitConfig<F> {
-    /// Returns vector of `length`s for assigned rows
+    /// Returns vector of `is_final`, `length`, `hash.lo`, `hash.hi` for assigned rows
     pub fn assign<'v>(
         &self,
         region: &mut Region<F>,
         witness: &[KeccakRow<F>],
-    ) -> Vec<KeccakAssignedValue<'v, F>> {
+    ) -> Vec<KeccakAssignedRow<'v, F>> {
         witness
             .iter()
             .enumerate()
@@ -798,13 +820,13 @@ impl<F: Field> KeccakCircuitConfig<F> {
             .collect()
     }
 
-    /// Output is `length` at that row
+    /// Output is `is_final`, `length`, `hash.lo`, `hash.hi` at that row
     pub fn set_row<'v>(
         &self,
         region: &mut Region<F>,
         offset: usize,
         row: &KeccakRow<F>,
-    ) -> KeccakAssignedValue<'v, F> {
+    ) -> KeccakAssignedRow<'v, F> {
         // Fixed selectors
         for (_, column, value) in &[
             ("q_enable", self.q_enable, F::from(row.q_enable)),
@@ -819,13 +841,13 @@ impl<F: Field> KeccakCircuitConfig<F> {
         }
 
         // Keccak data
-        let [_is_final, length] = [
-            ("is_final", self.keccak_table.is_enabled, F::from(row.is_final)),
-            ("length", self.keccak_table.input_len, F::from(row.length as u64)),
+        let [is_final, length, hash_lo, hash_hi] = [
+            ("is_final", self.keccak_table.is_enabled, Value::known(F::from(row.is_final))),
+            ("length", self.keccak_table.input_len, Value::known(F::from(row.length as u64))),
+            ("hash_lo", self.keccak_table.output.lo(), row.hash.lo()),
+            ("hash_hi", self.keccak_table.output.hi(), row.hash.hi()),
         ]
-        .map(|(_name, column, value)| {
-            assign_advice_custom(region, column, offset, Value::known(value))
-        });
+        .map(|(_name, column, value)| assign_advice_custom(region, column, offset, value));
 
         // Cell values
         row.cell_values.iter().zip(self.cell_manager.columns()).for_each(|(bit, column)| {
@@ -835,7 +857,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
         // Round constant
         assign_fixed_custom(region, self.round_cst, offset, row.round_cst);
 
-        length
+        KeccakAssignedRow { is_final, length, hash_lo, hash_hi }
     }
 
     pub fn load_aux_tables(&self, layouter: &mut impl Layouter<F>, k: u32) -> Result<(), Error> {
@@ -898,6 +920,7 @@ pub fn keccak_phase1<F: Field>(
 
 /// Witness generation in `FirstPhase` for a keccak hash digest without
 /// computing RLCs, which are deferred to `SecondPhase`.
+/// `bytes` is little-endian.
 pub fn keccak_phase0<F: Field>(
     rows: &mut Vec<KeccakRow<F>>,
     squeeze_digests: &mut Vec<[F; NUM_WORDS_TO_SQUEEZE]>,
@@ -930,6 +953,7 @@ pub fn keccak_phase0<F: Field>(
     // keeps track of running lengths over all rounds in an absorb step
     let mut round_lengths = Vec::with_capacity(NUM_ROUNDS + 1);
     let mut hash_words = [F::ZERO; NUM_WORDS_TO_SQUEEZE];
+    let mut hash = Word::default();
 
     for (idx, chunk) in chunks.enumerate() {
         let is_final_block = idx == num_chunks - 1;
@@ -1155,6 +1179,24 @@ pub fn keccak_phase0<F: Field>(
                 ));
             }
 
+            // The rlc of the hash
+            let is_final = is_final_block && round == NUM_ROUNDS;
+            hash = if is_final {
+                let hash_bytes_le = s
+                    .into_iter()
+                    .take(4)
+                    .flat_map(|a| to_bytes::value(&unpack(a[0])))
+                    .rev()
+                    .collect::<Vec<_>>();
+
+                let word: Word<Value<F>> =
+                    Word::from(eth_types::Word::from_little_endian(hash_bytes_le.as_slice()))
+                        .map(Value::known);
+                word
+            } else {
+                Word::default().into_value()
+            };
+
             // The words to squeeze out: this is the hash digest as words with
             // NUM_BYTES_PER_WORD (=8) bytes each
             for (hash_word, a) in hash_words.iter_mut().zip(s.iter()) {
@@ -1200,6 +1242,7 @@ pub fn keccak_phase0<F: Field>(
                     is_final: is_final_block && round == NUM_ROUNDS && row_idx == 0,
                     length: round_lengths[round],
                     cell_values: regions[round].rows.get(row_idx).unwrap_or(&vec![]).clone(),
+                    hash,
                 });
                 #[cfg(debug_assertions)]
                 {
@@ -1232,7 +1275,7 @@ pub fn keccak_phase0<F: Field>(
     }
 }
 
-/// Computes and assigns the input and output RLC values.
+/// Computes and assigns the input RLC values.
 pub fn multi_keccak_phase1<'a, 'v, F: Field>(
     region: &mut Region<F>,
     keccak_table: &KeccakTable,
@@ -1240,13 +1283,12 @@ pub fn multi_keccak_phase1<'a, 'v, F: Field>(
     challenge: Value<F>,
     squeeze_digests: Vec<[F; NUM_WORDS_TO_SQUEEZE]>,
     parameters: KeccakConfigParams,
-) -> (Vec<KeccakAssignedValue<'v, F>>, Vec<KeccakAssignedValue<'v, F>>) {
+) -> Vec<KeccakAssignedValue<'v, F>> {
     let mut input_rlcs = Vec::with_capacity(squeeze_digests.len());
-    let mut output_rlcs = Vec::with_capacity(squeeze_digests.len());
 
     let rows_per_round = parameters.rows_per_round;
     for idx in 0..rows_per_round {
-        [keccak_table.input_rlc, keccak_table.output_rlc]
+        [keccak_table.input_rlc, keccak_table.output.lo(), keccak_table.output.hi()]
             .map(|column| assign_advice_custom(region, column, idx, Value::known(F::ZERO)));
     }
 
@@ -1275,21 +1317,7 @@ pub fn multi_keccak_phase1<'a, 'v, F: Field>(
         );
     }
 
-    offset = rows_per_round;
-    for hash_words in squeeze_digests {
-        offset += rows_per_round * NUM_ROUNDS;
-        let hash_rlc = hash_words
-            .into_iter()
-            .flat_map(|a| to_bytes::value(&unpack(a)))
-            .map(|x| Value::known(F::from(x as u64)))
-            .reduce(|rlc, x| rlc * challenge + x)
-            .unwrap();
-        let output_rlc = assign_advice_custom(region, keccak_table.output_rlc, offset, hash_rlc);
-        output_rlcs.push(output_rlc);
-        offset += rows_per_round;
-    }
-
-    (input_rlcs, output_rlcs)
+    input_rlcs
 }
 
 /// Returns vector of KeccakRow and vector of hash digest outputs.

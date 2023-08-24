@@ -118,6 +118,31 @@ pub mod select {
     }
 }
 
+/// Decodes a field element from its byte representation in little endian order
+pub mod from_bytes {
+    use super::{Expr, Expression, PrimeField};
+
+    pub fn expr<F: PrimeField, E: Expr<F>>(bytes: &[E]) -> Expression<F> {
+        let mut value = 0.expr();
+        let mut multiplier = F::ONE;
+        for byte in bytes.iter() {
+            value = value + byte.expr() * multiplier;
+            multiplier *= F::from(256);
+        }
+        value
+    }
+
+    pub fn value<F: PrimeField>(bytes: &[u8]) -> F {
+        let mut value = F::ZERO;
+        let mut multiplier = F::ONE;
+        for byte in bytes.iter() {
+            value += F::from(*byte as u64) * multiplier;
+            multiplier *= F::from(256);
+        }
+        value
+    }
+}
+
 /// Trait that implements functionality to get a constant expression from
 /// commonly used types.
 pub trait Expr<F: PrimeField> {
@@ -172,18 +197,6 @@ impl<F: PrimeField> Expr<F> for i32 {
             F::from(self.unsigned_abs() as u64) * if self.is_negative() { -F::ONE } else { F::ONE },
         )
     }
-}
-
-/// Given a bytes-representation of an expression, it computes and returns the
-/// single expression.
-pub fn expr_from_bytes<F: PrimeField, E: Expr<F>>(bytes: &[E]) -> Expression<F> {
-    let mut value = 0.expr();
-    let mut multiplier = F::ONE;
-    for byte in bytes.iter() {
-        value = value + byte.expr() * multiplier;
-        multiplier *= F::from(256);
-    }
-    value
 }
 
 /// Returns 2**by as PrimeField

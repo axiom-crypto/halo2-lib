@@ -1,4 +1,4 @@
-use super::expression::Expr;
+use super::{expression::Expr, word::Word};
 use crate::halo2_proofs::{halo2curves::ff::PrimeField, plonk::Expression};
 
 #[derive(Default)]
@@ -15,6 +15,18 @@ impl<F: PrimeField> BaseConstraintBuilder<F> {
 
     pub(crate) fn require_zero(&mut self, name: &'static str, constraint: Expression<F>) {
         self.add_constraint(name, constraint);
+    }
+
+    pub(crate) fn require_equal_word(
+        &mut self,
+        name: &'static str,
+        lhs: Word<Expression<F>>,
+        rhs: Word<Expression<F>>,
+    ) {
+        let (lhs_lo, lhs_hi) = lhs.to_lo_hi();
+        let (rhs_lo, rhs_hi) = rhs.to_lo_hi();
+        self.add_constraint(name, lhs_lo - rhs_lo);
+        self.add_constraint(name, lhs_hi - rhs_hi);
     }
 
     pub(crate) fn require_equal(

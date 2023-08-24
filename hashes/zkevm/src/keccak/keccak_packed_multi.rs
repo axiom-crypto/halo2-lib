@@ -5,7 +5,9 @@ use crate::{
         halo2curves::ff::PrimeField,
         plonk::{Advice, Column, ConstraintSystem, Expression, Fixed, SecondPhase},
     },
-    util::{constraint_builder::BaseConstraintBuilder, eth_types::Field, expression::Expr},
+    util::{
+        constraint_builder::BaseConstraintBuilder, eth_types::Field, expression::Expr, word::Word,
+    },
 };
 use halo2_base::halo2_proofs::{circuit::AssignedCell, plonk::Assigned};
 
@@ -69,7 +71,7 @@ pub struct KeccakRow<F: PrimeField> {
     pub(crate) length: usize,
     // SecondPhase values will be assigned separately
     // pub(crate) data_rlc: Value<F>,
-    // pub(crate) hash_rlc: Value<F>,
+    pub(crate) hash: Word<Value<F>>,
 }
 
 impl<F: PrimeField> KeccakRow<F> {
@@ -86,6 +88,7 @@ impl<F: PrimeField> KeccakRow<F> {
                 is_final: false,
                 length: 0usize,
                 cell_values: Vec::new(),
+                hash: Word::default().into_value(),
             })
             .collect()
     }
@@ -138,8 +141,9 @@ pub struct KeccakTable {
     pub input_rlc: Column<Advice>, // RLC of input bytes
     // Byte array input length
     pub input_len: Column<Advice>,
-    /// RLC of the hash result
-    pub output_rlc: Column<Advice>, // RLC of hash of input bytes
+    // /// RLC of the hash result
+    // pub output_rlc: Column<Advice>, // RLC of hash of input bytes
+    pub output: Word<Column<Advice>>,
 }
 
 impl KeccakTable {
@@ -151,7 +155,12 @@ impl KeccakTable {
         meta.enable_equality(input_len);
         meta.enable_equality(input_rlc);
         meta.enable_equality(output_rlc);
-        Self { is_enabled: meta.advice_column(), input_rlc, input_len, output_rlc }
+        Self {
+            is_enabled: meta.advice_column(),
+            input_rlc,
+            input_len,
+            output: Word::new([meta.advice_column(), meta.advice_column()]),
+        }
     }
 }
 

@@ -14,6 +14,7 @@ log = "0.4"
 num-bigint = { version = "0.4" }
 halo2-base = { path = "../../halo2-base", default-features = false }
 rayon = "1.7"
+sha3 = "0.10.8"
 
 [dev-dependencies]
 criterion = "0.3"
