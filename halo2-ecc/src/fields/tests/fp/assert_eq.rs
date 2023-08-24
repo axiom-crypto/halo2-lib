@@ -1,11 +1,9 @@
 use crate::ff::Field;
 use crate::{bn254::FpChip, fields::FieldChip};
 
+use halo2_base::gates::range::circuit::builder::RangeCircuitBuilder;
+use halo2_base::gates::CircuitBuilderStage;
 use halo2_base::{
-    gates::{
-        builder::{GateThreadBuilder, RangeCircuitBuilder},
-        RangeChip,
-    },
     halo2_proofs::{
         halo2curves::bn256::Fq, plonk::keygen_pk, plonk::keygen_vk,
         poly::kzg::commitment::ParamsKZG,
@@ -19,36 +17,37 @@ fn test_fp_assert_eq_gen(k: u32, lookup_bits: usize, num_tries: usize) {
     let mut rng = thread_rng();
 
     // first create proving and verifying key
-    let mut builder = GateThreadBuilder::keygen();
-    let range = RangeChip::default(lookup_bits);
+    let mut builder = RangeCircuitBuilder::from_stage(CircuitBuilderStage::Keygen)
+        .use_k(k as usize)
+        .use_lookup_bits(lookup_bits);
+    let range = builder.range_chip();
     let chip = FpChip::new(&range, 88, 3);
 
     let ctx = builder.main(0);
     let a = chip.load_private(ctx, Fq::zero());
     let b = chip.load_private(ctx, Fq::zero());
     chip.assert_equal(ctx, &a, &b);
-    let mut config_params = builder.config(k as usize, Some(9));
-    config_params.lookup_bits = Some(lookup_bits);
-    let circuit = RangeCircuitBuilder::keygen(builder, config_params.clone());
+    let config_params = builder.config(Some(9));
 
     let params = ParamsKZG::setup(k, &mut rng);
     // generate proving key
-    let vk = keygen_vk(&params, &circuit).unwrap();
-    let pk = keygen_pk(&params, vk, &circuit).unwrap();
+    let vk = keygen_vk(&params, &builder).unwrap();
+    let pk = keygen_pk(&params, vk, &builder).unwrap();
     let vk = pk.get_vk(); // pk consumed vk
+    let break_points = builder.break_points();
+    drop(builder);
 
     // now create different proofs to test the soundness of the circuit
 
     let gen_pf = |a: Fq, b: Fq| {
-        let mut builder = GateThreadBuilder::prover();
-        let range = RangeChip::default(lookup_bits);
+        let mut builder = RangeCircuitBuilder::prover(config_params.clone(), break_points.clone());
+        let range = builder.range_chip();
         let chip = FpChip::new(&range, 88, 3);
 
         let ctx = builder.main(0);
         let [a, b] = [a, b].map(|x| chip.load_private(ctx, x));
         chip.assert_equal(ctx, &a, &b);
-        let circuit = RangeCircuitBuilder::prover(builder, config_params.clone(), vec![vec![]]); // no break points
-        gen_proof(&params, &pk, circuit)
+        gen_proof(&params, &pk, builder)
     };
 
     // expected answer

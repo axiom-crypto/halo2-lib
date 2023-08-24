@@ -77,6 +77,11 @@ impl<F: ScalarField> MultiPhaseCoreManager<F> {
         self.phase_manager[phase].new_thread()
     }
 
+    /// Returns a mutable reference to the [SinglePhaseCoreManager] of a given `phase`.
+    pub fn in_phase(&mut self, phase: usize) -> &mut SinglePhaseCoreManager<F> {
+        self.phase_manager.get_mut(phase).unwrap()
+    }
+
     /// Populate `self` up to Phase `phase` (inclusive)
     fn touch(&mut self, phase: usize) {
         while self.phase_manager.len() <= phase {

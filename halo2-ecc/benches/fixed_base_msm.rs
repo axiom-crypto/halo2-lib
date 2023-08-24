@@ -1,4 +1,8 @@
-use ark_std::{end_timer, start_timer};
+use halo2_base::gates::flex_gate::threads::SinglePhaseCoreManager;
+use halo2_base::gates::flex_gate::MultiPhaseThreadBreakPoints;
+use halo2_base::gates::range::circuit::builder::RangeCircuitBuilder;
+use halo2_base::gates::range::BaseConfigParams;
+use halo2_base::gates::CircuitBuilderStage;
 use halo2_base::halo2_proofs::halo2curves::ff::PrimeField as _;
 use halo2_base::halo2_proofs::{
     arithmetic::Field,
@@ -6,16 +10,7 @@ use halo2_base::halo2_proofs::{
     plonk::*,
     poly::kzg::commitment::ParamsKZG,
 };
-use halo2_base::{
-    gates::{
-        builder::{
-            BaseConfigParams, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
-            RangeCircuitBuilder,
-        },
-        RangeChip,
-    },
-    utils::testing::gen_proof,
-};
+use halo2_base::{gates::RangeChip, utils::testing::gen_proof};
 use halo2_ecc::{bn254::FpChip, ecc::EccChip};
 use rand::rngs::OsRng;
 
@@ -41,21 +36,19 @@ const BEST_100_CONFIG: MSMCircuitParams =
 const TEST_CONFIG: MSMCircuitParams = BEST_100_CONFIG;
 
 fn fixed_base_msm_bench(
-    builder: &mut GateThreadBuilder<Fr>,
+    pool: &mut SinglePhaseCoreManager<Fr>,
+    range: &RangeChip<Fr>,
     params: MSMCircuitParams,
     bases: Vec<G1Affine>,
     scalars: Vec<Fr>,
 ) {
-    let range = RangeChip::<Fr>::default(params.lookup_bits);
-    let fp_chip = FpChip::<Fr>::new(&range, params.limb_bits, params.num_limbs);
+    let fp_chip = FpChip::<Fr>::new(range, params.limb_bits, params.num_limbs);
     let ecc_chip = EccChip::new(&fp_chip);
 
-    let scalars_assigned = scalars
-        .iter()
-        .map(|scalar| vec![builder.main(0).load_witness(*scalar)])
-        .collect::<Vec<_>>();
+    let scalars_assigned =
+        scalars.iter().map(|scalar| vec![pool.main().load_witness(*scalar)]).collect::<Vec<_>>();
 
-    ecc_chip.fixed_base_msm(builder, &bases, scalars_assigned, Fr::NUM_BITS as usize);
+    ecc_chip.fixed_base_msm(pool, &bases, scalars_assigned, Fr::NUM_BITS as usize);
 }
 
 fn fixed_base_msm_circuit(
@@ -67,22 +60,18 @@ fn fixed_base_msm_circuit(
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
     let k = params.degree as usize;
-    let mut builder = GateThreadBuilder::new(stage == CircuitBuilderStage::Prover);
-
-    let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
-    fixed_base_msm_bench(&mut builder, params, bases, scalars);
-
-    let mut config_params = config_params.unwrap_or_else(|| builder.config(k, Some(20)));
-    config_params.lookup_bits = Some(params.lookup_bits);
-    let circuit = match stage {
-        CircuitBuilderStage::Mock => RangeCircuitBuilder::mock(builder, config_params),
-        CircuitBuilderStage::Keygen => RangeCircuitBuilder::keygen(builder, config_params),
+    let mut builder = match stage {
         CircuitBuilderStage::Prover => {
-            RangeCircuitBuilder::prover(builder, config_params, break_points.unwrap())
+            RangeCircuitBuilder::prover(config_params.unwrap(), break_points.unwrap())
         }
+        _ => RangeCircuitBuilder::from_stage(stage).use_k(k),
     };
-    end_timer!(start0);
-    circuit
+    let range = builder.range_chip();
+    fixed_base_msm_bench(builder.pool(0), &range, params, bases, scalars);
+    if !stage.witness_gen_only() {
+        builder.config(Some(20));
+    }
+    builder
 }
 
 fn bench(c: &mut Criterion) {
@@ -98,12 +87,12 @@ fn bench(c: &mut Criterion) {
         None,
         None,
     );
-    let config_params = circuit.0.config_params.clone();
+    let config_params = circuit.params();
 
     let params = ParamsKZG::<Bn256>::setup(k, &mut rng);
     let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
     let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
-    let break_points = circuit.0.break_points.take();
+    let break_points = circuit.break_points();
     drop(circuit);
 
     let (bases, scalars): (Vec<_>, Vec<_>) =

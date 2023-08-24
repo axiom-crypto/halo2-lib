@@ -1,29 +1,18 @@
 #![allow(non_snake_case)]
-use crate::ff::Field as _;
+use super::*;
 use crate::fields::FpStrategy;
 use crate::halo2_proofs::{
     arithmetic::CurveAffine,
-    dev::MockProver,
-    halo2curves::bn256::Fr,
     halo2curves::secp256k1::{Fp, Fq, Secp256k1Affine},
-    plonk::*,
 };
 use crate::secp256k1::{FpChip, FqChip};
 use crate::{
     ecc::{ecdsa::ecdsa_verify_no_pubkey_check, EccChip},
     fields::FieldChip,
 };
-use ark_std::{end_timer, start_timer};
-use halo2_base::gates::builder::{
-    BaseConfigParams, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
-    RangeCircuitBuilder,
-};
 use halo2_base::gates::RangeChip;
-use halo2_base::utils::fs::gen_srs;
-use halo2_base::utils::testing::{check_proof, gen_proof};
 use halo2_base::utils::{biguint_to_fe, fe_to_biguint, modulus, BigPrimeField};
 use halo2_base::Context;
-use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufReader;
@@ -31,7 +20,7 @@ use std::io::Write;
 use std::{fs, io::BufRead};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-struct CircuitParams {
+pub struct CircuitParams {
     strategy: FpStrategy,
     degree: u32,
     num_advice: usize,
@@ -42,22 +31,27 @@ struct CircuitParams {
     num_limbs: usize,
 }
 
-fn ecdsa_test<F: BigPrimeField>(
-    ctx: &mut Context<F>,
-    params: CircuitParams,
-    r: Fq,
-    s: Fq,
-    msghash: Fq,
-    pk: Secp256k1Affine,
-) {
-    let range = RangeChip::<F>::default(params.lookup_bits);
-    let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
-    let fq_chip = FqChip::<F>::new(&range, params.limb_bits, params.num_limbs);
+#[derive(Clone, Copy, Debug)]
+pub struct ECDSAInput {
+    pub r: Fq,
+    pub s: Fq,
+    pub msghash: Fq,
+    pub pk: Secp256k1Affine,
+}
 
-    let [m, r, s] = [msghash, r, s].map(|x| fq_chip.load_private(ctx, x));
+pub fn ecdsa_test<F: BigPrimeField>(
+    ctx: &mut Context<F>,
+    range: &RangeChip<F>,
+    params: CircuitParams,
+    input: ECDSAInput,
+) {
+    let fp_chip = FpChip::<F>::new(range, params.limb_bits, params.num_limbs);
+    let fq_chip = FqChip::<F>::new(range, params.limb_bits, params.num_limbs);
+
+    let [m, r, s] = [input.msghash, input.r, input.s].map(|x| fq_chip.load_private(ctx, x));
 
     let ecc_chip = EccChip::<F, FpChip<F>>::new(&fp_chip);
-    let pk = ecc_chip.load_private_unchecked(ctx, (pk.x, pk.y));
+    let pk = ecc_chip.load_private::<Secp256k1Affine>(ctx, (input.pk.x, input.pk.y));
     // test ECDSA
     let res = ecdsa_verify_no_pubkey_check::<F, Fp, Fq, Secp256k1Affine>(
         &ecc_chip, ctx, pk, r, s, m, 4, 4,
@@ -65,57 +59,40 @@ fn ecdsa_test<F: BigPrimeField>(
     assert_eq!(res.value(), &F::ONE);
 }
 
-fn random_ecdsa_circuit(
-    params: CircuitParams,
-    stage: CircuitBuilderStage,
-    config_params: Option<BaseConfigParams>,
-    break_points: Option<MultiPhaseThreadBreakPoints>,
-) -> RangeCircuitBuilder<Fr> {
-    let mut builder = match stage {
-        CircuitBuilderStage::Mock => GateThreadBuilder::mock(),
-        CircuitBuilderStage::Prover => GateThreadBuilder::prover(),
-        CircuitBuilderStage::Keygen => GateThreadBuilder::keygen(),
-    };
-    let sk = <Secp256k1Affine as CurveAffine>::ScalarExt::random(OsRng);
-    let pubkey = Secp256k1Affine::from(Secp256k1Affine::generator() * sk);
-    let msg_hash = <Secp256k1Affine as CurveAffine>::ScalarExt::random(OsRng);
+pub fn random_ecdsa_input(rng: &mut StdRng) -> ECDSAInput {
+    let sk = <Secp256k1Affine as CurveAffine>::ScalarExt::random(rng.clone());
+    let pk = Secp256k1Affine::from(Secp256k1Affine::generator() * sk);
+    let msghash = <Secp256k1Affine as CurveAffine>::ScalarExt::random(rng.clone());
 
-    let k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(OsRng);
+    let k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(rng);
     let k_inv = k.invert().unwrap();
 
     let r_point = Secp256k1Affine::from(Secp256k1Affine::generator() * k).coordinates().unwrap();
     let x = r_point.x();
     let x_bigint = fe_to_biguint(x);
     let r = biguint_to_fe::<Fq>(&(x_bigint % modulus::<Fq>()));
-    let s = k_inv * (msg_hash + (r * sk));
+    let s = k_inv * (msghash + (r * sk));
 
-    let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
-    ecdsa_test(builder.main(0), params, r, s, msg_hash, pubkey);
-
-    let mut config_params =
-        config_params.unwrap_or_else(|| builder.config(params.degree as usize, Some(20)));
-    config_params.lookup_bits = Some(params.lookup_bits);
-    let circuit = match stage {
-        CircuitBuilderStage::Mock => RangeCircuitBuilder::mock(builder, config_params),
-        CircuitBuilderStage::Keygen => RangeCircuitBuilder::keygen(builder, config_params),
-        CircuitBuilderStage::Prover => {
-            RangeCircuitBuilder::prover(builder, config_params, break_points.unwrap())
-        }
-    };
-    end_timer!(start0);
-    circuit
+    ECDSAInput { r, s, msghash, pk }
 }
 
-#[test]
-fn test_secp256k1_ecdsa() {
+pub fn run_test(input: ECDSAInput) {
     let path = "configs/secp256k1/ecdsa_circuit.config";
     let params: CircuitParams = serde_json::from_reader(
         File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
     )
     .unwrap();
 
-    let circuit = random_ecdsa_circuit(params, CircuitBuilderStage::Mock, None, None);
-    MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
+    base_test().k(params.degree).lookup_bits(params.lookup_bits).run(|ctx, range| {
+        ecdsa_test(ctx, range, params, input);
+    });
+}
+
+#[test]
+fn test_secp256k1_ecdsa() {
+    let mut rng = StdRng::seed_from_u64(0);
+    let input = random_ecdsa_input(&mut rng);
+    run_test(input);
 }
 
 #[test]
@@ -129,44 +106,20 @@ fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
     let mut fs_results = File::create(results_path).unwrap();
     writeln!(fs_results, "degree,num_advice,num_lookup,num_fixed,lookup_bits,limb_bits,num_limbs,proof_time,proof_size,verify_time")?;
 
+    let mut rng = StdRng::seed_from_u64(0);
     let bench_params_reader = BufReader::new(bench_params_file);
     for line in bench_params_reader.lines() {
         let bench_params: CircuitParams = serde_json::from_str(line.unwrap().as_str()).unwrap();
         let k = bench_params.degree;
         println!("---------------------- degree = {k} ------------------------------",);
 
-        let params = gen_srs(k);
-        println!("{bench_params:?}");
-
-        let circuit = random_ecdsa_circuit(bench_params, CircuitBuilderStage::Keygen, None, None);
-
-        let vk_time = start_timer!(|| "Generating vkey");
-        let vk = keygen_vk(&params, &circuit)?;
-        end_timer!(vk_time);
-
-        let pk_time = start_timer!(|| "Generating pkey");
-        let pk = keygen_pk(&params, vk, &circuit)?;
-        end_timer!(pk_time);
-
-        let break_points = circuit.0.break_points.take();
-        let config_params = circuit.0.config_params.clone();
-        drop(circuit);
-        // create a proof
-        let proof_time = start_timer!(|| "Proving time");
-        let circuit = random_ecdsa_circuit(
-            bench_params,
-            CircuitBuilderStage::Prover,
-            Some(config_params),
-            Some(break_points),
+        let stats = base_test().k(k).lookup_bits(bench_params.lookup_bits).bench_builder(
+            random_ecdsa_input(&mut rng),
+            random_ecdsa_input(&mut rng),
+            |pool, range, input| {
+                ecdsa_test(pool.main(), range, bench_params, input);
+            },
         );
-        let proof = gen_proof(&params, &pk, circuit);
-        end_timer!(proof_time);
-
-        let proof_size = proof.len();
-
-        let verify_time = start_timer!(|| "Verify time");
-        check_proof(&params, pk.get_vk(), &proof, true);
-        end_timer!(verify_time);
 
         writeln!(
             fs_results,
@@ -178,9 +131,9 @@ fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
             bench_params.lookup_bits,
             bench_params.limb_bits,
             bench_params.num_limbs,
-            proof_time.time.elapsed(),
-            proof_size,
-            verify_time.time.elapsed()
+            stats.proof_time.time.elapsed(),
+            stats.proof_size,
+            stats.verify_time.time.elapsed()
         )?;
     }
     Ok(())

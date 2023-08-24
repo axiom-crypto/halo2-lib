@@ -44,8 +44,8 @@ fn test_multithread_gates() {
     base_test().k(6).bench_builder(
         vec![[Fr::ZERO; 3]; 4],
         (0..4usize).map(|_| [(); 3].map(|_| Fr::random(&mut rng))).collect(),
-        |core, _, inputs| {
-            parallelize_core(&mut core.phase_manager[0], inputs, |ctx, input| {
+        |pool, _, inputs| {
+            parallelize_core(pool, inputs, |ctx, input| {
                 gate_tests(ctx, input);
             });
         },
@@ -97,8 +97,8 @@ fn test_range_single() {
     base_test().k(11).lookup_bits(3).bench_builder(
         [Fr::ZERO; 2],
         [100, 101].map(Fr::from),
-        |core, range, inputs| {
-            range_tests(core.main(0), range, inputs, 8, 8);
+        |pool, range, inputs| {
+            range_tests(pool.main(), range, inputs, 8, 8);
         },
     );
 }

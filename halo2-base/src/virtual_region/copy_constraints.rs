@@ -4,6 +4,7 @@ use std::ops::DerefMut;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use itertools::Itertools;
+use rayon::slice::ParallelSliceMut;
 
 use crate::halo2_proofs::{
     circuit::{Cell, Region},
@@ -104,6 +105,9 @@ impl<F: Field + Ord> VirtualRegionManager<F> for SharedCopyConstraintManager<F> 
     fn assign_raw(&self, config: &Self::Config, region: &mut Region<F>) -> Self::Assignment {
         let mut guard = self.lock().unwrap();
         let manager = guard.deref_mut();
+        // sort by constant so constant assignment order is deterministic
+        // this is necessary because constants can be assigned by multiple CPU threads
+        manager.constant_equalities.par_sort_unstable_by(|(c1, _), (c2, _)| c1.cmp(c2));
         // Assign fixed cells, we go left to right, then top to bottom, to avoid needing to know number of rows here
         let mut fixed_col = 0;
         let mut fixed_offset = 0;

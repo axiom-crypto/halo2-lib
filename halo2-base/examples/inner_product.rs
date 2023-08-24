@@ -32,8 +32,8 @@ fn main() {
             (0..5).map(|_| Fr::random(OsRng)).collect_vec(),
             (0..5).map(|_| Fr::random(OsRng)).collect_vec(),
         ),
-        |builder, range, (a, b)| {
-            inner_prod_bench(builder.main(0), range.gate(), a, b);
+        |pool, range, (a, b)| {
+            inner_prod_bench(pool.main(), range.gate(), a, b);
         },
     );
 }

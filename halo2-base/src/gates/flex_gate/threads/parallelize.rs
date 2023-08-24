@@ -6,7 +6,7 @@ use super::SinglePhaseCoreManager;
 
 /// Utility function to parallelize an operation involving [`Context`]s.
 pub fn parallelize_core<F, T, R, FR>(
-    builder: &mut SinglePhaseCoreManager<F>,
+    builder: &mut SinglePhaseCoreManager<F>, // leaving `builder` for historical reasons, `pool` is a better name
     input: Vec<T>,
     f: FR,
 ) -> Vec<R>

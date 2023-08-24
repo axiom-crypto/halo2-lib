@@ -1,7 +1,7 @@
 //! Utilities for testing
 use crate::{
     gates::{
-        flex_gate::threads::MultiPhaseCoreManager,
+        flex_gate::threads::SinglePhaseCoreManager,
         range::{circuit::builder::RangeCircuitBuilder, BaseConfigParams},
         CircuitBuilderStage, GateChip, RangeChip,
     },
@@ -143,7 +143,7 @@ impl BaseTester {
     /// Run a mock test by providing a closure that uses a `ctx` and `RangeChip`.
     /// - `expect_satisfied`: flag for whether you expect the test to pass or fail. Failure means a constraint system failure -- the tester does not catch system panics.
     pub fn run<R>(&self, f: impl FnOnce(&mut Context<Fr>, &RangeChip<Fr>) -> R) -> R {
-        self.run_builder(|builder, range| f(builder.main(0), range))
+        self.run_builder(|builder, range| f(builder.main(), range))
     }
 
     /// Run a mock test by providing a closure that uses a `ctx` and `GateChip`.
@@ -155,7 +155,7 @@ impl BaseTester {
     /// Run a mock test by providing a closure that uses a `builder` and `RangeChip`.
     pub fn run_builder<R>(
         &self,
-        f: impl FnOnce(&mut MultiPhaseCoreManager<Fr>, &RangeChip<Fr>) -> R,
+        f: impl FnOnce(&mut SinglePhaseCoreManager<Fr>, &RangeChip<Fr>) -> R,
     ) -> R {
         let mut builder = RangeCircuitBuilder::default().use_k(self.k as usize);
         if let Some(lb) = self.lookup_bits {
@@ -163,7 +163,7 @@ impl BaseTester {
         }
         let range = RangeChip::new(self.lookup_bits.unwrap_or(0), builder.lookup_manager().clone());
         // run the function, mutating `builder`
-        let res = f(builder.core_mut(), &range);
+        let res = f(builder.pool(0), &range);
 
         // helper check: if your function didn't use lookups, turn lookup table "off"
         let t_cells_lookup =
@@ -191,7 +191,7 @@ impl BaseTester {
         &self,
         init_input: I,
         logic_input: I,
-        f: impl Fn(&mut MultiPhaseCoreManager<Fr>, &RangeChip<Fr>, I),
+        f: impl Fn(&mut SinglePhaseCoreManager<Fr>, &RangeChip<Fr>, I),
     ) -> BenchStats {
         let mut builder =
             RangeCircuitBuilder::from_stage(CircuitBuilderStage::Keygen).use_k(self.k as usize);
@@ -200,7 +200,7 @@ impl BaseTester {
         }
         let range = RangeChip::new(self.lookup_bits.unwrap_or(0), builder.lookup_manager().clone());
         // run the function, mutating `builder`
-        f(builder.core_mut(), &range, init_input);
+        f(builder.pool(0), &range, init_input);
 
         // helper check: if your function didn't use lookups, turn lookup table "off"
         let t_cells_lookup =
@@ -225,7 +225,7 @@ impl BaseTester {
         let proof_time = start_timer!(|| "Proving time");
         let mut builder = RangeCircuitBuilder::prover(config_params.clone(), break_points);
         let range = RangeChip::new(self.lookup_bits.unwrap_or(0), builder.lookup_manager().clone());
-        f(builder.core_mut(), &range, logic_input);
+        f(builder.pool(0), &range, logic_input);
         let proof = gen_proof(&params, &pk, builder);
         end_timer!(proof_time);
 

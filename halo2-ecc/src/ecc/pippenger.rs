@@ -8,7 +8,7 @@ use crate::{
 };
 use halo2_base::{
     gates::{
-        builder::{parallelize_in, GateThreadBuilder},
+        flex_gate::threads::{parallelize_core, SinglePhaseCoreManager},
         GateInstructions,
     },
     utils::{BigPrimeField, CurveAffineExt},
@@ -219,13 +219,12 @@ where
 pub fn multi_exp_par<F: BigPrimeField, FC, C>(
     chip: &FC,
     // these are the "threads" within a single Phase
-    builder: &mut GateThreadBuilder<F>,
+    builder: &mut SinglePhaseCoreManager<F>,
     points: &[EcPoint<F, FC::FieldPoint>],
     scalars: Vec<Vec<AssignedValue<F>>>,
     max_scalar_bits_per_cell: usize,
     // radix: usize, // specialize to radix = 1
     clump_factor: usize,
-    phase: usize,
 ) -> EcPoint<F, FC::FieldPoint>
 where
     FC: FieldChip<F> + Selectable<F, FC::FieldPoint> + Selectable<F, FC::ReducedFieldPoint>,
@@ -239,7 +238,7 @@ where
     let mut bool_scalars = vec![Vec::with_capacity(points.len()); scalar_bits];
 
     // get a main thread
-    let ctx = builder.main(phase);
+    let ctx = builder.main();
     // single-threaded computation:
     for scalar in scalars {
         for (scalar_chunk, bool_chunk) in
@@ -267,8 +266,7 @@ where
 
     // now begins multi-threading
     // multi_prods is 2d vector of size `num_rounds` by `scalar_bits`
-    let multi_prods = parallelize_in(
-        phase,
+    let multi_prods = parallelize_core(
         builder,
         points.chunks(c).zip(any_points.iter()).enumerate().collect(),
         |ctx, (round, (points_clump, any_point))| {
@@ -306,7 +304,7 @@ where
     );
 
     // agg[j] = sum_{i=0..num_rounds} multi_prods[i][j] for j = 0..scalar_bits
-    let mut agg = parallelize_in(phase, builder, (0..scalar_bits).collect(), |ctx, i| {
+    let mut agg = parallelize_core(builder, (0..scalar_bits).collect(), |ctx, i| {
         let mut acc = multi_prods[0][i].clone();
         for multi_prod in multi_prods.iter().skip(1) {
             let _acc = ec_add_unequal(chip, ctx, &acc, &multi_prod[i], true);
@@ -316,7 +314,7 @@ where
     });
 
     // gets the LAST thread for single threaded work
-    let ctx = builder.main(phase);
+    let ctx = builder.main();
     // we have agg[j] = G'[j] + (2^num_rounds - 1) * any_base
     // let any_point = (2^num_rounds - 1) * any_base
     // TODO: can we remove all these random point operations somehow?

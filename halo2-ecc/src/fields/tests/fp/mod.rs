@@ -1,14 +1,10 @@
 use crate::ff::{Field as _, PrimeField as _};
 use crate::fields::fp::FpChip;
 use crate::fields::FieldChip;
-use crate::halo2_proofs::{
-    dev::MockProver,
-    halo2curves::bn256::{Fq, Fr},
-};
+use crate::halo2_proofs::halo2curves::bn256::{Fq, Fr};
 
-use halo2_base::gates::builder::{GateThreadBuilder, RangeCircuitBuilder};
-use halo2_base::gates::RangeChip;
 use halo2_base::utils::biguint_to_fe;
+use halo2_base::utils::testing::base_test;
 use halo2_base::utils::{fe_to_biguint, modulus};
 use halo2_base::Context;
 use rand::rngs::OsRng;
@@ -24,16 +20,10 @@ fn fp_chip_test(
     num_limbs: usize,
     f: impl Fn(&mut Context<Fr>, &FpChip<Fr, Fq>),
 ) {
-    let range = RangeChip::<Fr>::default(lookup_bits);
-    let chip = FpChip::<Fr, Fq>::new(&range, limb_bits, num_limbs);
-
-    let mut builder = GateThreadBuilder::mock();
-    f(builder.main(0), &chip);
-
-    let mut config_params = builder.config(k, Some(10));
-    config_params.lookup_bits = Some(lookup_bits);
-    let circuit = RangeCircuitBuilder::mock(builder, config_params);
-    MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
+    base_test().k(k as u32).lookup_bits(lookup_bits).run(|ctx, range| {
+        let chip = FpChip::<Fr, Fq>::new(range, limb_bits, num_limbs);
+        f(ctx, &chip);
+    });
 }
 
 #[test]
