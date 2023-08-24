@@ -4,11 +4,13 @@ use crate::halo2_proofs::{
     plonk::{Advice, Assigned, Column, Fixed},
 };
 
+/// Raw (physical) assigned cell in Plonkish arithmetization.
 #[cfg(feature = "halo2-axiom")]
 pub type Halo2AssignedCell<'v, F> = AssignedCell<&'v Assigned<F>, F>;
 #[cfg(not(feature = "halo2-axiom"))]
 pub type Halo2AssignedCell<'v, F> = AssignedCell<F, F>;
 
+/// Assign advice to physical region.
 #[inline(always)]
 pub fn raw_assign_advice<'v, F: Field>(
     region: &mut Region<F>,
@@ -33,6 +35,7 @@ pub fn raw_assign_advice<'v, F: Field>(
     }
 }
 
+/// Assign fixed to physical region.
 #[inline(always)]
 pub fn raw_assign_fixed<F: Field>(
     region: &mut Region<F>,
@@ -58,6 +61,7 @@ pub fn raw_assign_fixed<F: Field>(
     }
 }
 
+/// Constrain two physical cells to be equal.
 #[inline(always)]
 pub fn raw_constrain_equal<F: Field>(region: &mut Region<F>, left: Cell, right: Cell) {
     #[cfg(feature = "halo2-axiom")]

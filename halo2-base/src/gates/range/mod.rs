@@ -3,7 +3,8 @@ use crate::{
     halo2_proofs::{
         circuit::{Layouter, Value},
         plonk::{
-            Advice, Column, ConstraintSystem, Error, SecondPhase, Selector, TableColumn, ThirdPhase,
+            Advice, Column, ConstraintSystem, Error, Fixed, Instance, SecondPhase, Selector,
+            TableColumn, ThirdPhase,
         },
         poly::Rotation,
     },
@@ -15,17 +16,18 @@ use crate::{
     AssignedValue, Context,
     QuantumCell::{self, Constant, Existing, Witness},
 };
+
 use getset::Getters;
-use halo2_proofs_axiom::plonk::FirstPhase;
 use num_bigint::BigUint;
 use num_integer::Integer;
 use num_traits::One;
 use serde::{Deserialize, Serialize};
-use std::{any::TypeId, cmp::Ordering, ops::Shl, sync::OnceLock};
+use std::{cmp::Ordering, ops::Shl};
 
 use super::flex_gate::{FlexGateConfigParams, GateChip};
 
-mod circuit;
+/// Circuit
+pub mod circuit;
 
 /// A Config struct defining the parameters for a halo2-base circuit
 /// - this is used to configure either FlexGateConfig or RangeConfig.
@@ -55,6 +57,15 @@ impl BaseConfigParams {
     }
 }
 
+/// Configuration with [`BaseConfig`] with `NI` public instance columns.
+#[derive(Clone, Debug)]
+pub struct PublicBaseConfig<F: ScalarField, const NI: usize> {
+    /// The underlying private gate/range configuration
+    pub base: BaseConfig<F>,
+    /// The public instance column
+    pub instance: [Column<Instance>; NI],
+}
+
 /// Smart Halo2 circuit config that has different variants depending on whether you need range checks or not.
 /// The difference is that to enable range checks, the Halo2 config needs to add a lookup table.
 #[derive(Clone, Debug)]
@@ -65,48 +76,53 @@ pub enum BaseConfig<F: ScalarField> {
     WithRange(RangeConfig<F>),
 }
 
-impl<F: ScalarField> BaseConfig<F> {
+impl<F: ScalarField, const NI: usize> PublicBaseConfig<F, NI> {
     /// Generates a new `BaseConfig` depending on `params`.
     /// - It will generate a `RangeConfig` is `params` has `lookup_bits` not None **and** `num_lookup_advice_per_phase` are not all empty or zero (i.e., if `params` indicates that the circuit actually requires a lookup table).
     /// - Otherwise it will generate a `FlexGateConfig`.
     pub fn configure(meta: &mut ConstraintSystem<F>, params: BaseConfigParams) -> Self {
         let total_lookup_advice_cols = params.num_lookup_advice_per_phase.iter().sum::<usize>();
-        if params.lookup_bits.is_some() && total_lookup_advice_cols != 0 {
+        let base = if params.lookup_bits.is_some() && total_lookup_advice_cols != 0 {
             // We only add a lookup table if lookup bits is not None
-            Self::WithRange(RangeConfig::configure(
+            BaseConfig::WithRange(RangeConfig::configure(
                 meta,
                 params.gate_params(),
                 &params.num_lookup_advice_per_phase,
                 params.lookup_bits.unwrap(),
             ))
         } else {
-            Self::WithoutRange(FlexGateConfig::configure(meta, params.gate_params()))
-        }
+            BaseConfig::WithoutRange(FlexGateConfig::configure(meta, params.gate_params()))
+        };
+        let instance = [(); NI].map(|_| {
+            let inst = meta.instance_column();
+            meta.enable_equality(inst);
+            inst
+        });
+        Self { base, instance }
     }
 
     /// Returns the inner [`FlexGateConfig`]
     pub fn gate(&self) -> &FlexGateConfig<F> {
-        match self {
-            Self::WithoutRange(config) => config,
-            Self::WithRange(config) => &config.gate,
+        match &self.base {
+            BaseConfig::WithoutRange(config) => config,
+            BaseConfig::WithRange(config) => &config.gate,
         }
     }
 
-    /// Returns a slice of the special advice columns with lookup enabled, per phase.
-    /// Returns empty slice if there are no lookups enabled.
-    pub fn lookup_advice(&self) -> &[Vec<Column<Advice>>] {
-        match self {
-            Self::WithoutRange(_) => &[],
-            Self::WithRange(config) => &config.lookup_advice,
+    /// Returns the fixed columns for constants
+    pub fn constants(&self) -> &Vec<Column<Fixed>> {
+        match &self.base {
+            BaseConfig::WithoutRange(config) => &config.constants,
+            BaseConfig::WithRange(config) => &config.gate.constants,
         }
     }
 
     /// Returns a slice of the selector column to enable lookup -- this is only in the situation where there is a single advice column of any kind -- per phase
     /// Returns empty slice if there are no lookups enabled.
     pub fn q_lookup(&self) -> &[Option<Selector>] {
-        match self {
-            Self::WithoutRange(_) => &[],
-            Self::WithRange(config) => &config.q_lookup,
+        match &self.base {
+            BaseConfig::WithoutRange(_) => &[],
+            BaseConfig::WithRange(config) => &config.q_lookup,
         }
     }
 }
@@ -166,21 +182,21 @@ impl<F: ScalarField> RangeConfig<F> {
             let num_advice = *gate_params.num_advice_per_phase.get(phase).unwrap_or(&0);
             let mut columns = Vec::new();
             // if num_columns is set to 0, then we assume you do not want to perform any lookups in that phase
-            if num_advice == 1 && num_columns != 0 {
-                q_lookup.push(Some(meta.complex_selector()));
-            } else {
-                q_lookup.push(None);
-                for _ in 0..num_columns {
-                    let a = match phase {
-                        0 => meta.advice_column(),
-                        1 => meta.advice_column_in(SecondPhase),
-                        2 => meta.advice_column_in(ThirdPhase),
-                        _ => panic!("Currently RangeConfig only supports {MAX_PHASE} phases"),
-                    };
-                    meta.enable_equality(a);
-                    columns.push(a);
-                }
+            // if num_advice == 1 && num_columns != 0 {
+            //     q_lookup.push(Some(meta.complex_selector()));
+            // } else {
+            q_lookup.push(None);
+            for _ in 0..num_columns {
+                let a = match phase {
+                    0 => meta.advice_column(),
+                    1 => meta.advice_column_in(SecondPhase),
+                    2 => meta.advice_column_in(ThirdPhase),
+                    _ => panic!("Currently RangeConfig only supports {MAX_PHASE} phases"),
+                };
+                meta.enable_equality(a);
+                columns.push(a);
             }
+            // }
             lookup_advice.push(columns);
         }
 
@@ -501,7 +517,7 @@ pub struct RangeChip<F: ScalarField> {
     ///
     /// The lookup manager is used to store the cells that need to be looked up in the range check lookup table.
     #[getset(get = "pub")]
-    lookup_manager: [OnceLock<LookupAnyManager<F, 1>>; MAX_PHASE],
+    lookup_manager: [LookupAnyManager<F, 1>; MAX_PHASE],
     /// Defines the number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>).
     lookup_bits: usize,
     /// [Vec] of powers of `2 ** lookup_bits` represented as [QuantumCell::Constant].
@@ -513,7 +529,7 @@ impl<F: ScalarField> RangeChip<F> {
     /// Creates a new [RangeChip] with the given strategy and lookup_bits.
     /// * strategy: [GateStrategy] for advice values in this chip
     /// * lookup_bits: number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>)
-    pub fn new(lookup_bits: usize) -> Self {
+    pub fn new(lookup_bits: usize, lookup_manager: [LookupAnyManager<F, 1>; MAX_PHASE]) -> Self {
         let limb_base = F::from(1u64 << lookup_bits);
         let mut running_base = limb_base;
         let num_bases = F::CAPACITY as usize / lookup_bits;
@@ -524,28 +540,13 @@ impl<F: ScalarField> RangeChip<F> {
             limb_bases.push(Constant(running_base));
         }
         let gate = GateChip::new();
-        let lookup_manager = [(); MAX_PHASE].map(|_| OnceLock::new());
 
         Self { gate, lookup_bits, lookup_manager, limb_bases }
     }
 
-    /// Creates a new [RangeChip] with the default strategy and provided lookup_bits.
-    /// * lookup_bits: number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>)
-    pub fn default(lookup_bits: usize) -> Self {
-        Self::new(lookup_bits)
-    }
-
     fn add_cell_to_lookup(&self, ctx: &Context<F>, a: AssignedValue<F>) {
         let phase = ctx.phase();
-        let manager = self.lookup_manager[phase].get_or_init(|| {
-            let type_id = match phase {
-                0 => TypeId::of::<(LookupAnyManager<F, 1>, RangeConfig<F>, FirstPhase)>(),
-                1 => TypeId::of::<(LookupAnyManager<F, 1>, RangeConfig<F>, SecondPhase)>(),
-                2 => TypeId::of::<(LookupAnyManager<F, 1>, RangeConfig<F>, ThirdPhase)>(),
-                _ => panic!("Currently RangeChip only supports {MAX_PHASE} phases"),
-            };
-            LookupAnyManager::new(ctx.witness_gen_only(), type_id, ctx.copy_manager.clone())
-        });
+        let manager = &self.lookup_manager[phase];
         manager.add_lookup(ctx.context_id, [a]);
     }
 
@@ -581,10 +582,9 @@ impl<F: ScalarField> RangeChip<F> {
 
         debug_assert!(self.limb_bases.len() >= num_limbs);
 
-        let last_limb;
-        if num_limbs == 1 {
+        let last_limb = if num_limbs == 1 {
             self.add_cell_to_lookup(ctx, a);
-            last_limb = a;
+            a
         } else {
             let limbs = decompose_fe_to_u64_limbs(a.value(), num_limbs, self.lookup_bits)
                 .into_iter()
@@ -598,7 +598,7 @@ impl<F: ScalarField> RangeChip<F> {
             for i in 0..num_limbs - 1 {
                 self.add_cell_to_lookup(ctx, ctx.get(row_offset + 1 + 3 * i as isize));
             }
-            last_limb = ctx.get(row_offset + 1 + 3 * (num_limbs - 2) as isize);
+            ctx.get(row_offset + 1 + 3 * (num_limbs - 2) as isize)
         };
 
         // additional constraints for the last limb if rem_bits != 0

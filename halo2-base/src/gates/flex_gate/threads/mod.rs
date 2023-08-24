@@ -8,10 +8,11 @@
 //! Supports multiple phases.
 
 /// Thread builder for multiple phases
-pub(super) mod multi_phase;
+mod multi_phase;
 mod parallelize;
 /// Thread builder for a single phase
 mod single_phase;
 
+pub use multi_phase::{GateStatistics, MultiPhaseCoreManager};
 pub use parallelize::parallelize_core;
 pub use single_phase::SinglePhaseCoreManager;

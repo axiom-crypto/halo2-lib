@@ -48,9 +48,9 @@ use virtual_region::copy_constraints::SharedCopyConstraintManager;
 /// `gates` is misleading because we currently only use one custom gate throughout.
 pub mod gates;
 /// Module for the Poseidon hash function.
-pub mod poseidon;
+//pub mod poseidon;
 /// Module for SafeType which enforce value range and realted functions.
-pub mod safe_types;
+//pub mod safe_types;
 /// Utility functions for converting between different types of field elements.
 pub mod utils;
 pub mod virtual_region;
@@ -115,6 +115,7 @@ pub struct ContextCell {
 }
 
 impl ContextCell {
+    /// Creates a new [ContextCell] with the given `type_id`, `context_id`, and `offset`.
     pub fn new(type_id: TypeId, context_id: usize, offset: usize) -> Self {
         Self { type_id, context_id, offset }
     }
@@ -166,6 +167,7 @@ pub struct Context<F: ScalarField> {
     /// * If witness gen is performed many operations can be skipped for optimization.
     #[getset(get_copy = "pub")]
     witness_gen_only: bool,
+    /// The challenge phase that this [Context] will map to.
     #[getset(get_copy = "pub")]
     phase: usize,
     /// Identifier for what virtual region this context is in

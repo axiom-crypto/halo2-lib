@@ -22,6 +22,7 @@ pub enum CircuitBuilderStage {
 }
 
 impl CircuitBuilderStage {
+    /// Returns true if the circuit is used for witness generation only.
     pub fn witness_gen_only(&self) -> bool {
         matches!(self, CircuitBuilderStage::Prover)
     }

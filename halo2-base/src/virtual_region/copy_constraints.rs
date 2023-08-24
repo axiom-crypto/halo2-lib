@@ -1,13 +1,13 @@
 use std::any::TypeId;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, Mutex};
+use std::ops::DerefMut;
+use std::sync::{Arc, Mutex, OnceLock};
 
-use halo2_proofs_axiom::plonk::Assigned;
 use itertools::Itertools;
 
 use crate::halo2_proofs::{
     circuit::{Cell, Region},
-    plonk::{Column, Fixed},
+    plonk::{Assigned, Column, Fixed},
 };
 use crate::utils::halo2::{raw_assign_fixed, raw_constrain_equal, Halo2AssignedCell};
 use crate::AssignedValue;
@@ -41,6 +41,8 @@ pub struct CopyConstraintManager<F: Field + Ord> {
     pub assigned_advices: HashMap<ContextCell, Cell>,
     /// Constant assignments, (key = constant, value = [Cell])
     pub assigned_constants: BTreeMap<F, Cell>,
+    /// Flag for whether `assign_raw` has been called, for safety only.
+    assigned: OnceLock<()>,
 }
 
 impl<F: Field + Ord> CopyConstraintManager<F> {
@@ -83,6 +85,9 @@ impl<F: Field + Ord> CopyConstraintManager<F> {
 
 impl<F: Field + Ord> Drop for CopyConstraintManager<F> {
     fn drop(&mut self) {
+        if self.assigned.get().is_some() {
+            return;
+        }
         if !self.advice_equalities.is_empty() {
             panic!("advice_equalities not empty");
         }
@@ -97,7 +102,8 @@ impl<F: Field + Ord> VirtualRegionManager<F> for SharedCopyConstraintManager<F> 
     type Config = Vec<Column<Fixed>>;
 
     fn assign_raw(&self, config: &Self::Config, region: &mut Region<F>) -> Self::Assignment {
-        let mut manager = self.lock().unwrap();
+        let mut guard = self.lock().unwrap();
+        let manager = guard.deref_mut();
         // Assign fixed cells, we go left to right, then top to bottom, to avoid needing to know number of rows here
         let mut fixed_col = 0;
         let mut fixed_offset = 0;
@@ -126,7 +132,7 @@ impl<F: Field + Ord> VirtualRegionManager<F> for SharedCopyConstraintManager<F> 
             let right = manager.assigned_advices.get(right).expect("virtual cell not assigned");
             raw_constrain_equal(region, left, *right);
         }
-        manager.advice_equalities.clear();
-        manager.constant_equalities.clear();
+        // We can't clear advice_equalities and constant_equalities because keygen_vk and keygen_pk will call this function twice
+        let _ = manager.assigned.set(());
     }
 }

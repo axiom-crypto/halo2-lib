@@ -16,7 +16,6 @@ where
     R: Send,
     FR: Fn(&mut Context<F>, T) -> R + Send + Sync,
 {
-    let witness_gen_only = builder.witness_gen_only();
     // to prevent concurrency issues with context id, we generate all the ids first
     let thread_count = builder.thread_count();
     let mut ctxs =

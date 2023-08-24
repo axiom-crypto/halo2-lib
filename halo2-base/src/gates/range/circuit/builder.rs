@@ -1,452 +1,284 @@
-use crate::gates::{flex_gate::FlexGateConfig, range::BaseConfig};
 use crate::{
+    gates::{
+        flex_gate::{
+            threads::{GateStatistics, MultiPhaseCoreManager, SinglePhaseCoreManager},
+            MultiPhaseThreadBreakPoints, MAX_PHASE,
+        },
+        range::{BaseConfig, BaseConfigParams, PublicBaseConfig},
+        CircuitBuilderStage, RangeChip,
+    },
     halo2_proofs::{
-        circuit::{self, Layouter, Region, SimpleFloorPlanner, Value},
-        plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance, Selector},
+        circuit::{Layouter, SimpleFloorPlanner},
+        plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
     },
     utils::ScalarField,
-    AssignedValue, Context, SKIP_FIRST_PASS,
+    virtual_region::{
+        copy_constraints::SharedCopyConstraintManager, lookups::LookupAnyManager,
+        manager::VirtualRegionManager,
+    },
+    AssignedValue, Context,
 };
+use getset::{Getters, MutGetters, Setters};
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
-use std::{
-    cell::RefCell,
-    collections::{HashMap, HashSet},
-};
 
-/*
-    /// Auto-calculates configuration parameters for the circuit
+/// Keeping the naming `RangeCircuitBuilder` for backwards compatibility.
+pub type RangeCircuitBuilder<F> = BaseCircuitBuilder<F, 0>;
+/// [RangeCircuitBuilder] with 1 instance column.
+pub type RangeWithInstanceCircuitBuilder<F> = BaseCircuitBuilder<F, 1>;
+
+/// A circuit builder is a collection of virtual region managers that together assign virtual
+/// regions into a single physical circuit.
+///
+/// [BaseCircuitBuilder] is a circuit builder to create a circuit where the columns correspond to [PublicBaseConfig].
+/// This builder can hold multiple threads, but the [Circuit] implementation only evaluates the first phase.
+/// The user will have to implement a separate [Circuit] with multi-phase witness generation logic.
+///
+/// This is used to manage the virtual region corresponding to [FlexGateConfig] and (optionally) [RangeConfig].
+/// This can be used even if only using [GateChip] without [RangeChip].
+///
+/// The circuit will have `NI` public instance (aka public inputs+outputs) columns.
+#[derive(Clone, Debug, Getters, MutGetters, Setters)]
+pub struct BaseCircuitBuilder<F: ScalarField, const NI: usize> {
+    /// Virtual region for each challenge phase. These cannot be shared across threads while keeping circuit deterministic.
+    #[getset(get = "pub", get_mut = "pub", set = "pub")]
+    core: MultiPhaseCoreManager<F>,
+    /// The range lookup manager
+    #[getset(get = "pub", get_mut = "pub", set = "pub")]
+    lookup_manager: [LookupAnyManager<F, 1>; MAX_PHASE],
+    /// Configuration parameters for the circuit shape
+    pub config_params: BaseConfigParams,
+    /// The assigned instances to expose publicly at the end of circuit synthesis
+    pub assigned_instances: [Vec<AssignedValue<F>>; NI],
+}
+
+impl<F: ScalarField, const NI: usize> Default for BaseCircuitBuilder<F, NI> {
+    /// Quick start default circuit builder which can be used for MockProver, Keygen, and real prover.
+    /// For best performance during real proof generation, we recommend using [BaseCircuitBuilder::prover] instead.
+    fn default() -> Self {
+        Self::new(false)
+    }
+}
+
+impl<F: ScalarField, const NI: usize> BaseCircuitBuilder<F, NI> {
+    /// Creates a new [BaseCircuitBuilder] with all default managers.
+    /// * `witness_gen_only`:
+    ///     * If true, the builder only does witness asignments and does not store constraint information -- this should only be used for the real prover.
+    ///     * If false, the builder also imposes constraints (selectors, fixed columns, copy constraints). Primarily used for keygen and mock prover (but can also be used for real prover).
+    ///
+    /// By default, **no** circuit configuration parameters have been set.
+    /// These should be set separately using [use_params], or [use_k], [use_lookup_bits], and [config].
+    ///
+    /// Upon construction, there are no public instances (aka all witnesses are private).
+    /// The intended usage is that _before_ calling `synthesize`, witness generation can be done to populate
+    /// assigned instances, which are supplied as `assigned_instances` to this struct.
+    /// The [`Circuit`] implementation for this struct will then expose these instances and constrain
+    /// them using the Halo2 API.
+    pub fn new(witness_gen_only: bool) -> Self {
+        let core = MultiPhaseCoreManager::new(witness_gen_only);
+        let lookup_manager = [(); MAX_PHASE]
+            .map(|_| LookupAnyManager::new(witness_gen_only, core.copy_manager.clone()));
+        Self {
+            core,
+            lookup_manager,
+            config_params: Default::default(),
+            assigned_instances: [(); NI].map(|_| Vec::new()),
+        }
+    }
+
+    /// Creates a new [MultiPhaseCoreManager] depending on the stage of circuit building. If the stage is [CircuitBuilderStage::Prover], the [MultiPhaseCoreManager] is used for witness generation only.
+    pub fn from_stage(stage: CircuitBuilderStage) -> Self {
+        Self::new(stage.witness_gen_only()).unknown(stage == CircuitBuilderStage::Keygen)
+    }
+
+    /// Creates a new [BaseCircuitBuilder] with a pinned circuit configuration given by `config_params` and `break_points`.
+    pub fn prover(
+        config_params: BaseConfigParams,
+        break_points: MultiPhaseThreadBreakPoints,
+    ) -> Self {
+        Self::new(true).use_params(config_params).use_break_points(break_points)
+    }
+
+    /// The log_2 size of the lookup table, if using.
+    pub fn lookup_bits(&self) -> Option<usize> {
+        self.config_params.lookup_bits
+    }
+
+    /// Set lookup bits
+    pub fn set_lookup_bits(&mut self, lookup_bits: usize) {
+        self.config_params.lookup_bits = Some(lookup_bits);
+    }
+
+    /// Returns new with lookup bits
+    pub fn use_lookup_bits(mut self, lookup_bits: usize) -> Self {
+        self.set_lookup_bits(lookup_bits);
+        self
+    }
+
+    /// Returns new with `k` set
+    pub fn use_k(mut self, k: usize) -> Self {
+        self.config_params.k = k;
+        self
+    }
+
+    /// Set config params
+    pub fn set_params(&mut self, params: BaseConfigParams) {
+        self.config_params = params;
+    }
+
+    /// Returns new with config params
+    pub fn use_params(mut self, params: BaseConfigParams) -> Self {
+        self.set_params(params);
+        self
+    }
+
+    /// The break points of the circuit.
+    pub fn break_points(&self) -> MultiPhaseThreadBreakPoints {
+        self.core
+            .phase_manager
+            .iter()
+            .map(|pm| pm.break_points.get().expect("break points not set").clone())
+            .collect()
+    }
+
+    /// Sets the break points of the circuit.
+    pub fn set_break_points(&mut self, break_points: MultiPhaseThreadBreakPoints) {
+        for (pm, bp) in self.core.phase_manager.iter().zip_eq(break_points) {
+            pm.break_points.set(bp).unwrap();
+        }
+    }
+
+    /// Returns new with break points
+    pub fn use_break_points(mut self, break_points: MultiPhaseThreadBreakPoints) -> Self {
+        self.set_break_points(break_points);
+        self
+    }
+
+    /// Returns `self` with a gven copy manager
+    pub fn use_copy_manager(mut self, copy_manager: SharedCopyConstraintManager<F>) -> Self {
+        for lm in &mut self.lookup_manager {
+            lm.copy_manager = copy_manager.clone();
+        }
+        self.core = self.core.use_copy_manager(copy_manager);
+        self
+    }
+
+    /// Returns if the circuit is only used for witness generation.
+    pub fn witness_gen_only(&self) -> bool {
+        self.core.witness_gen_only()
+    }
+
+    /// Creates a new [MultiPhaseCoreManager] with `use_unknown` flag set.
+    /// * `use_unknown`: If true, during key generation witness [Value]s are replaced with Value::unknown() for safety.
+    pub fn unknown(mut self, use_unknown: bool) -> Self {
+        self.core = self.core.unknown(use_unknown);
+        self
+    }
+
+    /// Returns a mutable reference to the [Context] of a gate thread. Spawns a new thread for the given phase, if none exists.
+    /// * `phase`: The challenge phase (as an index) of the gate thread.
+    pub fn main(&mut self, phase: usize) -> &mut Context<F> {
+        self.core.main(phase)
+    }
+
+    /// Returns [SinglePhaseCoreManager] with the virtual region with all core threads in the given phase.
+    pub fn pool(&mut self, phase: usize) -> &mut SinglePhaseCoreManager<F> {
+        self.core.phase_manager.get_mut(phase).unwrap()
+    }
+
+    /// Spawns a new thread for a new given `phase`. Returns a mutable reference to the [Context] of the new thread.
+    /// * `phase`: The phase (index) of the gate thread.
+    pub fn new_thread(&mut self, phase: usize) -> &mut Context<F> {
+        self.core.new_thread(phase)
+    }
+
+    /// Returns some statistics about the virtual region.
+    pub fn statistics(&self) -> RangeStatistics {
+        let gate = self.core.statistics();
+        let total_lookup_advice_per_phase = self.total_lookup_advice_per_phase();
+        RangeStatistics { gate, total_lookup_advice_per_phase }
+    }
+
+    fn total_lookup_advice_per_phase(&self) -> Vec<usize> {
+        self.lookup_manager.iter().map(|lm| lm.total_rows()).collect()
+    }
+
+    /// Auto-calculates configuration parameters for the circuit and sets them.
     ///
     /// * `k`: The number of in the circuit (i.e. numeber of rows = 2<sup>k</sup>)
     /// * `minimum_rows`: The minimum number of rows in the circuit that cannot be used for witness assignments and contain random `blinding factors` to ensure zk property, defaults to 0.
-    pub fn config(&self, k: usize, minimum_rows: Option<usize>) -> BaseConfigParams {
+    /// * `lookup_bits`: The fixed lookup table will consist of [0, 2<sup>lookup_bits</sup>)
+    pub fn config(&mut self, minimum_rows: Option<usize>) -> BaseConfigParams {
+        let k = self.config_params.k;
+        assert_ne!(k, 0, "k must be set");
         let max_rows = (1 << k) - minimum_rows.unwrap_or(0);
-        let total_advice_per_phase = self
-            .threads
-            .iter()
-            .map(|threads| threads.iter().map(|ctx| ctx.advice.len()).sum::<usize>())
-            .collect::<Vec<_>>();
-        // we do a rough estimate by taking ceil(advice_cells_per_phase / 2^k )
-        // if this is too small, manual configuration will be needed
-        let num_advice_per_phase = total_advice_per_phase
-            .iter()
-            .map(|count| (count + max_rows - 1) / max_rows)
-            .collect::<Vec<_>>();
-
-        let total_lookup_advice_per_phase = self
-            .threads
-            .iter()
-            .map(|threads| threads.iter().map(|ctx| ctx.cells_to_lookup.len()).sum::<usize>())
-            .collect::<Vec<_>>();
+        let gate_params = self.core.config(k, minimum_rows);
+        let total_lookup_advice_per_phase = self.total_lookup_advice_per_phase();
         let num_lookup_advice_per_phase = total_lookup_advice_per_phase
             .iter()
             .map(|count| (count + max_rows - 1) / max_rows)
             .collect::<Vec<_>>();
 
-        let total_fixed: usize = HashSet::<F>::from_iter(self.threads.iter().flat_map(|threads| {
-            threads.iter().flat_map(|ctx| ctx.constant_equality_constraints.iter().map(|(c, _)| *c))
-        }))
-        .len();
-        let num_fixed = (total_fixed + (1 << k) - 1) >> k;
-
         let params = BaseConfigParams {
-            strategy: GateStrategy::Vertical,
-            num_advice_per_phase,
+            k: gate_params.k,
+            num_advice_per_phase: gate_params.num_advice_per_phase,
+            num_fixed: gate_params.num_fixed,
             num_lookup_advice_per_phase,
-            num_fixed,
-            k,
-            lookup_bits: None,
+            lookup_bits: self.lookup_bits(),
         };
+        self.config_params = params.clone();
         #[cfg(feature = "display")]
         {
-            for phase in 0..MAX_PHASE {
-                if total_advice_per_phase[phase] != 0 || total_lookup_advice_per_phase[phase] != 0 {
-                    println!(
-                        "Gate Chip | Phase {}: {} advice cells , {} lookup advice cells",
-                        phase, total_advice_per_phase[phase], total_lookup_advice_per_phase[phase],
-                    );
-                }
-            }
-            println!("Total {total_fixed} fixed cells");
+            println!("Total range check advice cells to lookup per phase: {total_lookup_advice_per_phase:?}");
             log::info!("Auto-calculated config params:\n {params:#?}");
         }
         params
     }
 
-    /// Assigns all advice and fixed cells, turns on selectors, and imposes equality constraints.
-    ///
-    /// Returns the assigned advices, and constants in the form of [KeygenAssignments].
-    ///
-    /// Assumes selector and advice columns are already allocated and of the same length.
-    ///
-    /// Note: `assign_all()` **should** be called during keygen or if using mock prover. It also works for the real prover, but there it is more optimal to use [`assign_threads_in`] instead.
-    /// * `config`: The [FlexGateConfig] of the circuit.
-    /// * `lookup_advice`: The lookup advice columns.
-    /// * `q_lookup`: The lookup advice selectors.
-    /// * `region`: The [Region] of the circuit.
-    /// * `assigned_advices`: The assigned advice cells.
-    /// * `assigned_constants`: The assigned fixed cells.
-    /// * `break_points`: The break points of the circuit.
-    pub fn assign_all(
+    /// Copies `assigned_instances` to the instance columns. Should only be called at the very end of
+    /// `synthesize` after virtual `assigned_instances` have been assigned to physical circuit.
+    pub fn assign_instances(
         &self,
-        config: &FlexGateConfig<F>,
-        lookup_advice: &[Vec<Column<Advice>>],
-        q_lookup: &[Option<Selector>],
-        region: &mut Region<F>,
-        KeygenAssignments {
-            mut assigned_advices,
-            mut assigned_constants,
-            mut break_points
-        }: KeygenAssignments<F>,
-    ) -> KeygenAssignments<F> {
-        let use_unknown = self.use_unknown;
-        let max_rows = config.max_rows;
-        let mut fixed_col = 0;
-        let mut fixed_offset = 0;
-        for (phase, threads) in self.threads.iter().enumerate() {
-            let mut break_point = vec![];
-            let mut gate_index = 0;
-            let mut row_offset = 0;
-            for ctx in threads {
-                if !ctx.advice.is_empty() {
-                    let mut basic_gate = config.basic_gates[phase]
-                        .get(gate_index)
-                        .unwrap_or_else(|| panic!("NOT ENOUGH ADVICE COLUMNS IN PHASE {phase}. Perhaps blinding factors were not taken into account. The max non-poisoned rows is {max_rows}"));
-                    assert_eq!(ctx.selector.len(), ctx.advice.len());
-
-                    for (i, (advice, &q)) in ctx.advice.iter().zip(ctx.selector.iter()).enumerate()
-                    {
-                        let column = basic_gate.value;
-                        let value =
-                            if use_unknown { Value::unknown() } else { Value::known(advice) };
-                        #[cfg(feature = "halo2-axiom")]
-                        let cell = *region.assign_advice(column, row_offset, value).cell();
-                        #[cfg(not(feature = "halo2-axiom"))]
-                        let cell = region
-                            .assign_advice(|| "", column, row_offset, || value.map(|v| *v))
-                            .unwrap()
-                            .cell();
-                        assigned_advices.insert((ctx.context_id, i), (cell, row_offset));
-
-                        // If selector enabled and row_offset is valid add break point to Keygen Assignments, account for break point overlap, and enforce equality constraint for gate outputs.
-                        if (q && row_offset + 4 > max_rows) || row_offset >= max_rows - 1 {
-                            break_point.push(row_offset);
-                            row_offset = 0;
-                            gate_index += 1;
-
-                            // when there is a break point, because we may have two gates that overlap at the current cell, we must copy the current cell to the next column for safety
-                            basic_gate = config.basic_gates[phase]
-                        .get(gate_index)
-                        .unwrap_or_else(|| panic!("NOT ENOUGH ADVICE COLUMNS IN PHASE {phase}. Perhaps blinding factors were not taken into account. The max non-poisoned rows is {max_rows}"));
-                            let column = basic_gate.value;
-
-                            #[cfg(feature = "halo2-axiom")]
-                            {
-                                let ncell = region.assign_advice(column, row_offset, value);
-                                region.constrain_equal(ncell.cell(), &cell);
-                            }
-                            #[cfg(not(feature = "halo2-axiom"))]
-                            {
-                                let ncell = region
-                                    .assign_advice(|| "", column, row_offset, || value.map(|v| *v))
-                                    .unwrap()
-                                    .cell();
-                                region.constrain_equal(ncell, cell).unwrap();
-                            }
-                        }
-
-                        if q {
-                            basic_gate
-                                .q_enable
-                                .enable(region, row_offset)
-                                .expect("enable selector should not fail");
-                        }
-
-                        row_offset += 1;
-                    }
-                }
-            }
-            break_points.push(break_point);
-        }
-        // we constrain equality constraints in a separate loop in case context `i` contains references to context `j` for `j > i`
-        for (phase, threads) in self.threads.iter().enumerate() {
-            let mut lookup_offset = 0;
-            let mut lookup_col = 0;
-            for ctx in threads {
-                for advice in &ctx.cells_to_lookup {
-                    // if q_lookup is Some, that means there should be a single advice column and it has lookup enabled
-                    let cell = advice.cell.unwrap();
-                    let (acell, row_offset) = assigned_advices[&(cell.context_id, cell.offset)];
-                    if let Some(q_lookup) = q_lookup[phase] {
-                        assert_eq!(config.basic_gates[phase].len(), 1);
-                        q_lookup.enable(region, row_offset).unwrap();
-                        continue;
-                    }
-                    // otherwise, we copy the advice value to the special lookup_advice columns
-                    if lookup_offset >= max_rows {
-                        lookup_offset = 0;
-                        lookup_col += 1;
-                    }
-                    let value = advice.value;
-                    let value = if use_unknown { Value::unknown() } else { Value::known(value) };
-                    let column = lookup_advice[phase][lookup_col];
-
-                    #[cfg(feature = "halo2-axiom")]
-                    {
-                        let bcell = region.assign_advice(column, lookup_offset, value);
-                        region.constrain_equal(&acell, bcell.cell());
-                    }
-                    #[cfg(not(feature = "halo2-axiom"))]
-                    {
-                        let bcell = region
-                            .assign_advice(|| "", column, lookup_offset, || value)
-                            .expect("assign_advice should not fail")
-                            .cell();
-                        region.constrain_equal(acell, bcell).unwrap();
-                    }
-                    lookup_offset += 1;
+        instance_columns: &[Column<Instance>; NI],
+        mut layouter: impl Layouter<F>,
+    ) {
+        if !self.core.witness_gen_only() {
+            // expose public instances
+            for (instances, instance_col) in self.assigned_instances.iter().zip(instance_columns) {
+                for (i, instance) in instances.iter().enumerate() {
+                    let cell = instance.cell.unwrap();
+                    let copy_manager = self.core.copy_manager.lock().unwrap();
+                    let cell =
+                        copy_manager.assigned_advices.get(&cell).expect("instance not assigned");
+                    layouter.constrain_instance(*cell, *instance_col, i);
                 }
             }
         }
-        KeygenAssignments { assigned_advices, assigned_constants, break_points }
+    }
+
+    /// Creates a new [RangeChip] sharing the same [LookupAnyManager]s as `self`.
+    pub fn range_chip(&self) -> RangeChip<F> {
+        RangeChip::new(
+            self.config_params.lookup_bits.expect("lookup bits not set"),
+            self.lookup_manager.clone(),
+        )
     }
 }
 
-/// Assigns threads to regions of advice column.
-///
-/// Uses preprocessed `break_points` to assign where to divide the advice column into a new column for each thread.
-///
-/// Performs only witness generation, so should only be evoked during proving not keygen.
-///
-/// Assumes that the advice columns are already assigned.
-/// * `phase` - the phase of the circuit
-/// * `threads` - [Vec] threads to assign
-/// * `config` - immutable reference to the configuration of the circuit
-/// * `lookup_advice` - Slice of lookup advice columns
-/// * `region` - mutable reference to the region to assign threads to
-/// * `break_points` - the preprocessed break points for the threads
-pub fn assign_threads_in<F: ScalarField>(
-    phase: usize,
-    threads: Vec<Context<F>>,
-    config: &FlexGateConfig<F>,
-    lookup_advice: &[Column<Advice>],
-    region: &mut Region<F>,
-    break_points: ThreadBreakPoints,
-) {
-    if config.basic_gates[phase].is_empty() {
-        assert_eq!(
-            threads.iter().map(|ctx| ctx.advice.len()).sum::<usize>(),
-            0,
-            "Trying to assign threads in a phase with no columns"
-        );
-        return;
-    }
-
-    let mut break_points = break_points.into_iter();
-    let mut break_point = break_points.next();
-
-    let mut gate_index = 0;
-    let mut column = config.basic_gates[phase][gate_index].value;
-    let mut row_offset = 0;
-
-    let mut lookup_offset = 0;
-    let mut lookup_advice = lookup_advice.iter();
-    let mut lookup_column = lookup_advice.next();
-    for ctx in threads {
-        // if lookup_column is [None], that means there should be a single advice column and it has lookup enabled, so we don't need to copy to special lookup advice columns
-        if lookup_column.is_some() {
-            for advice in ctx.cells_to_lookup {
-                if lookup_offset >= config.max_rows {
-                    lookup_offset = 0;
-                    lookup_column = lookup_advice.next();
-                }
-                // Assign the lookup advice values to the lookup_column
-                let value = advice.value;
-                let lookup_column = *lookup_column.unwrap();
-                #[cfg(feature = "halo2-axiom")]
-                region.assign_advice(lookup_column, lookup_offset, Value::known(value));
-                #[cfg(not(feature = "halo2-axiom"))]
-                region
-                    .assign_advice(|| "", lookup_column, lookup_offset, || Value::known(value))
-                    .unwrap();
-
-                lookup_offset += 1;
-            }
-        }
-        // Assign advice values to the advice columns in each [Context]
-        for advice in ctx.advice {
-            #[cfg(feature = "halo2-axiom")]
-            region.assign_advice(column, row_offset, Value::known(advice));
-            #[cfg(not(feature = "halo2-axiom"))]
-            region.assign_advice(|| "", column, row_offset, || Value::known(advice)).unwrap();
-
-            if break_point == Some(row_offset) {
-                break_point = break_points.next();
-                row_offset = 0;
-                gate_index += 1;
-                column = config.basic_gates[phase][gate_index].value;
-
-                #[cfg(feature = "halo2-axiom")]
-                region.assign_advice(column, row_offset, Value::known(advice));
-                #[cfg(not(feature = "halo2-axiom"))]
-                region.assign_advice(|| "", column, row_offset, || Value::known(advice)).unwrap();
-            }
-
-            row_offset += 1;
-        }
-    }
-}
-*/
-
-/// A wrapper struct to auto-build a circuit from a `GateThreadBuilder`.
-#[derive(Clone, Debug)]
-pub struct GateCircuitBuilder<F: ScalarField> {
-    /// The Thread Builder for the circuit
-    pub builder: RefCell<GateThreadBuilder<F>>, // `RefCell` is just to trick circuit `synthesize` to take ownership of the inner builder
-    /// Configuration parameters for the circuit shape
-    pub config_params: BaseConfigParams,
+/// Basic statistics
+pub struct RangeStatistics {
+    /// Number of advice cells for the basic gate and total constants used
+    pub gate: GateStatistics,
+    /// Total special advice cells that need to be looked up, per phase
+    pub total_lookup_advice_per_phase: Vec<usize>,
 }
 
-impl<F: ScalarField> GateCircuitBuilder<F> {
-    /// Creates a new [GateCircuitBuilder]
-    pub fn new(builder: GateThreadBuilder<F>, config_params: BaseConfigParams) -> Self {
-        Self { builder: RefCell::new(builder), config_params }
-    }
-
-    /// Creates a new [GateCircuitBuilder] with a pinned circuit configuration given by `config_params` and `break_points`.
-    pub fn prover(
-        builder: GateThreadBuilder<F>,
-        config_params: BaseConfigParams,
-        break_points: MultiPhaseThreadBreakPoints,
-    ) -> Self {
-        for (pm, bp) in builder.phase_manager.iter().zip_eq(break_points) {
-            pm.break_points.set(bp);
-        }
-        Self { builder: RefCell::new(builder), config_params }
-    }
-
-    /// Synthesizes from the [GateCircuitBuilder] by populating the advice column and assigning new threads if witness generation is performed.
-    pub fn sub_synthesize(
-        &self,
-        gate: &FlexGateConfig<F>,
-        lookup_advice: &[Vec<Column<Advice>>],
-        q_lookup: &[Option<Selector>],
-        layouter: &mut impl Layouter<F>,
-    ) -> HashMap<(usize, usize), (circuit::Cell, usize)> {
-        let mut first_pass = SKIP_FIRST_PASS;
-        let mut assigned_advices = HashMap::new();
-        layouter
-            .assign_region(
-                || "GateCircuitBuilder generated circuit",
-                |mut region| {
-                    if first_pass {
-                        first_pass = false;
-                        return Ok(());
-                    }
-                    // only support FirstPhase in this Builder because getting challenge value requires more specialized witness generation during synthesize
-                    // If we are not performing witness generation only, we can skip the first pass and assign threads directly
-                    if !self.builder.borrow().witness_gen_only {
-                        // clone the builder so we can re-use the circuit for both vk and pk gen
-                        let builder = self.builder.borrow().clone();
-                        for threads in builder.threads.iter().skip(1) {
-                            assert!(
-                                threads.is_empty(),
-                                "GateCircuitBuilder only supports FirstPhase for now"
-                            );
-                        }
-                        let assignments = builder.assign_all(
-                            gate,
-                            lookup_advice,
-                            q_lookup,
-                            &mut region,
-                            Default::default(),
-                        );
-                        *self.break_points.borrow_mut() = assignments.break_points;
-                        assigned_advices = assignments.assigned_advices;
-                    } else {
-                        // If we are only generating witness, we can skip the first pass and assign threads directly
-                        let builder = self.builder.take();
-                        let break_points = self.break_points.take();
-                        for (phase, (threads, break_points)) in
-                            builder.threads.into_iter().zip(break_points).enumerate().take(1)
-                        {
-                            assign_threads_in(
-                                phase,
-                                threads,
-                                gate,
-                                lookup_advice.get(phase).unwrap_or(&vec![]),
-                                &mut region,
-                                break_points,
-                            );
-                        }
-                    }
-                    Ok(())
-                },
-            )
-            .unwrap();
-        assigned_advices
-    }
-}
-
-/// A wrapper struct to auto-build a circuit from a `GateThreadBuilder`.
-#[derive(Clone, Debug)]
-pub struct RangeCircuitBuilder<F: ScalarField>(pub GateCircuitBuilder<F>);
-
-impl<F: ScalarField> RangeCircuitBuilder<F> {
-    /// Convenience function to create a new [RangeCircuitBuilder] with a given [CircuitBuilderStage].
-    pub fn from_stage(
-        stage: CircuitBuilderStage,
-        builder: GateThreadBuilder<F>,
-        config_params: BaseConfigParams,
-        break_points: Option<MultiPhaseThreadBreakPoints>,
-    ) -> Self {
-        match stage {
-            CircuitBuilderStage::Keygen => Self::keygen(builder, config_params),
-            CircuitBuilderStage::Mock => Self::mock(builder, config_params),
-            CircuitBuilderStage::Prover => Self::prover(
-                builder,
-                config_params,
-                break_points.expect("break points must be pre-calculated for prover"),
-            ),
-        }
-    }
-
-    /// Creates an instance of the [RangeCircuitBuilder] and executes in keygen mode.
-    pub fn keygen(builder: GateThreadBuilder<F>, config_params: BaseConfigParams) -> Self {
-        Self(GateCircuitBuilder::keygen(builder, config_params))
-    }
-
-    /// Creates a mock instance of the [RangeCircuitBuilder].
-    pub fn mock(builder: GateThreadBuilder<F>, config_params: BaseConfigParams) -> Self {
-        Self(GateCircuitBuilder::mock(builder, config_params))
-    }
-
-    /// Creates an instance of the [RangeCircuitBuilder] and executes in prover mode.
-    pub fn prover(
-        builder: GateThreadBuilder<F>,
-        config_params: BaseConfigParams,
-        break_points: MultiPhaseThreadBreakPoints,
-    ) -> Self {
-        Self(GateCircuitBuilder::prover(builder, config_params, break_points))
-    }
-
-    /// Auto-configures the circuit configuration parameters. Mutates the configuration parameters of the circuit
-    /// and also returns a copy of the new configuration.
-    pub fn config(&mut self, minimum_rows: Option<usize>) -> BaseConfigParams {
-        let lookup_bits = self.0.config_params.lookup_bits;
-        self.0.config_params = self.0.builder.borrow().config(self.0.config_params.k, minimum_rows);
-        self.0.config_params.lookup_bits = lookup_bits;
-        self.0.config_params.clone()
-    }
-}
-
-impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
-    type Config = BaseConfig<F>;
+impl<F: ScalarField, const NI: usize> Circuit<F> for BaseCircuitBuilder<F, NI> {
+    type Config = PublicBaseConfig<F, NI>;
     type FloorPlanner = SimpleFloorPlanner;
     type Params = BaseConfigParams;
 
     fn params(&self) -> Self::Params {
-        self.0.config_params.clone()
+        self.config_params.clone()
     }
 
     /// Creates a new instance of the [RangeCircuitBuilder] without witnesses by setting the witness_gen_only flag to false
@@ -456,7 +288,7 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
 
     /// Configures a new circuit using [`BaseConfigParams`]
     fn configure_with_params(meta: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config {
-        BaseConfig::configure(meta, params)
+        PublicBaseConfig::configure(meta, params)
     }
 
     fn configure(_: &mut ConstraintSystem<F>) -> Self::Config {
@@ -470,187 +302,37 @@ impl<F: ScalarField> Circuit<F> for RangeCircuitBuilder<F> {
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         // only load lookup table if we are actually doing lookups
-        if let BaseConfig::WithRange(config) = &config {
+        if let BaseConfig::WithRange(config) = &config.base {
             config.load_lookup_table(&mut layouter).expect("load lookup table should not fail");
         }
-        self.0.sub_synthesize(
-            config.gate(),
-            config.lookup_advice(),
-            config.q_lookup(),
-            &mut layouter,
-        );
+        // Only FirstPhase (phase 0)
+        layouter
+            .assign_region(
+                || "BaseCircuitBuilder generated circuit",
+                |mut region| {
+                    self.core.phase_manager[0]
+                        .assign_raw(&config.gate().basic_gates[0], &mut region);
+                    // Only assign cells to lookup if we're sure we're doing range lookups
+                    if let BaseConfig::WithRange(config) = &config.base {
+                        if !config.lookup_advice.is_empty() {
+                            let lookup_cols =
+                                config.lookup_advice[0].iter().map(|c| [*c]).collect_vec();
+                            self.lookup_manager[0].assign_raw(&lookup_cols, &mut region);
+                        }
+                    }
+                    // Impose equality constraints
+                    if !self.core.witness_gen_only() {
+                        self.core.copy_manager.assign_raw(config.constants(), &mut region);
+                        // When keygen_vk and keygen_pk are both run, you need to clear assigned constants
+                        // so the second run still assigns constants in the pk
+                        self.core.copy_manager.lock().unwrap().assigned_constants.clear();
+                    }
+                    Ok(())
+                },
+            )
+            .unwrap();
+
+        self.assign_instances(&config.instance, layouter.namespace(|| "expose"));
         Ok(())
-    }
-}
-
-/// Configuration with [`BaseConfig`] and a single public instance column.
-#[derive(Clone, Debug)]
-pub struct PublicBaseConfig<F: ScalarField> {
-    /// The underlying range configuration
-    pub base: BaseConfig<F>,
-    /// The public instance column
-    pub instance: Column<Instance>,
-}
-
-/// This is an extension of [`RangeCircuitBuilder`] that adds support for public instances (aka public inputs+outputs)
-///
-/// The intended design is that a [`GateThreadBuilder`] is populated and then produces some assigned instances, which are supplied as `assigned_instances` to this struct.
-/// The [`Circuit`] implementation for this struct will then expose these instances and constrain them using the Halo2 API.
-#[derive(Clone, Debug)]
-pub struct RangeWithInstanceCircuitBuilder<F: ScalarField> {
-    /// The underlying circuit builder
-    pub circuit: RangeCircuitBuilder<F>,
-    /// The assigned instances to expose publicly at the end of circuit synthesis
-    pub assigned_instances: Vec<AssignedValue<F>>,
-}
-
-impl<F: ScalarField> RangeWithInstanceCircuitBuilder<F> {
-    /// Convenience function to create a new [RangeWithInstanceCircuitBuilder] with a given [CircuitBuilderStage].
-    pub fn from_stage(
-        stage: CircuitBuilderStage,
-        builder: GateThreadBuilder<F>,
-        config_params: BaseConfigParams,
-        break_points: Option<MultiPhaseThreadBreakPoints>,
-        assigned_instances: Vec<AssignedValue<F>>,
-    ) -> Self {
-        Self {
-            circuit: RangeCircuitBuilder::from_stage(stage, builder, config_params, break_points),
-            assigned_instances,
-        }
-    }
-
-    /// See [`RangeCircuitBuilder::keygen`]
-    pub fn keygen(
-        builder: GateThreadBuilder<F>,
-        config_params: BaseConfigParams,
-        assigned_instances: Vec<AssignedValue<F>>,
-    ) -> Self {
-        Self { circuit: RangeCircuitBuilder::keygen(builder, config_params), assigned_instances }
-    }
-
-    /// See [`RangeCircuitBuilder::mock`]
-    pub fn mock(
-        builder: GateThreadBuilder<F>,
-        config_params: BaseConfigParams,
-        assigned_instances: Vec<AssignedValue<F>>,
-    ) -> Self {
-        Self { circuit: RangeCircuitBuilder::mock(builder, config_params), assigned_instances }
-    }
-
-    /// See [`RangeCircuitBuilder::prover`]
-    pub fn prover(
-        builder: GateThreadBuilder<F>,
-        config_params: BaseConfigParams,
-        break_points: MultiPhaseThreadBreakPoints,
-        assigned_instances: Vec<AssignedValue<F>>,
-    ) -> Self {
-        Self {
-            circuit: RangeCircuitBuilder::prover(builder, config_params, break_points),
-            assigned_instances,
-        }
-    }
-
-    /// Creates a new instance of the [RangeWithInstanceCircuitBuilder].
-    pub fn new(circuit: RangeCircuitBuilder<F>, assigned_instances: Vec<AssignedValue<F>>) -> Self {
-        Self { circuit, assigned_instances }
-    }
-
-    /// Gets the break points of the circuit.
-    pub fn break_points(&self) -> MultiPhaseThreadBreakPoints {
-        self.circuit.0.break_points.borrow().clone()
-    }
-
-    /// Gets the number of instances.
-    pub fn instance_count(&self) -> usize {
-        self.assigned_instances.len()
-    }
-
-    /// Gets the instances.
-    pub fn instance(&self) -> Vec<F> {
-        self.assigned_instances.iter().map(|v| *v.value()).collect()
-    }
-
-    /// Auto-configures the circuit configuration parameters. Mutates the configuration parameters of the circuit
-    /// and also returns a copy of the new configuration.
-    pub fn config(&mut self, minimum_rows: Option<usize>) -> BaseConfigParams {
-        self.circuit.config(minimum_rows)
-    }
-}
-
-impl<F: ScalarField> Circuit<F> for RangeWithInstanceCircuitBuilder<F> {
-    type Config = PublicBaseConfig<F>;
-    type FloorPlanner = SimpleFloorPlanner;
-    type Params = BaseConfigParams;
-
-    fn params(&self) -> Self::Params {
-        self.circuit.0.config_params.clone()
-    }
-
-    fn without_witnesses(&self) -> Self {
-        unimplemented!()
-    }
-
-    fn configure_with_params(meta: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config {
-        let base = BaseConfig::configure(meta, params);
-        let instance = meta.instance_column();
-        meta.enable_equality(instance);
-        PublicBaseConfig { base, instance }
-    }
-
-    fn configure(_: &mut ConstraintSystem<F>) -> Self::Config {
-        unreachable!("You must use configure_with_params")
-    }
-
-    fn synthesize(
-        &self,
-        config: Self::Config,
-        mut layouter: impl Layouter<F>,
-    ) -> Result<(), Error> {
-        // copied from RangeCircuitBuilder::synthesize but with extra logic to expose public instances
-        let instance_col = config.instance;
-        let config = config.base;
-        let circuit = &self.circuit.0;
-        // only load lookup table if we are actually doing lookups
-        if let BaseConfig::WithRange(config) = &config {
-            config.load_lookup_table(&mut layouter).expect("load lookup table should not fail");
-        }
-        // we later `take` the builder, so we need to save this value
-        let witness_gen_only = circuit.builder.borrow().witness_gen_only();
-        let assigned_advices = circuit.sub_synthesize(
-            config.gate(),
-            config.lookup_advice(),
-            config.q_lookup(),
-            &mut layouter,
-        );
-
-        if !witness_gen_only {
-            // expose public instances
-            let mut layouter = layouter.namespace(|| "expose");
-            for (i, instance) in self.assigned_instances.iter().enumerate() {
-                let cell = instance.cell.unwrap();
-                let (cell, _) = assigned_advices
-                    .get(&(cell.context_id, cell.offset))
-                    .expect("instance not assigned");
-                layouter.constrain_instance(*cell, instance_col, i);
-            }
-        }
-        Ok(())
-    }
-}
-
-/// Defines stage of the circuit builder.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum CircuitBuilderStage {
-    /// Keygen phase
-    Keygen,
-    /// Prover Circuit
-    Prover,
-    /// Mock Circuit
-    Mock,
-}
-
-impl CircuitBuilderStage {
-    pub fn witness_gen_only(&self) -> bool {
-        matches!(self, CircuitBuilderStage::Prover)
     }
 }

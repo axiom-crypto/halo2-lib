@@ -4,8 +4,8 @@ use getset::CopyGetters;
 
 use crate::{
     gates::{
-        builder::{CircuitBuilderStage, ThreadBreakPoints},
-        flex_gate::BasicGateConfig,
+        flex_gate::{BasicGateConfig, ThreadBreakPoints},
+        CircuitBuilderStage,
     },
     utils::halo2::{raw_assign_advice, raw_constrain_equal},
     utils::ScalarField,
@@ -34,9 +34,14 @@ pub struct SinglePhaseCoreManager<F: ScalarField> {
     /// The `unknown` flag is used during key generation. If true, during key generation witness [Value]s are replaced with Value::unknown() for safety.
     #[getset(get_copy = "pub")]
     pub(crate) use_unknown: bool,
+    /// The challenge phase the virtual regions will map to.
     #[getset(get_copy = "pub", set)]
     pub(crate) phase: usize,
+    /// The number of usable rows in the circuit, excluding blinded rows.
+    /// This must be provided if `break_points` is not set.
     pub usable_rows: OnceCell<usize>,
+    /// A very simple computation graph for the basic vertical gate. Must be provided as a "pinning"
+    /// when running the production prover.
     pub break_points: OnceCell<ThreadBreakPoints>,
 }
 
@@ -94,6 +99,7 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
         self.threads.len()
     }
 
+    /// A distinct tag for this particular type of virtual manager, which is different for each phase.
     pub fn type_of(&self) -> TypeId {
         match self.phase {
             0 => TypeId::of::<(Self, FirstPhase)>(),
@@ -146,7 +152,14 @@ impl<F: ScalarField> VirtualRegionManager<F> for SinglePhaseCoreManager<F> {
                 max_rows,
                 self.use_unknown,
             );
-            self.break_points.set(break_points).expect("break points already set");
+            self.break_points
+                .set(break_points.clone())
+                .or_else(|prev| {
+                    (prev == break_points)
+                        .then_some(())
+                        .ok_or("previously set break points don't match")
+                })
+                .unwrap();
         }
     }
 }
@@ -261,7 +274,7 @@ pub fn assign_witnesses<F: ScalarField>(
 
     for ctx in threads {
         // Assign advice values to the advice columns in each [Context]
-        for advice in ctx.advice {
+        for advice in &ctx.advice {
             raw_assign_advice(region, column, row_offset, Value::known(advice));
 
             if break_point == Some(row_offset) {

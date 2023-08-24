@@ -18,8 +18,6 @@ use std::{
 
 pub mod threads;
 
-pub use threads::multi_phase::{GateStatistics, GateThreadBuilder};
-
 /// Vector of thread advice column break points
 pub type ThreadBreakPoints = Vec<usize>;
 /// Vector of vectors tracking the thread break points across different halo2 phases

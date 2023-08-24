@@ -1,4 +1,4 @@
-use getset::Getters;
+use getset::CopyGetters;
 use itertools::Itertools;
 
 use crate::{
@@ -11,24 +11,24 @@ use crate::{
 use super::SinglePhaseCoreManager;
 
 /// Virtual region manager for [FlexGateConfig] in multiple phases.
-#[derive(Clone, Debug, Default, Getters)]
-pub struct GateThreadBuilder<F: ScalarField> {
+#[derive(Clone, Debug, Default, CopyGetters)]
+pub struct MultiPhaseCoreManager<F: ScalarField> {
     /// Virtual region for each challenge phase. These cannot be shared across threads while keeping circuit deterministic.
     pub phase_manager: Vec<SinglePhaseCoreManager<F>>,
     /// Global shared copy manager
     pub copy_manager: SharedCopyConstraintManager<F>,
     /// Flag for witness generation. If true, the gate thread builder is used for witness generation only.
-    #[getset(get = "pub")]
-    pub witness_gen_only: bool,
+    #[getset(get_copy = "pub")]
+    witness_gen_only: bool,
     /// The `unknown` flag is used during key generation. If true, during key generation witness [Value]s are replaced with Value::unknown() for safety.
-    #[getset(get = "pub")]
+    #[getset(get_copy = "pub")]
     use_unknown: bool,
 }
 
-impl<F: ScalarField> GateThreadBuilder<F> {
-    /// Creates a new [GateThreadBuilder] with a default [SinglePhaseCoreManager] in phase 0.
+impl<F: ScalarField> MultiPhaseCoreManager<F> {
+    /// Creates a new [MultiPhaseCoreManager] with a default [SinglePhaseCoreManager] in phase 0.
     /// Creates an empty [SharedCopyConstraintManager] and sets `witness_gen_only` flag.
-    /// * `witness_gen_only`: If true, the [GateThreadBuilder] is used for witness generation only.
+    /// * `witness_gen_only`: If true, the [MultiPhaseCoreManager] is used for witness generation only.
     ///     * If true, the gate thread builder only does witness asignments and does not store constraint information -- this should only be used for the real prover.
     ///     * If false, the gate thread builder is used for keygen and mock prover (it can also be used for real prover) and the builder stores circuit information (e.g. copy constraints, fixed columns, enabled selectors).
     ///         * These values are fixed for the circuit at key generation time, and they do not need to be re-computed by the prover in the actual proving phase.
@@ -39,13 +39,13 @@ impl<F: ScalarField> GateThreadBuilder<F> {
         Self { phase_manager, witness_gen_only, use_unknown: false, copy_manager }
     }
 
-    /// Creates a new [GateThreadBuilder] depending on the stage of circuit building. If the stage is [CircuitBuilderStage::Prover], the [GateThreadBuilder] is used for witness generation only.
+    /// Creates a new [MultiPhaseCoreManager] depending on the stage of circuit building. If the stage is [CircuitBuilderStage::Prover], the [MultiPhaseCoreManager] is used for witness generation only.
     pub fn from_stage(stage: CircuitBuilderStage) -> Self {
         Self::new(stage.witness_gen_only()).unknown(stage == CircuitBuilderStage::Keygen)
     }
 
-    /// Sets a new copy manager
-    pub fn copy_manager(mut self, copy_manager: SharedCopyConstraintManager<F>) -> Self {
+    /// Returns `self` with a given copy manager
+    pub fn use_copy_manager(mut self, copy_manager: SharedCopyConstraintManager<F>) -> Self {
         for pm in &mut self.phase_manager {
             pm.copy_manager = copy_manager.clone();
         }
@@ -53,7 +53,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
         self
     }
 
-    /// Creates a new [GateThreadBuilder] with `use_unknown` flag set.
+    /// Creates a new [MultiPhaseCoreManager] with `use_unknown` flag set.
     /// * `use_unknown`: If true, during key generation witness [Value]s are replaced with Value::unknown() for safety.
     pub fn unknown(mut self, use_unknown: bool) -> Self {
         self.use_unknown = use_unknown;
@@ -129,7 +129,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
         let params = FlexGateConfigParams { num_advice_per_phase, num_fixed, k };
         #[cfg(feature = "display")]
         {
-            for (phase, num_advice) in num_advice_per_phase.iter().enumerate() {
+            for (phase, num_advice) in stats.total_advice_per_phase.iter().enumerate() {
                 println!("Gate Chip | Phase {phase}: {num_advice} advice cells",);
             }
             println!("Total {} fixed cells", stats.total_fixed);
@@ -141,6 +141,8 @@ impl<F: ScalarField> GateThreadBuilder<F> {
 
 /// Basic statistics
 pub struct GateStatistics {
+    /// Total advice cell count per phase
     pub total_advice_per_phase: Vec<usize>,
+    /// Total distinct constants used
     pub total_fixed: usize,
 }

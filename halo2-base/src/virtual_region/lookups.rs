@@ -1,6 +1,5 @@
-use std::any::TypeId;
-use std::mem;
-use std::sync::{Arc, Mutex};
+use std::ops::DerefMut;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use getset::Getters;
 use rayon::slice::ParallelSliceMut;
@@ -27,29 +26,31 @@ use super::manager::VirtualRegionManager;
 /// deterministic -- the order in which the cells to lookup are added matters.
 /// The current solution is to tag the cells to lookup with the context id from the [Context] in which
 /// it was called, and then sort them by id. The assumption is that the [Context] is thread-local.
+///
+/// Cheap to clone across threads because everything is in [Arc].
 #[derive(Clone, Debug, Getters)]
 pub struct LookupAnyManager<F: Field + Ord, const ADVICE_COLS: usize> {
     /// Shared cells to lookup, tagged by context id.
+    #[allow(clippy::type_complexity)]
     pub cells_to_lookup: Arc<Mutex<Vec<(usize, [AssignedValue<F>; ADVICE_COLS])>>>,
     /// Global shared copy manager
     pub copy_manager: SharedCopyConstraintManager<F>,
-    /// Type id of the cells to lookup, used to tag the copied cells in the special lookup enabled columns.
-    type_id: TypeId,
     /// Specify whether constraints should be imposed for additional safety.
     #[getset(get = "pub")]
     witness_gen_only: bool,
+    /// Flag for whether `assign_raw` has been called, for safety only.
+    assigned: Arc<OnceLock<()>>,
 }
 
 impl<F: Field + Ord, const ADVICE_COLS: usize> LookupAnyManager<F, ADVICE_COLS> {
     /// Creates a new [LookupAnyManager] with a given copy manager.
-    /// * `type_id`: Type id of the cells to lookup, used to tag the copied cells in the special lookup enabled columns.
-    ///     * Make sure this is unique for each distinct lookup argument in the circuit!
-    pub fn new(
-        witness_gen_only: bool,
-        type_id: TypeId,
-        copy_manager: SharedCopyConstraintManager<F>,
-    ) -> Self {
-        Self { witness_gen_only, cells_to_lookup: Default::default(), copy_manager, type_id }
+    pub fn new(witness_gen_only: bool, copy_manager: SharedCopyConstraintManager<F>) -> Self {
+        Self {
+            witness_gen_only,
+            cells_to_lookup: Default::default(),
+            copy_manager,
+            assigned: Default::default(),
+        }
     }
 
     /// Add a lookup argument to the manager.
@@ -72,7 +73,7 @@ impl<F: Field + Ord, const ADVICE_COLS: usize> LookupAnyManager<F, ADVICE_COLS> 
 
 impl<F: Field + Ord, const ADVICE_COLS: usize> Drop for LookupAnyManager<F, ADVICE_COLS> {
     fn drop(&mut self) {
-        if self.total_rows() > 0 {
+        if self.total_rows() > 0 && self.assigned.get().is_none() {
             panic!("LookupAnyManager was not assigned!");
         }
     }
@@ -85,35 +86,32 @@ impl<F: Field + Ord, const ADVICE_COLS: usize> VirtualRegionManager<F>
 
     fn assign_raw(&self, config: &Self::Config, region: &mut Region<F>) {
         let mut cells_to_lookup = self.cells_to_lookup.lock().unwrap();
-        let mut cells_to_lookup: Vec<_> = mem::take(cells_to_lookup.as_mut());
+        let cells_to_lookup = cells_to_lookup.deref_mut();
         cells_to_lookup.par_sort_unstable_by(|(id1, _), (id2, _)| id1.cmp(id2));
-
         // Copy the cells to the config columns, going left to right, then top to bottom.
         // Will panic if out of rows
         let mut lookup_offset = 0;
         let mut lookup_col = 0;
-        for (id, advices) in cells_to_lookup {
+        for (_, advices) in cells_to_lookup {
             if lookup_col >= config.len() {
                 lookup_col = 0;
                 lookup_offset += 1;
             }
-            for (advice, &column) in advices.into_iter().zip(config[lookup_col].iter()) {
+            for (advice, &column) in advices.iter().zip(config[lookup_col].iter()) {
                 let bcell =
                     raw_assign_advice(region, column, lookup_offset, Value::known(advice.value));
                 if !self.witness_gen_only {
                     let ctx_cell = advice.cell.unwrap();
-                    let acell = self
-                        .copy_manager
-                        .lock()
-                        .unwrap()
-                        .assigned_advices
-                        .get(&ctx_cell)
-                        .expect("cell not assigned");
+                    let copy_manager = self.copy_manager.lock().unwrap();
+                    let acell =
+                        copy_manager.assigned_advices.get(&ctx_cell).expect("cell not assigned");
                     region.constrain_equal(*acell, bcell.cell());
                 }
             }
 
             lookup_col += 1;
         }
+        // We cannot clear `cells_to_lookup` because keygen_vk and keygen_pk both call this function
+        let _ = self.assigned.set(());
     }
 }
