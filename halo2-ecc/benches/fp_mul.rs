@@ -1,12 +1,9 @@
 use ark_std::{end_timer, start_timer};
+use halo2_base::gates::flex_gate::MultiPhaseThreadBreakPoints;
+use halo2_base::gates::range::circuit::builder::RangeCircuitBuilder;
+use halo2_base::gates::range::BaseConfigParams;
+use halo2_base::gates::{CircuitBuilderStage, RangeChip};
 use halo2_base::{
-    gates::{
-        builder::{
-            BaseConfigParams, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
-            RangeCircuitBuilder,
-        },
-        RangeChip,
-    },
     halo2_proofs::{
         arithmetic::Field,
         halo2curves::bn256::{Bn256, Fq, Fr},
@@ -31,14 +28,13 @@ const K: u32 = 19;
 
 fn fp_mul_bench<F: BigPrimeField>(
     ctx: &mut Context<F>,
-    lookup_bits: usize,
+    range: &RangeChip<F>,
     limb_bits: usize,
     num_limbs: usize,
     _a: Fq,
     _b: Fq,
 ) {
-    let range = RangeChip::<F>::default(lookup_bits);
-    let chip = FpChip::<F, Fq>::new(&range, limb_bits, num_limbs);
+    let chip = FpChip::<F, Fq>::new(range, limb_bits, num_limbs);
 
     let [a, b] = [_a, _b].map(|x| chip.load_private(ctx, x));
     for _ in 0..2857 {
@@ -55,32 +51,31 @@ fn fp_mul_circuit(
 ) -> RangeCircuitBuilder<Fr> {
     let k = K as usize;
     let lookup_bits = k - 1;
-    let mut builder = GateThreadBuilder::from_stage(stage);
+    let mut builder = match stage {
+        CircuitBuilderStage::Prover => {
+            RangeCircuitBuilder::prover(config_params.unwrap(), break_points.unwrap())
+        }
+        _ => RangeCircuitBuilder::from_stage(stage).use_k(k).use_lookup_bits(lookup_bits),
+    };
 
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
-    fp_mul_bench(builder.main(0), lookup_bits, 88, 3, a, b);
-
-    let mut config_params = config_params.unwrap_or_else(|| builder.config(k, Some(20)));
-    config_params.lookup_bits = Some(lookup_bits);
-    let circuit = match stage {
-        CircuitBuilderStage::Mock => RangeCircuitBuilder::mock(builder, config_params),
-        CircuitBuilderStage::Keygen => RangeCircuitBuilder::keygen(builder, config_params),
-        CircuitBuilderStage::Prover => {
-            RangeCircuitBuilder::prover(builder, config_params, break_points.unwrap())
-        }
-    };
+    let range = builder.range_chip();
+    fp_mul_bench(builder.main(0), &range, 88, 3, a, b);
     end_timer!(start0);
-    circuit
+    if !stage.witness_gen_only() {
+        builder.config(Some(20));
+    }
+    builder
 }
 
 fn bench(c: &mut Criterion) {
     let circuit = fp_mul_circuit(CircuitBuilderStage::Keygen, Fq::zero(), Fq::zero(), None, None);
-    let config_params = circuit.0.config_params.clone();
+    let config_params = circuit.params();
 
     let params = ParamsKZG::<Bn256>::setup(K, OsRng);
     let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
     let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
-    let break_points = circuit.0.break_points.take();
+    let break_points = circuit.break_points();
 
     let a = Fq::random(OsRng);
     let b = Fq::random(OsRng);

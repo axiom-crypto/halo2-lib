@@ -105,11 +105,12 @@ pub struct BaseTester {
     k: u32,
     lookup_bits: Option<usize>,
     expect_satisfied: bool,
+    unusable_rows: usize,
 }
 
 impl Default for BaseTester {
     fn default() -> Self {
-        Self { k: 10, lookup_bits: Some(9), expect_satisfied: true }
+        Self { k: 10, lookup_bits: Some(9), expect_satisfied: true, unusable_rows: 9 }
     }
 }
 
@@ -137,6 +138,12 @@ impl BaseTester {
     /// Specify whether you expect this test to pass or fail. Default: pass
     pub fn expect_satisfied(mut self, expect_satisfied: bool) -> Self {
         self.expect_satisfied = expect_satisfied;
+        self
+    }
+
+    /// Set the number of blinding (poisoned) rows
+    pub fn unusable_rows(mut self, unusable_rows: usize) -> Self {
+        self.unusable_rows = unusable_rows;
         self
     }
 
@@ -172,7 +179,7 @@ impl BaseTester {
         builder.config_params.lookup_bits = lookup_bits;
 
         // configure the circuit shape, 9 blinding rows seems enough
-        builder.config(Some(9));
+        builder.config(Some(self.unusable_rows));
         if self.expect_satisfied {
             MockProver::run(self.k, &builder, vec![]).unwrap().assert_satisfied();
         } else {
@@ -209,7 +216,7 @@ impl BaseTester {
         builder.config_params.lookup_bits = lookup_bits;
 
         // configure the circuit shape, 9 blinding rows seems enough
-        let config_params = builder.config(Some(9));
+        let config_params = builder.config(Some(self.unusable_rows));
 
         let params = gen_srs(self.k);
         let vk_time = start_timer!(|| "Generating vkey");

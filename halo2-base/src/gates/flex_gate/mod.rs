@@ -132,6 +132,7 @@ impl<F: ScalarField> FlexGateConfig<F> {
                 (0..num_columns).map(|_| BasicGateConfig::configure(meta, phase as u8)).collect();
             basic_gates.push(config);
         }
+        log::info!("{}", meta.minimum_rows());
         Self {
             basic_gates,
             constants,

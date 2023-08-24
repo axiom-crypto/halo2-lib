@@ -64,7 +64,7 @@ fn fixed_base_msm_circuit(
         CircuitBuilderStage::Prover => {
             RangeCircuitBuilder::prover(config_params.unwrap(), break_points.unwrap())
         }
-        _ => RangeCircuitBuilder::from_stage(stage).use_k(k),
+        _ => RangeCircuitBuilder::from_stage(stage).use_k(k).use_lookup_bits(params.lookup_bits),
     };
     let range = builder.range_chip();
     fixed_base_msm_bench(builder.pool(0), &range, params, bases, scalars);

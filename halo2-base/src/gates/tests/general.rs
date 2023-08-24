@@ -52,6 +52,7 @@ fn test_multithread_gates() {
     );
 }
 
+/*
 #[cfg(feature = "dev-graph")]
 #[test]
 fn plot_gates() {
@@ -72,6 +73,7 @@ fn plot_gates() {
     let circuit = RangeCircuitBuilder::keygen(builder);
     halo2_proofs::dev::CircuitLayout::default().render(k, &circuit, &root).unwrap();
 }
+*/
 
 fn range_tests<F: BigPrimeField>(
     ctx: &mut Context<F>,
@@ -111,26 +113,15 @@ fn test_range_multicolumn() {
     })
 }
 
-#[cfg(feature = "dev-graph")]
 #[test]
-fn plot_range() {
-    use crate::gates::builder::set_lookup_bits;
-    use plotters::prelude::*;
-
-    let root = BitMapBackend::new("layout.png", (1024, 1024)).into_drawing_area();
-    root.fill(&WHITE).unwrap();
-    let root = root.titled("Range Layout", ("sans-serif", 60)).unwrap();
-
-    let k = 11;
-    let inputs = [0, 0].map(Fr::from);
-    let mut builder = GateThreadBuilder::new(false);
-    set_lookup_bits(3);
-    let range = RangeChip::default(3);
-    range_tests(builder.main(0), &range, inputs, 8, 8);
-
-    // auto-tune circuit
-    builder.config(k, Some(9));
-    // create circuit
-    let circuit = RangeCircuitBuilder::keygen(builder);
-    halo2_proofs::dev::CircuitLayout::default().render(7, &circuit, &root).unwrap();
+fn test_multithread_range() {
+    base_test().k(6).lookup_bits(3).unusable_rows(20).bench_builder(
+        vec![[Fr::ZERO; 2]; 3],
+        vec![[0, 1].map(Fr::from), [100, 101].map(Fr::from), [254, 255].map(Fr::from)],
+        |pool, range, inputs| {
+            parallelize_core(pool, inputs, |ctx, input| {
+                range_tests(ctx, range, input, 8, 8);
+            });
+        },
+    );
 }
