@@ -8,16 +8,10 @@ use crate::{
     halo2_proofs::{
         circuit::{Layouter, Region, Value},
         halo2curves::ff::PrimeField,
-        plonk::{
-            Challenge, Column, ConstraintSystem, Error, Expression, Fixed, TableColumn,
-            VirtualCells,
-        },
+        plonk::{Column, ConstraintSystem, Error, Expression, Fixed, TableColumn, VirtualCells},
         poly::Rotation,
     },
-    util::{
-        expression::sum,
-        word::{self, Word, WordExpr},
-    },
+    util::word::{self, Word, WordExpr},
 };
 use itertools::Itertools;
 use log::{debug, info};
@@ -44,9 +38,10 @@ pub struct KeccakConfigParams {
 /// KeccakConfig
 #[derive(Clone, Debug)]
 pub struct KeccakCircuitConfig<F> {
-    challenge: Challenge,
     // Bool. True on 1st row of each round.
     q_enable: Column<Fixed>,
+    // // Bool. True on every row of all valid rounds.
+    // q_enable_row: Column<Fixed>,
     // Bool. True on 1st row.
     q_first: Column<Fixed>,
     // Bool. True on 1st row of all rounds except last rounds.
@@ -77,15 +72,8 @@ pub struct KeccakCircuitConfig<F> {
 }
 
 impl<F: Field> KeccakCircuitConfig<F> {
-    pub fn challenge(&self) -> Challenge {
-        self.challenge
-    }
     /// Return a new KeccakCircuitConfig
-    pub fn new(
-        meta: &mut ConstraintSystem<F>,
-        challenge: Challenge,
-        parameters: KeccakConfigParams,
-    ) -> Self {
+    pub fn new(meta: &mut ConstraintSystem<F>, parameters: KeccakConfigParams) -> Self {
         let k = parameters.k;
         let num_rows_per_round = parameters.rows_per_round;
 
@@ -101,8 +89,6 @@ impl<F: Field> KeccakCircuitConfig<F> {
         let keccak_table = KeccakTable::construct(meta);
 
         let is_final = keccak_table.is_enabled;
-        let input_len = keccak_table.input_len;
-        let data_rlc = keccak_table.input_rlc;
         let hash_word = keccak_table.output;
 
         let normalize_3 = array_init::array_init(|_| meta.lookup_table_column());
@@ -539,7 +525,6 @@ impl<F: Field> KeccakCircuitConfig<F> {
             }
 
             let hash_bytes_le = hash_bytes.into_iter().rev().collect::<Vec<_>>();
-            // cb.require_equal("hash rlc check", rlc, meta.query_advice(hash_rlc, Rotation::cur()));
             cb.condition(start_new_hash, |cb| {
                 cb.require_equal_word(
                     "output check",
@@ -565,6 +550,121 @@ impl<F: Field> KeccakCircuitConfig<F> {
                 meta.query_advice(is_final, Rotation::cur()),
             );
             cb.gate(meta.query_fixed(q_first, Rotation::cur()))
+        });
+
+        // some utility query functions
+        let q = |col: Column<Fixed>, meta: &mut VirtualCells<'_, F>| {
+            meta.query_fixed(col, Rotation::cur())
+        };
+        let q_in_round = |col: Column<Fixed>, meta: &mut VirtualCells<'_, F>| {
+            (0..num_rows_per_round as i32)
+                .map(|i| meta.query_fixed(col, Rotation(-i)))
+                .fold(0.expr(), |acc, elem| acc + elem)
+        };
+
+        /*
+        eg：
+            data:
+                get_num_rows_per_round: 18
+                input: "12345678abc"
+            table:
+                Note[1]: be careful: is_paddings is not column here! It is [Cell; 8].
+        offset  value bytes_left  is_paddings q_enable q_padding_last
+        18        1      11          0         1        0 // 1st round begin
+        19        2      10          0         0        0
+        20        3      9           0         0        0
+        21        4      8           0         0        0
+        22        5      7           0         0        0
+        23        6      6           0         0        0
+        24        7      5           0         0        0
+        25        8      4           0         0        0
+        26        8      4           NA        0        0
+        ...
+        35        8      4           NA        0        0  // 1st round end
+        36        a      3           0         1        1  // 2nd round begin
+        37        b      2           0         0        0
+        38        c      1           0         0        0
+        39        0      0           1         0        0
+        40        0      0           1         0        0
+        41        0      0           1         0        0
+        42        0      0           1         0        0
+        43        0      0           1         0        0
+        */
+
+        meta.create_gate("byte_value", |meta| {
+            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+            for idx in 0..num_rows_per_round {
+                // q_padding[idx] && !is_paddings[min(i+1, NUM_BYTES_PER_WORD - 1)] => byte_value[idx] == input_bytes[min(i+1, NUM_BYTES_PER_WORD - 1)]
+                // Length of is_paddings is NUM_BYTES_PER_WORD so NUM_BYTES_PER_WORD - 1 means the last byte.
+                cb.condition(
+                    q(q_padding, meta)
+                        * not::expr(is_paddings[std::cmp::min(idx, NUM_BYTES_PER_WORD - 1)].expr()),
+                    |cb| {
+                        cb.require_equal(
+                            "input byte",
+                            input_bytes[std::cmp::min(idx, NUM_BYTES_PER_WORD - 1)].expr.clone(),
+                            meta.query_advice(keccak_table.byte_value, Rotation(idx as i32)),
+                        );
+                    },
+                );
+            }
+            cb.gate(q(q_enable, meta))
+        });
+        meta.create_gate("bytes_left", |meta| {
+            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+            // q_first[i] == 0 => bytes_left[i] == 0
+            cb.condition(q_in_round(q_first, meta), |cb| {
+                cb.require_zero(
+                    "bytes_left needs to be zero on the first row",
+                    meta.query_advice(keccak_table.bytes_left, Rotation::cur()),
+                );
+            });
+            // is_paddings only be true when
+            cb.condition(q(q_padding, meta), |cb| {
+                for i in 0..num_rows_per_round {
+                    let bytes_left = meta.query_advice(keccak_table.bytes_left, Rotation(i as i32));
+                    let bytes_left_next =
+                        meta.query_advice(keccak_table.bytes_left, Rotation(i as i32 + 1));
+                    // real input only when !is_paddings[i] && i < NUM_BYTES_PER_WORD
+                    cb.require_equal(
+                        "if not padding, bytes_left decreases by 1, else, stay same",
+                        bytes_left_next,
+                        bytes_left.clone()
+                            - if i < 7 || i == num_rows_per_round - 1 {
+                                not::expr(
+                                    is_paddings[std::cmp::min(i, NUM_BYTES_PER_WORD - 1)].expr(),
+                                )
+                            } else {
+                                0.expr()
+                            },
+                    );
+                    cb.require_zero(
+                        "bytes_left should be 0 when padding",
+                        bytes_left * is_paddings[std::cmp::min(i, NUM_BYTES_PER_WORD - 1)].expr(),
+                    );
+                }
+            });
+            cb.condition(
+                (q_in_round(q_enable, meta)
+                    - q_in_round(q_padding, meta)
+                    - q_in_round(q_first, meta))
+                    * meta.query_advice(is_final, Rotation::next()),
+                |cb| {
+                    let bytes_left = meta.query_advice(keccak_table.bytes_left, Rotation::cur());
+                    let bytes_left_next =
+                        meta.query_advice(keccak_table.bytes_left, Rotation::next());
+                    cb.require_equal(
+                        "bytes_left should stay same on non absorb round",
+                        bytes_left,
+                        bytes_left_next,
+                    );
+                },
+            );
+            cb.condition(q(q_enable, meta) * meta.query_advice(is_final, Rotation::cur()), |cb| {
+                let bytes_left = meta.query_advice(keccak_table.bytes_left, Rotation::cur());
+                cb.require_zero("bytes_left should be 0 when is_final", bytes_left);
+            });
+            cb.gate(1.expr())
         });
 
         // Enforce logic for when this block is the last block for a hash
@@ -684,79 +784,6 @@ impl<F: Field> KeccakCircuitConfig<F> {
             cb.gate(1.expr())
         });
 
-        assert!(num_rows_per_round > NUM_BYTES_PER_WORD, "We require enough rows per round to hold the running RLC of the bytes from the one keccak word absorbed per round");
-        // TODO: there is probably a way to only require NUM_BYTES_PER_WORD instead of
-        // NUM_BYTES_PER_WORD + 1 rows per round, but for simplicity and to keep the
-        // gate degree at 3, we just do the obvious thing for now Input data rlc
-        meta.create_gate("length and data rlc", |meta| {
-            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-
-            let q_padding = meta.query_fixed(q_padding, Rotation::cur());
-            let start_new_hash_prev = start_new_hash(meta, Rotation(-(num_rows_per_round as i32)));
-            let length_prev = meta.query_advice(input_len, Rotation(-(num_rows_per_round as i32)));
-            let length = meta.query_advice(input_len, Rotation::cur());
-            let data_rlc_prev = meta.query_advice(data_rlc, Rotation(-(num_rows_per_round as i32)));
-
-            // Update the length/data_rlc on rows where we absorb data
-            cb.condition(q_padding.expr(), |cb| {
-                // Length increases by the number of bytes that aren't padding
-                cb.require_equal(
-                    "update length",
-                    length.clone(),
-                    length_prev.clone() * not::expr(start_new_hash_prev.expr())
-                        + sum::expr(
-                            is_paddings.iter().map(|is_padding| not::expr(is_padding.expr())),
-                        ),
-                );
-                let challenge_expr = meta.query_challenge(challenge);
-                // Use intermediate cells to keep the degree low
-                let mut new_data_rlc =
-                    data_rlc_prev.clone() * not::expr(start_new_hash_prev.expr());
-                let mut data_rlcs = (0..NUM_BYTES_PER_WORD)
-                    .map(|i| meta.query_advice(data_rlc, Rotation(i as i32 + 1)));
-                let intermed_rlc = data_rlcs.next().unwrap();
-                cb.require_equal("initial data rlc", intermed_rlc.clone(), new_data_rlc);
-                new_data_rlc = intermed_rlc;
-                for (byte, is_padding) in input_bytes.iter().zip(is_paddings.iter()) {
-                    new_data_rlc = select::expr(
-                        is_padding.expr(),
-                        new_data_rlc.clone(),
-                        new_data_rlc * challenge_expr.clone() + byte.expr.clone(),
-                    );
-                    if let Some(intermed_rlc) = data_rlcs.next() {
-                        cb.require_equal(
-                            "intermediate data rlc",
-                            intermed_rlc.clone(),
-                            new_data_rlc,
-                        );
-                        new_data_rlc = intermed_rlc;
-                    }
-                }
-                cb.require_equal(
-                    "update data rlc",
-                    meta.query_advice(data_rlc, Rotation::cur()),
-                    new_data_rlc,
-                );
-            });
-            // Keep length/data_rlc the same on rows where we don't absorb data
-            cb.condition(
-                and::expr([
-                    meta.query_fixed(q_enable, Rotation::cur())
-                        - meta.query_fixed(q_first, Rotation::cur()),
-                    not::expr(q_padding),
-                ]),
-                |cb| {
-                    cb.require_equal("length equality check", length, length_prev);
-                    cb.require_equal(
-                        "data_rlc equality check",
-                        meta.query_advice(data_rlc, Rotation::cur()),
-                        data_rlc_prev.clone(),
-                    );
-                },
-            );
-            cb.gate(1.expr())
-        });
-
         info!("Degree: {}", meta.degree());
         info!("Minimum rows: {}", meta.minimum_rows());
         info!("Total Lookups: {}", total_lookup_counter);
@@ -777,7 +804,6 @@ impl<F: Field> KeccakCircuitConfig<F> {
         info!("uniform part sizes: {:?}", target_part_sizes(get_num_bits_per_theta_c_lookup(k)));
 
         KeccakCircuitConfig {
-            challenge,
             q_enable,
             q_first,
             q_round,
@@ -800,11 +826,13 @@ impl<F: Field> KeccakCircuitConfig<F> {
 }
 
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct KeccakAssignedRow<'v, F: Field> {
     pub(crate) is_final: KeccakAssignedValue<'v, F>,
-    pub(crate) length: KeccakAssignedValue<'v, F>,
     pub(crate) hash_lo: KeccakAssignedValue<'v, F>,
     pub(crate) hash_hi: KeccakAssignedValue<'v, F>,
+    pub(crate) bytes_left: KeccakAssignedValue<'v, F>,
+    pub(crate) byte_value: KeccakAssignedValue<'v, F>,
 }
 
 impl<F: Field> KeccakCircuitConfig<F> {
@@ -842,11 +870,12 @@ impl<F: Field> KeccakCircuitConfig<F> {
         }
 
         // Keccak data
-        let [is_final, length, hash_lo, hash_hi] = [
+        let [is_final, hash_lo, hash_hi, bytes_left, byte_value] = [
             ("is_final", self.keccak_table.is_enabled, Value::known(F::from(row.is_final))),
-            ("length", self.keccak_table.input_len, Value::known(F::from(row.length as u64))),
             ("hash_lo", self.keccak_table.output.lo(), row.hash.lo()),
             ("hash_hi", self.keccak_table.output.hi(), row.hash.hi()),
+            ("bytes_left", self.keccak_table.bytes_left, Value::known(row.bytes_left)),
+            ("value", self.keccak_table.byte_value, Value::known(row.byte_value)),
         ]
         .map(|(_name, column, value)| assign_advice_custom(region, column, offset, value));
 
@@ -858,7 +887,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
         // Round constant
         assign_fixed_custom(region, self.round_cst, offset, row.round_cst);
 
-        KeccakAssignedRow { is_final, length, hash_lo, hash_hi }
+        KeccakAssignedRow { is_final, hash_lo, hash_hi, bytes_left, byte_value }
     }
 
     pub fn load_aux_tables(&self, layouter: &mut impl Layouter<F>, k: u32) -> Result<(), Error> {
@@ -876,53 +905,8 @@ impl<F: Field> KeccakCircuitConfig<F> {
     }
 }
 
-/// Computes and assigns the input RLC values (but not the output RLC values:
-/// see `multi_keccak_phase1`).
-pub fn keccak_phase1<F: Field>(
-    region: &mut Region<F>,
-    keccak_table: &KeccakTable,
-    bytes: &[u8],
-    challenge: Value<F>,
-    input_rlcs: &mut Vec<KeccakAssignedValue<F>>,
-    offset: &mut usize,
-    rows_per_round: usize,
-) {
-    let num_chunks = get_num_keccak_f(bytes.len());
-
-    let mut byte_idx = 0;
-    let mut data_rlc = Value::known(F::ZERO);
-
-    for _ in 0..num_chunks {
-        for round in 0..NUM_ROUNDS + 1 {
-            if round < NUM_WORDS_TO_ABSORB {
-                for idx in 0..NUM_BYTES_PER_WORD {
-                    assign_advice_custom(
-                        region,
-                        keccak_table.input_rlc,
-                        *offset + idx + 1,
-                        data_rlc,
-                    );
-                    if byte_idx < bytes.len() {
-                        data_rlc =
-                            data_rlc * challenge + Value::known(F::from(bytes[byte_idx] as u64));
-                    }
-                    byte_idx += 1;
-                }
-            }
-            let input_rlc = assign_advice_custom(region, keccak_table.input_rlc, *offset, data_rlc);
-            if round == NUM_ROUNDS {
-                input_rlcs.push(input_rlc);
-            }
-
-            *offset += rows_per_round;
-        }
-    }
-}
-
-/// Witness generation in `FirstPhase` for a keccak hash digest without
-/// computing RLCs, which are deferred to `SecondPhase`.
-/// `bytes` is little-endian.
-pub fn keccak_phase0<F: Field>(
+/// Witness generation for keccak hash of little-endian `bytes`.
+fn keccak<F: Field>(
     rows: &mut Vec<KeccakRow<F>>,
     squeeze_digests: &mut Vec<[F; NUM_WORDS_TO_SQUEEZE]>,
     bytes: &[u8],
@@ -1231,6 +1215,14 @@ pub fn keccak_phase0<F: Field>(
             let round_cst = pack_u64(ROUND_CST[round]);
 
             for row_idx in 0..num_rows_per_round {
+                let byte_idx = if round < NUM_WORDS_TO_ABSORB {
+                    round * 8 + std::cmp::min(row_idx, NUM_BYTES_PER_WORD - 1)
+                } else {
+                    NUM_WORDS_TO_ABSORB * 8
+                } + idx * NUM_WORDS_TO_ABSORB * 8;
+
+                let byte = if byte_idx >= bytes.len() { 0 } else { bytes[byte_idx] };
+                let bytes_left = if byte_idx >= bytes.len() { 0 } else { bytes.len() - byte_idx };
                 rows.push(KeccakRow {
                     q_enable: row_idx == 0,
                     // q_enable_row: true,
@@ -1241,9 +1233,10 @@ pub fn keccak_phase0<F: Field>(
                     q_padding_last: row_idx == 0 && round == NUM_WORDS_TO_ABSORB - 1,
                     round_cst,
                     is_final: is_final_block && round == NUM_ROUNDS && row_idx == 0,
-                    length: round_lengths[round],
                     cell_values: regions[round].rows.get(row_idx).unwrap_or(&vec![]).clone(),
                     hash,
+                    bytes_left: F::from_u128(bytes_left as u128),
+                    byte_value: F::from_u128(byte as u128),
                 });
                 #[cfg(debug_assertions)]
                 {
@@ -1276,53 +1269,8 @@ pub fn keccak_phase0<F: Field>(
     }
 }
 
-/// Computes and assigns the input RLC values.
-pub fn multi_keccak_phase1<'a, 'v, F: Field>(
-    region: &mut Region<F>,
-    keccak_table: &KeccakTable,
-    bytes: impl IntoIterator<Item = &'a [u8]>,
-    challenge: Value<F>,
-    squeeze_digests: Vec<[F; NUM_WORDS_TO_SQUEEZE]>,
-    parameters: KeccakConfigParams,
-) -> Vec<KeccakAssignedValue<'v, F>> {
-    let mut input_rlcs = Vec::with_capacity(squeeze_digests.len());
-
-    let rows_per_round = parameters.rows_per_round;
-    for idx in 0..rows_per_round {
-        [keccak_table.input_rlc, keccak_table.output.lo(), keccak_table.output.hi()]
-            .map(|column| assign_advice_custom(region, column, idx, Value::known(F::ZERO)));
-    }
-
-    let mut offset = rows_per_round;
-    for bytes in bytes {
-        keccak_phase1(
-            region,
-            keccak_table,
-            bytes,
-            challenge,
-            &mut input_rlcs,
-            &mut offset,
-            rows_per_round,
-        );
-    }
-    debug_assert!(input_rlcs.len() <= squeeze_digests.len());
-    while input_rlcs.len() < squeeze_digests.len() {
-        keccak_phase1(
-            region,
-            keccak_table,
-            &[],
-            challenge,
-            &mut input_rlcs,
-            &mut offset,
-            rows_per_round,
-        );
-    }
-
-    input_rlcs
-}
-
-/// Returns vector of KeccakRow and vector of hash digest outputs.
-pub fn multi_keccak_phase0<F: Field>(
+/// Witness generation for multiple keccak hashes of little-endian `bytes`.
+pub fn multi_keccak<F: Field>(
     bytes: &[Vec<u8>],
     capacity: Option<usize>,
     parameters: KeccakConfigParams,
@@ -1340,7 +1288,7 @@ pub fn multi_keccak_phase0<F: Field>(
             let num_keccak_f = get_num_keccak_f(bytes.len());
             let mut squeeze_digests = Vec::with_capacity(num_keccak_f);
             let mut rows = Vec::with_capacity(num_keccak_f * (NUM_ROUNDS + 1) * num_rows_per_round);
-            keccak_phase0(&mut rows, &mut squeeze_digests, bytes, parameters);
+            keccak(&mut rows, &mut squeeze_digests, bytes, parameters);
             (rows, squeeze_digests)
         })
         .collect::<Vec<_>>();
@@ -1354,7 +1302,7 @@ pub fn multi_keccak_phase0<F: Field>(
     if let Some(capacity) = capacity {
         // Pad with no data hashes to the expected capacity
         while rows.len() < (1 + capacity * (NUM_ROUNDS + 1)) * num_rows_per_round {
-            keccak_phase0(&mut rows, &mut squeeze_digests, &[], parameters);
+            keccak(&mut rows, &mut squeeze_digests, &[], parameters);
         }
         // Check that we are not over capacity
         if rows.len() > (1 + capacity * (NUM_ROUNDS + 1)) * num_rows_per_round {
