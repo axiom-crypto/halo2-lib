@@ -1,4 +1,4 @@
-use halo2_proofs_axiom::{
+use crate::halo2_proofs::{
     arithmetic::Field,
     circuit::{Layouter, SimpleFloorPlanner, Value},
     dev::MockProver,

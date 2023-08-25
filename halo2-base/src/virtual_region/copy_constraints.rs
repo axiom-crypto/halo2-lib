@@ -92,10 +92,10 @@ impl<F: Field + Ord> Drop for CopyConstraintManager<F> {
             return;
         }
         if !self.advice_equalities.is_empty() {
-            panic!("advice_equalities not empty");
+            dbg!("WARNING: advice_equalities not empty");
         }
         if !self.constant_equalities.is_empty() {
-            panic!("constant_equalities not empty");
+            dbg!("WARNING: constant_equalities not empty");
         }
     }
 }

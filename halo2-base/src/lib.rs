@@ -48,9 +48,9 @@ use virtual_region::copy_constraints::SharedCopyConstraintManager;
 /// `gates` is misleading because we currently only use one custom gate throughout.
 pub mod gates;
 /// Module for the Poseidon hash function.
-//pub mod poseidon;
+pub mod poseidon;
 /// Module for SafeType which enforce value range and realted functions.
-//pub mod safe_types;
+pub mod safe_types;
 /// Utility functions for converting between different types of field elements.
 pub mod utils;
 pub mod virtual_region;

@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    gates::{builder::GateThreadBuilder, GateChip},
+    gates::{flex_gate::threads::SinglePhaseCoreManager, GateChip},
     halo2_proofs::halo2curves::{bn256::Fr, ff::PrimeField},
 };
 
@@ -38,9 +38,9 @@ fn test_mds() {
 
 #[test]
 fn test_poseidon_against_test_vectors() {
-    let mut builder = GateThreadBuilder::prover();
-    let gate = GateChip::<Fr>::default();
-    let ctx = builder.main(0);
+    let mut pool = SinglePhaseCoreManager::new(true, Default::default());
+    let gate = GateChip::default();
+    let ctx = pool.main();
 
     // https://extgit.iaik.tugraz.at/krypto/hadeshash/-/blob/master/code/test_vectors.txt
     // poseidonperm_x5_254_3

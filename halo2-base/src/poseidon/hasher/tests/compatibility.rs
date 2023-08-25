@@ -1,7 +1,7 @@
 use std::{cmp::max, iter::zip};
 
 use crate::{
-    gates::{builder::GateThreadBuilder, GateChip},
+    gates::{flex_gate::threads::SinglePhaseCoreManager, GateChip},
     halo2_proofs::halo2curves::bn256::Fr,
     poseidon::hasher::PoseidonHasher,
     utils::ScalarField,
@@ -23,10 +23,10 @@ fn poseidon_compatiblity_verification<
     // list of amounts of elements of F that should be squeezed every time
     mut squeezings: Vec<usize>,
 ) {
-    let mut builder = GateThreadBuilder::prover();
+    let mut pool = SinglePhaseCoreManager::new(true, Default::default());
     let gate = GateChip::default();
 
-    let ctx = builder.main(0);
+    let ctx = pool.main();
 
     // constructing native and in-circuit Poseidon sponges
     let mut native_sponge = Poseidon::<F, T, RATE>::new(R_F, R_P);
