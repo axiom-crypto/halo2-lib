@@ -117,10 +117,6 @@ impl<F: ScalarField> MultiPhaseCoreManager<F> {
     /// * `minimum_rows`: The minimum number of rows in the circuit that cannot be used for witness assignments and contain random `blinding factors` to ensure zk property, defaults to 0.
     pub fn config(&self, k: usize, minimum_rows: Option<usize>) -> FlexGateConfigParams {
         let max_rows = (1 << k) - minimum_rows.unwrap_or(0);
-        // set usable rows here as convenience for later use in `assign_raw`
-        for pm in &self.phase_manager {
-            pm.usable_rows.set(max_rows).unwrap();
-        }
         let stats = self.statistics();
         // we do a rough estimate by taking ceil(advice_cells_per_phase / 2^k )
         // if this is too small, manual configuration will be needed

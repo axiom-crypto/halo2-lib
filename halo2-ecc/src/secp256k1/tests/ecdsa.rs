@@ -1,8 +1,14 @@
 #![allow(non_snake_case)]
+use std::fs::File;
+use std::io::BufReader;
+use std::io::Write;
+use std::{fs, io::BufRead};
+
 use super::*;
 use crate::fields::FpStrategy;
 use crate::halo2_proofs::{
     arithmetic::CurveAffine,
+    halo2curves::bn256::Fr,
     halo2curves::secp256k1::{Fp, Fq, Secp256k1Affine},
 };
 use crate::secp256k1::{FpChip, FqChip};
@@ -14,10 +20,7 @@ use halo2_base::gates::RangeChip;
 use halo2_base::utils::{biguint_to_fe, fe_to_biguint, modulus, BigPrimeField};
 use halo2_base::Context;
 use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::BufReader;
-use std::io::Write;
-use std::{fs, io::BufRead};
+use test_log::test;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct CircuitParams {
@@ -44,19 +47,19 @@ pub fn ecdsa_test<F: BigPrimeField>(
     range: &RangeChip<F>,
     params: CircuitParams,
     input: ECDSAInput,
-) {
+) -> F {
     let fp_chip = FpChip::<F>::new(range, params.limb_bits, params.num_limbs);
     let fq_chip = FqChip::<F>::new(range, params.limb_bits, params.num_limbs);
 
     let [m, r, s] = [input.msghash, input.r, input.s].map(|x| fq_chip.load_private(ctx, x));
 
     let ecc_chip = EccChip::<F, FpChip<F>>::new(&fp_chip);
-    let pk = ecc_chip.load_private::<Secp256k1Affine>(ctx, (input.pk.x, input.pk.y));
+    let pk = ecc_chip.load_private_unchecked(ctx, (input.pk.x, input.pk.y));
     // test ECDSA
     let res = ecdsa_verify_no_pubkey_check::<F, Fp, Fq, Secp256k1Affine>(
         &ecc_chip, ctx, pk, r, s, m, 4, 4,
     );
-    assert_eq!(res.value(), &F::ONE);
+    *res.value()
 }
 
 pub fn random_ecdsa_input(rng: &mut StdRng) -> ECDSAInput {
@@ -83,9 +86,11 @@ pub fn run_test(input: ECDSAInput) {
     )
     .unwrap();
 
-    base_test().k(params.degree).lookup_bits(params.lookup_bits).run(|ctx, range| {
-        ecdsa_test(ctx, range, params, input);
-    });
+    let res = base_test()
+        .k(params.degree)
+        .lookup_bits(params.lookup_bits)
+        .run(|ctx, range| ecdsa_test(ctx, range, params, input));
+    assert_eq!(res, Fr::ONE);
 }
 
 #[test]
@@ -113,13 +118,14 @@ fn bench_secp256k1_ecdsa() -> Result<(), Box<dyn std::error::Error>> {
         let k = bench_params.degree;
         println!("---------------------- degree = {k} ------------------------------",);
 
-        let stats = base_test().k(k).lookup_bits(bench_params.lookup_bits).bench_builder(
-            random_ecdsa_input(&mut rng),
-            random_ecdsa_input(&mut rng),
-            |pool, range, input| {
-                ecdsa_test(pool.main(), range, bench_params, input);
-            },
-        );
+        let stats =
+            base_test().k(k).lookup_bits(bench_params.lookup_bits).unusable_rows(20).bench_builder(
+                random_ecdsa_input(&mut rng),
+                random_ecdsa_input(&mut rng),
+                |pool, range, input| {
+                    ecdsa_test(pool.main(), range, bench_params, input);
+                },
+            );
 
         writeln!(
             fs_results,

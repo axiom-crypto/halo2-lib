@@ -182,27 +182,28 @@ impl<F: ScalarField> RangeConfig<F> {
             let num_advice = *gate_params.num_advice_per_phase.get(phase).unwrap_or(&0);
             let mut columns = Vec::new();
             // if num_columns is set to 0, then we assume you do not want to perform any lookups in that phase
-            // if num_advice == 1 && num_columns != 0 {
-            //     q_lookup.push(Some(meta.complex_selector()));
-            // } else {
-            q_lookup.push(None);
-            for _ in 0..num_columns {
-                let a = match phase {
-                    0 => meta.advice_column(),
-                    1 => meta.advice_column_in(SecondPhase),
-                    2 => meta.advice_column_in(ThirdPhase),
-                    _ => panic!("Currently RangeConfig only supports {MAX_PHASE} phases"),
-                };
-                meta.enable_equality(a);
-                columns.push(a);
+            if num_advice == 1 && num_columns != 0 {
+                q_lookup.push(Some(meta.complex_selector()));
+            } else {
+                q_lookup.push(None);
+                for _ in 0..num_columns {
+                    let a = match phase {
+                        0 => meta.advice_column(),
+                        1 => meta.advice_column_in(SecondPhase),
+                        2 => meta.advice_column_in(ThirdPhase),
+                        _ => panic!("Currently RangeConfig only supports {MAX_PHASE} phases"),
+                    };
+                    meta.enable_equality(a);
+                    columns.push(a);
+                }
             }
-            // }
             lookup_advice.push(columns);
         }
 
         let mut config = Self { lookup_advice, q_lookup, lookup, lookup_bits, gate };
         config.create_lookup(meta);
 
+        log::info!("Poisoned rows after RangeConfig::configure {}", meta.minimum_rows());
         config.gate.max_rows = (1 << gate_params.k) - meta.minimum_rows();
         assert!(
             (1 << lookup_bits) <= config.gate.max_rows,

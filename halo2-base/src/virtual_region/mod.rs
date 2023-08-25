@@ -10,3 +10,6 @@ pub mod copy_constraints;
 pub mod lookups;
 /// Virtual region manager
 pub mod manager;
+
+#[cfg(test)]
+mod tests;

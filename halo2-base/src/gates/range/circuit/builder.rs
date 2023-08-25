@@ -4,11 +4,11 @@ use crate::{
             threads::{GateStatistics, MultiPhaseCoreManager, SinglePhaseCoreManager},
             MultiPhaseThreadBreakPoints, MAX_PHASE,
         },
-        range::{BaseConfig, BaseConfigParams, PublicBaseConfig},
+        range::{BaseConfig, BaseConfigParams, PublicBaseConfig, RangeConfig},
         CircuitBuilderStage, RangeChip,
     },
     halo2_proofs::{
-        circuit::{Layouter, SimpleFloorPlanner},
+        circuit::{Layouter, Region, SimpleFloorPlanner},
         plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
     },
     utils::ScalarField,
@@ -247,7 +247,7 @@ impl<F: ScalarField, const NI: usize> BaseCircuitBuilder<F, NI> {
                 for (i, instance) in instances.iter().enumerate() {
                     let cell = instance.cell.unwrap();
                     let copy_manager = self.core.copy_manager.lock().unwrap();
-                    let cell =
+                    let (cell, _) =
                         copy_manager.assigned_advices.get(&cell).expect("instance not assigned");
                     layouter.constrain_instance(*cell, *instance_col, i);
                 }
@@ -261,6 +261,51 @@ impl<F: ScalarField, const NI: usize> BaseCircuitBuilder<F, NI> {
             self.config_params.lookup_bits.expect("lookup bits not set"),
             self.lookup_manager.clone(),
         )
+    }
+
+    /// Copies the queued cells to be range looked up in phase `phase` to special advice lookup columns
+    /// using [LookupAnyManager].
+    ///
+    /// ## Special case
+    /// Just for [RangeConfig], we have special handling for the case where there is a single (physical)
+    /// advice column in [FlexGateConfig]. In this case, `RangeConfig` does not create extra lookup advice columns,
+    /// the single advice column has lookup enabled, and there is a selector to toggle when lookup should
+    /// be turned on.
+    pub fn assign_lookups_in_phase(
+        &self,
+        config: &RangeConfig<F>,
+        region: &mut Region<F>,
+        phase: usize,
+    ) {
+        let lookup_manager = self.lookup_manager.get(phase).expect("too many phases");
+        if lookup_manager.total_rows() == 0 {
+            return;
+        }
+        if let Some(q_lookup) = config.q_lookup.get(phase).and_then(|q| *q) {
+            // if q_lookup is Some, that means there should be a single advice column and it has lookup enabled
+            assert_eq!(config.gate.basic_gates[phase].len(), 1);
+            if !self.witness_gen_only() {
+                let cells_to_lookup = lookup_manager.cells_to_lookup.lock().unwrap();
+                for advice in cells_to_lookup.iter().flat_map(|(_, advices)| advices) {
+                    let cell = advice[0].cell.as_ref().unwrap();
+                    let copy_manager = self.core.copy_manager.lock().unwrap();
+                    let (acell, row_offset) = copy_manager.assigned_advices[cell];
+                    #[cfg(feature = "halo2-axiom")]
+                    assert_eq!(row_offset, acell.row_offset());
+                    q_lookup.enable(region, row_offset).unwrap();
+                }
+            }
+        } else {
+            let lookup_cols = config
+                .lookup_advice
+                .get(phase)
+                .expect("No special lookup advice columns")
+                .iter()
+                .map(|c| [*c])
+                .collect_vec();
+            lookup_manager.assign_raw(&lookup_cols, region);
+        }
+        let _ = lookup_manager.assigned.set(());
     }
 }
 
@@ -310,15 +355,14 @@ impl<F: ScalarField, const NI: usize> Circuit<F> for BaseCircuitBuilder<F, NI> {
             .assign_region(
                 || "BaseCircuitBuilder generated circuit",
                 |mut region| {
-                    self.core.phase_manager[0]
-                        .assign_raw(&config.gate().basic_gates[0], &mut region);
+                    let usable_rows = config.gate().max_rows;
+                    self.core.phase_manager[0].assign_raw(
+                        &(config.gate().basic_gates[0].clone(), usable_rows),
+                        &mut region,
+                    );
                     // Only assign cells to lookup if we're sure we're doing range lookups
                     if let BaseConfig::WithRange(config) = &config.base {
-                        if !config.lookup_advice.is_empty() {
-                            let lookup_cols =
-                                config.lookup_advice[0].iter().map(|c| [*c]).collect_vec();
-                            self.lookup_manager[0].assign_raw(&lookup_cols, &mut region);
-                        }
+                        self.assign_lookups_in_phase(config, &mut region, 0);
                     }
                     // Impose equality constraints
                     if !self.core.witness_gen_only() {

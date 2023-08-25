@@ -38,8 +38,10 @@ pub struct CopyConstraintManager<F: Field + Ord> {
     external_cell_count: usize,
 
     // In circuit assignments
-    /// Advice assignments, mapping from virtual [ContextCell] to assigned physical [Cell].
-    pub assigned_advices: HashMap<ContextCell, Cell>,
+    /// Advice assignments, mapping from virtual [ContextCell] to assigned physical ([Cell], row offset).
+    // The row offset is only required because in the PSE version `Cell` does not expose `row_offset`.
+    // This can be removed after https://github.com/privacy-scaling-explorations/halo2/pull/192 is merged.
+    pub assigned_advices: HashMap<ContextCell, (Cell, usize)>,
     /// Constant assignments, (key = constant, value = [Cell])
     pub assigned_constants: BTreeMap<F, Cell>,
     /// Flag for whether `assign_raw` has been called, for safety only.
@@ -79,7 +81,7 @@ impl<F: Field + Ord> CopyConstraintManager<F> {
     pub fn load_external_cell(&mut self, cell: Cell) -> ContextCell {
         let context_cell = ContextCell::new(TypeId::of::<Cell>(), 0, self.external_cell_count);
         self.external_cell_count += 1;
-        self.assigned_advices.insert(context_cell, cell);
+        self.assigned_advices.insert(context_cell, (cell, 0));
         context_cell
     }
 }
@@ -127,13 +129,15 @@ impl<F: Field + Ord> VirtualRegionManager<F> for SharedCopyConstraintManager<F> 
         // Impose equality constraints between assigned advice cells
         // At this point we assume all cells have been assigned by other VirtualRegionManagers
         for (left, right) in &manager.advice_equalities {
-            let left = manager.assigned_advices.get(left).expect("virtual cell not assigned");
-            let right = manager.assigned_advices.get(right).expect("virtual cell not assigned");
+            let (left, _) = manager.assigned_advices.get(left).expect("virtual cell not assigned");
+            let (right, _) =
+                manager.assigned_advices.get(right).expect("virtual cell not assigned");
             raw_constrain_equal(region, *left, *right);
         }
         for (left, right) in &manager.constant_equalities {
             let left = manager.assigned_constants[left];
-            let right = manager.assigned_advices.get(right).expect("virtual cell not assigned");
+            let (right, _) =
+                manager.assigned_advices.get(right).expect("virtual cell not assigned");
             raw_constrain_equal(region, left, *right);
         }
         // We can't clear advice_equalities and constant_equalities because keygen_vk and keygen_pk will call this function twice

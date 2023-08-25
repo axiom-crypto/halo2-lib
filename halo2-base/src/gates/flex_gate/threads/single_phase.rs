@@ -37,9 +37,6 @@ pub struct SinglePhaseCoreManager<F: ScalarField> {
     /// The challenge phase the virtual regions will map to.
     #[getset(get_copy = "pub", set)]
     pub(crate) phase: usize,
-    /// The number of usable rows in the circuit, excluding blinded rows.
-    /// This must be provided if `break_points` is not set.
-    pub usable_rows: OnceCell<usize>,
     /// A very simple computation graph for the basic vertical gate. Must be provided as a "pinning"
     /// when running the production prover.
     pub break_points: OnceCell<ThreadBreakPoints>,
@@ -135,31 +132,29 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
 }
 
 impl<F: ScalarField> VirtualRegionManager<F> for SinglePhaseCoreManager<F> {
-    type Config = Vec<BasicGateConfig<F>>;
+    type Config = (Vec<BasicGateConfig<F>>, usize); // usize = usable_rows
 
-    fn assign_raw(&self, config: &Self::Config, region: &mut Region<F>) {
+    fn assign_raw(&self, (config, usable_rows): &Self::Config, region: &mut Region<F>) {
         if self.witness_gen_only {
             let break_points = self.break_points.get().expect("break points not set");
             assign_witnesses(&self.threads, config, region, break_points);
         } else {
             let mut copy_manager = self.copy_manager.lock().unwrap();
-            let max_rows = *self.usable_rows.get().expect("usable rows not set");
             let break_points = assign_with_constraints(
                 &self.threads,
                 config,
                 region,
                 &mut copy_manager,
-                max_rows,
+                *usable_rows,
                 self.use_unknown,
             );
-            self.break_points
-                .set(break_points.clone())
-                .or_else(|prev| {
-                    (prev == break_points)
-                        .then_some(())
-                        .ok_or("previously set break points don't match")
-                })
-                .unwrap();
+            self.break_points.set(break_points).unwrap_or_else(|break_points| {
+                assert_eq!(
+                    self.break_points.get().unwrap(),
+                    &break_points,
+                    "previously set break points don't match"
+                );
+            });
         }
     }
 }
@@ -208,7 +203,7 @@ pub fn assign_with_constraints<F: ScalarField>(
                 .cell();
             copy_manager
                 .assigned_advices
-                .insert(ContextCell::new(ctx.type_id, ctx.context_id, i), cell);
+                .insert(ContextCell::new(ctx.type_id, ctx.context_id, i), (cell, row_offset));
 
             // If selector enabled and row_offset is valid add break point, account for break point overlap, and enforce equality constraint for gate outputs.
             if (q && row_offset + 4 > max_rows) || row_offset >= max_rows - 1 {

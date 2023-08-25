@@ -42,7 +42,7 @@ pub struct LookupAnyManager<F: Field + Ord, const ADVICE_COLS: usize> {
     #[getset(get = "pub")]
     witness_gen_only: bool,
     /// Flag for whether `assign_raw` has been called, for safety only.
-    assigned: Arc<OnceLock<()>>,
+    pub(crate) assigned: Arc<OnceLock<()>>,
 }
 
 impl<F: Field + Ord, const ADVICE_COLS: usize> LookupAnyManager<F, ADVICE_COLS> {
@@ -114,7 +114,7 @@ impl<F: Field + Ord, const ADVICE_COLS: usize> VirtualRegionManager<F>
                 if !self.witness_gen_only {
                     let ctx_cell = advice.cell.unwrap();
                     let copy_manager = self.copy_manager.lock().unwrap();
-                    let acell =
+                    let (acell, _) =
                         copy_manager.assigned_advices.get(&ctx_cell).expect("cell not assigned");
                     region.constrain_equal(*acell, bcell.cell());
                 }

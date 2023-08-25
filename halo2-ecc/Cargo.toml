@@ -24,6 +24,8 @@ pprof = { version = "0.11", features = ["criterion", "flamegraph"] }
 criterion = "0.4"
 criterion-macro = "0.4"
 halo2-base = { path = "../halo2-base", default-features = false, features = ["test-utils"] }
+test-log = "0.2.12"
+env_logger = "0.10.0"
 
 [features]
 default = ["jemallocator", "halo2-axiom", "display"]
