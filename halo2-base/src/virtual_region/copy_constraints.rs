@@ -104,6 +104,7 @@ impl<F: Field + Ord> VirtualRegionManager<F> for SharedCopyConstraintManager<F> 
     // The fixed columns
     type Config = Vec<Column<Fixed>>;
 
+    /// This should be the last manager to be assigned, after all other managers have assigned cells.
     fn assign_raw(&self, config: &Self::Config, region: &mut Region<F>) -> Self::Assignment {
         let mut guard = self.lock().unwrap();
         let manager = guard.deref_mut();
@@ -142,5 +143,8 @@ impl<F: Field + Ord> VirtualRegionManager<F> for SharedCopyConstraintManager<F> 
         }
         // We can't clear advice_equalities and constant_equalities because keygen_vk and keygen_pk will call this function twice
         let _ = manager.assigned.set(());
+        // When keygen_vk and keygen_pk are both run, you need to clear assigned constants
+        // so the second run still assigns constants in the pk
+        manager.assigned_constants.clear();
     }
 }

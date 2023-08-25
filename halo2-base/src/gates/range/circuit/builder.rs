@@ -367,9 +367,6 @@ impl<F: ScalarField, const NI: usize> Circuit<F> for BaseCircuitBuilder<F, NI> {
                     // Impose equality constraints
                     if !self.core.witness_gen_only() {
                         self.core.copy_manager.assign_raw(config.constants(), &mut region);
-                        // When keygen_vk and keygen_pk are both run, you need to clear assigned constants
-                        // so the second run still assigns constants in the pk
-                        self.core.copy_manager.lock().unwrap().assigned_constants.clear();
                     }
                     Ok(())
                 },

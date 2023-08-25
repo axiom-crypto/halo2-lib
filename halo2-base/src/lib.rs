@@ -173,7 +173,6 @@ pub struct Context<F: ScalarField> {
     /// Identifier for what virtual region this context is in
     type_id: TypeId,
     /// Identifier to reference cells from this [Context].
-    #[getset(get_copy = "pub")]
     context_id: usize,
 
     /// Single column of advice cells.
@@ -214,6 +213,11 @@ impl<F: ScalarField> Context<F> {
             zero_cell: None,
             copy_manager,
         }
+    }
+
+    /// The context id, this can be used as a tag when CPU multi-threading
+    pub fn id(&self) -> usize {
+        self.context_id
     }
 
     fn latest_cell(&self) -> ContextCell {
