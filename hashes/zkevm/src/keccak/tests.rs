@@ -4,8 +4,8 @@ use crate::halo2_proofs::{
     dev::MockProver,
     halo2curves::bn256::Fr,
     halo2curves::bn256::{Bn256, G1Affine},
+    plonk::Circuit,
     plonk::{create_proof, keygen_pk, keygen_vk, verify_proof},
-    plonk::{Circuit, FirstPhase},
     poly::{
         commitment::ParamsProver,
         kzg::{
@@ -53,8 +53,7 @@ impl<F: Field> Circuit<F> for KeccakCircuit<F> {
         // MockProver complains if you only have columns in SecondPhase, so let's just make an empty column in FirstPhase
         meta.advice_column();
 
-        let challenge = meta.challenge_usable_after(FirstPhase);
-        KeccakCircuitConfig::new(meta, challenge, params)
+        KeccakCircuitConfig::new(meta, params)
     }
 
     fn configure(_: &mut ConstraintSystem<F>) -> Self::Config {
@@ -68,7 +67,6 @@ impl<F: Field> Circuit<F> for KeccakCircuit<F> {
     ) -> Result<(), Error> {
         let params = config.parameters;
         config.load_aux_tables(&mut layouter, params.k)?;
-        let mut challenge = layouter.get_challenge(config.challenge);
         let mut first_pass = SKIP_FIRST_PASS;
         layouter.assign_region(
             || "keccak circuit",
@@ -77,66 +75,16 @@ impl<F: Field> Circuit<F> for KeccakCircuit<F> {
                     first_pass = false;
                     return Ok(());
                 }
-                let (witness, squeeze_digests) = multi_keccak_phase0(
+                let (witness, _) = multi_keccak(
                     &self.inputs,
                     self.num_rows.map(|nr| get_keccak_capacity(nr, params.rows_per_round)),
                     params,
                 );
                 let assigned_rows = config.assign(&mut region, &witness);
                 if self.verify_output {
-                    let mut input_offset = 0;
-                    // only look at last row in each round
-                    // first round is dummy, so ignore
-                    // only look at last round per absorb of RATE_IN_BITS
-                    for assigned_row in assigned_rows
-                        .into_iter()
-                        .step_by(config.parameters.rows_per_round)
-                        .step_by(NUM_ROUNDS + 1)
-                        .skip(1)
-                    {
-                        let KeccakAssignedRow { is_final, length, hash_lo, hash_hi } = assigned_row;
-                        let is_final_val = extract_value(is_final).ne(&F::ZERO);
-                        let hash_lo_val = u128::from_le_bytes(
-                            extract_value(hash_lo).to_bytes_le()[..16].try_into().unwrap(),
-                        );
-                        let hash_hi_val = u128::from_le_bytes(
-                            extract_value(hash_hi).to_bytes_le()[..16].try_into().unwrap(),
-                        );
-                        println!(
-                            "is_final: {:?}, len: {:?}, hash_lo: {:#x}, hash_hi: {:#x}",
-                            is_final_val,
-                            length.value(),
-                            hash_lo_val,
-                            hash_hi_val,
-                        );
-
-                        if input_offset < self.inputs.len() && is_final_val {
-                            // out is in big endian.
-                            let out = Keccak256::digest(&self.inputs[input_offset]);
-                            let lo = u128::from_be_bytes(out[16..].try_into().unwrap());
-                            let hi = u128::from_be_bytes(out[..16].try_into().unwrap());
-                            println!("lo: {:#x}, hi: {:#x}", lo, hi);
-                            assert_eq!(lo, hash_lo_val);
-                            assert_eq!(hi, hash_hi_val);
-                            input_offset += 1;
-                        }
-                    }
+                    self.verify_output_witnesses(&assigned_rows);
+                    self.verify_input_witnesses(&assigned_rows);
                 }
-
-                #[cfg(feature = "halo2-axiom")]
-                {
-                    region.next_phase();
-                    challenge = region.get_challenge(config.challenge);
-                }
-                multi_keccak_phase1(
-                    &mut region,
-                    &config.keccak_table,
-                    self.inputs.iter().map(|v| v.as_slice()),
-                    challenge,
-                    squeeze_digests,
-                    params,
-                );
-                println!("finished keccak circuit");
                 Ok(())
             },
         )?;
@@ -154,6 +102,77 @@ impl<F: Field> KeccakCircuit<F> {
         verify_output: bool,
     ) -> Self {
         KeccakCircuit { config, inputs, num_rows, _marker: PhantomData, verify_output }
+    }
+
+    fn verify_output_witnesses<'v>(&self, assigned_rows: &[KeccakAssignedRow<'v, F>]) {
+        let mut input_offset = 0;
+        // only look at last row in each round
+        // first round is dummy, so ignore
+        // only look at last round per absorb of RATE_IN_BITS
+        for assigned_row in
+            assigned_rows.iter().step_by(self.config.rows_per_round).step_by(NUM_ROUNDS + 1).skip(1)
+        {
+            let KeccakAssignedRow { is_final, hash_lo, hash_hi, .. } = assigned_row.clone();
+            let is_final_val = extract_value(is_final).ne(&F::ZERO);
+            let hash_lo_val = extract_u128(hash_lo);
+            let hash_hi_val = extract_u128(hash_hi);
+
+            if input_offset < self.inputs.len() && is_final_val {
+                // out is in big endian.
+                let out = Keccak256::digest(&self.inputs[input_offset]);
+                let lo = u128::from_be_bytes(out[16..].try_into().unwrap());
+                let hi = u128::from_be_bytes(out[..16].try_into().unwrap());
+                assert_eq!(lo, hash_lo_val);
+                assert_eq!(hi, hash_hi_val);
+                input_offset += 1;
+            }
+        }
+    }
+
+    fn verify_input_witnesses<'v>(&self, assigned_rows: &[KeccakAssignedRow<'v, F>]) {
+        let rows_per_round = self.config.rows_per_round;
+        let mut input_offset = 0;
+        let mut input_byte_offset = 0;
+        // first round is dummy, so ignore
+        for absorb_chunk in &assigned_rows.chunks(rows_per_round).skip(1).chunks(NUM_ROUNDS + 1) {
+            let mut abosrbed = false;
+            for (round_idx, assigned_rows) in absorb_chunk.enumerate() {
+                for (row_idx, assigned_row) in assigned_rows.iter().enumerate() {
+                    let KeccakAssignedRow { is_final, byte_value, bytes_left, .. } =
+                        assigned_row.clone();
+                    let is_final_val = extract_value(is_final).ne(&F::ZERO);
+                    let byte_value_val = extract_u128(byte_value);
+                    let bytes_left_val = extract_u128(bytes_left);
+                    // Padded inputs - all empty.
+                    if input_offset >= self.inputs.len() {
+                        assert_eq!(byte_value_val, 0);
+                        assert_eq!(bytes_left_val, 0);
+                        continue;
+                    }
+                    let input_len = self.inputs[input_offset].len();
+                    if round_idx == NUM_ROUNDS && row_idx == 0 && is_final_val {
+                        abosrbed = true;
+                    }
+                    // Only these rows could contain inputs.
+                    if round_idx < NUM_WORDS_TO_ABSORB && row_idx < NUM_BYTES_PER_WORD {
+                        assert_eq!(bytes_left_val, input_len as u128 - input_byte_offset as u128);
+                        if input_byte_offset < input_len {
+                            assert_eq!(
+                                byte_value_val,
+                                u128::from(self.inputs[input_offset][input_byte_offset])
+                            );
+                            input_byte_offset += 1;
+                        } else {
+                            assert_eq!(byte_value_val, 0);
+                        };
+                    }
+                }
+            }
+            if abosrbed {
+                input_offset += 1;
+                input_byte_offset = 0;
+            }
+        }
     }
 }
 
@@ -176,6 +195,13 @@ fn extract_value<'v, F: Field>(assigned_value: KeccakAssignedValue<'v, F>) -> F 
         halo2_base::halo2_proofs::plonk::Assigned::Trivial(f) => f,
         _ => panic!("value should be trival"),
     }
+}
+
+fn extract_u128<'v, F: Field>(assigned_value: KeccakAssignedValue<'v, F>) -> u128 {
+    let le_bytes = extract_value(assigned_value).to_bytes_le();
+    let hi = u128::from_le_bytes(le_bytes[16..].try_into().unwrap());
+    assert_eq!(hi, 0);
+    u128::from_le_bytes(le_bytes[..16].try_into().unwrap())
 }
 
 #[test_case(14, 28; "k: 14, rows_per_round: 28")]
