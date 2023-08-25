@@ -569,7 +569,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
                 get_num_rows_per_round: 18
                 input: "12345678abc"
             table:
-                Note[1]: be careful: is_paddings is not column here! It is [Cell; 8].
+                Note[1]: be careful: is_paddings is not column here! It is [Cell; 8] and it will be constrained later.
         offset byte_value bytes_left  is_paddings q_enable q_padding_last
         18        1          11          0         1        0 // 1st round begin
         19        2          10          0         0        0
