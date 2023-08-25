@@ -203,7 +203,7 @@ pub fn assign_with_constraints<F: ScalarField>(
                 .cell();
             copy_manager
                 .assigned_advices
-                .insert(ContextCell::new(ctx.type_id, ctx.context_id, i), (cell, row_offset));
+                .insert(ContextCell::new(ctx.type_id, ctx.context_id, i), cell);
 
             // If selector enabled and row_offset is valid add break point, account for break point overlap, and enforce equality constraint for gate outputs.
             if (q && row_offset + 4 > max_rows) || row_offset >= max_rows - 1 {

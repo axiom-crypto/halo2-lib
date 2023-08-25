@@ -247,7 +247,7 @@ impl<F: ScalarField, const NI: usize> BaseCircuitBuilder<F, NI> {
                 for (i, instance) in instances.iter().enumerate() {
                     let cell = instance.cell.unwrap();
                     let copy_manager = self.core.copy_manager.lock().unwrap();
-                    let (cell, _) =
+                    let cell =
                         copy_manager.assigned_advices.get(&cell).expect("instance not assigned");
                     layouter.constrain_instance(*cell, *instance_col, i);
                 }
@@ -289,10 +289,8 @@ impl<F: ScalarField, const NI: usize> BaseCircuitBuilder<F, NI> {
                 for advice in cells_to_lookup.iter().flat_map(|(_, advices)| advices) {
                     let cell = advice[0].cell.as_ref().unwrap();
                     let copy_manager = self.core.copy_manager.lock().unwrap();
-                    let (acell, row_offset) = copy_manager.assigned_advices[cell];
-                    #[cfg(feature = "halo2-axiom")]
-                    assert_eq!(row_offset, acell.row_offset());
-                    q_lookup.enable(region, row_offset).unwrap();
+                    let acell = copy_manager.assigned_advices[cell];
+                    q_lookup.enable(region, acell.row_offset).unwrap();
                 }
             }
         } else {

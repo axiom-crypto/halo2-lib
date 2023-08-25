@@ -114,7 +114,7 @@ impl<F: Field + Ord, const ADVICE_COLS: usize> VirtualRegionManager<F>
                 if !self.witness_gen_only {
                     let ctx_cell = advice.cell.unwrap();
                     let copy_manager = self.copy_manager.lock().unwrap();
-                    let (acell, _) =
+                    let acell =
                         copy_manager.assigned_advices.get(&ctx_cell).expect("cell not assigned");
                     region.constrain_equal(*acell, bcell.cell());
                 }
