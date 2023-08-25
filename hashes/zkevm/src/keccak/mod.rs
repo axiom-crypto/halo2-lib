@@ -570,26 +570,26 @@ impl<F: Field> KeccakCircuitConfig<F> {
                 input: "12345678abc"
             table:
                 Note[1]: be careful: is_paddings is not column here! It is [Cell; 8].
-        offset  value bytes_left  is_paddings q_enable q_padding_last
-        18        1      11          0         1        0 // 1st round begin
-        19        2      10          0         0        0
-        20        3      9           0         0        0
-        21        4      8           0         0        0
-        22        5      7           0         0        0
-        23        6      6           0         0        0
-        24        7      5           0         0        0
-        25        8      4           0         0        0
-        26        8      4           NA        0        0
+        offset byte_value bytes_left  is_paddings q_enable q_padding_last
+        18        1          11          0         1        0 // 1st round begin
+        19        2          10          0         0        0
+        20        3          9           0         0        0
+        21        4          8           0         0        0
+        22        5          7           0         0        0
+        23        6          6           0         0        0
+        24        7          5           0         0        0
+        25        8          4           0         0        0
+        26        8          4           NA        0        0
         ...
-        35        8      4           NA        0        0  // 1st round end
-        36        a      3           0         1        1  // 2nd round begin
-        37        b      2           0         0        0
-        38        c      1           0         0        0
-        39        0      0           1         0        0
-        40        0      0           1         0        0
-        41        0      0           1         0        0
-        42        0      0           1         0        0
-        43        0      0           1         0        0
+        35        8          4           NA        0        0  // 1st round end
+        36        a          3           0         1        1  // 2nd round begin
+        37        b          2           0         0        0
+        38        c          1           0         0        0
+        39        0          0           1         0        0
+        40        0          0           1         0        0
+        41        0          0           1         0        0
+        42        0          0           1         0        0
+        43        0          0           1         0        0
         */
 
         meta.create_gate("byte_value", |meta| {
@@ -613,7 +613,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
         });
         meta.create_gate("bytes_left", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-            // q_first[i] == 0 => bytes_left[i] == 0
+            // bytes_left[i] == 0 in the first round
             cb.condition(q_in_round(q_first, meta), |cb| {
                 cb.require_zero(
                     "bytes_left needs to be zero on the first row",
