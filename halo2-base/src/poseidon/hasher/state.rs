@@ -1,8 +1,11 @@
 use std::iter;
 
+use itertools::Itertools;
+
 use crate::{
     gates::GateInstructions,
-    poseidon::hasher::mds::SparseMDSMatrix,
+    poseidon::hasher::{mds::SparseMDSMatrix, spec::OptimizedPoseidonSpec},
+    safe_types::SafeBool,
     utils::ScalarField,
     AssignedValue, Context,
     QuantumCell::{Constant, Existing},
@@ -23,7 +26,75 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE
         Self { s: default_state.map(|f| ctx.load_constant(f)) }
     }
 
-    pub fn x_power5_with_constant(
+    /// Perform permutation on this state.
+    ///
+    /// ATTETION: inputs.len() needs to be fixed at compile time.
+    /// Assume len <= inputs.len().
+    /// `inputs` is right padded.
+    /// If `len` is `None`, treat `inputs` as a fixed length array.
+    pub fn permutation(
+        &mut self,
+        ctx: &mut Context<F>,
+        gate: &impl GateInstructions<F>,
+        inputs: &[AssignedValue<F>],
+        len: Option<AssignedValue<F>>,
+        spec: &OptimizedPoseidonSpec<F, T, RATE>,
+    ) {
+        let r_f = spec.r_f / 2;
+        let mds = &spec.mds_matrices.mds.0;
+        let pre_sparse_mds = &spec.mds_matrices.pre_sparse_mds.0;
+        let sparse_matrices = &spec.mds_matrices.sparse_matrices;
+
+        // First half of the full round
+        let constants = &spec.constants.start;
+        if let Some(len) = len {
+            // Note: this doesn't mean `padded_inputs` is 0 padded because there is no constraints on `inputs[len..]`
+            let padded_inputs: [AssignedValue<F>; RATE] =
+                core::array::from_fn(
+                    |i| if i < inputs.len() { inputs[i] } else { ctx.load_zero() },
+                );
+            self.absorb_var_len_with_pre_constants(ctx, gate, padded_inputs, len, &constants[0]);
+        } else {
+            self.absorb_with_pre_constants(ctx, gate, inputs, &constants[0]);
+        }
+        for constants in constants.iter().skip(1).take(r_f - 1) {
+            self.sbox_full(ctx, gate, constants);
+            self.apply_mds(ctx, gate, mds);
+        }
+        self.sbox_full(ctx, gate, constants.last().unwrap());
+        self.apply_mds(ctx, gate, pre_sparse_mds);
+
+        // Partial rounds
+        let constants = &spec.constants.partial;
+        for (constant, sparse_mds) in constants.iter().zip(sparse_matrices.iter()) {
+            self.sbox_part(ctx, gate, constant);
+            self.apply_sparse_mds(ctx, gate, sparse_mds);
+        }
+
+        // Second half of the full rounds
+        let constants = &spec.constants.end;
+        for constants in constants.iter() {
+            self.sbox_full(ctx, gate, constants);
+            self.apply_mds(ctx, gate, mds);
+        }
+        self.sbox_full(ctx, gate, &[F::ZERO; T]);
+        self.apply_mds(ctx, gate, mds);
+    }
+
+    /// Constrains and set self to a specific state if `selector` is true.
+    pub fn select(
+        &mut self,
+        ctx: &mut Context<F>,
+        gate: &impl GateInstructions<F>,
+        selector: SafeBool<F>,
+        set_to: &Self,
+    ) {
+        for i in 0..T {
+            self.s[i] = gate.select(ctx, set_to.s[i], self.s[i], *selector.as_ref());
+        }
+    }
+
+    fn x_power5_with_constant(
         ctx: &mut Context<F>,
         gate: &impl GateInstructions<F>,
         x: AssignedValue<F>,
@@ -34,7 +105,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE
         gate.mul_add(ctx, x, x4, Constant(*constant))
     }
 
-    pub fn sbox_full(
+    fn sbox_full(
         &mut self,
         ctx: &mut Context<F>,
         gate: &impl GateInstructions<F>,
@@ -45,21 +116,16 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE
         }
     }
 
-    pub fn sbox_part(
-        &mut self,
-        ctx: &mut Context<F>,
-        gate: &impl GateInstructions<F>,
-        constant: &F,
-    ) {
+    fn sbox_part(&mut self, ctx: &mut Context<F>, gate: &impl GateInstructions<F>, constant: &F) {
         let x = &mut self.s[0];
         *x = Self::x_power5_with_constant(ctx, gate, *x, constant);
     }
 
-    pub fn absorb_with_pre_constants(
+    fn absorb_with_pre_constants(
         &mut self,
         ctx: &mut Context<F>,
         gate: &impl GateInstructions<F>,
-        inputs: Vec<AssignedValue<F>>,
+        inputs: &[AssignedValue<F>],
         pre_constants: &[F; T],
     ) {
         assert!(inputs.len() < T);
@@ -94,7 +160,58 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE
         }
     }
 
-    pub fn apply_mds(
+    /// Absorb inputs with a variable length.
+    ///
+    /// `inputs` is right padded.
+    fn absorb_var_len_with_pre_constants(
+        &mut self,
+        ctx: &mut Context<F>,
+        gate: &impl GateInstructions<F>,
+        inputs: [AssignedValue<F>; RATE],
+        len: AssignedValue<F>,
+        pre_constants: &[F; T],
+    ) {
+        // Explanation of what's going on: before each round of the poseidon permutation,
+        // two things have to be added to the state: inputs (the absorbed elements) and
+        // preconstants. Imagine the state as a list of T elements, the first of which is
+        // the capacity:  |--cap--|--el1--|--el2--|--elR--|
+        // - A preconstant is added to each of all T elements (which is different for each)
+        // - The inputs are added to all elements starting from el1 (so, not to the capacity),
+        //   to as many elements as inputs are available.
+        // - To the first element for which no input is left (if any), an extra 1 is added.
+
+        // Adding preconstants to the current state.
+        for (i, pre_const) in pre_constants.iter().enumerate() {
+            self.s[i] = gate.add(ctx, self.s[i], Constant(*pre_const));
+        }
+
+        // Generate a mask array where a[i] = i < len for i = 0..RATE.
+        let idx = gate.dec(ctx, len);
+        let len_indicator = gate.idx_to_indicator(ctx, idx, RATE);
+        // inputs_mask[i] = sum(len_indicator[i..])
+        let mut inputs_mask =
+            gate.partial_sums(ctx, len_indicator.clone().into_iter().rev()).collect_vec();
+        inputs_mask.reverse();
+
+        let padded_inputs = inputs
+            .iter()
+            .zip(inputs_mask.iter())
+            .map(|(input, mask)| gate.mul(ctx, *input, *mask))
+            .collect_vec();
+        for i in 0..RATE {
+            // Add all inputs.
+            self.s[i + 1] = gate.add(ctx, self.s[i + 1], padded_inputs[i]);
+            // Add the extra 1 after inputs.
+            if i + 2 < T {
+                self.s[i + 2] = gate.add(ctx, self.s[i + 2], len_indicator[i]);
+            }
+        }
+        // If len == 0, inputs_mask is all 0. Then the extra 1 should be added into s[1].
+        let empty_extra_one = gate.not(ctx, inputs_mask[0]);
+        self.s[1] = gate.add(ctx, self.s[1], empty_extra_one);
+    }
+
+    fn apply_mds(
         &mut self,
         ctx: &mut Context<F>,
         gate: &impl GateInstructions<F>,
@@ -110,7 +227,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonState<F, T, RATE
         self.s = res.try_into().unwrap();
     }
 
-    pub fn apply_sparse_mds(
+    fn apply_sparse_mds(
         &mut self,
         ctx: &mut Context<F>,
         gate: &impl GateInstructions<F>,
