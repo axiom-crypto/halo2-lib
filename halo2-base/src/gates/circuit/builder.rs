@@ -1,11 +1,12 @@
 use crate::{
     gates::{
+        circuit::CircuitBuilderStage,
         flex_gate::{
             threads::{GateStatistics, MultiPhaseCoreManager, SinglePhaseCoreManager},
             MultiPhaseThreadBreakPoints, MAX_PHASE,
         },
         range::{BaseConfig, BaseConfigParams, PublicBaseConfig, RangeConfig},
-        CircuitBuilderStage, RangeChip,
+        RangeChip,
     },
     halo2_proofs::{
         circuit::{Layouter, Region, SimpleFloorPlanner},

@@ -2,7 +2,7 @@ use getset::CopyGetters;
 use itertools::Itertools;
 
 use crate::{
-    gates::{flex_gate::FlexGateConfigParams, CircuitBuilderStage},
+    gates::{circuit::CircuitBuilderStage, flex_gate::FlexGateConfigParams},
     utils::ScalarField,
     virtual_region::copy_constraints::SharedCopyConstraintManager,
     Context,

@@ -1,6 +1,5 @@
+use halo2_base::gates::circuit::{builder::RangeCircuitBuilder, CircuitBuilderStage};
 use halo2_base::gates::flex_gate::{GateChip, GateInstructions};
-use halo2_base::gates::range::circuit::builder::RangeCircuitBuilder;
-use halo2_base::gates::CircuitBuilderStage;
 use halo2_base::halo2_proofs::{
     arithmetic::Field,
     dev::MockProver,

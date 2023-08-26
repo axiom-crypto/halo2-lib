@@ -1,8 +1,7 @@
 use crate::ff::Field;
 use crate::{bn254::FpChip, fields::FieldChip};
 
-use halo2_base::gates::range::circuit::builder::RangeCircuitBuilder;
-use halo2_base::gates::CircuitBuilderStage;
+use halo2_base::gates::circuit::{builder::RangeCircuitBuilder, CircuitBuilderStage};
 use halo2_base::{
     halo2_proofs::{
         halo2curves::bn256::Fq, plonk::keygen_pk, plonk::keygen_vk,

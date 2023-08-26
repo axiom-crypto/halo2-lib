@@ -26,9 +26,6 @@ use std::{cmp::Ordering, ops::Shl};
 
 use super::flex_gate::{FlexGateConfigParams, GateChip};
 
-/// Circuit
-pub mod circuit;
-
 /// A Config struct defining the parameters for a halo2-base circuit
 /// - this is used to configure either FlexGateConfig or RangeConfig.
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]

@@ -1,8 +1,7 @@
+use halo2_base::gates::circuit::{builder::RangeCircuitBuilder, CircuitBuilderStage};
 use halo2_base::gates::flex_gate::threads::SinglePhaseCoreManager;
 use halo2_base::gates::flex_gate::MultiPhaseThreadBreakPoints;
-use halo2_base::gates::range::circuit::builder::RangeCircuitBuilder;
 use halo2_base::gates::range::BaseConfigParams;
-use halo2_base::gates::CircuitBuilderStage;
 use halo2_base::halo2_proofs::halo2curves::ff::PrimeField as _;
 use halo2_base::halo2_proofs::{
     arithmetic::Field,

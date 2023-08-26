@@ -1,9 +1,10 @@
 //! Utilities for testing
 use crate::{
     gates::{
+        circuit::{builder::RangeCircuitBuilder, CircuitBuilderStage},
         flex_gate::threads::SinglePhaseCoreManager,
-        range::{circuit::builder::RangeCircuitBuilder, BaseConfigParams},
-        CircuitBuilderStage, GateChip, RangeChip,
+        range::BaseConfigParams,
+        GateChip, RangeChip,
     },
     halo2_proofs::{
         dev::MockProver,

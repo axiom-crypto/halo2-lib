@@ -1,5 +1,5 @@
 use crate::{
-    gates::range::circuit::builder::RangeCircuitBuilder,
+    gates::circuit::builder::RangeCircuitBuilder,
     halo2_proofs::{
         halo2curves::bn256::{Bn256, Fr},
         plonk::{keygen_pk, keygen_vk},

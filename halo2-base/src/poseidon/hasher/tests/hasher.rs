@@ -1,5 +1,5 @@
 use crate::{
-    gates::range::{circuit::builder::RangeCircuitBuilder, RangeInstructions},
+    gates::{circuit::builder::RangeCircuitBuilder, range::RangeInstructions},
     halo2_proofs::halo2curves::bn256::Fr,
     poseidon::hasher::{spec::OptimizedPoseidonSpec, PoseidonHasher},
     utils::{testing::base_test, BigPrimeField, ScalarField},

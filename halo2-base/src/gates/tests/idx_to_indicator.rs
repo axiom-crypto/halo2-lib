@@ -1,6 +1,5 @@
 use crate::ff::Field;
-use crate::gates::range::circuit::builder::RangeCircuitBuilder;
-use crate::gates::CircuitBuilderStage;
+use crate::gates::circuit::{builder::RangeCircuitBuilder, CircuitBuilderStage};
 use crate::{
     gates::{GateChip, GateInstructions},
     halo2_proofs::{

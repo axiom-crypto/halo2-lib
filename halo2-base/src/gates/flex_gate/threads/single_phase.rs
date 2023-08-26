@@ -4,8 +4,8 @@ use getset::CopyGetters;
 
 use crate::{
     gates::{
+        circuit::CircuitBuilderStage,
         flex_gate::{BasicGateConfig, ThreadBreakPoints},
-        CircuitBuilderStage,
     },
     utils::halo2::{raw_assign_advice, raw_constrain_equal},
     utils::ScalarField,
