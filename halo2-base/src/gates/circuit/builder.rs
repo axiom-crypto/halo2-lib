@@ -26,9 +26,7 @@ use crate::{
 use super::BaseCircuitParams;
 
 /// Keeping the naming `RangeCircuitBuilder` for backwards compatibility.
-pub type RangeCircuitBuilder<F> = BaseCircuitBuilder<F, 0>;
-/// [RangeCircuitBuilder] with 1 instance column.
-pub type RangeWithInstanceCircuitBuilder<F> = BaseCircuitBuilder<F, 1>;
+pub type RangeCircuitBuilder<F> = BaseCircuitBuilder<F>;
 
 /// A circuit builder is a collection of virtual region managers that together assign virtual
 /// regions into a single physical circuit.
@@ -42,7 +40,7 @@ pub type RangeWithInstanceCircuitBuilder<F> = BaseCircuitBuilder<F, 1>;
 ///
 /// The circuit will have `NI` public instance (aka public inputs+outputs) columns.
 #[derive(Clone, Debug, Getters, MutGetters, Setters)]
-pub struct BaseCircuitBuilder<F: ScalarField, const NI: usize> {
+pub struct BaseCircuitBuilder<F: ScalarField> {
     /// Virtual region for each challenge phase. These cannot be shared across threads while keeping circuit deterministic.
     #[getset(get = "pub", get_mut = "pub", set = "pub")]
     pub(super) core: MultiPhaseCoreManager<F>,
@@ -52,10 +50,10 @@ pub struct BaseCircuitBuilder<F: ScalarField, const NI: usize> {
     /// Configuration parameters for the circuit shape
     pub config_params: BaseCircuitParams,
     /// The assigned instances to expose publicly at the end of circuit synthesis
-    pub assigned_instances: [Vec<AssignedValue<F>>; NI],
+    pub assigned_instances: Vec<Vec<AssignedValue<F>>>,
 }
 
-impl<F: ScalarField, const NI: usize> Default for BaseCircuitBuilder<F, NI> {
+impl<F: ScalarField> Default for BaseCircuitBuilder<F> {
     /// Quick start default circuit builder which can be used for MockProver, Keygen, and real prover.
     /// For best performance during real proof generation, we recommend using [BaseCircuitBuilder::prover] instead.
     fn default() -> Self {
@@ -63,7 +61,7 @@ impl<F: ScalarField, const NI: usize> Default for BaseCircuitBuilder<F, NI> {
     }
 }
 
-impl<F: ScalarField, const NI: usize> BaseCircuitBuilder<F, NI> {
+impl<F: ScalarField> BaseCircuitBuilder<F> {
     /// Creates a new [BaseCircuitBuilder] with all default managers.
     /// * `witness_gen_only`:
     ///     * If true, the builder only does witness asignments and does not store constraint information -- this should only be used for the real prover.
@@ -81,12 +79,7 @@ impl<F: ScalarField, const NI: usize> BaseCircuitBuilder<F, NI> {
         let core = MultiPhaseCoreManager::new(witness_gen_only);
         let lookup_manager = [(); MAX_PHASE]
             .map(|_| LookupAnyManager::new(witness_gen_only, core.copy_manager.clone()));
-        Self {
-            core,
-            lookup_manager,
-            config_params: Default::default(),
-            assigned_instances: [(); NI].map(|_| Vec::new()),
-        }
+        Self { core, lookup_manager, config_params: Default::default(), assigned_instances: vec![] }
     }
 
     /// Creates a new [MultiPhaseCoreManager] depending on the stage of circuit building. If the stage is [CircuitBuilderStage::Prover], the [MultiPhaseCoreManager] is used for witness generation only.
@@ -124,8 +117,24 @@ impl<F: ScalarField, const NI: usize> BaseCircuitBuilder<F, NI> {
         self
     }
 
+    /// Set the number of instance columns. This resizes `self.assigned_instances`.
+    pub fn set_instance_columns(&mut self, num_instance_columns: usize) {
+        self.config_params.num_instance_columns = num_instance_columns;
+        while self.assigned_instances.len() < num_instance_columns {
+            self.assigned_instances.push(vec![]);
+        }
+        assert_eq!(self.assigned_instances.len(), num_instance_columns);
+    }
+
+    /// Returns new with `self.assigned_instances` resized to specified number of instance columns.
+    pub fn use_instance_columns(mut self, num_instance_columns: usize) -> Self {
+        self.set_instance_columns(num_instance_columns);
+        self
+    }
+
     /// Set config params
     pub fn set_params(&mut self, params: BaseCircuitParams) {
+        self.set_instance_columns(params.num_instance_columns);
         self.config_params = params;
     }
 
@@ -213,6 +222,7 @@ impl<F: ScalarField, const NI: usize> BaseCircuitBuilder<F, NI> {
     /// * `lookup_bits`: The fixed lookup table will consist of [0, 2<sup>lookup_bits</sup>)
     pub fn calculate_params(&mut self, minimum_rows: Option<usize>) -> BaseCircuitParams {
         let k = self.config_params.k;
+        let ni = self.config_params.num_instance_columns;
         assert_ne!(k, 0, "k must be set");
         let max_rows = (1 << k) - minimum_rows.unwrap_or(0);
         let gate_params = self.core.calculate_params(k, minimum_rows);
@@ -228,6 +238,7 @@ impl<F: ScalarField, const NI: usize> BaseCircuitBuilder<F, NI> {
             num_fixed: gate_params.num_fixed,
             num_lookup_advice_per_phase,
             lookup_bits: self.lookup_bits(),
+            num_instance_columns: ni,
         };
         self.config_params = params.clone();
         #[cfg(feature = "display")]
@@ -242,12 +253,13 @@ impl<F: ScalarField, const NI: usize> BaseCircuitBuilder<F, NI> {
     /// `synthesize` after virtual `assigned_instances` have been assigned to physical circuit.
     pub fn assign_instances(
         &self,
-        instance_columns: &[Column<Instance>; NI],
+        instance_columns: &[Column<Instance>],
         mut layouter: impl Layouter<F>,
     ) {
         if !self.core.witness_gen_only() {
             // expose public instances
-            for (instances, instance_col) in self.assigned_instances.iter().zip(instance_columns) {
+            for (instances, instance_col) in self.assigned_instances.iter().zip_eq(instance_columns)
+            {
                 for (i, instance) in instances.iter().enumerate() {
                     let cell = instance.cell.unwrap();
                     let copy_manager = self.core.copy_manager.lock().unwrap();

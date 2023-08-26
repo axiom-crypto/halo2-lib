@@ -33,6 +33,9 @@ pub struct BaseCircuitParams {
     pub num_lookup_advice_per_phase: Vec<usize>,
     /// This is `None` if no lookup table is used.
     pub lookup_bits: Option<usize>,
+    /// Number of public instance columns
+    #[serde(default)]
+    pub num_instance_columns: usize,
 }
 
 impl BaseCircuitParams {
@@ -47,11 +50,11 @@ impl BaseCircuitParams {
 
 /// Configuration with [`BaseConfig`] with `NI` public instance columns.
 #[derive(Clone, Debug)]
-pub struct BaseConfig<F: ScalarField, const NI: usize> {
+pub struct BaseConfig<F: ScalarField> {
     /// The underlying private gate/range configuration
     pub base: MaybeRangeConfig<F>,
     /// The public instance column
-    pub instance: [Column<Instance>; NI],
+    pub instance: Vec<Column<Instance>>,
 }
 
 /// Smart Halo2 circuit config that has different variants depending on whether you need range checks or not.
@@ -64,7 +67,7 @@ pub enum MaybeRangeConfig<F: ScalarField> {
     WithRange(RangeConfig<F>),
 }
 
-impl<F: ScalarField, const NI: usize> BaseConfig<F, NI> {
+impl<F: ScalarField> BaseConfig<F> {
     /// Generates a new `BaseConfig` depending on `params`.
     /// - It will generate a `RangeConfig` is `params` has `lookup_bits` not None **and** `num_lookup_advice_per_phase` are not all empty or zero (i.e., if `params` indicates that the circuit actually requires a lookup table).
     /// - Otherwise it will generate a `FlexGateConfig`.
@@ -81,11 +84,13 @@ impl<F: ScalarField, const NI: usize> BaseConfig<F, NI> {
         } else {
             MaybeRangeConfig::WithoutRange(FlexGateConfig::configure(meta, params.gate_params()))
         };
-        let instance = [(); NI].map(|_| {
-            let inst = meta.instance_column();
-            meta.enable_equality(inst);
-            inst
-        });
+        let instance = (0..params.num_instance_columns)
+            .map(|_| {
+                let inst = meta.instance_column();
+                meta.enable_equality(inst);
+                inst
+            })
+            .collect();
         Self { base, instance }
     }
 
@@ -115,8 +120,8 @@ impl<F: ScalarField, const NI: usize> BaseConfig<F, NI> {
     }
 }
 
-impl<F: ScalarField, const NI: usize> Circuit<F> for BaseCircuitBuilder<F, NI> {
-    type Config = BaseConfig<F, NI>;
+impl<F: ScalarField> Circuit<F> for BaseCircuitBuilder<F> {
+    type Config = BaseConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
     type Params = BaseCircuitParams;
 
