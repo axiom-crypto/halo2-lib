@@ -1,3 +1,6 @@
+use getset::{Getters, MutGetters, Setters};
+use itertools::Itertools;
+
 use crate::{
     gates::{
         circuit::CircuitBuilderStage,
@@ -5,12 +8,12 @@ use crate::{
             threads::{GateStatistics, MultiPhaseCoreManager, SinglePhaseCoreManager},
             MultiPhaseThreadBreakPoints, MAX_PHASE,
         },
-        range::{BaseConfig, BaseConfigParams, PublicBaseConfig, RangeConfig},
+        range::RangeConfig,
         RangeChip,
     },
     halo2_proofs::{
-        circuit::{Layouter, Region, SimpleFloorPlanner},
-        plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
+        circuit::{Layouter, Region},
+        plonk::{Column, Instance},
     },
     utils::ScalarField,
     virtual_region::{
@@ -19,8 +22,8 @@ use crate::{
     },
     AssignedValue, Context,
 };
-use getset::{Getters, MutGetters, Setters};
-use itertools::Itertools;
+
+use super::BaseCircuitParams;
 
 /// Keeping the naming `RangeCircuitBuilder` for backwards compatibility.
 pub type RangeCircuitBuilder<F> = BaseCircuitBuilder<F, 0>;
@@ -42,12 +45,12 @@ pub type RangeWithInstanceCircuitBuilder<F> = BaseCircuitBuilder<F, 1>;
 pub struct BaseCircuitBuilder<F: ScalarField, const NI: usize> {
     /// Virtual region for each challenge phase. These cannot be shared across threads while keeping circuit deterministic.
     #[getset(get = "pub", get_mut = "pub", set = "pub")]
-    core: MultiPhaseCoreManager<F>,
+    pub(super) core: MultiPhaseCoreManager<F>,
     /// The range lookup manager
     #[getset(get = "pub", get_mut = "pub", set = "pub")]
-    lookup_manager: [LookupAnyManager<F, 1>; MAX_PHASE],
+    pub(super) lookup_manager: [LookupAnyManager<F, 1>; MAX_PHASE],
     /// Configuration parameters for the circuit shape
-    pub config_params: BaseConfigParams,
+    pub config_params: BaseCircuitParams,
     /// The assigned instances to expose publicly at the end of circuit synthesis
     pub assigned_instances: [Vec<AssignedValue<F>>; NI],
 }
@@ -93,7 +96,7 @@ impl<F: ScalarField, const NI: usize> BaseCircuitBuilder<F, NI> {
 
     /// Creates a new [BaseCircuitBuilder] with a pinned circuit configuration given by `config_params` and `break_points`.
     pub fn prover(
-        config_params: BaseConfigParams,
+        config_params: BaseCircuitParams,
         break_points: MultiPhaseThreadBreakPoints,
     ) -> Self {
         Self::new(true).use_params(config_params).use_break_points(break_points)
@@ -122,12 +125,12 @@ impl<F: ScalarField, const NI: usize> BaseCircuitBuilder<F, NI> {
     }
 
     /// Set config params
-    pub fn set_params(&mut self, params: BaseConfigParams) {
+    pub fn set_params(&mut self, params: BaseCircuitParams) {
         self.config_params = params;
     }
 
     /// Returns new with config params
-    pub fn use_params(mut self, params: BaseConfigParams) -> Self {
+    pub fn use_params(mut self, params: BaseCircuitParams) -> Self {
         self.set_params(params);
         self
     }
@@ -208,18 +211,18 @@ impl<F: ScalarField, const NI: usize> BaseCircuitBuilder<F, NI> {
     /// * `k`: The number of in the circuit (i.e. numeber of rows = 2<sup>k</sup>)
     /// * `minimum_rows`: The minimum number of rows in the circuit that cannot be used for witness assignments and contain random `blinding factors` to ensure zk property, defaults to 0.
     /// * `lookup_bits`: The fixed lookup table will consist of [0, 2<sup>lookup_bits</sup>)
-    pub fn config(&mut self, minimum_rows: Option<usize>) -> BaseConfigParams {
+    pub fn calculate_params(&mut self, minimum_rows: Option<usize>) -> BaseCircuitParams {
         let k = self.config_params.k;
         assert_ne!(k, 0, "k must be set");
         let max_rows = (1 << k) - minimum_rows.unwrap_or(0);
-        let gate_params = self.core.config(k, minimum_rows);
+        let gate_params = self.core.calculate_params(k, minimum_rows);
         let total_lookup_advice_per_phase = self.total_lookup_advice_per_phase();
         let num_lookup_advice_per_phase = total_lookup_advice_per_phase
             .iter()
             .map(|count| (count + max_rows - 1) / max_rows)
             .collect::<Vec<_>>();
 
-        let params = BaseConfigParams {
+        let params = BaseCircuitParams {
             k: gate_params.k,
             num_advice_per_phase: gate_params.num_advice_per_phase,
             num_fixed: gate_params.num_fixed,
@@ -314,65 +317,4 @@ pub struct RangeStatistics {
     pub gate: GateStatistics,
     /// Total special advice cells that need to be looked up, per phase
     pub total_lookup_advice_per_phase: Vec<usize>,
-}
-
-impl<F: ScalarField, const NI: usize> Circuit<F> for BaseCircuitBuilder<F, NI> {
-    type Config = PublicBaseConfig<F, NI>;
-    type FloorPlanner = SimpleFloorPlanner;
-    type Params = BaseConfigParams;
-
-    fn params(&self) -> Self::Params {
-        self.config_params.clone()
-    }
-
-    /// Creates a new instance of the [RangeCircuitBuilder] without witnesses by setting the witness_gen_only flag to false
-    fn without_witnesses(&self) -> Self {
-        unimplemented!()
-    }
-
-    /// Configures a new circuit using [`BaseConfigParams`]
-    fn configure_with_params(meta: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config {
-        PublicBaseConfig::configure(meta, params)
-    }
-
-    fn configure(_: &mut ConstraintSystem<F>) -> Self::Config {
-        unreachable!("You must use configure_with_params");
-    }
-
-    /// Performs the actual computation on the circuit (e.g., witness generation), populating the lookup table and filling in all the advice values for a particular proof.
-    fn synthesize(
-        &self,
-        config: Self::Config,
-        mut layouter: impl Layouter<F>,
-    ) -> Result<(), Error> {
-        // only load lookup table if we are actually doing lookups
-        if let BaseConfig::WithRange(config) = &config.base {
-            config.load_lookup_table(&mut layouter).expect("load lookup table should not fail");
-        }
-        // Only FirstPhase (phase 0)
-        layouter
-            .assign_region(
-                || "BaseCircuitBuilder generated circuit",
-                |mut region| {
-                    let usable_rows = config.gate().max_rows;
-                    self.core.phase_manager[0].assign_raw(
-                        &(config.gate().basic_gates[0].clone(), usable_rows),
-                        &mut region,
-                    );
-                    // Only assign cells to lookup if we're sure we're doing range lookups
-                    if let BaseConfig::WithRange(config) = &config.base {
-                        self.assign_lookups_in_phase(config, &mut region, 0);
-                    }
-                    // Impose equality constraints
-                    if !self.core.witness_gen_only() {
-                        self.core.copy_manager.assign_raw(config.constants(), &mut region);
-                    }
-                    Ok(())
-                },
-            )
-            .unwrap();
-
-        self.assign_instances(&config.instance, layouter.namespace(|| "expose"));
-        Ok(())
-    }
 }

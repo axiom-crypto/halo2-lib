@@ -26,7 +26,7 @@ fn test_fp_assert_eq_gen(k: u32, lookup_bits: usize, num_tries: usize) {
     let a = chip.load_private(ctx, Fq::zero());
     let b = chip.load_private(ctx, Fq::zero());
     chip.assert_equal(ctx, &a, &b);
-    let config_params = builder.config(Some(9));
+    let config_params = builder.calculate_params(Some(9));
 
     let params = ParamsKZG::setup(k, &mut rng);
     // generate proving key

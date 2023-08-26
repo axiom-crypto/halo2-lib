@@ -39,7 +39,7 @@ fn bench(c: &mut Criterion) {
     let mut builder =
         RangeCircuitBuilder::from_stage(CircuitBuilderStage::Keygen).use_k(k as usize);
     inner_prod_bench(builder.main(0), vec![Fr::zero(); 5], vec![Fr::zero(); 5]);
-    let config_params = builder.config(Some(20));
+    let config_params = builder.calculate_params(Some(20));
 
     // check the circuit is correct just in case
     MockProver::run(k, &builder, vec![]).unwrap().assert_satisfied();

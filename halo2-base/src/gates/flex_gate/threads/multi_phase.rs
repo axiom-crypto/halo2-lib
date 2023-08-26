@@ -115,7 +115,7 @@ impl<F: ScalarField> MultiPhaseCoreManager<F> {
     ///
     /// * `k`: The number of in the circuit (i.e. numeber of rows = 2<sup>k</sup>)
     /// * `minimum_rows`: The minimum number of rows in the circuit that cannot be used for witness assignments and contain random `blinding factors` to ensure zk property, defaults to 0.
-    pub fn config(&self, k: usize, minimum_rows: Option<usize>) -> FlexGateConfigParams {
+    pub fn calculate_params(&self, k: usize, minimum_rows: Option<usize>) -> FlexGateConfigParams {
         let max_rows = (1 << k) - minimum_rows.unwrap_or(0);
         let stats = self.statistics();
         // we do a rough estimate by taking ceil(advice_cells_per_phase / 2^k )

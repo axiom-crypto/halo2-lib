@@ -33,7 +33,7 @@ fn test_raw_bytes_to_gen<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
     let safe_value_offsets =
         safe_value.value().iter().map(|v| v.cell.unwrap().offset).collect::<Vec<_>>();
 
-    let config_params = builder.config(Some(9));
+    let config_params = builder.calculate_params(Some(9));
     let params = ParamsKZG::setup(k, OsRng);
     // generate proving key
     let vk = keygen_vk(&params, &builder).unwrap();

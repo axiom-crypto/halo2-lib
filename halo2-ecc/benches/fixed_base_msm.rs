@@ -1,7 +1,7 @@
+use halo2_base::gates::circuit::BaseCircuitParams;
 use halo2_base::gates::circuit::{builder::RangeCircuitBuilder, CircuitBuilderStage};
 use halo2_base::gates::flex_gate::threads::SinglePhaseCoreManager;
 use halo2_base::gates::flex_gate::MultiPhaseThreadBreakPoints;
-use halo2_base::gates::range::BaseConfigParams;
 use halo2_base::halo2_proofs::halo2curves::ff::PrimeField as _;
 use halo2_base::halo2_proofs::{
     arithmetic::Field,
@@ -55,7 +55,7 @@ fn fixed_base_msm_circuit(
     stage: CircuitBuilderStage,
     bases: Vec<G1Affine>,
     scalars: Vec<Fr>,
-    config_params: Option<BaseConfigParams>,
+    config_params: Option<BaseCircuitParams>,
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
     let k = params.degree as usize;
@@ -68,7 +68,7 @@ fn fixed_base_msm_circuit(
     let range = builder.range_chip();
     fixed_base_msm_bench(builder.pool(0), &range, params, bases, scalars);
     if !stage.witness_gen_only() {
-        builder.config(Some(20));
+        builder.calculate_params(Some(20));
     }
     builder
 }

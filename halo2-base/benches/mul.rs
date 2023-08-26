@@ -34,7 +34,7 @@ fn bench(c: &mut Criterion) {
     let mut builder =
         RangeCircuitBuilder::from_stage(CircuitBuilderStage::Keygen).use_k(K as usize);
     mul_bench(builder.main(0), [Fr::zero(); 2]);
-    let config_params = builder.config(Some(9));
+    let config_params = builder.calculate_params(Some(9));
 
     let params = ParamsKZG::<Bn256>::setup(K, OsRng);
     let vk = keygen_vk(&params, &builder).expect("vk should not fail");

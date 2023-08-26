@@ -166,7 +166,7 @@ fn var_byte_array_circuit<const MAX_LEN: usize>(
     let len = ctx.load_witness(Fr::from(len as u64));
     let fake_bytes = ctx.assign_witnesses(bytes.into_iter().map(Fr::from).collect::<Vec<_>>());
     safe.raw_to_var_len_bytes::<MAX_LEN>(ctx, fake_bytes.try_into().unwrap(), len);
-    builder.config(Some(9));
+    builder.calculate_params(Some(9));
     builder
 }
 

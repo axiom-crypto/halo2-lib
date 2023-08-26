@@ -3,8 +3,7 @@ use crate::{
     halo2_proofs::{
         circuit::{Layouter, Value},
         plonk::{
-            Advice, Column, ConstraintSystem, Error, Fixed, Instance, SecondPhase, Selector,
-            TableColumn, ThirdPhase,
+            Advice, Column, ConstraintSystem, Error, SecondPhase, Selector, TableColumn, ThirdPhase,
         },
         poly::Rotation,
     },
@@ -17,112 +16,13 @@ use crate::{
     QuantumCell::{self, Constant, Existing, Witness},
 };
 
+use super::flex_gate::{FlexGateConfigParams, GateChip};
+
 use getset::Getters;
 use num_bigint::BigUint;
 use num_integer::Integer;
 use num_traits::One;
-use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, ops::Shl};
-
-use super::flex_gate::{FlexGateConfigParams, GateChip};
-
-/// A Config struct defining the parameters for a halo2-base circuit
-/// - this is used to configure either FlexGateConfig or RangeConfig.
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
-pub struct BaseConfigParams {
-    // Keeping FlexGateConfigParams expanded for backwards compatibility
-    /// Specifies the number of rows in the circuit to be 2<sup>k</sup>
-    pub k: usize,
-    /// The number of advice columns per phase
-    pub num_advice_per_phase: Vec<usize>,
-    /// The number of fixed columns
-    pub num_fixed: usize,
-    /// The number of bits that can be ranged checked using a special lookup table with values [0, 2<sup>lookup_bits</sup>), if using.
-    /// The number of special advice columns that have range lookup enabled per phase
-    pub num_lookup_advice_per_phase: Vec<usize>,
-    /// This is `None` if no lookup table is used.
-    pub lookup_bits: Option<usize>,
-}
-
-impl BaseConfigParams {
-    fn gate_params(&self) -> FlexGateConfigParams {
-        FlexGateConfigParams {
-            k: self.k,
-            num_advice_per_phase: self.num_advice_per_phase.clone(),
-            num_fixed: self.num_fixed,
-        }
-    }
-}
-
-/// Configuration with [`BaseConfig`] with `NI` public instance columns.
-#[derive(Clone, Debug)]
-pub struct PublicBaseConfig<F: ScalarField, const NI: usize> {
-    /// The underlying private gate/range configuration
-    pub base: BaseConfig<F>,
-    /// The public instance column
-    pub instance: [Column<Instance>; NI],
-}
-
-/// Smart Halo2 circuit config that has different variants depending on whether you need range checks or not.
-/// The difference is that to enable range checks, the Halo2 config needs to add a lookup table.
-#[derive(Clone, Debug)]
-pub enum BaseConfig<F: ScalarField> {
-    /// Config for a circuit that does not use range checks
-    WithoutRange(FlexGateConfig<F>),
-    /// Config for a circuit that does use range checks
-    WithRange(RangeConfig<F>),
-}
-
-impl<F: ScalarField, const NI: usize> PublicBaseConfig<F, NI> {
-    /// Generates a new `BaseConfig` depending on `params`.
-    /// - It will generate a `RangeConfig` is `params` has `lookup_bits` not None **and** `num_lookup_advice_per_phase` are not all empty or zero (i.e., if `params` indicates that the circuit actually requires a lookup table).
-    /// - Otherwise it will generate a `FlexGateConfig`.
-    pub fn configure(meta: &mut ConstraintSystem<F>, params: BaseConfigParams) -> Self {
-        let total_lookup_advice_cols = params.num_lookup_advice_per_phase.iter().sum::<usize>();
-        let base = if params.lookup_bits.is_some() && total_lookup_advice_cols != 0 {
-            // We only add a lookup table if lookup bits is not None
-            BaseConfig::WithRange(RangeConfig::configure(
-                meta,
-                params.gate_params(),
-                &params.num_lookup_advice_per_phase,
-                params.lookup_bits.unwrap(),
-            ))
-        } else {
-            BaseConfig::WithoutRange(FlexGateConfig::configure(meta, params.gate_params()))
-        };
-        let instance = [(); NI].map(|_| {
-            let inst = meta.instance_column();
-            meta.enable_equality(inst);
-            inst
-        });
-        Self { base, instance }
-    }
-
-    /// Returns the inner [`FlexGateConfig`]
-    pub fn gate(&self) -> &FlexGateConfig<F> {
-        match &self.base {
-            BaseConfig::WithoutRange(config) => config,
-            BaseConfig::WithRange(config) => &config.gate,
-        }
-    }
-
-    /// Returns the fixed columns for constants
-    pub fn constants(&self) -> &Vec<Column<Fixed>> {
-        match &self.base {
-            BaseConfig::WithoutRange(config) => &config.constants,
-            BaseConfig::WithRange(config) => &config.gate.constants,
-        }
-    }
-
-    /// Returns a slice of the selector column to enable lookup -- this is only in the situation where there is a single advice column of any kind -- per phase
-    /// Returns empty slice if there are no lookups enabled.
-    pub fn q_lookup(&self) -> &[Option<Selector>] {
-        match &self.base {
-            BaseConfig::WithoutRange(_) => &[],
-            BaseConfig::WithRange(config) => &config.q_lookup,
-        }
-    }
-}
 
 /// Configuration for Range Chip
 #[derive(Clone, Debug)]

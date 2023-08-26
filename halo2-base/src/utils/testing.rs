@@ -1,9 +1,8 @@
 //! Utilities for testing
 use crate::{
     gates::{
-        circuit::{builder::RangeCircuitBuilder, CircuitBuilderStage},
+        circuit::{builder::RangeCircuitBuilder, BaseCircuitParams, CircuitBuilderStage},
         flex_gate::threads::SinglePhaseCoreManager,
-        range::BaseConfigParams,
         GateChip, RangeChip,
     },
     halo2_proofs::{
@@ -180,7 +179,7 @@ impl BaseTester {
         builder.config_params.lookup_bits = lookup_bits;
 
         // configure the circuit shape, 9 blinding rows seems enough
-        builder.config(Some(self.unusable_rows));
+        builder.calculate_params(Some(self.unusable_rows));
         if self.expect_satisfied {
             MockProver::run(self.k, &builder, vec![]).unwrap().assert_satisfied();
         } else {
@@ -217,7 +216,7 @@ impl BaseTester {
         builder.config_params.lookup_bits = lookup_bits;
 
         // configure the circuit shape, 9 blinding rows seems enough
-        let config_params = builder.config(Some(self.unusable_rows));
+        let config_params = builder.calculate_params(Some(self.unusable_rows));
 
         let params = gen_srs(self.k);
         let vk_time = start_timer!(|| "Generating vkey");
@@ -250,7 +249,7 @@ impl BaseTester {
 /// Bench stats
 pub struct BenchStats {
     /// Config params
-    pub config_params: BaseConfigParams,
+    pub config_params: BaseCircuitParams,
     /// Vkey gen time
     pub vk_time: TimerInfo,
     /// Pkey gen time

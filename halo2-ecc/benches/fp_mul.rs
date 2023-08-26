@@ -1,6 +1,6 @@
 use ark_std::{end_timer, start_timer};
+use halo2_base::gates::circuit::BaseCircuitParams;
 use halo2_base::gates::flex_gate::MultiPhaseThreadBreakPoints;
-use halo2_base::gates::range::BaseConfigParams;
 use halo2_base::gates::{
     circuit::{builder::RangeCircuitBuilder, CircuitBuilderStage},
     RangeChip,
@@ -48,7 +48,7 @@ fn fp_mul_circuit(
     stage: CircuitBuilderStage,
     a: Fq,
     b: Fq,
-    config_params: Option<BaseConfigParams>,
+    config_params: Option<BaseCircuitParams>,
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
     let k = K as usize;
@@ -65,7 +65,7 @@ fn fp_mul_circuit(
     fp_mul_bench(builder.main(0), &range, 88, 3, a, b);
     end_timer!(start0);
     if !stage.witness_gen_only() {
-        builder.config(Some(20));
+        builder.calculate_params(Some(20));
     }
     builder
 }

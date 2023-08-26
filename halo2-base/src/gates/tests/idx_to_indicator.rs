@@ -25,7 +25,7 @@ fn test_idx_to_indicator_gen(k: u32, len: usize) {
     let indicator = gate.idx_to_indicator(builder.main(0), dummy_idx, len);
     // get the offsets of the indicator cells for later 'pranking'
     let ind_offsets = indicator.iter().map(|ind| ind.cell.unwrap().offset).collect::<Vec<_>>();
-    let config_params = builder.config(Some(9));
+    let config_params = builder.calculate_params(Some(9));
 
     let params = ParamsKZG::setup(k, OsRng);
     // generate proving key

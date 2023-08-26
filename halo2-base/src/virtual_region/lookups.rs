@@ -14,12 +14,18 @@ use crate::AssignedValue;
 use super::copy_constraints::SharedCopyConstraintManager;
 use super::manager::VirtualRegionManager;
 
+/// A manager that can be used for any lookup argument. This manager automates
+/// the process of copying cells to designed advice columns with lookup enabled.
+/// It also manages how many such advice columns are necessary.
+///
+/// ## Detailed explanation
 /// If we have a lookup argument that uses `ADVICE_COLS` advice columns and `TABLE_COLS` table columns, where
 /// the table is either fixed or dynamic (advice), then we want to dynamically allocate chunks of `ADVICE_COLS` columns
 /// that have the lookup into the table **always on** so that:
 /// - every time we want to lookup [_; ADVICE_COLS] values, we copy them over to a row in the special
 /// lookup-enabled advice columns.
 /// - note that just for assignment, we don't need to know anything about the table itself.
+/// Note: the manager does not need to know the value of `TABLE_COLS`.
 ///
 /// We want this manager to be CPU thread safe, while ensuring that the resulting circuit is
 /// deterministic -- the order in which the cells to lookup are added matters.

@@ -1,7 +1,7 @@
 use ark_std::{end_timer, start_timer};
+use halo2_base::gates::circuit::BaseCircuitParams;
 use halo2_base::gates::flex_gate::threads::SinglePhaseCoreManager;
 use halo2_base::gates::flex_gate::MultiPhaseThreadBreakPoints;
-use halo2_base::gates::range::BaseConfigParams;
 use halo2_base::gates::{
     circuit::{builder::RangeCircuitBuilder, CircuitBuilderStage},
     RangeChip,
@@ -76,7 +76,7 @@ fn msm_circuit(
     stage: CircuitBuilderStage,
     bases: Vec<G1Affine>,
     scalars: Vec<Fr>,
-    config_params: Option<BaseConfigParams>,
+    config_params: Option<BaseCircuitParams>,
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
@@ -91,7 +91,7 @@ fn msm_circuit(
     msm_bench(builder.pool(0), &range, params, bases, scalars);
     end_timer!(start0);
     if !stage.witness_gen_only() {
-        builder.config(Some(20));
+        builder.calculate_params(Some(20));
     }
     builder
 }
