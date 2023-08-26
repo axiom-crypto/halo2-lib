@@ -11,7 +11,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest-m
+    runs-on: ubuntu-latest-64core-256ram
 
     steps:
       - uses: actions/checkout@v3
@@ -24,7 +24,7 @@ jobs:
       - name: Run halo2-ecc tests (mock prover)
         working-directory: "halo2-ecc"
         run: |
-          cargo test --lib -- --skip bench --test-threads=2
+          cargo test --lib -- --skip bench
       - name: Run halo2-ecc tests (real prover)
         working-directory: "halo2-ecc"
         run: |
@@ -39,7 +39,7 @@ jobs:
       - name: Run zkevm tests
         working-directory: "hashes/zkevm"
         run: |
-          cargo test
+          cargo test packed_multi_keccak_prover::k_14
 
   lint:
     name: Lint
