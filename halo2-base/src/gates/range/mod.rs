@@ -1,5 +1,5 @@
 use crate::{
-    gates::flex_gate::{FlexGateConfig, GateInstructions, GateStrategy, MAX_PHASE},
+    gates::flex_gate::{FlexGateConfig, GateInstructions, MAX_PHASE},
     halo2_proofs::{
         circuit::{Layouter, Value},
         plonk::{
@@ -11,96 +11,18 @@ use crate::{
         biguint_to_fe, bit_length, decompose_fe_to_u64_limbs, fe_to_biguint, BigPrimeField,
         ScalarField,
     },
+    virtual_region::lookups::LookupAnyManager,
     AssignedValue, Context,
     QuantumCell::{self, Constant, Existing, Witness},
 };
+
+use super::flex_gate::{FlexGateConfigParams, GateChip};
+
+use getset::Getters;
 use num_bigint::BigUint;
 use num_integer::Integer;
 use num_traits::One;
 use std::{cmp::Ordering, ops::Shl};
-
-use super::{builder::BaseConfigParams, flex_gate::GateChip};
-
-/// Specifies the gate strategy for the range chip
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum RangeStrategy {
-    /// # Vertical Gate Strategy:
-    /// `q_0 * (a + b * c - d) = 0`
-    /// where
-    /// * a = value[0], b = value[1], c = value[2], d = value[3]
-    /// * q = q_lookup[0]
-    /// * q is either 0 or 1 so this is just a simple selector
-    ///
-    /// Using `a + b * c` instead of `a * b + c` allows for "chaining" of gates, i.e., the output of one gate becomes `a` in the next gate.
-    Vertical, // vanilla implementation with vertical basic gate(s)
-}
-
-/// Smart Halo2 circuit config that has different variants depending on whether you need range checks or not.
-/// The difference is that to enable range checks, the Halo2 config needs to add a lookup table.
-#[derive(Clone, Debug)]
-pub enum BaseConfig<F: ScalarField> {
-    /// Config for a circuit that does not use range checks
-    WithoutRange(FlexGateConfig<F>),
-    /// Config for a circuit that does use range checks
-    WithRange(RangeConfig<F>),
-}
-
-impl<F: ScalarField> BaseConfig<F> {
-    /// Generates a new `BaseConfig` depending on `params`.
-    /// - It will generate a `RangeConfig` is `params` has `lookup_bits` not None **and** `num_lookup_advice_per_phase` are not all empty or zero (i.e., if `params` indicates that the circuit actually requires a lookup table).
-    /// - Otherwise it will generate a `FlexGateConfig`.
-    pub fn configure(meta: &mut ConstraintSystem<F>, params: BaseConfigParams) -> Self {
-        let total_lookup_advice_cols = params.num_lookup_advice_per_phase.iter().sum::<usize>();
-        if params.lookup_bits.is_some() && total_lookup_advice_cols != 0 {
-            // We only add a lookup table if lookup bits is not None
-            Self::WithRange(RangeConfig::configure(
-                meta,
-                match params.strategy {
-                    GateStrategy::Vertical => RangeStrategy::Vertical,
-                },
-                &params.num_advice_per_phase,
-                &params.num_lookup_advice_per_phase,
-                params.num_fixed,
-                params.lookup_bits.unwrap(),
-                params.k,
-            ))
-        } else {
-            Self::WithoutRange(FlexGateConfig::configure(
-                meta,
-                params.strategy,
-                &params.num_advice_per_phase,
-                params.num_fixed,
-                params.k,
-            ))
-        }
-    }
-
-    /// Returns the inner [`FlexGateConfig`]
-    pub fn gate(&self) -> &FlexGateConfig<F> {
-        match self {
-            Self::WithoutRange(config) => config,
-            Self::WithRange(config) => &config.gate,
-        }
-    }
-
-    /// Returns a slice of the special advice columns with lookup enabled, per phase.
-    /// Returns empty slice if there are no lookups enabled.
-    pub fn lookup_advice(&self) -> &[Vec<Column<Advice>>] {
-        match self {
-            Self::WithoutRange(_) => &[],
-            Self::WithRange(config) => &config.lookup_advice,
-        }
-    }
-
-    /// Returns a slice of the selector column to enable lookup -- this is only in the situation where there is a single advice column of any kind -- per phase
-    /// Returns empty slice if there are no lookups enabled.
-    pub fn q_lookup(&self) -> &[Option<Selector>] {
-        match self {
-            Self::WithoutRange(_) => &[],
-            Self::WithRange(config) => &config.q_lookup,
-        }
-    }
-}
 
 /// Configuration for Range Chip
 #[derive(Clone, Debug)]
@@ -114,15 +36,13 @@ pub struct RangeConfig<F: ScalarField> {
     /// * If `gate` has only 1 advice column, lookups are enabled for that column, in which case `lookup_advice` is empty
     /// * If `gate` has more than 1 advice column some number of user-specified `lookup_advice` columns are added
     ///     * In this case, we don't need a selector so `q_lookup` is empty
-    pub lookup_advice: [Vec<Column<Advice>>; MAX_PHASE],
+    pub lookup_advice: Vec<Vec<Column<Advice>>>,
     /// Selector values for the lookup table.
     pub q_lookup: Vec<Option<Selector>>,
     /// Column for lookup table values.
     pub lookup: TableColumn,
     /// Defines the number of bits represented in the lookup table [0,2^<sup>lookup_bits</sup>).
     lookup_bits: usize,
-    /// Gate Strategy used for specifying advice values.
-    _strategy: RangeStrategy,
 }
 
 impl<F: ScalarField> RangeConfig<F> {
@@ -140,35 +60,26 @@ impl<F: ScalarField> RangeConfig<F> {
     /// * `circuit_degree`: Degree that expresses the size of circuit (i.e., 2^<sup>circuit_degree</sup> is the number of rows in the circuit)
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
-        range_strategy: RangeStrategy,
-        num_advice: &[usize],
+        gate_params: FlexGateConfigParams,
         num_lookup_advice: &[usize],
-        num_fixed: usize,
         lookup_bits: usize,
-        circuit_degree: usize,
     ) -> Self {
-        assert!(lookup_bits <= 28);
+        assert!(lookup_bits <= F::S as usize);
         // sanity check: only create lookup table if there are lookup_advice columns
         assert!(!num_lookup_advice.is_empty(), "You are creating a RangeConfig but don't seem to need a lookup table, please double-check if you're using lookups correctly. Consider setting lookup_bits = None in BaseConfigParams");
 
         let lookup = meta.lookup_table_column();
 
-        let gate = FlexGateConfig::configure(
-            meta,
-            match range_strategy {
-                RangeStrategy::Vertical => GateStrategy::Vertical,
-            },
-            num_advice,
-            num_fixed,
-            circuit_degree,
-        );
+        let gate = FlexGateConfig::configure(meta, gate_params.clone());
 
         // For now, we apply the same range lookup table to each phase
         let mut q_lookup = Vec::new();
-        let mut lookup_advice = [(); MAX_PHASE].map(|_| Vec::new());
+        let mut lookup_advice = Vec::new();
         for (phase, &num_columns) in num_lookup_advice.iter().enumerate() {
+            let num_advice = *gate_params.num_advice_per_phase.get(phase).unwrap_or(&0);
+            let mut columns = Vec::new();
             // if num_columns is set to 0, then we assume you do not want to perform any lookups in that phase
-            if num_advice[phase] == 1 && num_columns != 0 {
+            if num_advice == 1 && num_columns != 0 {
                 q_lookup.push(Some(meta.complex_selector()));
             } else {
                 q_lookup.push(None);
@@ -180,16 +91,17 @@ impl<F: ScalarField> RangeConfig<F> {
                         _ => panic!("Currently RangeConfig only supports {MAX_PHASE} phases"),
                     };
                     meta.enable_equality(a);
-                    lookup_advice[phase].push(a);
+                    columns.push(a);
                 }
             }
+            lookup_advice.push(columns);
         }
 
-        let mut config =
-            Self { lookup_advice, q_lookup, lookup, lookup_bits, gate, _strategy: range_strategy };
+        let mut config = Self { lookup_advice, q_lookup, lookup, lookup_bits, gate };
         config.create_lookup(meta);
 
-        config.gate.max_rows = (1 << circuit_degree) - meta.minimum_rows();
+        log::info!("Poisoned rows after RangeConfig::configure {}", meta.minimum_rows());
+        config.gate.max_rows = (1 << gate_params.k) - meta.minimum_rows();
         assert!(
             (1 << lookup_bits) <= config.gate.max_rows,
             "lookup table is too large for the circuit degree plus blinding factors!"
@@ -255,17 +167,14 @@ pub trait RangeInstructions<F: ScalarField> {
     /// Returns the type of gate used.
     fn gate(&self) -> &Self::Gate;
 
-    /// Returns the [GateStrategy] for this range.
-    fn strategy(&self) -> RangeStrategy;
-
     /// Returns the number of bits the lookup table represents.
     fn lookup_bits(&self) -> usize;
 
     /// Checks and constrains that `a` lies in the range [0, 2<sup>range_bits</sup>).
     ///
-    /// Assumes that both `a`<= `range_bits` bits.
-    /// * a: [AssignedValue] value to be range checked
-    /// * range_bits: number of bits to represent the range
+    /// Inputs:
+    /// * `a`: [AssignedValue] value to be range checked
+    /// * `range_bits`: number of bits in the range
     fn range_check(&self, ctx: &mut Context<F>, a: AssignedValue<F>, range_bits: usize);
 
     /// Constrains that 'a' is less than 'b'.
@@ -497,14 +406,18 @@ pub trait RangeInstructions<F: ScalarField> {
 /// # RangeChip
 /// This chip provides methods that rely on "range checking" that a field element `x` is within a range of bits.
 /// Range checks are done using a lookup table with the numbers [0, 2<sup>lookup_bits</sup>).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Getters)]
 pub struct RangeChip<F: ScalarField> {
-    /// [GateStrategy] for advice values in this chip.
-    strategy: RangeStrategy,
     /// Underlying [GateChip] for this chip.
     pub gate: GateChip<F>,
+    /// Lookup manager for each phase, lazily initiated using the [SharedCopyConstraintManager] from the [Context]
+    /// that first calls it.
+    ///
+    /// The lookup manager is used to store the cells that need to be looked up in the range check lookup table.
+    #[getset(get = "pub")]
+    lookup_manager: [LookupAnyManager<F, 1>; MAX_PHASE],
     /// Defines the number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>).
-    pub lookup_bits: usize,
+    lookup_bits: usize,
     /// [Vec] of powers of `2 ** lookup_bits` represented as [QuantumCell::Constant].
     /// These are precomputed and cached as a performance optimization for later limb decompositions. We precompute up to the higher power that fits in `F`, which is `2 ** ((F::CAPACITY / lookup_bits) * lookup_bits)`.
     pub limb_bases: Vec<QuantumCell<F>>,
@@ -514,7 +427,7 @@ impl<F: ScalarField> RangeChip<F> {
     /// Creates a new [RangeChip] with the given strategy and lookup_bits.
     /// * strategy: [GateStrategy] for advice values in this chip
     /// * lookup_bits: number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>)
-    pub fn new(strategy: RangeStrategy, lookup_bits: usize) -> Self {
+    pub fn new(lookup_bits: usize, lookup_manager: [LookupAnyManager<F, 1>; MAX_PHASE]) -> Self {
         let limb_base = F::from(1u64 << lookup_bits);
         let mut running_base = limb_base;
         let num_bases = F::CAPACITY as usize / lookup_bits;
@@ -524,17 +437,84 @@ impl<F: ScalarField> RangeChip<F> {
             running_base *= &limb_base;
             limb_bases.push(Constant(running_base));
         }
-        let gate = GateChip::new(match strategy {
-            RangeStrategy::Vertical => GateStrategy::Vertical,
-        });
+        let gate = GateChip::new();
 
-        Self { strategy, gate, lookup_bits, limb_bases }
+        Self { gate, lookup_bits, lookup_manager, limb_bases }
     }
 
-    /// Creates a new [RangeChip] with the default strategy and provided lookup_bits.
-    /// * lookup_bits: number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>)
-    pub fn default(lookup_bits: usize) -> Self {
-        Self::new(RangeStrategy::Vertical, lookup_bits)
+    fn add_cell_to_lookup(&self, ctx: &Context<F>, a: AssignedValue<F>) {
+        let phase = ctx.phase();
+        let manager = &self.lookup_manager[phase];
+        manager.add_lookup(ctx.context_id, [a]);
+    }
+
+    /// Checks and constrains that `a` lies in the range [0, 2<sup>range_bits</sup>).
+    ///
+    /// This is done by decomposing `a` into `num_limbs` limbs, where `num_limbs = ceil(range_bits / lookup_bits)`.
+    /// Each limb is constrained to be within the range [0, 2<sup>lookup_bits</sup>).
+    /// The limbs are then combined to form `a` again with the last limb having `rem_bits` number of bits.
+    ///
+    /// Returns the last (highest) limb.
+    ///
+    /// Inputs:
+    /// * `a`: [AssignedValue] value to be range checked
+    /// * `range_bits`: number of bits in the range
+    /// * `lookup_bits`: number of bits in the lookup table
+    ///
+    /// # Assumptions
+    /// * `ceil(range_bits / lookup_bits) * lookup_bits <= F::CAPACITY`
+    fn _range_check(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+        range_bits: usize,
+    ) -> AssignedValue<F> {
+        if range_bits == 0 {
+            self.gate.assert_is_const(ctx, &a, &F::ZERO);
+            return a;
+        }
+        // the number of limbs
+        let num_limbs = (range_bits + self.lookup_bits - 1) / self.lookup_bits;
+        // println!("range check {} bits {} len", range_bits, k);
+        let rem_bits = range_bits % self.lookup_bits;
+
+        debug_assert!(self.limb_bases.len() >= num_limbs);
+
+        let last_limb = if num_limbs == 1 {
+            self.add_cell_to_lookup(ctx, a);
+            a
+        } else {
+            let limbs = decompose_fe_to_u64_limbs(a.value(), num_limbs, self.lookup_bits)
+                .into_iter()
+                .map(|x| Witness(F::from(x)));
+            let row_offset = ctx.advice.len() as isize;
+            let acc = self.gate.inner_product(ctx, limbs, self.limb_bases[..num_limbs].to_vec());
+            // the inner product above must equal `a`
+            ctx.constrain_equal(&a, &acc);
+            // we fetch the cells to lookup by getting the indices where `limbs` were assigned in `inner_product`. Because `limb_bases[0]` is 1, the progression of indices is 0,1,4,...,4+3*i
+            self.add_cell_to_lookup(ctx, ctx.get(row_offset));
+            for i in 0..num_limbs - 1 {
+                self.add_cell_to_lookup(ctx, ctx.get(row_offset + 1 + 3 * i as isize));
+            }
+            ctx.get(row_offset + 1 + 3 * (num_limbs - 2) as isize)
+        };
+
+        // additional constraints for the last limb if rem_bits != 0
+        match rem_bits.cmp(&1) {
+            // we want to check x := limbs[num_limbs-1] is boolean
+            // we constrain x*(x-1) = 0 + x * x - x == 0
+            // | 0 | x | x | x |
+            Ordering::Equal => {
+                self.gate.assert_bit(ctx, last_limb);
+            }
+            Ordering::Greater => {
+                let mult_val = self.gate.pow_of_two[self.lookup_bits - rem_bits];
+                let check = self.gate.mul(ctx, last_limb, Constant(mult_val));
+                self.add_cell_to_lookup(ctx, check);
+            }
+            _ => {}
+        }
+        last_limb
     }
 }
 
@@ -546,11 +526,6 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         &self.gate
     }
 
-    /// Returns the [GateStrategy] for this range.
-    fn strategy(&self) -> RangeStrategy {
-        self.strategy
-    }
-
     /// Returns the number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>).
     fn lookup_bits(&self) -> usize {
         self.lookup_bits
@@ -558,61 +533,18 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
 
     /// Checks and constrains that `a` lies in the range [0, 2<sup>range_bits</sup>).
     ///
-    /// This is done by decomposing `a` into `k` limbs, where `k = ceil(range_bits / lookup_bits)`.
+    /// This is done by decomposing `a` into `num_limbs` limbs, where `num_limbs = ceil(range_bits / lookup_bits)`.
     /// Each limb is constrained to be within the range [0, 2<sup>lookup_bits</sup>).
     /// The limbs are then combined to form `a` again with the last limb having `rem_bits` number of bits.
     ///
+    /// Inputs:
     /// * `a`: [AssignedValue] value to be range checked
     /// * `range_bits`: number of bits in the range
-    /// * `lookup_bits`: number of bits in the lookup table
     ///
     /// # Assumptions
     /// * `ceil(range_bits / lookup_bits) * lookup_bits <= F::CAPACITY`
     fn range_check(&self, ctx: &mut Context<F>, a: AssignedValue<F>, range_bits: usize) {
-        if range_bits == 0 {
-            self.gate.assert_is_const(ctx, &a, &F::ZERO);
-            return;
-        }
-        // the number of limbs
-        let k = (range_bits + self.lookup_bits - 1) / self.lookup_bits;
-        // println!("range check {} bits {} len", range_bits, k);
-        let rem_bits = range_bits % self.lookup_bits;
-
-        debug_assert!(self.limb_bases.len() >= k);
-
-        if k == 1 {
-            ctx.cells_to_lookup.push(a);
-        } else {
-            let limbs = decompose_fe_to_u64_limbs(a.value(), k, self.lookup_bits)
-                .into_iter()
-                .map(|x| Witness(F::from(x)));
-            let row_offset = ctx.advice.len() as isize;
-            let acc = self.gate.inner_product(ctx, limbs, self.limb_bases[..k].to_vec());
-            // the inner product above must equal `a`
-            ctx.constrain_equal(&a, &acc);
-            // we fetch the cells to lookup by getting the indices where `limbs` were assigned in `inner_product`. Because `limb_bases[0]` is 1, the progression of indices is 0,1,4,...,4+3*i
-            ctx.cells_to_lookup.push(ctx.get(row_offset));
-            for i in 0..k - 1 {
-                ctx.cells_to_lookup.push(ctx.get(row_offset + 1 + 3 * i as isize));
-            }
-        };
-
-        // additional constraints for the last limb if rem_bits != 0
-        match rem_bits.cmp(&1) {
-            // we want to check x := limbs[k-1] is boolean
-            // we constrain x*(x-1) = 0 + x * x - x == 0
-            // | 0 | x | x | x |
-            Ordering::Equal => {
-                self.gate.assert_bit(ctx, *ctx.cells_to_lookup.last().unwrap());
-            }
-            Ordering::Greater => {
-                let mult_val = self.gate.pow_of_two[self.lookup_bits - rem_bits];
-                let check =
-                    self.gate.mul(ctx, *ctx.cells_to_lookup.last().unwrap(), Constant(mult_val));
-                ctx.cells_to_lookup.push(check);
-            }
-            _ => {}
-        }
+        self._range_check(ctx, a, range_bits);
     }
 
     /// Constrains that 'a' is less than 'b'.
@@ -633,22 +565,20 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         let a = a.into();
         let b = b.into();
         let pow_of_two = self.gate.pow_of_two[num_bits];
-        let check_cell = match self.strategy {
-            RangeStrategy::Vertical => {
-                let shift_a_val = pow_of_two + a.value();
-                // | a + 2^(num_bits) - b | b | 1 | a + 2^(num_bits) | - 2^(num_bits) | 1 | a |
-                let cells = [
-                    Witness(shift_a_val - b.value()),
-                    b,
-                    Constant(F::ONE),
-                    Witness(shift_a_val),
-                    Constant(-pow_of_two),
-                    Constant(F::ONE),
-                    a,
-                ];
-                ctx.assign_region(cells, [0, 3]);
-                ctx.get(-7)
-            }
+        let check_cell = {
+            let shift_a_val = pow_of_two + a.value();
+            // | a + 2^(num_bits) - b | b | 1 | a + 2^(num_bits) | - 2^(num_bits) | 1 | a |
+            let cells = [
+                Witness(shift_a_val - b.value()),
+                b,
+                Constant(F::ONE),
+                Witness(shift_a_val),
+                Constant(-pow_of_two),
+                Constant(F::ONE),
+                a,
+            ];
+            ctx.assign_region(cells, [0, 3]);
+            ctx.get(-7)
         };
 
         self.range_check(ctx, check_cell, num_bits);
@@ -683,28 +613,26 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
 
         let shift_a_val = pow_padded + a.value();
         let shifted_val = shift_a_val - b.value();
-        let shifted_cell = match self.strategy {
-            RangeStrategy::Vertical => {
-                ctx.assign_region(
-                    [
-                        Witness(shifted_val),
-                        b,
-                        Constant(F::ONE),
-                        Witness(shift_a_val),
-                        Constant(-pow_padded),
-                        Constant(F::ONE),
-                        a,
-                    ],
-                    [0, 3],
-                );
-                ctx.get(-7)
-            }
+        let shifted_cell = {
+            ctx.assign_region(
+                [
+                    Witness(shifted_val),
+                    b,
+                    Constant(F::ONE),
+                    Witness(shift_a_val),
+                    Constant(-pow_padded),
+                    Constant(F::ONE),
+                    a,
+                ],
+                [0, 3],
+            );
+            ctx.get(-7)
         };
 
         // check whether a - b + 2^padded_bits < 2^padded_bits ?
         // since assuming a, b < 2^padded_bits we are guaranteed a - b + 2^padded_bits < 2^{padded_bits + 1}
-        self.range_check(ctx, shifted_cell, padded_bits + self.lookup_bits);
-        // ctx.cells_to_lookup.last() will have the (k + 1)-th limb of `a - b + 2^{k * limb_bits}`, which is zero iff `a < b`
-        self.gate.is_zero(ctx, *ctx.cells_to_lookup.last().unwrap())
+        let last_limb = self._range_check(ctx, shifted_cell, padded_bits + self.lookup_bits);
+        // last_limb will have the (k + 1)-th limb of `a - b + 2^{k * limb_bits}`, which is zero iff `a < b`
+        self.gate.is_zero(ctx, last_limb)
     }
 }

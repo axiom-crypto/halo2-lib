@@ -3,7 +3,7 @@ use crate::ff::Field;
 use crate::fields::{fp::FpChip, FieldChip, Selectable};
 use crate::group::{Curve, Group};
 use crate::halo2_proofs::arithmetic::CurveAffine;
-use halo2_base::gates::builder::GateThreadBuilder;
+use halo2_base::gates::flex_gate::threads::SinglePhaseCoreManager;
 use halo2_base::utils::{modulus, BigPrimeField};
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
@@ -1043,7 +1043,7 @@ where
     /// See [`pippenger::multi_exp_par`] for more details.
     pub fn variable_base_msm<C>(
         &self,
-        thread_pool: &mut GateThreadBuilder<F>,
+        thread_pool: &mut SinglePhaseCoreManager<F>,
         P: &[EcPoint<F, FC::FieldPoint>],
         scalars: Vec<Vec<AssignedValue<F>>>,
         max_bits: usize,
@@ -1053,18 +1053,17 @@ where
         FC: Selectable<F, FC::ReducedFieldPoint>,
     {
         // window_bits = 4 is optimal from empirical observations
-        self.variable_base_msm_in::<C>(thread_pool, P, scalars, max_bits, 4, 0)
+        self.variable_base_msm_custom::<C>(thread_pool, P, scalars, max_bits, 4)
     }
 
     // TODO: add asserts to validate input assumptions described in docs
-    pub fn variable_base_msm_in<C>(
+    pub fn variable_base_msm_custom<C>(
         &self,
-        builder: &mut GateThreadBuilder<F>,
+        builder: &mut SinglePhaseCoreManager<F>,
         P: &[EcPoint<F, FC::FieldPoint>],
         scalars: Vec<Vec<AssignedValue<F>>>,
         max_bits: usize,
         window_bits: usize,
-        phase: usize,
     ) -> EcPoint<F, FC::FieldPoint>
     where
         C: CurveAffineExt<Base = FC::FieldType>,
@@ -1076,7 +1075,7 @@ where
         if P.len() <= 25 {
             multi_scalar_multiply::<F, FC, C>(
                 self.field_chip,
-                builder.main(phase),
+                builder.main(),
                 P,
                 scalars,
                 max_bits,
@@ -1098,7 +1097,6 @@ where
                 scalars,
                 max_bits,
                 window_bits, // clump_factor := window_bits
-                phase,
             )
         }
     }
@@ -1132,7 +1130,7 @@ impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
     // default for most purposes
     pub fn fixed_base_msm<C>(
         &self,
-        builder: &mut GateThreadBuilder<F>,
+        builder: &mut SinglePhaseCoreManager<F>,
         points: &[C],
         scalars: Vec<Vec<AssignedValue<F>>>,
         max_scalar_bits_per_cell: usize,
@@ -1141,7 +1139,7 @@ impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         C: CurveAffineExt,
         FC: FieldChip<F, FieldType = C::Base> + Selectable<F, FC::FieldPoint>,
     {
-        self.fixed_base_msm_in::<C>(builder, points, scalars, max_scalar_bits_per_cell, 4, 0)
+        self.fixed_base_msm_custom::<C>(builder, points, scalars, max_scalar_bits_per_cell, 4)
     }
 
     // `radix = 0` means auto-calculate
@@ -1149,14 +1147,13 @@ impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
     /// `clump_factor = 0` means auto-calculate
     ///
     /// The user should filter out base points that are identity beforehand; we do not separately do this here
-    pub fn fixed_base_msm_in<C>(
+    pub fn fixed_base_msm_custom<C>(
         &self,
-        builder: &mut GateThreadBuilder<F>,
+        builder: &mut SinglePhaseCoreManager<F>,
         points: &[C],
         scalars: Vec<Vec<AssignedValue<F>>>,
         max_scalar_bits_per_cell: usize,
         clump_factor: usize,
-        phase: usize,
     ) -> EcPoint<F, FC::FieldPoint>
     where
         C: CurveAffineExt,
@@ -1166,15 +1163,7 @@ impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         #[cfg(feature = "display")]
         println!("computing length {} fixed base msm", points.len());
 
-        fixed_base::msm_par(
-            self,
-            builder,
-            points,
-            scalars,
-            max_scalar_bits_per_cell,
-            clump_factor,
-            phase,
-        )
+        fixed_base::msm_par(self, builder, points, scalars, max_scalar_bits_per_cell, clump_factor)
 
         // Empirically does not seem like pippenger is any better for fixed base msm right now, because of the cost of `select_by_indicator`
         // Cell usage becomes around comparable when `points.len() > 100`, and `clump_factor` should always be 4

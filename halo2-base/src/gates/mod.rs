@@ -1,5 +1,5 @@
-/// Module that helps auto-build circuits
-pub mod builder;
+/// Module providing tools to create a circuit using our gates
+pub mod circuit;
 /// Module implementing our simple custom gate and common functions using it
 pub mod flex_gate;
 /// Module using a single lookup table for range checks

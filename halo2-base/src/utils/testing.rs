@@ -1,8 +1,9 @@
 //! Utilities for testing
 use crate::{
     gates::{
-        builder::{BaseConfigParams, GateThreadBuilder, RangeCircuitBuilder},
-        GateChip,
+        circuit::{builder::RangeCircuitBuilder, BaseCircuitParams, CircuitBuilderStage},
+        flex_gate::threads::SinglePhaseCoreManager,
+        GateChip, RangeChip,
     },
     halo2_proofs::{
         dev::MockProver,
@@ -17,7 +18,6 @@ use crate::{
             Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
         },
     },
-    safe_types::RangeChip,
     Context,
 };
 use ark_std::{end_timer, perf_trace::TimerInfo, start_timer};
@@ -80,7 +80,7 @@ pub fn check_proof_with_instances(
     // Just FYI, because strategy is `SingleStrategy`, the output `res` is `Result<(), Error>`, so there is no need to call `res.finalize()`.
 
     if expect_satisfied {
-        assert!(res.is_ok());
+        res.unwrap();
     } else {
         assert!(res.is_err());
     }
@@ -105,11 +105,12 @@ pub struct BaseTester {
     k: u32,
     lookup_bits: Option<usize>,
     expect_satisfied: bool,
+    unusable_rows: usize,
 }
 
 impl Default for BaseTester {
     fn default() -> Self {
-        Self { k: 10, lookup_bits: Some(9), expect_satisfied: true }
+        Self { k: 10, lookup_bits: Some(9), expect_satisfied: true, unusable_rows: 9 }
     }
 }
 
@@ -140,10 +141,16 @@ impl BaseTester {
         self
     }
 
+    /// Set the number of blinding (poisoned) rows
+    pub fn unusable_rows(mut self, unusable_rows: usize) -> Self {
+        self.unusable_rows = unusable_rows;
+        self
+    }
+
     /// Run a mock test by providing a closure that uses a `ctx` and `RangeChip`.
     /// - `expect_satisfied`: flag for whether you expect the test to pass or fail. Failure means a constraint system failure -- the tester does not catch system panics.
     pub fn run<R>(&self, f: impl FnOnce(&mut Context<Fr>, &RangeChip<Fr>) -> R) -> R {
-        self.run_builder(|builder, range| f(builder.main(0), range))
+        self.run_builder(|builder, range| f(builder.main(), range))
     }
 
     /// Run a mock test by providing a closure that uses a `ctx` and `GateChip`.
@@ -155,30 +162,28 @@ impl BaseTester {
     /// Run a mock test by providing a closure that uses a `builder` and `RangeChip`.
     pub fn run_builder<R>(
         &self,
-        f: impl FnOnce(&mut GateThreadBuilder<Fr>, &RangeChip<Fr>) -> R,
+        f: impl FnOnce(&mut SinglePhaseCoreManager<Fr>, &RangeChip<Fr>) -> R,
     ) -> R {
-        let mut builder = GateThreadBuilder::mock();
-        let range = RangeChip::default(self.lookup_bits.unwrap_or(0));
+        let mut builder = RangeCircuitBuilder::default().use_k(self.k as usize);
+        if let Some(lb) = self.lookup_bits {
+            builder.set_lookup_bits(lb)
+        }
+        let range = RangeChip::new(self.lookup_bits.unwrap_or(0), builder.lookup_manager().clone());
         // run the function, mutating `builder`
-        let res = f(&mut builder, &range);
+        let res = f(builder.pool(0), &range);
 
         // helper check: if your function didn't use lookups, turn lookup table "off"
-        let t_cells_lookup = builder
-            .threads
-            .iter()
-            .map(|t| t.iter().map(|ctx| ctx.cells_to_lookup.len()).sum::<usize>())
-            .sum::<usize>();
+        let t_cells_lookup =
+            builder.lookup_manager().iter().map(|lm| lm.total_rows()).sum::<usize>();
         let lookup_bits = if t_cells_lookup == 0 { None } else { self.lookup_bits };
+        builder.config_params.lookup_bits = lookup_bits;
 
         // configure the circuit shape, 9 blinding rows seems enough
-        let mut config_params = builder.config(self.k as usize, Some(9));
-        config_params.lookup_bits = lookup_bits;
-        // create circuit
-        let circuit = RangeCircuitBuilder::mock(builder, config_params);
+        builder.calculate_params(Some(self.unusable_rows));
         if self.expect_satisfied {
-            MockProver::run(self.k, &circuit, vec![]).unwrap().assert_satisfied();
+            MockProver::run(self.k, &builder, vec![]).unwrap().assert_satisfied();
         } else {
-            assert!(MockProver::run(self.k, &circuit, vec![]).unwrap().verify().is_err());
+            assert!(MockProver::run(self.k, &builder, vec![]).unwrap().verify().is_err());
         }
         res
     }
@@ -193,44 +198,42 @@ impl BaseTester {
         &self,
         init_input: I,
         logic_input: I,
-        f: impl Fn(&mut GateThreadBuilder<Fr>, &RangeChip<Fr>, I),
+        f: impl Fn(&mut SinglePhaseCoreManager<Fr>, &RangeChip<Fr>, I),
     ) -> BenchStats {
-        let mut builder = GateThreadBuilder::keygen();
-        let range = RangeChip::default(self.lookup_bits.unwrap_or(0));
+        let mut builder =
+            RangeCircuitBuilder::from_stage(CircuitBuilderStage::Keygen).use_k(self.k as usize);
+        if let Some(lb) = self.lookup_bits {
+            builder.set_lookup_bits(lb)
+        }
+        let range = RangeChip::new(self.lookup_bits.unwrap_or(0), builder.lookup_manager().clone());
         // run the function, mutating `builder`
-        f(&mut builder, &range, init_input);
+        f(builder.pool(0), &range, init_input);
 
         // helper check: if your function didn't use lookups, turn lookup table "off"
-        let t_cells_lookup = builder
-            .threads
-            .iter()
-            .map(|t| t.iter().map(|ctx| ctx.cells_to_lookup.len()).sum::<usize>())
-            .sum::<usize>();
+        let t_cells_lookup =
+            builder.lookup_manager().iter().map(|lm| lm.total_rows()).sum::<usize>();
         let lookup_bits = if t_cells_lookup == 0 { None } else { self.lookup_bits };
+        builder.config_params.lookup_bits = lookup_bits;
 
         // configure the circuit shape, 9 blinding rows seems enough
-        let mut config_params = builder.config(self.k as usize, Some(9));
-        config_params.lookup_bits = lookup_bits;
-        dbg!(&config_params);
-        let circuit = RangeCircuitBuilder::keygen(builder, config_params.clone());
+        let config_params = builder.calculate_params(Some(self.unusable_rows));
 
-        let params = gen_srs(config_params.k as u32);
+        let params = gen_srs(self.k);
         let vk_time = start_timer!(|| "Generating vkey");
-        let vk = keygen_vk(&params, &circuit).unwrap();
+        let vk = keygen_vk(&params, &builder).unwrap();
         end_timer!(vk_time);
         let pk_time = start_timer!(|| "Generating pkey");
-        let pk = keygen_pk(&params, vk, &circuit).unwrap();
+        let pk = keygen_pk(&params, vk, &builder).unwrap();
         end_timer!(pk_time);
 
-        let break_points = circuit.0.break_points.borrow().clone();
-        drop(circuit);
+        let break_points = builder.break_points();
+        drop(builder);
         // create real proof
         let proof_time = start_timer!(|| "Proving time");
-        let mut builder = GateThreadBuilder::prover();
-        let range = RangeChip::default(self.lookup_bits.unwrap_or(0));
-        f(&mut builder, &range, logic_input);
-        let circuit = RangeCircuitBuilder::prover(builder, config_params.clone(), break_points);
-        let proof = gen_proof(&params, &pk, circuit);
+        let mut builder = RangeCircuitBuilder::prover(config_params.clone(), break_points);
+        let range = RangeChip::new(self.lookup_bits.unwrap_or(0), builder.lookup_manager().clone());
+        f(builder.pool(0), &range, logic_input);
+        let proof = gen_proof(&params, &pk, builder);
         end_timer!(proof_time);
 
         let proof_size = proof.len();
@@ -246,7 +249,7 @@ impl BaseTester {
 /// Bench stats
 pub struct BenchStats {
     /// Config params
-    pub config_params: BaseConfigParams,
+    pub config_params: BaseCircuitParams,
     /// Vkey gen time
     pub vk_time: TimerInfo,
     /// Pkey gen time

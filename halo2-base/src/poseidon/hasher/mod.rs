@@ -1,7 +1,7 @@
 use crate::{
-    gates::GateInstructions,
+    gates::{GateInstructions, RangeInstructions},
     poseidon::hasher::{spec::OptimizedPoseidonSpec, state::PoseidonState},
-    safe_types::{RangeInstructions, SafeTypeChip},
+    safe_types::SafeTypeChip,
     utils::BigPrimeField,
     AssignedValue, Context,
     QuantumCell::Constant,

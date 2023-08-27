@@ -1,7 +1,7 @@
 use crate::{
-    gates::RangeChip,
+    gates::{RangeChip, RangeInstructions},
     poseidon::hasher::{spec::OptimizedPoseidonSpec, PoseidonHasher},
-    safe_types::{FixLenBytes, RangeInstructions, VarLenBytes, VarLenBytesVec},
+    safe_types::{FixLenBytes, VarLenBytes, VarLenBytesVec},
     utils::{BigPrimeField, ScalarField},
     AssignedValue, Context,
 };

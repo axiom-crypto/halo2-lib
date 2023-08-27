@@ -4,7 +4,7 @@ use crate::ecc::{ec_sub_strict, load_random_point};
 use crate::ff::Field;
 use crate::fields::{FieldChip, Selectable};
 use crate::group::Curve;
-use halo2_base::gates::builder::{parallelize_in, GateThreadBuilder};
+use halo2_base::gates::flex_gate::threads::{parallelize_core, SinglePhaseCoreManager};
 use halo2_base::utils::BigPrimeField;
 use halo2_base::{gates::GateInstructions, utils::CurveAffineExt, AssignedValue, Context};
 use itertools::Itertools;
@@ -113,12 +113,11 @@ where
 /// * Output may be point at infinity, in which case (0, 0) is returned
 pub fn msm_par<F, FC, C>(
     chip: &EccChip<F, FC>,
-    builder: &mut GateThreadBuilder<F>,
+    builder: &mut SinglePhaseCoreManager<F>,
     points: &[C],
     scalars: Vec<Vec<AssignedValue<F>>>,
     max_scalar_bits_per_cell: usize,
     window_bits: usize,
-    phase: usize,
 ) -> EcPoint<F, FC::FieldPoint>
 where
     F: BigPrimeField,
@@ -126,7 +125,7 @@ where
     FC: FieldChip<F, FieldType = C::Base> + Selectable<F, FC::FieldPoint>,
 {
     if points.is_empty() {
-        return chip.assign_constant_point(builder.main(phase), C::identity());
+        return chip.assign_constant_point(builder.main(), C::identity());
     }
     assert!((max_scalar_bits_per_cell as u32) <= F::NUM_BITS);
     assert_eq!(points.len(), scalars.len());
@@ -168,11 +167,10 @@ where
     C::Curve::batch_normalize(&cached_points_jacobian, &mut cached_points_affine);
 
     let field_chip = chip.field_chip();
-    let ctx = builder.main(phase);
+    let ctx = builder.main();
     let any_point = chip.load_random_point::<C>(ctx);
 
-    let scalar_mults = parallelize_in(
-        phase,
+    let scalar_mults = parallelize_core(
         builder,
         cached_points_affine
             .chunks(cached_points_affine.len() / points.len())
@@ -209,7 +207,7 @@ where
             curr_point
         },
     );
-    let ctx = builder.main(phase);
+    let ctx = builder.main();
     // sum `scalar_mults` but take into account possiblity of identity points
     let any_point2 = chip.load_random_point::<C>(ctx);
     let mut acc = any_point2.clone();

@@ -1,7 +1,7 @@
 #![cfg(feature = "test-utils")]
 use halo2_base::gates::flex_gate::{GateChip, GateInstructions};
+use halo2_base::gates::RangeInstructions;
 use halo2_base::halo2_proofs::{arithmetic::Field, halo2curves::bn256::Fr};
-use halo2_base::safe_types::RangeInstructions;
 use halo2_base::utils::testing::base_test;
 use halo2_base::utils::ScalarField;
 use halo2_base::{Context, QuantumCell::Existing};
@@ -32,8 +32,8 @@ fn main() {
             (0..5).map(|_| Fr::random(OsRng)).collect_vec(),
             (0..5).map(|_| Fr::random(OsRng)).collect_vec(),
         ),
-        |builder, range, (a, b)| {
-            inner_prod_bench(builder.main(0), range.gate(), a, b);
+        |pool, range, (a, b)| {
+            inner_prod_bench(pool.main(), range.gate(), a, b);
         },
     );
 }

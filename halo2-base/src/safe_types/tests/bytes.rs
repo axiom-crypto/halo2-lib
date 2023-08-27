@@ -1,10 +1,6 @@
 use crate::{
-    gates::{
-        builder::{GateThreadBuilder, RangeCircuitBuilder},
-        RangeChip,
-    },
+    gates::circuit::builder::RangeCircuitBuilder,
     halo2_proofs::{
-        dev::MockProver,
         halo2curves::bn256::{Bn256, Fr},
         plonk::{keygen_pk, keygen_vk},
         poly::kzg::commitment::ParamsKZG,
@@ -18,15 +14,10 @@ use std::vec;
 
 // =========== Utilies ===============
 fn mock_circuit_test<FM: FnMut(&mut Context<Fr>, SafeTypeChip<'_, Fr>)>(mut f: FM) {
-    let mut builder = GateThreadBuilder::mock();
-    let range = RangeChip::default(8);
-    let safe = SafeTypeChip::new(&range);
-    let ctx = builder.main(0);
-    f(ctx, safe);
-    let mut params = builder.config(10, Some(9));
-    params.lookup_bits = Some(8);
-    let circuit = RangeCircuitBuilder::mock(builder, params);
-    MockProver::run(10, &circuit, vec![]).unwrap().assert_satisfied();
+    base_test().k(10).lookup_bits(8).run(|ctx, range| {
+        let safe = SafeTypeChip::new(range);
+        f(ctx, safe);
+    });
 }
 
 // =========== Mock Prover ===========
@@ -160,32 +151,26 @@ fn neg_different_proof_max_len() {
     prover_satisfied::<KEYGEN_MAX_LEN, PROVER_MAX_LEN>(keygen_inputs, proof_inputs);
 }
 
-//test circuit
+// test circuit
 fn var_byte_array_circuit<const MAX_LEN: usize>(
     k: usize,
-    phase: bool,
+    witness_gen_only: bool,
     (bytes, len): (Vec<u64>, usize),
 ) -> RangeCircuitBuilder<Fr> {
     let lookup_bits = 3;
-    let mut builder = match phase {
-        true => GateThreadBuilder::prover(),
-        false => GateThreadBuilder::keygen(),
-    };
-    let range = RangeChip::<Fr>::default(lookup_bits);
+    let mut builder =
+        RangeCircuitBuilder::new(witness_gen_only).use_k(k).use_lookup_bits(lookup_bits);
+    let range = builder.range_chip();
     let safe = SafeTypeChip::new(&range);
     let ctx = builder.main(0);
     let len = ctx.load_witness(Fr::from(len as u64));
     let fake_bytes = ctx.assign_witnesses(bytes.into_iter().map(Fr::from).collect::<Vec<_>>());
     safe.raw_to_var_len_bytes::<MAX_LEN>(ctx, fake_bytes.try_into().unwrap(), len);
-    let mut params = builder.config(k, Some(9));
-    params.lookup_bits = Some(lookup_bits);
-    match phase {
-        true => RangeCircuitBuilder::prover(builder, params, vec![vec![]]),
-        false => RangeCircuitBuilder::keygen(builder, params),
-    }
+    builder.calculate_params(Some(9));
+    builder
 }
 
-//Prover test
+// Prover test
 fn prover_satisfied<const KEYGEN_MAX_LEN: usize, const PROVER_MAX_LEN: usize>(
     keygen_inputs: (Vec<u64>, usize),
     proof_inputs: (Vec<u64>, usize),
@@ -196,8 +181,10 @@ fn prover_satisfied<const KEYGEN_MAX_LEN: usize, const PROVER_MAX_LEN: usize>(
     let keygen_circuit = var_byte_array_circuit::<KEYGEN_MAX_LEN>(k, false, keygen_inputs);
     let vk = keygen_vk(&params, &keygen_circuit).unwrap();
     let pk = keygen_pk(&params, vk.clone(), &keygen_circuit).unwrap();
+    let break_points = keygen_circuit.break_points();
 
-    let proof_circuit = var_byte_array_circuit::<PROVER_MAX_LEN>(k, true, proof_inputs);
+    let mut proof_circuit = var_byte_array_circuit::<PROVER_MAX_LEN>(k, true, proof_inputs);
+    proof_circuit.set_break_points(break_points);
     let proof = gen_proof(&params, &pk, proof_circuit);
     check_proof(&params, &vk, &proof[..], true);
 }

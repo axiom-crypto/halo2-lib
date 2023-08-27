@@ -16,23 +16,24 @@ use std::{
     marker::PhantomData,
 };
 
+pub mod threads;
+
+/// Vector of thread advice column break points
+pub type ThreadBreakPoints = Vec<usize>;
+/// Vector of vectors tracking the thread break points across different halo2 phases
+pub type MultiPhaseThreadBreakPoints = Vec<ThreadBreakPoints>;
+
 /// The maximum number of phases in halo2.
-pub const MAX_PHASE: usize = 3;
+pub(super) const MAX_PHASE: usize = 3;
 
-/// Specifies the gate strategy for the gate chip
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub enum GateStrategy {
-    /// # Vertical Gate Strategy:
-    /// `q_0 * (a + b * c - d) = 0`
-    /// where
-    /// * a = value[0], b = value[1], c = value[2], d = value[3]
-    /// * q = q_enable[0]
-    /// * q is either 0 or 1 so this is just a simple selector
-    /// We chose `a + b * c` instead of `a * b + c` to allow "chaining" of gates, i.e., the output of one gate because `a` in the next gate.
-    #[default]
-    Vertical,
-}
-
+/// # Vertical Gate Strategy:
+/// `q_0 * (a + b * c - d) = 0`
+/// where
+/// * a = value[0], b = value[1], c = value[2], d = value[3]
+/// * q = q_enable[0]
+/// * q is either 0 or 1 so this is just a simple selector
+/// We chose `a + b * c` instead of `a * b + c` to allow "chaining" of gates, i.e., the output of one gate because `a` in the next gate.
+///
 /// A configuration for a basic gate chip describing the selector, and advice column values.
 #[derive(Clone, Debug)]
 pub struct BasicGateConfig<F: ScalarField> {
@@ -52,7 +53,7 @@ impl<F: ScalarField> BasicGateConfig<F> {
     /// * `meta`: [ConstraintSystem] used for the gate
     /// * `strategy`: The [GateStrategy] to use for the gate
     /// * `phase`: The phase to add the gate to
-    pub fn configure(meta: &mut ConstraintSystem<F>, strategy: GateStrategy, phase: u8) -> Self {
+    pub fn configure(meta: &mut ConstraintSystem<F>, phase: u8) -> Self {
         let value = match phase {
             0 => meta.advice_column_in(FirstPhase),
             1 => meta.advice_column_in(SecondPhase),
@@ -63,13 +64,9 @@ impl<F: ScalarField> BasicGateConfig<F> {
 
         let q_enable = meta.selector();
 
-        match strategy {
-            GateStrategy::Vertical => {
-                let config = Self { q_enable, value, _marker: PhantomData };
-                config.create_gate(meta);
-                config
-            }
-        }
+        let config = Self { q_enable, value, _marker: PhantomData };
+        config.create_gate(meta);
+        config
     }
 
     /// Wrapper for [ConstraintSystem].create_gate(name, meta) creates a gate form [q * (a + b * c - out)].
@@ -88,17 +85,24 @@ impl<F: ScalarField> BasicGateConfig<F> {
     }
 }
 
+/// A Config struct defining the parameters for [FlexGateConfig]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+pub struct FlexGateConfigParams {
+    /// Specifies the number of rows in the circuit to be 2<sup>k</sup>
+    pub k: usize,
+    /// The number of advice columns per phase
+    pub num_advice_per_phase: Vec<usize>,
+    /// The number of fixed columns
+    pub num_fixed: usize,
+}
+
 /// Defines a configuration for a flex gate chip describing the selector, and advice column values for the chip.
 #[derive(Clone, Debug)]
 pub struct FlexGateConfig<F: ScalarField> {
     /// A [Vec] of [BasicGateConfig] that define gates for each halo2 phase.
-    pub basic_gates: [Vec<BasicGateConfig<F>>; MAX_PHASE],
+    pub basic_gates: Vec<Vec<BasicGateConfig<F>>>,
     /// A [Vec] of [Fixed] [Column]s for allocating constant values.
     pub constants: Vec<Column<Fixed>>,
-    /// Number of advice columns for each halo2 phase.
-    pub num_advice: [usize; MAX_PHASE],
-    /// [GateStrategy] for the flex gate.
-    _strategy: GateStrategy,
     /// Max number of rows in flex gate.
     pub max_rows: usize,
 }
@@ -112,53 +116,34 @@ impl<F: ScalarField> FlexGateConfig<F> {
     /// * `num_advice`: Number of [Advice] [Column]s in each phase
     /// * `num_fixed`: Number of [Fixed] [Column]s in each phase
     /// * `circuit_degree`: Degree that expresses the size of circuit (i.e., 2^<sup>circuit_degree</sup> is the number of rows in the circuit)
-    pub fn configure(
-        meta: &mut ConstraintSystem<F>,
-        strategy: GateStrategy,
-        num_advice: &[usize],
-        num_fixed: usize,
-        // log2_ceil(# rows in circuit)
-        circuit_degree: usize,
-    ) -> Self {
+    pub fn configure(meta: &mut ConstraintSystem<F>, params: FlexGateConfigParams) -> Self {
         // create fixed (constant) columns and enable equality constraints
-        let mut constants = Vec::with_capacity(num_fixed);
-        for _i in 0..num_fixed {
+        let mut constants = Vec::with_capacity(params.num_fixed);
+        for _i in 0..params.num_fixed {
             let c = meta.fixed_column();
             meta.enable_equality(c);
             // meta.enable_constant(c);
             constants.push(c);
         }
 
-        match strategy {
-            GateStrategy::Vertical => {
-                let mut basic_gates = [(); MAX_PHASE].map(|_| vec![]);
-                let mut num_advice_array = [0usize; MAX_PHASE];
-                for ((phase, &num_columns), gates) in
-                    num_advice.iter().enumerate().zip(basic_gates.iter_mut())
-                {
-                    *gates = (0..num_columns)
-                        .map(|_| BasicGateConfig::configure(meta, strategy, phase as u8))
-                        .collect();
-                    num_advice_array[phase] = num_columns;
-                }
-                Self {
-                    basic_gates,
-                    constants,
-                    num_advice: num_advice_array,
-                    _strategy: strategy,
-                    /// Warning: this needs to be updated if you create more advice columns after this `FlexGateConfig` is created
-                    max_rows: (1 << circuit_degree) - meta.minimum_rows(),
-                }
-            }
+        let mut basic_gates = vec![];
+        for (phase, &num_columns) in params.num_advice_per_phase.iter().enumerate() {
+            let config =
+                (0..num_columns).map(|_| BasicGateConfig::configure(meta, phase as u8)).collect();
+            basic_gates.push(config);
+        }
+        log::info!("Poisoned rows after FlexGateConfig::configure {}", meta.minimum_rows());
+        Self {
+            basic_gates,
+            constants,
+            /// Warning: this needs to be updated if you create more advice columns after this `FlexGateConfig` is created
+            max_rows: (1 << params.k) - meta.minimum_rows(),
         }
     }
 }
 
 /// Trait that defines basic arithmetic operations for a gate.
 pub trait GateInstructions<F: ScalarField> {
-    /// Returns the [GateStrategy] for the gate.
-    fn strategy(&self) -> GateStrategy;
-
     /// Returns a slice of the [ScalarField] field elements 2^i for i in 0..F::NUM_BITS.
     fn pow_of_two(&self) -> &[F];
 
@@ -346,7 +331,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `constant`: constant value to constrain `a` to be equal to
     fn assert_is_const(&self, ctx: &mut Context<F>, a: &AssignedValue<F>, constant: &F) {
         if !ctx.witness_gen_only {
-            ctx.constant_equality_constraints.push((*constant, a.cell.unwrap()));
+            ctx.copy_manager.lock().unwrap().constant_equalities.push((*constant, a.cell.unwrap()));
         }
     }
 
@@ -892,8 +877,6 @@ pub trait GateInstructions<F: ScalarField> {
 /// A chip that implements the [GateInstructions] trait supporting basic arithmetic operations.
 #[derive(Clone, Debug)]
 pub struct GateChip<F: ScalarField> {
-    /// The [GateStrategy] used when declaring gates.
-    strategy: GateStrategy,
     /// The field elements 2^i for i in 0..F::NUM_BITS.
     pub pow_of_two: Vec<F>,
     /// To avoid Montgomery conversion in `F::from` for common small numbers, we keep a cache of field elements.
@@ -902,13 +885,13 @@ pub struct GateChip<F: ScalarField> {
 
 impl<F: ScalarField> Default for GateChip<F> {
     fn default() -> Self {
-        Self::new(GateStrategy::Vertical)
+        Self::new()
     }
 }
 
 impl<F: ScalarField> GateChip<F> {
     /// Returns a new [GateChip] with the given [GateStrategy].
-    pub fn new(strategy: GateStrategy) -> Self {
+    pub fn new() -> Self {
         let mut pow_of_two = Vec::with_capacity(F::NUM_BITS as usize);
         let two = F::from(2);
         pow_of_two.push(F::ONE);
@@ -918,7 +901,7 @@ impl<F: ScalarField> GateChip<F> {
         }
         let field_element_cache = (0..1024).map(|i| F::from(i)).collect();
 
-        Self { strategy, pow_of_two, field_element_cache }
+        Self { pow_of_two, field_element_cache }
     }
 
     /// Calculates and constrains the inner product of `<a, b>`.
@@ -971,11 +954,6 @@ impl<F: ScalarField> GateChip<F> {
 }
 
 impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
-    /// Returns the [GateStrategy] the [GateChip].
-    fn strategy(&self) -> GateStrategy {
-        self.strategy
-    }
-
     /// Returns a slice of the [ScalarField] elements 2<sup>i</sup> for i in 0..F::NUM_BITS.
     fn pow_of_two(&self) -> &[F] {
         &self.pow_of_two
@@ -1070,25 +1048,20 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
         values: impl IntoIterator<Item = (F, QuantumCell<F>, QuantumCell<F>)>,
         var: QuantumCell<F>,
     ) -> AssignedValue<F> {
-        // TODO: optimizer
-        match self.strategy {
-            GateStrategy::Vertical => {
-                // Create an iterator starting with `var` and
-                let (a, b): (Vec<_>, Vec<_>) = std::iter::once((var, Constant(F::ONE)))
-                    .chain(values.into_iter().filter_map(|(c, va, vb)| {
-                        if c == F::ONE {
-                            Some((va, vb))
-                        } else if c != F::ZERO {
-                            let prod = self.mul(ctx, va, vb);
-                            Some((QuantumCell::Existing(prod), Constant(c)))
-                        } else {
-                            None
-                        }
-                    }))
-                    .unzip();
-                self.inner_product(ctx, a, b)
-            }
-        }
+        // Create an iterator starting with `var` and
+        let (a, b): (Vec<_>, Vec<_>) = std::iter::once((var, Constant(F::ONE)))
+            .chain(values.into_iter().filter_map(|(c, va, vb)| {
+                if c == F::ONE {
+                    Some((va, vb))
+                } else if c != F::ZERO {
+                    let prod = self.mul(ctx, va, vb);
+                    Some((QuantumCell::Existing(prod), Constant(c)))
+                } else {
+                    None
+                }
+            }))
+            .unzip();
+        self.inner_product(ctx, a, b)
     }
 
     /// Constrains and returns `sel ? a : b` assuming `sel` is boolean.
@@ -1110,24 +1083,20 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
         let sel = sel.into();
         let diff_val = *a.value() - b.value();
         let out_val = diff_val * sel.value() + b.value();
-        match self.strategy {
-            // | a - b | 1 | b | a |
-            // | b | sel | a - b | out |
-            GateStrategy::Vertical => {
-                let cells = [
-                    Witness(diff_val),
-                    Constant(F::ONE),
-                    b,
-                    a,
-                    b,
-                    sel,
-                    Witness(diff_val),
-                    Witness(out_val),
-                ];
-                ctx.assign_region_smart(cells, [0, 4], [(0, 6), (2, 4)], []);
-                ctx.last().unwrap()
-            }
-        }
+        // | a - b | 1 | b | a |
+        // | b | sel | a - b | out |
+        let cells = [
+            Witness(diff_val),
+            Constant(F::ONE),
+            b,
+            a,
+            b,
+            sel,
+            Witness(diff_val),
+            Witness(out_val),
+        ];
+        ctx.assign_region_smart(cells, [0, 4], [(0, 6), (2, 4)], []);
+        ctx.last().unwrap()
     }
 
     /// Constains and returns `a || (b && c)`, assuming `a`, `b` and `c` are boolean.

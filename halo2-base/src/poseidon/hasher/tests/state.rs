@@ -1,14 +1,14 @@
 use super::*;
 use crate::{
-    gates::{builder::GateThreadBuilder, GateChip},
+    gates::{flex_gate::threads::SinglePhaseCoreManager, GateChip},
     halo2_proofs::halo2curves::{bn256::Fr, ff::PrimeField},
 };
 
 #[test]
 fn test_fix_permutation_against_test_vectors() {
-    let mut builder = GateThreadBuilder::prover();
+    let mut pool = SinglePhaseCoreManager::new(true, Default::default());
     let gate = GateChip::<Fr>::default();
-    let ctx = builder.main(0);
+    let ctx = pool.main();
 
     // https://extgit.iaik.tugraz.at/krypto/hadeshash/-/blob/master/code/test_vectors.txt
     // poseidonperm_x5_254_3
@@ -67,9 +67,9 @@ fn test_fix_permutation_against_test_vectors() {
 
 #[test]
 fn test_var_permutation_against_test_vectors() {
-    let mut builder = GateThreadBuilder::prover();
+    let mut pool = SinglePhaseCoreManager::new(true, Default::default());
     let gate = GateChip::<Fr>::default();
-    let ctx = builder.main(0);
+    let ctx = pool.main();
 
     // https://extgit.iaik.tugraz.at/krypto/hadeshash/-/blob/master/code/test_vectors.txt
     // poseidonperm_x5_254_3

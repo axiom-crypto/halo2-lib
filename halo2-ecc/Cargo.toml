@@ -1,6 +1,6 @@
 [package]
 name = "halo2-ecc"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2021"
 
 [dependencies]
@@ -24,6 +24,8 @@ pprof = { version = "0.11", features = ["criterion", "flamegraph"] }
 criterion = "0.4"
 criterion-macro = "0.4"
 halo2-base = { path = "../halo2-base", default-features = false, features = ["test-utils"] }
+test-log = "0.2.12"
+env_logger = "0.10.0"
 
 [features]
 default = ["jemallocator", "halo2-axiom", "display"]

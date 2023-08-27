@@ -1,18 +1,9 @@
 use crate::{
+    gates::circuit::{builder::RangeCircuitBuilder, CircuitBuilderStage},
+    halo2_proofs::plonk::{keygen_pk, keygen_vk, Assigned},
     halo2_proofs::{halo2curves::bn256::Fr, poly::kzg::commitment::ParamsKZG},
-    utils::testing::{check_proof, gen_proof},
-};
-
-use crate::{
-    gates::{
-        builder::{GateThreadBuilder, RangeCircuitBuilder},
-        RangeChip,
-    },
-    halo2_proofs::{
-        plonk::keygen_pk,
-        plonk::{keygen_vk, Assigned},
-    },
     safe_types::*,
+    utils::testing::{check_proof, gen_proof},
 };
 use itertools::Itertools;
 use rand::rngs::OsRng;
@@ -25,9 +16,11 @@ fn test_raw_bytes_to_gen<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
     expect_satisfied: bool,
 ) {
     // first create proving and verifying key
-    let mut builder = GateThreadBuilder::<Fr>::keygen();
     let lookup_bits = 3;
-    let range_chip = RangeChip::<Fr>::default(lookup_bits);
+    let mut builder = RangeCircuitBuilder::from_stage(CircuitBuilderStage::Keygen)
+        .use_k(k as usize)
+        .use_lookup_bits(lookup_bits);
+    let range_chip = builder.range_chip();
     let safe_type_chip = SafeTypeChip::new(&range_chip);
 
     let dummy_raw_bytes = builder
@@ -40,20 +33,19 @@ fn test_raw_bytes_to_gen<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
     let safe_value_offsets =
         safe_value.value().iter().map(|v| v.cell.unwrap().offset).collect::<Vec<_>>();
 
-    let mut config_params = builder.config(k as usize, Some(9));
-    config_params.lookup_bits = Some(lookup_bits);
-    let circuit = RangeCircuitBuilder::keygen(builder, config_params.clone());
-
+    let config_params = builder.calculate_params(Some(9));
     let params = ParamsKZG::setup(k, OsRng);
     // generate proving key
-    let vk = keygen_vk(&params, &circuit).unwrap();
-    let pk = keygen_pk(&params, vk, &circuit).unwrap();
+    let vk = keygen_vk(&params, &builder).unwrap();
+    let pk = keygen_pk(&params, vk, &builder).unwrap();
     let vk = pk.get_vk(); // pk consumed vk
+    let break_points = builder.break_points();
+    drop(builder);
 
     // now create different proofs to test the soundness of the circuit
     let gen_pf = |inputs: &[Fr], outputs: &[Fr]| {
-        let mut builder = GateThreadBuilder::<Fr>::prover();
-        let range_chip = RangeChip::<Fr>::default(lookup_bits);
+        let mut builder = RangeCircuitBuilder::prover(config_params.clone(), break_points.clone());
+        let range_chip = builder.range_chip();
         let safe_type_chip = SafeTypeChip::new(&range_chip);
 
         let assigned_raw_bytes = builder.main(0).assign_witnesses(inputs.to_vec());
@@ -63,8 +55,7 @@ fn test_raw_bytes_to_gen<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
         for (offset, witness) in safe_value_offsets.iter().zip_eq(outputs) {
             builder.main(0).advice[*offset] = Assigned::<Fr>::Trivial(*witness);
         }
-        let circuit = RangeCircuitBuilder::prover(builder, config_params, vec![vec![]]); // no break points
-        gen_proof(&params, &pk, circuit)
+        gen_proof(&params, &pk, builder)
     };
     let pf = gen_pf(raw_bytes, outputs);
     check_proof(&params, vk, &pf, expect_satisfied);

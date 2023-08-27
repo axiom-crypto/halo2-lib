@@ -1,5 +1,5 @@
 use crate::{
-    gates::{builder::GateThreadBuilder, range::RangeInstructions, RangeChip},
+    gates::{circuit::builder::RangeCircuitBuilder, range::RangeInstructions},
     halo2_proofs::halo2curves::bn256::Fr,
     poseidon::hasher::{spec::OptimizedPoseidonSpec, PoseidonHasher},
     utils::{testing::base_test, BigPrimeField, ScalarField},
@@ -28,9 +28,9 @@ fn hasher_compatiblity_verification<
     F: BigPrimeField,
 {
     let lookup_bits = 3;
-    let mut builder = GateThreadBuilder::prover();
-    let range = RangeChip::<F>::default(lookup_bits);
 
+    let mut builder = RangeCircuitBuilder::new(true).use_lookup_bits(lookup_bits);
+    let range = builder.range_chip();
     let ctx = builder.main(0);
 
     // Construct in-circuit Poseidon hasher. Assuming SECURE_MDS = 0.
@@ -114,8 +114,8 @@ fn test_poseidon_hasher_with_prover() {
         for max_len in max_lens {
             let init_input = random_payload_without_len(max_len, usize::MAX);
             let logic_input = random_payload_without_len(max_len, usize::MAX);
-            base_test().k(12).bench_builder(init_input, logic_input, |builder, range, payload| {
-                let ctx = builder.main(0);
+            base_test().k(12).bench_builder(init_input, logic_input, |pool, range, payload| {
+                let ctx = pool.main();
                 // Construct in-circuit Poseidon hasher. Assuming SECURE_MDS = 0.
                 let spec = OptimizedPoseidonSpec::<Fr, T, RATE>::new::<R_F, R_P, 0>();
                 let mut hasher = PoseidonHasher::<Fr, T, RATE>::new(spec);
