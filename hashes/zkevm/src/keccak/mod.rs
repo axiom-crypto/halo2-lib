@@ -569,21 +569,21 @@ impl<F: Field> KeccakCircuitConfig<F> {
                 input: "12345678abc"
             table:
                 Note[1]: be careful: is_paddings is not column here! It is [Cell; 8] and it will be constrained later.
-        offset byte_value bytes_left  is_paddings q_enable q_padding_last
-        18        1          11          0         1        0 // 1st round begin
-        19        2          10          0         0        0
-        20        3          9           0         0        0
-        21        4          8           0         0        0
-        22        5          7           0         0        0
-        23        6          6           0         0        0
-        24        7          5           0         0        0
-        25        8          4           0         0        0
-        26        8          4           NA        0        0
+        offset word_value bytes_left  is_paddings q_enable q_padding_last
+        18     0x87654321    11          0         1        0 // 1st round begin
+        19        0          10          0         0        0
+        20        0          9           0         0        0
+        21        0          8           0         0        0
+        22        0          7           0         0        0
+        23        0          6           0         0        0
+        24        0          5           0         0        0
+        25        0          4           0         0        0
+        26        0          4           NA        0        0
         ...
-        35        8          4           NA        0        0  // 1st round end
-        36        a          3           0         1        1  // 2nd round begin
-        37        b          2           0         0        0
-        38        c          1           0         0        0
+        35        0          4           NA        0        0  // 1st round end
+        36      0xcba        3           0         1        1  // 2nd round begin
+        37        0          2           0         0        0
+        38        0          1           0         0        0
         39        0          0           1         0        0
         40        0          0           1         0        0
         41        0          0           1         0        0
@@ -591,24 +591,14 @@ impl<F: Field> KeccakCircuitConfig<F> {
         43        0          0           1         0        0
         */
 
-        meta.create_gate("byte_value", |meta| {
+        meta.create_gate("word_value", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-            for idx in 0..num_rows_per_round {
-                // q_padding[idx] && !is_paddings[min(i+1, NUM_BYTES_PER_WORD - 1)] => byte_value[idx] == input_bytes[min(i+1, NUM_BYTES_PER_WORD - 1)]
-                // Length of is_paddings is NUM_BYTES_PER_WORD so NUM_BYTES_PER_WORD - 1 means the last byte.
-                cb.condition(
-                    q(q_padding, meta)
-                        * not::expr(is_paddings[std::cmp::min(idx, NUM_BYTES_PER_WORD - 1)].expr()),
-                    |cb| {
-                        cb.require_equal(
-                            "input byte",
-                            input_bytes[std::cmp::min(idx, NUM_BYTES_PER_WORD - 1)].expr.clone(),
-                            meta.query_advice(keccak_table.byte_value, Rotation(idx as i32)),
-                        );
-                    },
-                );
-            }
-            cb.gate(q(q_enable, meta))
+            cb.require_equal(
+                "word value",
+                absorb_data.expr(),
+                meta.query_advice(keccak_table.word_value, Rotation::cur()),
+            );
+            cb.gate(q(q_enable, meta) * not::expr(q(q_padding, meta)))
         });
         meta.create_gate("bytes_left", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
@@ -832,7 +822,7 @@ pub struct KeccakAssignedRow<'v, F: Field> {
     pub(crate) hash_lo: KeccakAssignedValue<'v, F>,
     pub(crate) hash_hi: KeccakAssignedValue<'v, F>,
     pub(crate) bytes_left: KeccakAssignedValue<'v, F>,
-    pub(crate) byte_value: KeccakAssignedValue<'v, F>,
+    pub(crate) word_value: KeccakAssignedValue<'v, F>,
 }
 
 impl<F: Field> KeccakCircuitConfig<F> {
@@ -870,12 +860,12 @@ impl<F: Field> KeccakCircuitConfig<F> {
         }
 
         // Keccak data
-        let [is_final, hash_lo, hash_hi, bytes_left, byte_value] = [
+        let [is_final, hash_lo, hash_hi, bytes_left, word_value] = [
             ("is_final", self.keccak_table.is_enabled, Value::known(F::from(row.is_final))),
             ("hash_lo", self.keccak_table.output.lo(), row.hash.lo()),
             ("hash_hi", self.keccak_table.output.hi(), row.hash.hi()),
             ("bytes_left", self.keccak_table.bytes_left, Value::known(row.bytes_left)),
-            ("value", self.keccak_table.byte_value, Value::known(row.byte_value)),
+            ("word_value", self.keccak_table.word_value, Value::known(row.word_value)),
         ]
         .map(|(_name, column, value)| assign_advice_custom(region, column, offset, value));
 
@@ -887,7 +877,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
         // Round constant
         assign_fixed_custom(region, self.round_cst, offset, row.round_cst);
 
-        KeccakAssignedRow { is_final, hash_lo, hash_hi, bytes_left, byte_value }
+        KeccakAssignedRow { is_final, hash_lo, hash_hi, bytes_left, word_value }
     }
 
     pub fn load_aux_tables(&self, layouter: &mut impl Layouter<F>, k: u32) -> Result<(), Error> {
@@ -1215,13 +1205,24 @@ fn keccak<F: Field>(
             let round_cst = pack_u64(ROUND_CST[round]);
 
             for row_idx in 0..num_rows_per_round {
+                let word_value = if round < NUM_WORDS_TO_ABSORB && row_idx == 0 {
+                    let byte_idx = (idx * NUM_WORDS_TO_ABSORB + round) * NUM_BYTES_PER_WORD;
+                    if byte_idx >= bytes.len() {
+                        0
+                    } else {
+                        let end = std::cmp::min(byte_idx + NUM_BYTES_PER_WORD, bytes.len());
+                        let mut word_bytes = bytes[byte_idx..end].to_vec().clone();
+                        word_bytes.resize(NUM_BYTES_PER_WORD, 0);
+                        u64::from_le_bytes(word_bytes.try_into().unwrap())
+                    }
+                } else {
+                    0
+                };
                 let byte_idx = if round < NUM_WORDS_TO_ABSORB {
                     round * 8 + std::cmp::min(row_idx, NUM_BYTES_PER_WORD - 1)
                 } else {
                     NUM_WORDS_TO_ABSORB * 8
                 } + idx * NUM_WORDS_TO_ABSORB * 8;
-
-                let byte = if byte_idx >= bytes.len() { 0 } else { bytes[byte_idx] };
                 let bytes_left = if byte_idx >= bytes.len() { 0 } else { bytes.len() - byte_idx };
                 rows.push(KeccakRow {
                     q_enable: row_idx == 0,
@@ -1236,7 +1237,7 @@ fn keccak<F: Field>(
                     cell_values: regions[round].rows.get(row_idx).unwrap_or(&vec![]).clone(),
                     hash,
                     bytes_left: F::from_u128(bytes_left as u128),
-                    byte_value: F::from_u128(byte as u128),
+                    word_value: F::from_u128(word_value as u128),
                 });
                 #[cfg(debug_assertions)]
                 {

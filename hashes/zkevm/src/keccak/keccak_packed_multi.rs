@@ -72,7 +72,7 @@ pub struct KeccakRow<F: PrimeField> {
     // pub(crate) data_rlc: Value<F>,
     pub(crate) hash: Word<Value<F>>,
     pub(crate) bytes_left: F,
-    pub(crate) byte_value: F,
+    pub(crate) word_value: F,
 }
 
 impl<F: PrimeField> KeccakRow<F> {
@@ -90,7 +90,7 @@ impl<F: PrimeField> KeccakRow<F> {
                 cell_values: Vec::new(),
                 hash: Word::default().into_value(),
                 bytes_left: F::ZERO,
-                byte_value: F::ZERO,
+                word_value: F::ZERO,
             })
             .collect()
     }
@@ -141,8 +141,8 @@ pub struct KeccakTable {
     pub is_enabled: Column<Advice>,
     /// Keccak hash of input
     pub output: Word<Column<Advice>>,
-    /// Raw bytes of inputs
-    pub byte_value: Column<Advice>,
+    /// Raw word bytes of inputs
+    pub word_value: Column<Advice>,
     /// Number of bytes left of a input
     pub bytes_left: Column<Advice>,
 }
@@ -151,13 +151,13 @@ impl KeccakTable {
     /// Construct a new KeccakTable
     pub fn construct<F: Field>(meta: &mut ConstraintSystem<F>) -> Self {
         let input_len = meta.advice_column();
-        let byte_value = meta.advice_column();
+        let word_value = meta.advice_column();
         let bytes_left = meta.advice_column();
         meta.enable_equality(input_len);
         Self {
             is_enabled: meta.advice_column(),
             output: Word::new([meta.advice_column(), meta.advice_column()]),
-            byte_value,
+            word_value,
             bytes_left,
         }
     }
