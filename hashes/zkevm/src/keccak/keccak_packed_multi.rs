@@ -1,15 +1,15 @@
 use super::{cell_manager::*, param::*, table::*};
 use crate::{
     halo2_proofs::{
-        circuit::{Region, Value},
+        circuit::Value,
         halo2curves::ff::PrimeField,
-        plonk::{Advice, Column, ConstraintSystem, Expression, Fixed, SecondPhase},
+        plonk::{Advice, Column, ConstraintSystem, Expression, SecondPhase},
     },
     util::{
         constraint_builder::BaseConstraintBuilder, eth_types::Field, expression::Expr, word::Word,
     },
 };
-use halo2_base::halo2_proofs::{circuit::AssignedCell, plonk::Assigned};
+use halo2_base::utils::halo2::Halo2AssignedCell;
 
 pub(crate) fn get_num_bits_per_absorb_lookup(k: u32) -> usize {
     get_num_bits_per_lookup(ABSORB_LOOKUP_RANGE, k)
@@ -163,51 +163,7 @@ impl KeccakTable {
     }
 }
 
-#[cfg(feature = "halo2-axiom")]
-pub(crate) type KeccakAssignedValue<'v, F> = AssignedCell<&'v Assigned<F>, F>;
-#[cfg(not(feature = "halo2-axiom"))]
-pub(crate) type KeccakAssignedValue<'v, F> = AssignedCell<F, F>;
-
-pub fn assign_advice_custom<'v, F: Field>(
-    region: &mut Region<F>,
-    column: Column<Advice>,
-    offset: usize,
-    value: Value<F>,
-) -> KeccakAssignedValue<'v, F> {
-    #[cfg(feature = "halo2-axiom")]
-    {
-        region.assign_advice(column, offset, value)
-    }
-    #[cfg(feature = "halo2-pse")]
-    {
-        region
-            .assign_advice(|| format!("assign advice {}", offset), column, offset, || value)
-            .unwrap()
-    }
-}
-
-pub fn assign_fixed_custom<F: Field>(
-    region: &mut Region<F>,
-    column: Column<Fixed>,
-    offset: usize,
-    value: F,
-) {
-    #[cfg(feature = "halo2-axiom")]
-    {
-        region.assign_fixed(column, offset, value);
-    }
-    #[cfg(feature = "halo2-pse")]
-    {
-        region
-            .assign_fixed(
-                || format!("assign fixed {}", offset),
-                column,
-                offset,
-                || Value::known(value),
-            )
-            .unwrap();
-    }
-}
+pub(crate) type KeccakAssignedValue<'v, F> = Halo2AssignedCell<'v, F>;
 
 /// Recombines parts back together
 pub(crate) mod decode {

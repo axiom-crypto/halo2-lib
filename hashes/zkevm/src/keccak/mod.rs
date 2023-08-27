@@ -19,6 +19,7 @@ use crate::{
         word::{self, Word, WordExpr},
     },
 };
+use halo2_base::utils::halo2::{raw_assign_advice, raw_assign_fixed};
 use itertools::Itertools;
 use log::{debug, info};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
@@ -838,7 +839,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
             ("q_padding", self.q_padding, F::from(row.q_padding)),
             ("q_padding_last", self.q_padding_last, F::from(row.q_padding_last)),
         ] {
-            assign_fixed_custom(region, *column, offset, *value);
+            raw_assign_fixed(region, *column, offset, *value);
         }
 
         // Keccak data
@@ -848,15 +849,15 @@ impl<F: Field> KeccakCircuitConfig<F> {
             ("hash_lo", self.keccak_table.output.lo(), row.hash.lo()),
             ("hash_hi", self.keccak_table.output.hi(), row.hash.hi()),
         ]
-        .map(|(_name, column, value)| assign_advice_custom(region, column, offset, value));
+        .map(|(_name, column, value)| raw_assign_advice(region, column, offset, value));
 
         // Cell values
         row.cell_values.iter().zip(self.cell_manager.columns()).for_each(|(bit, column)| {
-            assign_advice_custom(region, column.advice, offset, Value::known(*bit));
+            raw_assign_advice(region, column.advice, offset, Value::known(*bit));
         });
 
         // Round constant
-        assign_fixed_custom(region, self.round_cst, offset, row.round_cst);
+        raw_assign_fixed(region, self.round_cst, offset, row.round_cst);
 
         KeccakAssignedRow { is_final, length, hash_lo, hash_hi }
     }
@@ -896,12 +897,7 @@ pub fn keccak_phase1<F: Field>(
         for round in 0..NUM_ROUNDS + 1 {
             if round < NUM_WORDS_TO_ABSORB {
                 for idx in 0..NUM_BYTES_PER_WORD {
-                    assign_advice_custom(
-                        region,
-                        keccak_table.input_rlc,
-                        *offset + idx + 1,
-                        data_rlc,
-                    );
+                    raw_assign_advice(region, keccak_table.input_rlc, *offset + idx + 1, data_rlc);
                     if byte_idx < bytes.len() {
                         data_rlc =
                             data_rlc * challenge + Value::known(F::from(bytes[byte_idx] as u64));
@@ -909,7 +905,7 @@ pub fn keccak_phase1<F: Field>(
                     byte_idx += 1;
                 }
             }
-            let input_rlc = assign_advice_custom(region, keccak_table.input_rlc, *offset, data_rlc);
+            let input_rlc = raw_assign_advice(region, keccak_table.input_rlc, *offset, data_rlc);
             if round == NUM_ROUNDS {
                 input_rlcs.push(input_rlc);
             }
@@ -1290,7 +1286,7 @@ pub fn multi_keccak_phase1<'a, 'v, F: Field>(
     let rows_per_round = parameters.rows_per_round;
     for idx in 0..rows_per_round {
         [keccak_table.input_rlc, keccak_table.output.lo(), keccak_table.output.hi()]
-            .map(|column| assign_advice_custom(region, column, idx, Value::known(F::ZERO)));
+            .map(|column| raw_assign_advice(region, column, idx, Value::known(F::ZERO)));
     }
 
     let mut offset = rows_per_round;

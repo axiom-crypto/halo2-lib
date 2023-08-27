@@ -135,7 +135,7 @@ pub mod from_bytes {
     pub fn value<F: PrimeField>(bytes: &[u8]) -> F {
         let mut value = F::ZERO;
         let mut multiplier = F::ONE;
-        let two_pow_64 = F::from_u128(1 << 64);
+        let two_pow_64 = F::from_u128(1u128 << 64);
         let two_pow_128 = two_pow_64 * two_pow_64;
         for u128_chunk in bytes.chunks(u128::BITS as usize / u8::BITS as usize) {
             let mut buffer = [0; 16];
