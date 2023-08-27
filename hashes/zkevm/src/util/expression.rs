@@ -135,9 +135,13 @@ pub mod from_bytes {
     pub fn value<F: PrimeField>(bytes: &[u8]) -> F {
         let mut value = F::ZERO;
         let mut multiplier = F::ONE;
-        for byte in bytes.iter() {
-            value += F::from(*byte as u64) * multiplier;
-            multiplier *= F::from(256);
+        let two_pow_64 = F::from_u128(1 << 64);
+        let two_pow_128 = two_pow_64 * two_pow_64;
+        for u128_chunk in bytes.chunks(u128::BITS as usize / u8::BITS as usize) {
+            let mut buffer = [0; 16];
+            buffer[..u128_chunk.len()].copy_from_slice(u128_chunk);
+            value += F::from_u128(u128::from_le_bytes(buffer)) * multiplier;
+            multiplier *= two_pow_128;
         }
         value
     }

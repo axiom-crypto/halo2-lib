@@ -1180,7 +1180,7 @@ pub fn keccak_phase0<F: Field>(
                 ));
             }
 
-            // The rlc of the hash
+            // Assign the hash result
             let is_final = is_final_block && round == NUM_ROUNDS;
             hash = if is_final {
                 let hash_bytes_le = s

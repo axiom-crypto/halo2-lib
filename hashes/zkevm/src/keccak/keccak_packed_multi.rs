@@ -141,8 +141,7 @@ pub struct KeccakTable {
     pub input_rlc: Column<Advice>, // RLC of input bytes
     // Byte array input length
     pub input_len: Column<Advice>,
-    // /// RLC of the hash result
-    // pub output_rlc: Column<Advice>, // RLC of hash of input bytes
+    /// Output of the hash function
     pub output: Word<Column<Advice>>,
 }
 
