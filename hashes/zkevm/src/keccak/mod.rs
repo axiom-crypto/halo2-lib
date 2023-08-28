@@ -603,10 +603,10 @@ impl<F: Field> KeccakCircuitConfig<F> {
         });
         meta.create_gate("bytes_left", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-            // bytes_left[i] == 0 in the first round
+            // bytes_left is 0 in the absolute first `rows_per_round` of the entire circuit, i.e., the first dummy round.
             cb.condition(q_in_round(q_first, meta), |cb| {
                 cb.require_zero(
-                    "bytes_left needs to be zero on the first row",
+                    "bytes_left needs to be zero on the absolute first dummy round",
                     meta.query_advice(keccak_table.bytes_left, Rotation::cur()),
                 );
             });
@@ -635,6 +635,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
                     );
                 }
             });
+            // Note: `q_padding` and `q_first` are never enabled at the same time.
             cb.condition(
                 (q_in_round(q_enable, meta)
                     - q_in_round(q_padding, meta)
