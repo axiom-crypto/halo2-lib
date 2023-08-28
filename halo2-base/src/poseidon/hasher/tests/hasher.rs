@@ -1,11 +1,9 @@
-use std::cmp::max;
-
 use crate::{
-    gates::{circuit::builder::RangeCircuitBuilder, range::RangeInstructions, RangeChip},
+    gates::{range::RangeInstructions, RangeChip},
     halo2_proofs::halo2curves::bn256::Fr,
     poseidon::hasher::{spec::OptimizedPoseidonSpec, PoseidonCompactInput, PoseidonHasher},
-    safe_types::{SafeBool, SafeTypeChip},
-    utils::{testing::base_test, BigPrimeField, ScalarField},
+    safe_types::SafeTypeChip,
+    utils::{testing::base_test, ScalarField},
     Context,
 };
 use halo2_proofs_axiom::arithmetic::Field;
