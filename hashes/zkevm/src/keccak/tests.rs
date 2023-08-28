@@ -135,7 +135,7 @@ impl<F: Field> KeccakCircuit<F> {
         let mut input_byte_offset = 0;
         // first round is dummy, so ignore
         for absorb_chunk in &assigned_rows.chunks(rows_per_round).skip(1).chunks(NUM_ROUNDS + 1) {
-            let mut abosrbed = false;
+            let mut absorbed = false;
             for (round_idx, assigned_rows) in absorb_chunk.enumerate() {
                 for (row_idx, assigned_row) in assigned_rows.iter().enumerate() {
                     let KeccakAssignedRow { is_final, word_value, bytes_left, .. } =
@@ -151,7 +151,7 @@ impl<F: Field> KeccakCircuit<F> {
                     }
                     let input_len = self.inputs[input_offset].len();
                     if round_idx == NUM_ROUNDS && row_idx == 0 && is_final_val {
-                        abosrbed = true;
+                        absorbed = true;
                     }
                     if row_idx == 0 {
                         assert_eq!(bytes_left_val, input_len as u128 - input_byte_offset as u128);
@@ -172,7 +172,7 @@ impl<F: Field> KeccakCircuit<F> {
                     }
                 }
             }
-            if abosrbed {
+            if absorbed {
                 input_offset += 1;
                 input_byte_offset = 0;
             }

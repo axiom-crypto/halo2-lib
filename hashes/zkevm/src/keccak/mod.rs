@@ -615,8 +615,8 @@ impl<F: Field> KeccakCircuitConfig<F> {
         meta.create_gate("bytes_left", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
             let bytes_left_expr = meta.query_advice(keccak_table.bytes_left, Rotation::cur());
-            // bytes_left is 0 in the absolute first `rows_per_round` of the entire circuit, i.e., the first dummy round.
 
+            // bytes_left is 0 in the absolute first `rows_per_round` of the entire circuit, i.e., the first dummy round.
             cb.condition(q_in_round(q_first, meta), |cb| {
                 cb.require_zero(
                     "bytes_left needs to be zero on the absolute first dummy round",
@@ -624,12 +624,12 @@ impl<F: Field> KeccakCircuitConfig<F> {
                 );
             });
             let is_final_expr = meta.query_advice(is_final, Rotation::cur());
-            // bytes_left[i] == 0 when is_final.
+            // is_final ==> bytes_left == 0.
             // Note: is_final = true only in the last round, which doesn't have any data to absorb.
             cb.condition(meta.query_advice(is_final, Rotation::cur()), |cb| {
                 cb.require_zero("bytes_left should be 0 when is_final", bytes_left_expr.clone());
             });
-            // q_padding? NUM_BYTES_PER_WORD - sum(is_paddings): 0
+            // word_len = q_padding? NUM_BYTES_PER_WORD - sum(is_paddings): 0
             // Only rounds with q_padding == true have inputs to absorb.
             let word_len = select::expr(
                 q(q_padding, meta),
