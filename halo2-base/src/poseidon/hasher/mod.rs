@@ -128,6 +128,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
     where
         F: BigPrimeField,
     {
+        // TODO: rewrite this using hash_compact_input.
         let max_len = inputs.len();
         if max_len == 0 {
             return *self.empty_hash();
@@ -219,6 +220,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
             let hash = range.gate().select(ctx, state_2.s[1], state.s[1], is_full);
             outputs.push(PoseidonCompactOutput { hash, is_final: input.is_final });
             // Reset state to init_state if this is the end of a logical input.
+            // TODO: skip this if this is the last row.
             state.select(ctx, range.gate(), input.is_final, self.init_state());
         }
         outputs
