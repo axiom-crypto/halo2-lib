@@ -1,7 +1,7 @@
 use crate::{
     gates::{GateInstructions, RangeInstructions},
     poseidon::hasher::{spec::OptimizedPoseidonSpec, state::PoseidonState},
-    safe_types::SafeTypeChip,
+    safe_types::{SafeBool, SafeTypeChip},
     utils::BigPrimeField,
     AssignedValue, Context,
     QuantumCell::Constant,
@@ -47,6 +47,52 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasherConsts<F, 
         let empty_hash = fix_len_array_squeeze(ctx, gate, &[], &mut state, spec);
         Self { init_state, empty_hash }
     }
+}
+
+/// 1 logical row of compact input for Poseidon hasher.
+pub struct PoseidonCompactInput<F: ScalarField, const RATE: usize> {
+    // Right padded inputs. No constrains on paddings.
+    inputs: [AssignedValue<F>; RATE],
+    // is_final = 1 triggers squeeze.
+    is_final: SafeBool<F>,
+    // Length of `inputs`.
+    len: AssignedValue<F>,
+}
+
+impl<F: ScalarField, const RATE: usize> PoseidonCompactInput<F, RATE> {
+    /// Create a new PoseidonCompactInput.
+    pub fn new(
+        inputs: [AssignedValue<F>; RATE],
+        is_final: SafeBool<F>,
+        len: AssignedValue<F>,
+    ) -> Self {
+        Self { inputs, is_final, len }
+    }
+
+    /// Add data validation constraints.
+    pub fn add_validation_constraints(
+        &self,
+        ctx: &mut Context<F>,
+        range: &impl RangeInstructions<F>,
+    ) {
+        range.is_less_than_safe(ctx, self.len, (RATE + 1) as u64);
+        // Invalid case: (!is_final && len != RATE) ==> !(is_final || len == RATE)
+        let is_full: AssignedValue<F> =
+            range.gate().is_equal(ctx, self.len, Constant(F::from(RATE as u64)));
+        let invalid_cond = range.gate().or(ctx, *self.is_final.as_ref(), is_full);
+        range.gate().assert_is_const(ctx, &invalid_cond, &F::ZERO);
+    }
+}
+
+/// 1 logical row of compact output for Poseidon hasher.
+#[derive(Getters)]
+pub struct PoseidonCompactOutput<F: ScalarField> {
+    /// hash of 1 logical input.
+    #[getset(get = "pub")]
+    hash: AssignedValue<F>,
+    /// is_final = 1 ==> this is the end of a logical input.
+    #[getset(get = "pub")]
+    is_final: SafeBool<F>,
 }
 
 impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RATE> {
@@ -146,6 +192,36 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
     {
         let mut state = self.init_state().clone();
         fix_len_array_squeeze(ctx, range.gate(), inputs, &mut state, &self.spec)
+    }
+
+    /// Constrains and returns hashes of inputs in a compact format. Length of `compact_inputs` should be determined at compile time.
+    pub fn hash_compact_input(
+        &self,
+        ctx: &mut Context<F>,
+        range: &impl RangeInstructions<F>,
+        compact_inputs: &[PoseidonCompactInput<F, RATE>],
+    ) -> Vec<PoseidonCompactOutput<F>>
+    where
+        F: BigPrimeField,
+    {
+        let mut outputs = Vec::with_capacity(compact_inputs.len());
+        let mut state = self.init_state().clone();
+        for input in compact_inputs {
+            // Assume this is the last row of a logical input:
+            // Depending on if len == RATE.
+            let is_full = range.gate().is_equal(ctx, input.len, Constant(F::from(RATE as u64)));
+            // Case 1: if len != RATE.
+            state.permutation(ctx, range.gate(), &input.inputs, Some(input.len), &self.spec);
+            // Case 2: if len == RATE, an extra permuation is needed for squeeze.
+            let mut state_2 = state.clone();
+            state_2.permutation(ctx, range.gate(), &[], None, &self.spec);
+            // Select the result of case 1/2 depending on if len == RATE.
+            let hash = range.gate().select(ctx, state_2.s[1], state.s[1], is_full);
+            outputs.push(PoseidonCompactOutput { hash, is_final: input.is_final });
+            // Reset state to init_state if this is the end of a logical input.
+            state.select(ctx, range.gate(), input.is_final, self.init_state());
+        }
+        outputs
     }
 }
 
