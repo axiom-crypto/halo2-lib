@@ -162,7 +162,7 @@ impl<'range, F: PrimeField, Fp: PrimeField> FpChip<'range, F, Fp> {
     ) -> AssignedValue<F> {
         let a = a.into();
         self.enforce_less_than_p(ctx, a.clone());
-        big_is_even::positive(self.range(), ctx, a.0.truncation, self.limb_bits)
+        big_is_even::range(self.range(), ctx, a.0.truncation, self.limb_bits)
     }
 }
 

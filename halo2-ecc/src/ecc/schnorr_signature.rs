@@ -8,6 +8,8 @@ use super::{fixed_base, scalar_multiply, EcPoint, EccChip};
 // SF is the scalar field of GA
 // p = base field modulus
 // n = scalar field modulus
+// assume r < p, 0 < s < n, 0 < msgHash < n
+// this circuit applies over constraints that s > 0, msgHash > 0 cause scalar_multiply can't handle zero scalar
 /// `pubkey` should not be the identity point
 /// follow spec in https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
 pub fn schnorr_verify_no_pubkey_check<F: PrimeField, CF: PrimeField, SF: PrimeField, GA>(
@@ -29,9 +31,9 @@ where
 
     // check r < p
     let r_valid = base_chip.is_less_than_p(ctx, &r);
-    // check s < n
+    // check 0 < s < n
     let s_valid = scalar_chip.is_soft_nonzero(ctx, &s);
-    // check e < n
+    // check 0 < e < n
     let e_valid = scalar_chip.is_soft_nonzero(ctx, &msgHash);
 
     // compute s * G and msgHash * pubkey
