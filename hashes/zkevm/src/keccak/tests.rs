@@ -153,26 +153,22 @@ impl<F: Field> KeccakCircuit<F> {
                     if round_idx == NUM_ROUNDS && row_idx == 0 && is_final_val {
                         abosrbed = true;
                     }
-                    // Only these rows could contain inputs.
-                    if round_idx < NUM_WORDS_TO_ABSORB && row_idx < NUM_BYTES_PER_WORD {
+                    if row_idx == 0 {
                         assert_eq!(bytes_left_val, input_len as u128 - input_byte_offset as u128);
-                        if row_idx == 0 {
-                            let end =
-                                std::cmp::min(input_byte_offset + NUM_BYTES_PER_WORD, input_len);
-                            let mut expected_val_le_bytes =
-                                self.inputs[input_offset][input_byte_offset..end].to_vec().clone();
-                            expected_val_le_bytes.resize(NUM_BYTES_PER_WORD, 0);
-                            assert_eq!(
-                                word_value_val,
-                                u64::from_le_bytes(expected_val_le_bytes.try_into().unwrap())
-                                    as u128,
-                            );
+                        // Only these rows could contain inputs.
+                        let end = if round_idx < NUM_WORDS_TO_ABSORB {
+                            std::cmp::min(input_byte_offset + NUM_BYTES_PER_WORD, input_len)
                         } else {
-                            assert_eq!(word_value_val, 0);
+                            input_byte_offset
                         };
-                        if input_byte_offset < input_len {
-                            input_byte_offset += 1;
-                        }
+                        let mut expected_val_le_bytes =
+                            self.inputs[input_offset][input_byte_offset..end].to_vec().clone();
+                        expected_val_le_bytes.resize(NUM_BYTES_PER_WORD, 0);
+                        assert_eq!(
+                            word_value_val,
+                            u64::from_le_bytes(expected_val_le_bytes.try_into().unwrap()) as u128,
+                        );
+                        input_byte_offset = end;
                     }
                 }
             }
@@ -213,7 +209,7 @@ fn extract_u128<'v, F: Field>(assigned_value: KeccakAssignedValue<'v, F>) -> u12
 }
 
 #[test_case(14, 28; "k: 14, rows_per_round: 28")]
-#[test_case(12, 10; "k: 12, rows_per_round: 5")]
+#[test_case(12, 5; "k: 12, rows_per_round: 5")]
 fn packed_multi_keccak_simple(k: u32, rows_per_round: usize) {
     let _ = env_logger::builder().is_test(true).try_init();
 

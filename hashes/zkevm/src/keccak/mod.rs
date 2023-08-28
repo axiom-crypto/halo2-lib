@@ -11,7 +11,10 @@ use crate::{
         plonk::{Column, ConstraintSystem, Error, Expression, Fixed, TableColumn, VirtualCells},
         poly::Rotation,
     },
-    util::word::{self, Word, WordExpr},
+    util::{
+        expression::{from_bytes, sum},
+        word::{self, Word, WordExpr},
+    },
 };
 use halo2_base::utils::halo2::{raw_assign_advice, raw_assign_fixed};
 use itertools::Itertools;
@@ -41,8 +44,6 @@ pub struct KeccakConfigParams {
 pub struct KeccakCircuitConfig<F> {
     // Bool. True on 1st row of each round.
     q_enable: Column<Fixed>,
-    // // Bool. True on every row of all valid rounds.
-    // q_enable_row: Column<Fixed>,
     // Bool. True on 1st row.
     q_first: Column<Fixed>,
     // Bool. True on 1st row of all rounds except last rounds.
@@ -79,7 +80,6 @@ impl<F: Field> KeccakCircuitConfig<F> {
         let num_rows_per_round = parameters.rows_per_round;
 
         let q_enable = meta.fixed_column();
-        // let q_enable_row = meta.fixed_column();
         let q_first = meta.fixed_column();
         let q_round = meta.fixed_column();
         let q_absorb = meta.fixed_column();
@@ -557,6 +557,8 @@ impl<F: Field> KeccakCircuitConfig<F> {
         let q = |col: Column<Fixed>, meta: &mut VirtualCells<'_, F>| {
             meta.query_fixed(col, Rotation::cur())
         };
+        // Note: this is assumed to be called on a selector col that is only enabled on the first row of a round.
+        // In that case, you can use q_in_round on col to detect if a row is any of the num_rows_per_round on or after the first row.
         let q_in_round = |col: Column<Fixed>, meta: &mut VirtualCells<'_, F>| {
             (0..num_rows_per_round as i32)
                 .map(|i| meta.query_fixed(col, Rotation(-i)))
@@ -570,6 +572,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
                 input: "12345678abc"
             table:
                 Note[1]: be careful: is_paddings is not column here! It is [Cell; 8] and it will be constrained later.
+                Note[2]: only first row of each round has constraints on bytes_left. This example just shows how witnesses are filled.
         offset word_value bytes_left  is_paddings q_enable q_padding_last
         18     0x87654321    11          0         1        0 // 1st round begin
         19        0          10          0         0        0
@@ -594,69 +597,57 @@ impl<F: Field> KeccakCircuitConfig<F> {
 
         meta.create_gate("word_value", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+            let masked_input_bytes = input_bytes
+                .iter()
+                .zip(is_paddings.clone())
+                .map(|(input_byte, is_padding)| {
+                    input_byte.expr.clone() * not::expr(is_padding.expr().clone())
+                })
+                .collect_vec();
+            let input_word = from_bytes::expr(&masked_input_bytes);
             cb.require_equal(
                 "word value",
-                absorb_data.expr(),
+                input_word,
                 meta.query_advice(keccak_table.word_value, Rotation::cur()),
             );
-            cb.gate(q(q_enable, meta) * not::expr(q(q_padding, meta)))
+            cb.gate(q(q_padding, meta))
         });
         meta.create_gate("bytes_left", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+            let bytes_left_expr = meta.query_advice(keccak_table.bytes_left, Rotation::cur());
             // bytes_left is 0 in the absolute first `rows_per_round` of the entire circuit, i.e., the first dummy round.
+
             cb.condition(q_in_round(q_first, meta), |cb| {
                 cb.require_zero(
                     "bytes_left needs to be zero on the absolute first dummy round",
                     meta.query_advice(keccak_table.bytes_left, Rotation::cur()),
                 );
             });
-            // is_paddings only be true when
-            cb.condition(q(q_padding, meta), |cb| {
-                for i in 0..num_rows_per_round {
-                    let bytes_left = meta.query_advice(keccak_table.bytes_left, Rotation(i as i32));
-                    let bytes_left_next =
-                        meta.query_advice(keccak_table.bytes_left, Rotation(i as i32 + 1));
-                    // real input only when !is_paddings[i] && i < NUM_BYTES_PER_WORD
-                    cb.require_equal(
-                        "if not padding, bytes_left decreases by 1, else, stay same",
-                        bytes_left_next,
-                        bytes_left.clone()
-                            - if i < 7 || i == num_rows_per_round - 1 {
-                                not::expr(
-                                    is_paddings[std::cmp::min(i, NUM_BYTES_PER_WORD - 1)].expr(),
-                                )
-                            } else {
-                                0.expr()
-                            },
-                    );
-                    cb.require_zero(
-                        "bytes_left should be 0 when padding",
-                        bytes_left * is_paddings[std::cmp::min(i, NUM_BYTES_PER_WORD - 1)].expr(),
-                    );
-                }
+            let is_final_expr = meta.query_advice(is_final, Rotation::cur());
+            // bytes_left[i] == 0 when is_final.
+            // Note: is_final = true only in the last round, which doesn't have any data to absorb.
+            cb.condition(meta.query_advice(is_final, Rotation::cur()), |cb| {
+                cb.require_zero("bytes_left should be 0 when is_final", bytes_left_expr.clone());
             });
-            // Note: `q_padding` and `q_first` are never enabled at the same time.
-            cb.condition(
-                (q_in_round(q_enable, meta)
-                    - q_in_round(q_padding, meta)
-                    - q_in_round(q_first, meta))
-                    * meta.query_advice(is_final, Rotation::next()),
-                |cb| {
-                    let bytes_left = meta.query_advice(keccak_table.bytes_left, Rotation::cur());
-                    let bytes_left_next =
-                        meta.query_advice(keccak_table.bytes_left, Rotation::next());
-                    cb.require_equal(
-                        "bytes_left should stay same on non absorb round",
-                        bytes_left,
-                        bytes_left_next,
-                    );
-                },
+            // q_padding? NUM_BYTES_PER_WORD - sum(is_paddings): 0
+            // Only rounds with q_padding == true have inputs to absorb.
+            let word_len = select::expr(
+                q(q_padding, meta),
+                NUM_BYTES_PER_WORD.expr() - sum::expr(is_paddings.clone()),
+                0.expr(),
             );
-            cb.condition(q(q_enable, meta) * meta.query_advice(is_final, Rotation::cur()), |cb| {
-                let bytes_left = meta.query_advice(keccak_table.bytes_left, Rotation::cur());
-                cb.require_zero("bytes_left should be 0 when is_final", bytes_left);
+            // !is_final[i] ==> bytes_left[i + num_rows_per_round] + word_len == bytes_left[i]
+            cb.condition(not::expr(is_final_expr), |cb| {
+                let bytes_left_next_expr =
+                    meta.query_advice(keccak_table.bytes_left, Rotation(num_rows_per_round as i32));
+                cb.require_equal(
+                    "if not final, bytes_left decreaes by the length of the word",
+                    bytes_left_expr,
+                    bytes_left_next_expr.clone() + word_len,
+                );
             });
-            cb.gate(1.expr())
+
+            cb.gate(q(q_enable, meta))
         });
 
         // Enforce logic for when this block is the last block for a hash
@@ -1221,14 +1212,13 @@ fn keccak<F: Field>(
                     0
                 };
                 let byte_idx = if round < NUM_WORDS_TO_ABSORB {
-                    round * 8 + std::cmp::min(row_idx, NUM_BYTES_PER_WORD - 1)
+                    round * NUM_BYTES_PER_WORD + std::cmp::min(row_idx, NUM_BYTES_PER_WORD - 1)
                 } else {
-                    NUM_WORDS_TO_ABSORB * 8
-                } + idx * NUM_WORDS_TO_ABSORB * 8;
+                    NUM_WORDS_TO_ABSORB * NUM_BYTES_PER_WORD
+                } + idx * NUM_WORDS_TO_ABSORB * NUM_BYTES_PER_WORD;
                 let bytes_left = if byte_idx >= bytes.len() { 0 } else { bytes.len() - byte_idx };
                 rows.push(KeccakRow {
                     q_enable: row_idx == 0,
-                    // q_enable_row: true,
                     q_round: row_idx == 0 && round < NUM_ROUNDS,
                     q_absorb: row_idx == 0 && round == NUM_ROUNDS,
                     q_round_last: row_idx == 0 && round == NUM_ROUNDS,

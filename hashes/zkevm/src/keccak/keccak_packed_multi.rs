@@ -59,7 +59,6 @@ pub(crate) struct SqueezeData<F: PrimeField> {
 #[derive(Clone, Debug)]
 pub struct KeccakRow<F: PrimeField> {
     pub(crate) q_enable: bool,
-    // pub(crate) q_enable_row: bool,
     pub(crate) q_round: bool,
     pub(crate) q_absorb: bool,
     pub(crate) q_round_last: bool,
@@ -68,10 +67,9 @@ pub struct KeccakRow<F: PrimeField> {
     pub(crate) round_cst: F,
     pub(crate) is_final: bool,
     pub(crate) cell_values: Vec<F>,
-    // SecondPhase values will be assigned separately
-    // pub(crate) data_rlc: Value<F>,
     pub(crate) hash: Word<Value<F>>,
     pub(crate) bytes_left: F,
+    // A keccak word(NUM_BYTES_PER_WORD bytes)
     pub(crate) word_value: F,
 }
 
@@ -141,7 +139,7 @@ pub struct KeccakTable {
     pub is_enabled: Column<Advice>,
     /// Keccak hash of input
     pub output: Word<Column<Advice>>,
-    /// Raw word bytes of inputs
+    /// Raw keccak words(NUM_BYTES_PER_WORD bytes) of inputs
     pub word_value: Column<Advice>,
     /// Number of bytes left of a input
     pub bytes_left: Column<Advice>,
