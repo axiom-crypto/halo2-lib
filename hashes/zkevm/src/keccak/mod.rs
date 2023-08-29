@@ -619,7 +619,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
             let bytes_left_expr = meta.query_advice(keccak_table.bytes_left, Rotation::cur());
 
             // bytes_left is 0 in the absolute first `rows_per_round` of the entire circuit, i.e., the first dummy round.
-            cb.condition(q_in_round(q_first, meta), |cb| {
+            cb.condition(q(q_first, meta), |cb| {
                 cb.require_zero(
                     "bytes_left needs to be zero on the absolute first dummy round",
                     meta.query_advice(keccak_table.bytes_left, Rotation::cur()),
