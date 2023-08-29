@@ -3,7 +3,7 @@ use crate::{
     halo2_proofs::{
         circuit::Value,
         halo2curves::ff::PrimeField,
-        plonk::{Advice, Column, ConstraintSystem, Expression, SecondPhase},
+        plonk::{Advice, Column, ConstraintSystem, Expression},
     },
     util::{
         constraint_builder::BaseConstraintBuilder, eth_types::Field, expression::Expr, word::Word,
@@ -55,23 +55,22 @@ pub(crate) struct SqueezeData<F: PrimeField> {
     packed: F,
 }
 
-/// KeccakRow
+/// KeccakRow. Field definitions could be found in [KeccakCircuitConfig].
 #[derive(Clone, Debug)]
 pub struct KeccakRow<F: PrimeField> {
     pub(crate) q_enable: bool,
-    // pub(crate) q_enable_row: bool,
     pub(crate) q_round: bool,
     pub(crate) q_absorb: bool,
     pub(crate) q_round_last: bool,
-    pub(crate) q_padding: bool,
-    pub(crate) q_padding_last: bool,
+    pub(crate) q_input: bool,
+    pub(crate) q_input_last: bool,
     pub(crate) round_cst: F,
     pub(crate) is_final: bool,
     pub(crate) cell_values: Vec<F>,
-    pub(crate) length: usize,
-    // SecondPhase values will be assigned separately
-    // pub(crate) data_rlc: Value<F>,
     pub(crate) hash: Word<Value<F>>,
+    pub(crate) bytes_left: F,
+    // A keccak word(NUM_BYTES_PER_WORD bytes)
+    pub(crate) word_value: F,
 }
 
 impl<F: PrimeField> KeccakRow<F> {
@@ -82,13 +81,14 @@ impl<F: PrimeField> KeccakRow<F> {
                 q_round: false,
                 q_absorb: idx == 0,
                 q_round_last: false,
-                q_padding: false,
-                q_padding_last: false,
+                q_input: false,
+                q_input_last: false,
                 round_cst: F::ZERO,
                 is_final: false,
-                length: 0usize,
                 cell_values: Vec::new(),
                 hash: Word::default().into_value(),
+                bytes_left: F::ZERO,
+                word_value: F::ZERO,
             })
             .collect()
     }
@@ -137,28 +137,26 @@ impl<F: PrimeField> KeccakRegion<F> {
 pub struct KeccakTable {
     /// True when the row is enabled
     pub is_enabled: Column<Advice>,
-    /// Byte array input as `RLC(reversed(input))`
-    pub input_rlc: Column<Advice>, // RLC of input bytes
-    // Byte array input length
-    pub input_len: Column<Advice>,
-    /// Output of the hash function
+    /// Keccak hash of input
     pub output: Word<Column<Advice>>,
+    /// Raw keccak words(NUM_BYTES_PER_WORD bytes) of inputs
+    pub word_value: Column<Advice>,
+    /// Number of bytes left of a input
+    pub bytes_left: Column<Advice>,
 }
 
 impl KeccakTable {
     /// Construct a new KeccakTable
     pub fn construct<F: Field>(meta: &mut ConstraintSystem<F>) -> Self {
         let input_len = meta.advice_column();
-        let input_rlc = meta.advice_column_in(SecondPhase);
-        let output_rlc = meta.advice_column_in(SecondPhase);
+        let word_value = meta.advice_column();
+        let bytes_left = meta.advice_column();
         meta.enable_equality(input_len);
-        meta.enable_equality(input_rlc);
-        meta.enable_equality(output_rlc);
         Self {
             is_enabled: meta.advice_column(),
-            input_rlc,
-            input_len,
             output: Word::new([meta.advice_column(), meta.advice_column()]),
+            word_value,
+            bytes_left,
         }
     }
 }
