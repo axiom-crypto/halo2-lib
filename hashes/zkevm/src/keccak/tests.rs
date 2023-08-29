@@ -104,7 +104,7 @@ impl<F: Field> KeccakCircuit<F> {
         KeccakCircuit { config, inputs, num_rows, _marker: PhantomData, verify_output }
     }
 
-    fn verify_output_witnesses<'v>(&self, assigned_rows: &[KeccakAssignedRow<'v, F>]) {
+    fn verify_output_witnesses(&self, assigned_rows: &[KeccakAssignedRow<F>]) {
         let mut input_offset = 0;
         // only look at last row in each round
         // first round is dummy, so ignore
@@ -129,7 +129,7 @@ impl<F: Field> KeccakCircuit<F> {
         }
     }
 
-    fn verify_input_witnesses<'v>(&self, assigned_rows: &[KeccakAssignedRow<'v, F>]) {
+    fn verify_input_witnesses(&self, assigned_rows: &[KeccakAssignedRow<F>]) {
         let rows_per_round = self.config.rows_per_round;
         let mut input_offset = 0;
         let mut input_byte_offset = 0;
@@ -192,7 +192,7 @@ fn verify<F: Field + Ord + FromUniformBytes<64>>(
     prover.assert_satisfied();
 }
 
-fn extract_value<'v, F: Field>(assigned_value: KeccakAssignedValue<'v, F>) -> F {
+fn extract_value<F: Field>(assigned_value: KeccakAssignedValue<F>) -> F {
     let assigned = **value_to_option(assigned_value.value()).unwrap();
     match assigned {
         halo2_base::halo2_proofs::plonk::Assigned::Zero => F::ZERO,
@@ -201,7 +201,7 @@ fn extract_value<'v, F: Field>(assigned_value: KeccakAssignedValue<'v, F>) -> F 
     }
 }
 
-fn extract_u128<'v, F: Field>(assigned_value: KeccakAssignedValue<'v, F>) -> u128 {
+fn extract_u128<F: Field>(assigned_value: KeccakAssignedValue<F>) -> u128 {
     let le_bytes = extract_value(assigned_value).to_bytes_le();
     let hi = u128::from_le_bytes(le_bytes[16..].try_into().unwrap());
     assert_eq!(hi, 0);

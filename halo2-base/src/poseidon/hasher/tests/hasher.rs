@@ -214,7 +214,7 @@ fn test_poseidon_hasher_compact_inputs_with_prover() {
     {
         const T: usize = 3;
         const RATE: usize = 2;
-        let params = vec![
+        let params = [
             (RATE, 0),
             (RATE * 2, RATE + 1),
             (RATE * 5, RATE * 4 + 1),
