@@ -53,7 +53,8 @@ pub struct KeccakCircuitConfig<F> {
     // Bool. True on 1st row of last rounds.
     q_round_last: Column<Fixed>,
     // Bool. True on 1st row of rounds which might contain inputs.
-    // Note: first NUM_WORDS_TO_ABSORB rounds of each chunk might contain inputs. These rounded are 0 padded.
+    // Note: first NUM_WORDS_TO_ABSORB rounds of each chunk might contain inputs.
+    // It "might" contain inputs because it's possible that a round only have paddings.
     q_input: Column<Fixed>,
     // Bool. True on 1st row of all last input round.
     q_input_last: Column<Fixed>,
