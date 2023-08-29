@@ -8,7 +8,7 @@ use super::{fixed_base, scalar_multiply, EcPoint, EccChip};
 // SF is the scalar field of GA
 // p = base field modulus
 // n = scalar field modulus
-// assume r < p, 0 < s < n, 0 < msgHash < n
+// checks r < p, 0 < s < n, 0 < msgHash < n
 // this circuit applies over constraints that s > 0, msgHash > 0 cause scalar_multiply can't handle zero scalar
 /// `pubkey` should not be the identity point
 /// follow spec in https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
