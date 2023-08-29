@@ -559,14 +559,6 @@ impl<F: Field> KeccakCircuitConfig<F> {
         let q = |col: Column<Fixed>, meta: &mut VirtualCells<'_, F>| {
             meta.query_fixed(col, Rotation::cur())
         };
-        // Note: this is assumed to be called on a selector col that is only enabled on the first row of a round.
-        // In that case, you can use q_in_round on col to detect if a row is any of the num_rows_per_round on or after the first row.
-        let q_in_round = |col: Column<Fixed>, meta: &mut VirtualCells<'_, F>| {
-            (0..num_rows_per_round as i32)
-                .map(|i| meta.query_fixed(col, Rotation(-i)))
-                .fold(0.expr(), |acc, elem| acc + elem)
-        };
-
         /*
         eg：
             data:
