@@ -210,12 +210,21 @@ pub fn assign_with_constraints<F: ScalarField, const ROTATIONS: usize>(
                 .insert(ContextCell::new(ctx.type_id, ctx.context_id, i), cell);
 
             // If selector enabled and row_offset is valid add break point, account for break point overlap, and enforce equality constraint for gate outputs.
-            // ⚠️ This assumes overlap is of form: gate enabled at `row_offset - delta` and `row_offset`, where `delta = ROTATIONS - 1`. We currently do not support `delta < ROTATIONS - 1`.
+            // ⚠️ This assumes overlap is of form: gate enabled at `i - delta` and `i`, where `delta = ROTATIONS - 1`. We currently do not support `delta < ROTATIONS - 1`.
             if (q && row_offset + ROTATIONS > max_rows) || row_offset >= max_rows - 1 {
                 break_points.push(row_offset);
                 row_offset = 0;
                 gate_index += 1;
 
+                // safety check: make sure selector is not enabled on `i - delta` for `0 < delta < ROTATIONS - 1`
+                if ROTATIONS > 1 && i + 2 >= ROTATIONS {
+                    for delta in 1..ROTATIONS - 1 {
+                        assert!(
+                            !ctx.selector[i - delta],
+                            "We do not support overlaps with delta = {delta}"
+                        );
+                    }
+                }
                 // when there is a break point, because we may have two gates that overlap at the current cell, we must copy the current cell to the next column for safety
                 basic_gate = basic_gates
                         .get(gate_index)
