@@ -11,7 +11,7 @@
 mod multi_phase;
 mod parallelize;
 /// Thread builder for a single phase
-mod single_phase;
+pub mod single_phase;
 
 pub use multi_phase::{GateStatistics, MultiPhaseCoreManager};
 pub use parallelize::parallelize_core;

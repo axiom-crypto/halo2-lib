@@ -47,6 +47,11 @@ pub struct BasicGateConfig<F: ScalarField> {
 }
 
 impl<F: ScalarField> BasicGateConfig<F> {
+    /// Constructor
+    pub fn new(q_enable: Selector, value: Column<Advice>) -> Self {
+        Self { q_enable, value, _marker: PhantomData }
+    }
+
     /// Instantiates a new [BasicGateConfig].
     ///
     /// Assumes `phase` is in the range [0, MAX_PHASE).
@@ -103,7 +108,7 @@ pub struct FlexGateConfig<F: ScalarField> {
     pub basic_gates: Vec<Vec<BasicGateConfig<F>>>,
     /// A [Vec] of [Fixed] [Column]s for allocating constant values.
     pub constants: Vec<Column<Fixed>>,
-    /// Max number of rows in flex gate.
+    /// Max number of usable rows in the circuit.
     pub max_rows: usize,
 }
 
