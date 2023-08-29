@@ -52,10 +52,11 @@ pub struct KeccakCircuitConfig<F> {
     q_absorb: Column<Fixed>,
     // Bool. True on 1st row of last rounds.
     q_round_last: Column<Fixed>,
-    // Bool. True on 1st row of padding rounds.
-    q_padding: Column<Fixed>,
-    // Bool. True on 1st row of last padding rounds.
-    q_padding_last: Column<Fixed>,
+    // Bool. True on 1st row of rounds which might contain inputs.
+    // Note: first NUM_WORDS_TO_ABSORB rounds of each chunk might contain inputs. These rounded are 0 padded.
+    q_input: Column<Fixed>,
+    // Bool. True on 1st row of all last input round.
+    q_input_last: Column<Fixed>,
 
     pub keccak_table: KeccakTable,
 
@@ -84,8 +85,8 @@ impl<F: Field> KeccakCircuitConfig<F> {
         let q_round = meta.fixed_column();
         let q_absorb = meta.fixed_column();
         let q_round_last = meta.fixed_column();
-        let q_padding = meta.fixed_column();
-        let q_padding_last = meta.fixed_column();
+        let q_input = meta.fixed_column();
+        let q_input_last = meta.fixed_column();
         let round_cst = meta.fixed_column();
         let keccak_table = KeccakTable::construct(meta);
 
@@ -573,7 +574,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
             table:
                 Note[1]: be careful: is_paddings is not column here! It is [Cell; 8] and it will be constrained later.
                 Note[2]: only first row of each round has constraints on bytes_left. This example just shows how witnesses are filled.
-        offset word_value bytes_left  is_paddings q_enable q_padding_last
+        offset word_value bytes_left  is_paddings q_enable q_input_last
         18     0x87654321    11          0         1        0 // 1st round begin
         19        0          10          0         0        0
         20        0          9           0         0        0
@@ -610,7 +611,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
                 input_word,
                 meta.query_advice(keccak_table.word_value, Rotation::cur()),
             );
-            cb.gate(q(q_padding, meta))
+            cb.gate(q(q_input, meta))
         });
         meta.create_gate("bytes_left", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
@@ -629,10 +630,10 @@ impl<F: Field> KeccakCircuitConfig<F> {
             cb.condition(meta.query_advice(is_final, Rotation::cur()), |cb| {
                 cb.require_zero("bytes_left should be 0 when is_final", bytes_left_expr.clone());
             });
-            // word_len = q_padding? NUM_BYTES_PER_WORD - sum(is_paddings): 0
-            // Only rounds with q_padding == true have inputs to absorb.
+            // word_len = q_input? NUM_BYTES_PER_WORD - sum(is_paddings): 0
+            // Only rounds with q_input == true have inputs to absorb.
             let word_len = select::expr(
-                q(q_padding, meta),
+                q(q_input, meta),
                 NUM_BYTES_PER_WORD.expr() - sum::expr(is_paddings.clone()),
                 0.expr(),
             );
@@ -691,8 +692,8 @@ impl<F: Field> KeccakCircuitConfig<F> {
             is_paddings.last().unwrap().at_offset(meta, -(num_rows_per_round as i32));
         meta.create_gate("padding", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-            let q_padding = meta.query_fixed(q_padding, Rotation::cur());
-            let q_padding_last = meta.query_fixed(q_padding_last, Rotation::cur());
+            let q_input = meta.query_fixed(q_input, Rotation::cur());
+            let q_input_last = meta.query_fixed(q_input_last, Rotation::cur());
 
             // All padding selectors need to be boolean
             for is_padding in is_paddings.iter() {
@@ -716,7 +717,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
                 let is_first_padding = is_paddings[idx].expr() - is_padding_prev.clone();
 
                 // Check padding transition 0 -> 1 done only once
-                cb.condition(q_padding.expr(), |cb| {
+                cb.condition(q_input.expr(), |cb| {
                     cb.require_boolean("padding step boolean", is_first_padding.clone());
                 });
 
@@ -726,10 +727,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
                     // degree by one Padding start/intermediate byte, all
                     // padding rows except the last one
                     cb.condition(
-                        and::expr([
-                            q_padding.expr() - q_padding_last.expr(),
-                            is_paddings[idx].expr(),
-                        ]),
+                        and::expr([q_input.expr() - q_input_last.expr(), is_paddings[idx].expr()]),
                         |cb| {
                             // Input bytes need to be zero, or one if this is the first padding byte
                             cb.require_equal(
@@ -740,21 +738,18 @@ impl<F: Field> KeccakCircuitConfig<F> {
                         },
                     );
                     // Padding start/end byte, only on the last padding row
-                    cb.condition(
-                        and::expr([q_padding_last.expr(), is_paddings[idx].expr()]),
-                        |cb| {
-                            // The input byte needs to be 128, unless it's also the first padding
-                            // byte then it's 129
-                            cb.require_equal(
-                                "padding start/end byte",
-                                input_bytes[idx].expr.clone(),
-                                is_first_padding.expr() + 128.expr(),
-                            );
-                        },
-                    );
+                    cb.condition(and::expr([q_input_last.expr(), is_paddings[idx].expr()]), |cb| {
+                        // The input byte needs to be 128, unless it's also the first padding
+                        // byte then it's 129
+                        cb.require_equal(
+                            "padding start/end byte",
+                            input_bytes[idx].expr.clone(),
+                            is_first_padding.expr() + 128.expr(),
+                        );
+                    });
                 } else {
                     // Padding start/intermediate byte
-                    cb.condition(and::expr([q_padding.expr(), is_paddings[idx].expr()]), |cb| {
+                    cb.condition(and::expr([q_input.expr(), is_paddings[idx].expr()]), |cb| {
                         // Input bytes need to be zero, or one if this is the first padding byte
                         cb.require_equal(
                             "padding start/intermediate byte",
@@ -792,8 +787,8 @@ impl<F: Field> KeccakCircuitConfig<F> {
             q_round,
             q_absorb,
             q_round_last,
-            q_padding,
-            q_padding_last,
+            q_input,
+            q_input_last,
             keccak_table,
             cell_manager,
             round_cst,
@@ -846,8 +841,8 @@ impl<F: Field> KeccakCircuitConfig<F> {
             ("q_round", self.q_round, F::from(row.q_round)),
             ("q_round_last", self.q_round_last, F::from(row.q_round_last)),
             ("q_absorb", self.q_absorb, F::from(row.q_absorb)),
-            ("q_padding", self.q_padding, F::from(row.q_padding)),
-            ("q_padding_last", self.q_padding_last, F::from(row.q_padding_last)),
+            ("q_input", self.q_input, F::from(row.q_input)),
+            ("q_input_last", self.q_input_last, F::from(row.q_input_last)),
         ] {
             raw_assign_fixed(region, *column, offset, *value);
         }
@@ -1222,8 +1217,8 @@ fn keccak<F: Field>(
                     q_round: row_idx == 0 && round < NUM_ROUNDS,
                     q_absorb: row_idx == 0 && round == NUM_ROUNDS,
                     q_round_last: row_idx == 0 && round == NUM_ROUNDS,
-                    q_padding: row_idx == 0 && round < NUM_WORDS_TO_ABSORB,
-                    q_padding_last: row_idx == 0 && round == NUM_WORDS_TO_ABSORB - 1,
+                    q_input: row_idx == 0 && round < NUM_WORDS_TO_ABSORB,
+                    q_input_last: row_idx == 0 && round == NUM_WORDS_TO_ABSORB - 1,
                     round_cst,
                     is_final: is_final_block && round == NUM_ROUNDS && row_idx == 0,
                     cell_values: regions[round].rows.get(row_idx).unwrap_or(&vec![]).clone(),
