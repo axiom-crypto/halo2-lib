@@ -140,7 +140,7 @@ impl<F: ScalarField> VirtualRegionManager<F> for SinglePhaseCoreManager<F> {
             assign_witnesses(&self.threads, config, region, break_points);
         } else {
             let mut copy_manager = self.copy_manager.lock().unwrap();
-            let break_points = assign_with_constraints(
+            let break_points = assign_with_constraints::<F, 4>(
                 &self.threads,
                 config,
                 region,
@@ -165,13 +165,17 @@ impl<F: ScalarField> VirtualRegionManager<F> for SinglePhaseCoreManager<F> {
 ///
 /// For proof generation, see [assign_witnesses].
 ///
+/// This is generic for a "vertical" custom gate that uses a single column and `ROTATIONS` contiguous rows in that column.
+///
+/// ⚠️ Right now we only support "overlaps" where you can have the gate enabled at `offset` and `offset + ROTATIONS - 1`, but not at `offset + delta` where `delta < ROTATIONS - 1`.
+///
 /// # Inputs
 /// - `max_rows`: The number of rows that can be used for the assignment. This is the number of rows that are not blinded for zero-knowledge.
 /// - If `use_unknown` is true, then the advice columns will be assigned as unknowns.
 ///
 /// # Assumptions
 /// - All `basic_gates` are in the same phase.
-pub fn assign_with_constraints<F: ScalarField>(
+pub fn assign_with_constraints<F: ScalarField, const ROTATIONS: usize>(
     threads: &[Context<F>],
     basic_gates: &[BasicGateConfig<F>],
     region: &mut Region<F>,
@@ -206,7 +210,8 @@ pub fn assign_with_constraints<F: ScalarField>(
                 .insert(ContextCell::new(ctx.type_id, ctx.context_id, i), cell);
 
             // If selector enabled and row_offset is valid add break point, account for break point overlap, and enforce equality constraint for gate outputs.
-            if (q && row_offset + 4 > max_rows) || row_offset >= max_rows - 1 {
+            // ⚠️ This assumes overlap is of form: gate enabled at `row_offset - delta` and `row_offset`, where `delta = ROTATIONS - 1`. We currently do not support `delta < ROTATIONS - 1`.
+            if (q && row_offset + ROTATIONS > max_rows) || row_offset >= max_rows - 1 {
                 break_points.push(row_offset);
                 row_offset = 0;
                 gate_index += 1;
