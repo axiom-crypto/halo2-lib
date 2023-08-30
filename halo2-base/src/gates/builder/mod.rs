@@ -310,10 +310,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
                         }
 
                         if q {
-                            basic_gate
-                                .q_enable
-                                .enable(region, row_offset)
-                                .expect("enable selector should not fail");
+                            region.assign_fixed(basic_gate.q_enable, row_offset, F::from(true));
                         }
 
                         row_offset += 1;
@@ -744,7 +741,8 @@ impl<const NI: usize, F: ScalarField> RangeWithMultipleInstancesCircuitBuilder<N
             .try_with(|config| config.borrow().clone())
             .expect("You need to call config() to configure the halo2-base circuit shape first");
         let k = params.k;
-        let mut assigned_instances_iter = self.assigned_instances.chunks((1 << k) - (MAX_BLINDING_FACTORS)).into_iter();
+        let mut assigned_instances_iter =
+            self.assigned_instances.chunks((1 << k) - (MAX_BLINDING_FACTORS)).into_iter();
         for _ in 0..NI {
             let next_chunk = assigned_instances_iter.next();
             let processed_chunk = if let Some(next_chunk) = next_chunk {
@@ -761,7 +759,9 @@ impl<const NI: usize, F: ScalarField> RangeWithMultipleInstancesCircuitBuilder<N
     }
 }
 
-impl<const NI: usize, F: ScalarField> Circuit<F> for RangeWithMultipleInstancesCircuitBuilder<NI,F> {
+impl<const NI: usize, F: ScalarField> Circuit<F>
+    for RangeWithMultipleInstancesCircuitBuilder<NI, F>
+{
     type Config = PublicBaseConfig<NI, F>;
     type FloorPlanner = SimpleFloorPlanner;
 
@@ -808,7 +808,8 @@ impl<const NI: usize, F: ScalarField> Circuit<F> for RangeWithMultipleInstancesC
             // expose public instances
             let mut layouter = layouter.namespace(|| "expose");
             // todo: calculate optimal chunk size using meta.blinding_factors
-            let mut assigned_instances_iter = self.assigned_instances.chunks((1 << k) - (MAX_BLINDING_FACTORS)).into_iter();
+            let mut assigned_instances_iter =
+                self.assigned_instances.chunks((1 << k) - (MAX_BLINDING_FACTORS)).into_iter();
             for instance_col in instance_cols.iter() {
                 let next_chunk = assigned_instances_iter.next();
                 if let Some(next_chunk) = next_chunk {

@@ -38,7 +38,7 @@ pub enum GateStrategy {
 pub struct BasicGateConfig<F: ScalarField> {
     /// [Selector] column that stores selector values that are used to activate gates in the advice column.
     // `q_enable` will have either length 1 or 2, depending on the strategy
-    pub q_enable: Selector,
+    pub q_enable: Column<Fixed>,
     /// [Column] that stores the advice values of the gate.
     pub value: Column<Advice>,
     /// Marker for the field type.
@@ -61,7 +61,7 @@ impl<F: ScalarField> BasicGateConfig<F> {
         };
         meta.enable_equality(value);
 
-        let q_enable = meta.selector();
+        let q_enable = meta.fixed_column();
 
         match strategy {
             GateStrategy::Vertical => {
@@ -76,7 +76,7 @@ impl<F: ScalarField> BasicGateConfig<F> {
     /// * `meta`: [ConstraintSystem] used for the gate
     fn create_gate(&self, meta: &mut ConstraintSystem<F>) {
         meta.create_gate("1 column a + b * c = out", |meta| {
-            let q = meta.query_selector(self.q_enable);
+            let q = meta.query_fixed(self.q_enable, Rotation::cur());
 
             let a = meta.query_advice(self.value, Rotation::cur());
             let b = meta.query_advice(self.value, Rotation::next());
