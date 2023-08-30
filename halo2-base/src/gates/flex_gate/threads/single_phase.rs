@@ -8,7 +8,7 @@ use crate::{
         flex_gate::{BasicGateConfig, ThreadBreakPoints},
     },
     utils::halo2::{raw_assign_advice, raw_constrain_equal},
-    utils::ScalarField,
+    utils::{halo2::raw_assign_fixed, ScalarField},
     virtual_region::copy_constraints::{CopyConstraintManager, SharedCopyConstraintManager},
     Context, ContextCell,
 };
@@ -256,10 +256,7 @@ pub fn assign_with_constraints<F: ScalarField, const ROTATIONS: usize>(
             }
 
             if q {
-                basic_gate
-                    .q_enable
-                    .enable(region, row_offset)
-                    .expect("enable selector should not fail");
+                raw_assign_fixed(region, basic_gate.q_enable, row_offset, F::ONE);
             }
 
             row_offset += 1;
