@@ -23,6 +23,7 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::marker::PhantomData;
 
 pub mod cell_manager;
+pub mod computation_circuit;
 pub mod keccak_packed_multi;
 pub mod param;
 pub mod table;
