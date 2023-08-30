@@ -40,7 +40,9 @@ impl<F: ScalarField, const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>
     /// Total bits of this type.
     pub const TOTAL_BITS: usize = TOTAL_BITS;
     /// Number of bits of each element.
-    pub const BITS_PER_ELE: usize = min(TOTAL_BITS, BYTES_PER_ELE * BITS_PER_BYTE);
+    pub fn bits_per_ele() -> usize {
+        min(TOTAL_BITS, BYTES_PER_ELE * BITS_PER_BYTE)
+    }
     /// Number of elements of this type.
     pub const VALUE_LENGTH: usize =
         (TOTAL_BITS + BYTES_PER_ELE * BITS_PER_BYTE - 1) / (BYTES_PER_ELE * BITS_PER_BYTE);
@@ -103,7 +105,7 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
         ctx: &mut Context<F>,
         inputs: RawAssignedValues<F>,
     ) -> SafeType<F, BYTES_PER_ELE, TOTAL_BITS> {
-        let element_bits = SafeType::<F, BYTES_PER_ELE, TOTAL_BITS>::BITS_PER_ELE;
+        let element_bits = SafeType::<F, BYTES_PER_ELE, TOTAL_BITS>::bits_per_ele();
         let bits = TOTAL_BITS;
         assert!(
             inputs.len() * BITS_PER_BYTE == max(bits, BITS_PER_BYTE),
