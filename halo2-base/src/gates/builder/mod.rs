@@ -275,10 +275,7 @@ impl<F: ScalarField> GateThreadBuilder<F> {
                         }
 
                         if q {
-                            basic_gate
-                                .q_enable
-                                .enable(region, row_offset)
-                                .expect("enable selector should not fail");
+                            region.assign_fixed(basic_gate.q_enable, row_offset, F::from(true));
                         }
 
                         row_offset += 1;
