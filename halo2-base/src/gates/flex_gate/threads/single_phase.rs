@@ -82,6 +82,20 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
         Self { use_unknown, ..self }
     }
 
+    /// Mutates `self` to use the given copy manager everywhere, including in all threads.
+    pub fn set_copy_manager(&mut self, copy_manager: SharedCopyConstraintManager<F>) {
+        self.copy_manager = copy_manager.clone();
+        for ctx in &mut self.threads {
+            ctx.copy_manager = copy_manager.clone();
+        }
+    }
+
+    /// Returns `self` with a given copy manager
+    pub fn use_copy_manager(mut self, copy_manager: SharedCopyConstraintManager<F>) -> Self {
+        self.set_copy_manager(copy_manager);
+        self
+    }
+
     /// Returns a mutable reference to the [Context] of a gate thread. Spawns a new thread for the given phase, if none exists.
     pub fn main(&mut self) -> &mut Context<F> {
         if self.threads.is_empty() {

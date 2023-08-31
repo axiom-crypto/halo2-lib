@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use getset::{Getters, MutGetters, Setters};
 use itertools::Itertools;
 
@@ -17,7 +19,8 @@ use crate::{
     },
     utils::ScalarField,
     virtual_region::{
-        copy_constraints::SharedCopyConstraintManager, lookups::LookupAnyManager,
+        copy_constraints::{CopyConstraintManager, SharedCopyConstraintManager},
+        lookups::LookupAnyManager,
         manager::VirtualRegionManager,
     },
     AssignedValue, Context,
@@ -95,6 +98,32 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
         Self::new(true).use_params(config_params).use_break_points(break_points)
     }
 
+    /// Sets the copy manager to the given one in all shared references.
+    pub fn set_copy_manager(&mut self, copy_manager: SharedCopyConstraintManager<F>) {
+        for lm in &mut self.lookup_manager {
+            lm.copy_manager = copy_manager.clone();
+        }
+        self.core.set_copy_manager(copy_manager);
+    }
+
+    /// Returns `self` with a given copy manager
+    pub fn use_copy_manager(mut self, copy_manager: SharedCopyConstraintManager<F>) -> Self {
+        self.set_copy_manager(copy_manager);
+        self
+    }
+
+    /// Deep clone of `self`, where the underlying object of shared references in [SharedCopyConstraintManager] and [LookupAnyManager] are cloned.
+    pub fn deep_clone(&self) -> Self {
+        let cm: CopyConstraintManager<F> = self.core.copy_manager.lock().unwrap().clone();
+        let cm_ref = Arc::new(Mutex::new(cm));
+        let mut clone = self.clone().use_copy_manager(cm_ref);
+        for lm in &mut clone.lookup_manager {
+            let ctl_clone = lm.cells_to_lookup.lock().unwrap().clone();
+            lm.cells_to_lookup = Arc::new(Mutex::new(ctl_clone));
+        }
+        clone
+    }
+
     /// The log_2 size of the lookup table, if using.
     pub fn lookup_bits(&self) -> Option<usize> {
         self.config_params.lookup_bits
@@ -163,15 +192,6 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
     /// Returns new with break points
     pub fn use_break_points(mut self, break_points: MultiPhaseThreadBreakPoints) -> Self {
         self.set_break_points(break_points);
-        self
-    }
-
-    /// Returns `self` with a gven copy manager
-    pub fn use_copy_manager(mut self, copy_manager: SharedCopyConstraintManager<F>) -> Self {
-        for lm in &mut self.lookup_manager {
-            lm.copy_manager = copy_manager.clone();
-        }
-        self.core = self.core.use_copy_manager(copy_manager);
         self
     }
 
