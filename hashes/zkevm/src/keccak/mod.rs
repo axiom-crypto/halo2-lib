@@ -797,14 +797,13 @@ impl<F: Field> KeccakCircuitConfig<F> {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Clone)]
 pub struct KeccakAssignedRow<'v, F: Field> {
-    pub(crate) is_final: KeccakAssignedValue<'v, F>,
-    pub(crate) hash_lo: KeccakAssignedValue<'v, F>,
-    pub(crate) hash_hi: KeccakAssignedValue<'v, F>,
-    pub(crate) bytes_left: KeccakAssignedValue<'v, F>,
-    pub(crate) word_value: KeccakAssignedValue<'v, F>,
+    pub is_final: KeccakAssignedValue<'v, F>,
+    pub hash_lo: KeccakAssignedValue<'v, F>,
+    pub hash_hi: KeccakAssignedValue<'v, F>,
+    pub bytes_left: KeccakAssignedValue<'v, F>,
+    pub word_value: KeccakAssignedValue<'v, F>,
 }
 
 impl<F: Field> KeccakCircuitConfig<F> {
