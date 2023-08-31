@@ -16,7 +16,7 @@ use std::marker::PhantomData;
 
 pub mod ecdsa;
 pub mod fixed_base;
-pub mod inner_product_proof;
+pub mod inner_product_argument;
 // pub mod fixed_base_pippenger;
 pub mod pippenger;
 
