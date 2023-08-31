@@ -9,6 +9,7 @@ use num_traits::Zero;
 
 pub mod add_no_carry;
 pub mod big_is_equal;
+pub mod big_is_even;
 pub mod big_is_zero;
 pub mod big_less_than;
 pub mod carry_mod;

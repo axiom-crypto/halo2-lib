@@ -34,6 +34,8 @@ use crate::{
 pub mod ecdsa;
 pub mod ecdsa_tests;
 
+pub mod schnorr_signature_tests;
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 struct CircuitParams {
     strategy: FpStrategy,
