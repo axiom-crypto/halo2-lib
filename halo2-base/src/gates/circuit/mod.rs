@@ -118,6 +118,14 @@ impl<F: ScalarField> BaseConfig<F> {
             MaybeRangeConfig::WithRange(config) => &config.q_lookup,
         }
     }
+
+    /// Updates the number of usable rows in the circuit. Used if you mutate [ConstraintSystem] after `BaseConfig::configure` is called.
+    pub fn set_usable_rows(&mut self, usable_rows: usize) {
+        match &mut self.base {
+            MaybeRangeConfig::WithoutRange(config) => config.max_rows = usable_rows,
+            MaybeRangeConfig::WithRange(config) => config.gate.max_rows = usable_rows,
+        }
+    }
 }
 
 impl<F: ScalarField> Circuit<F> for BaseCircuitBuilder<F> {

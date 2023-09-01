@@ -44,12 +44,17 @@ impl<F: ScalarField> MultiPhaseCoreManager<F> {
         Self::new(stage.witness_gen_only()).unknown(stage == CircuitBuilderStage::Keygen)
     }
 
-    /// Returns `self` with a given copy manager
-    pub fn use_copy_manager(mut self, copy_manager: SharedCopyConstraintManager<F>) -> Self {
+    /// Mutates `self` to use the given copy manager in all phases and all threads.
+    pub fn set_copy_manager(&mut self, copy_manager: SharedCopyConstraintManager<F>) {
         for pm in &mut self.phase_manager {
-            pm.copy_manager = copy_manager.clone();
+            pm.set_copy_manager(copy_manager.clone());
         }
         self.copy_manager = copy_manager;
+    }
+
+    /// Returns `self` with a given copy manager
+    pub fn use_copy_manager(mut self, copy_manager: SharedCopyConstraintManager<F>) -> Self {
+        self.set_copy_manager(copy_manager);
         self
     }
 
