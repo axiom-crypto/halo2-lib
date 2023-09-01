@@ -815,7 +815,7 @@ pub trait GateInstructions<F: ScalarField> {
         range_bits: usize,
     ) -> Vec<AssignedValue<F>>;
 
-    /// Constrains and computes `a`<sup>`exp`</sup> where both `a, exp` are witnesses. The exponent is computed in the native field `F`.
+    /// Constrains and computes `a^exp` where both `a, exp` are witnesses. The exponent is computed in the native field `F`.
     ///
     /// Constrains that `exp` has at most `max_bits` bits.
     fn pow_var(
@@ -824,7 +824,38 @@ pub trait GateInstructions<F: ScalarField> {
         a: AssignedValue<F>,
         exp: AssignedValue<F>,
         max_bits: usize,
-    ) -> AssignedValue<F>;
+    ) -> AssignedValue<F> {
+        let exp_bits = self.num_to_bits(ctx, exp, max_bits);
+        // standard square-and-mul approach
+        let mut acc = ctx.load_constant(F::ONE);
+        for (i, bit) in exp_bits.into_iter().rev().enumerate() {
+            if i > 0 {
+                // square
+                acc = self.mul(ctx, acc, acc);
+            }
+            let mul = self.mul(ctx, acc, a);
+            acc = self.select(ctx, mul, acc, bit);
+        }
+        acc
+    }
+
+    /// Constrains and computes `2^exp` where `exp` is witness. The exponent is computed in the native field `F`.
+    ///
+    /// Constrains that `exp <= max_exp`.
+    fn pow_of_two_var(
+        &self,
+        ctx: &mut Context<F>,
+        exp: AssignedValue<F>,
+        max_exp: usize,
+    ) -> AssignedValue<F> {
+        assert!(self.pow_of_two().len() > max_exp);
+        let pows = self.pow_of_two().iter().take(max_exp + 1).map(|c| Constant(*c));
+        let res = self.select_from_idx(ctx, pows, exp);
+        // res = 0 iff exp > max_exp. we constrain this is not the case
+        let is_zero = self.is_zero(ctx, res);
+        self.assert_is_const(ctx, &is_zero, &F::ZERO);
+        res
+    }
 
     /// Performs and constrains Lagrange interpolation on `coords` and evaluates the resulting polynomial at `x`.
     ///
@@ -1173,29 +1204,5 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
             self.assert_bit(ctx, *bit_cell);
         }
         bit_cells
-    }
-
-    /// Constrains and computes `a^exp` where both `a, exp` are witnesses. The exponent is computed in the native field `F`.
-    ///
-    /// Constrains that `exp` has at most `max_bits` bits.
-    fn pow_var(
-        &self,
-        ctx: &mut Context<F>,
-        a: AssignedValue<F>,
-        exp: AssignedValue<F>,
-        max_bits: usize,
-    ) -> AssignedValue<F> {
-        let exp_bits = self.num_to_bits(ctx, exp, max_bits);
-        // standard square-and-mul approach
-        let mut acc = ctx.load_constant(F::ONE);
-        for (i, bit) in exp_bits.into_iter().rev().enumerate() {
-            if i > 0 {
-                // square
-                acc = self.mul(ctx, acc, acc);
-            }
-            let mul = self.mul(ctx, acc, a);
-            acc = self.select(ctx, mul, acc, bit);
-        }
-        acc
     }
 }

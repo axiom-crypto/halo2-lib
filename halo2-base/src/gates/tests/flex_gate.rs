@@ -212,3 +212,12 @@ pub fn test_pow_var(a: Fr, exp: BigUint, max_bits: usize) -> Fr {
         *chip.pow_var(ctx, a, exp, max_bits).value()
     })
 }
+
+#[test_case(Fr::from(8),8 => Fr::from(256); "pow_of_two_var(8,8): 2^8 = 256")]
+#[test_case(Fr::from(8),20 => Fr::from(256); "pow_of_two_var(8,20): 2^8 = 256")]
+pub fn test_pow_of_two_var(exp: Fr, max_exp: usize) -> Fr {
+    base_test().run_gate(|ctx, chip| {
+        let exp = ctx.load_witness(exp);
+        *chip.pow_of_two_var(ctx, exp, max_exp).value()
+    })
+}
