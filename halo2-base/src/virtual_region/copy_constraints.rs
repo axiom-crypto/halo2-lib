@@ -77,9 +77,21 @@ impl<F: Field + Ord> CopyConstraintManager<F> {
     /// Adds external raw Halo2 cell to `self.assigned_advices` and returns a new virtual cell that can be
     /// used as a tag (but will not be re-assigned). The returned [ContextCell] will have `type_id` the `TypeId::of::<Cell>()`.
     pub fn load_external_cell(&mut self, cell: Cell) -> ContextCell {
+        self.load_external_cell_impl(Some(cell))
+    }
+
+    /// Mock to load an external cell for base circuit simulation. If any mock external cell is loaded, calling [assign_raw] will panic.
+    pub fn mock_external_assigned(&mut self, v: F) -> AssignedValue<F> {
+        let context_cell = self.load_external_cell_impl(None);
+        AssignedValue { value: Assigned::Trivial(v), cell: Some(context_cell) }
+    }
+
+    fn load_external_cell_impl(&mut self, cell: Option<Cell>) -> ContextCell {
         let context_cell = ContextCell::new(TypeId::of::<Cell>(), 0, self.external_cell_count);
         self.external_cell_count += 1;
-        self.assigned_advices.insert(context_cell, cell);
+        if let Some(cell) = cell {
+            self.assigned_advices.insert(context_cell, cell);
+        }
         context_cell
     }
 

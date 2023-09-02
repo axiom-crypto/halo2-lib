@@ -23,7 +23,8 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::marker::PhantomData;
 
 pub mod cell_manager;
-pub mod computation_circuit;
+/// Module for coprocessor circuits.
+pub mod co_circuit;
 pub mod keccak_packed_multi;
 pub mod param;
 pub mod table;
@@ -632,7 +633,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
                 0.expr(),
             );
             // !is_final[i] ==> bytes_left[i + num_rows_per_round] + word_len == bytes_left[i]
-            cb.condition(not::expr(is_final_expr), |cb| {
+            cb.condition(not::expr(q(q_first, meta)) * not::expr(is_final_expr), |cb| {
                 let bytes_left_next_expr =
                     meta.query_advice(keccak_table.bytes_left, Rotation(num_rows_per_round as i32));
                 cb.require_equal(
