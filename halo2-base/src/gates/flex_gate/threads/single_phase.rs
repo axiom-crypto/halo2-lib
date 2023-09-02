@@ -57,8 +57,6 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
             copy_manager,
             ..Default::default()
         };
-        // start with a main thread in phase 0
-        builder.new_thread();
         builder
     }
 
@@ -122,6 +120,7 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
 
     /// Creates new context but does not append to `self.threads`
     pub(crate) fn new_context(&self, context_id: usize) -> Context<F> {
+        dbg!(self.phase);
         Context::new(
             self.witness_gen_only,
             self.phase,
