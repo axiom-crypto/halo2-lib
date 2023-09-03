@@ -198,13 +198,13 @@ fn test_ram_prover() {
     let vk = keygen_vk(&params, &circuit).unwrap();
     let pk = keygen_pk(&params, vk, &circuit).unwrap();
     let circuit_params = circuit.params();
-    let break_points = circuit.cpu.break_points.get().unwrap().clone();
+    let break_points = circuit.cpu.break_points.borrow().clone().unwrap();
     drop(circuit);
 
     let memory: Vec<_> = (0..mem_len).map(|_| Fr::random(&mut rng)).collect();
     let ptrs = [(); CYCLES].map(|_| rng.gen_range(0..memory.len()));
     let mut circuit = RAMCircuit::new(memory, ptrs, circuit_params, true);
-    circuit.cpu.break_points.set(break_points).unwrap();
+    *circuit.cpu.break_points.borrow_mut() = Some(break_points);
     circuit.compute();
 
     let proof = gen_proof(&params, &pk, circuit);
