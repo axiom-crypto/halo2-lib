@@ -212,15 +212,28 @@ fn extract_u128<F: Field>(assigned_value: KeccakAssignedValue<F>) -> u128 {
 #[test_case(12, 5; "k: 12, rows_per_round: 5")]
 fn packed_multi_keccak_simple(k: u32, rows_per_round: usize) {
     let _ = env_logger::builder().is_test(true).try_init();
-
-    let inputs = vec![
-        vec![],
-        (0u8..1).collect::<Vec<_>>(),
-        (0u8..135).collect::<Vec<_>>(),
-        (0u8..136).collect::<Vec<_>>(),
-        (0u8..200).collect::<Vec<_>>(),
-    ];
-    verify::<Fr>(KeccakConfigParams { k, rows_per_round }, inputs, true);
+    {
+        // First input is empty.
+        let inputs = vec![
+            vec![],
+            (0u8..1).collect::<Vec<_>>(),
+            (0u8..135).collect::<Vec<_>>(),
+            (0u8..136).collect::<Vec<_>>(),
+            (0u8..200).collect::<Vec<_>>(),
+        ];
+        verify::<Fr>(KeccakConfigParams { k, rows_per_round }, inputs, true);
+    }
+    {
+        // First input is not empty.
+        let inputs = vec![
+            (0u8..200).collect::<Vec<_>>(),
+            vec![],
+            (0u8..1).collect::<Vec<_>>(),
+            (0u8..135).collect::<Vec<_>>(),
+            (0u8..136).collect::<Vec<_>>(),
+        ];
+        verify::<Fr>(KeccakConfigParams { k, rows_per_round }, inputs, true);
+    }
 }
 
 #[test_case(14, 25 ; "k: 14, rows_per_round: 25")]
@@ -231,11 +244,11 @@ fn packed_multi_keccak_prover(k: u32, rows_per_round: usize) {
     let params = ParamsKZG::<Bn256>::setup(k, OsRng);
 
     let inputs = vec![
+        (0u8..200).collect::<Vec<_>>(),
         vec![],
         (0u8..1).collect::<Vec<_>>(),
         (0u8..135).collect::<Vec<_>>(),
         (0u8..136).collect::<Vec<_>>(),
-        (0u8..200).collect::<Vec<_>>(),
     ];
     let circuit = KeccakCircuit::new(
         KeccakConfigParams { k, rows_per_round },
