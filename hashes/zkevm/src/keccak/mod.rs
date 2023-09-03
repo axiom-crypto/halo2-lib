@@ -624,18 +624,19 @@ impl<F: Field> KeccakCircuitConfig<F> {
             cb.condition(meta.query_advice(is_final, Rotation::cur()), |cb| {
                 cb.require_zero("bytes_left should be 0 when is_final", bytes_left_expr.clone());
             });
+            //q_input[cur] ==> bytes_left[cur + num_rows_per_round] + word_len == bytes_left[cur]
             cb.condition(q(q_input, meta), |cb| {
                 // word_len = NUM_BYTES_PER_WORD - sum(is_paddings)
                 let word_len = NUM_BYTES_PER_WORD.expr() - sum::expr(is_paddings.clone());
                 let bytes_left_next_expr =
                     meta.query_advice(keccak_table.bytes_left, Rotation(num_rows_per_round as i32));
                 cb.require_equal(
-                    "if q_input, bytes_left[curr + num_rows_per_round] + word_len == bytes_left[curr]",
+                    "if there is a word in this round, bytes_left[curr + num_rows_per_round] + word_len == bytes_left[curr]",
                     bytes_left_expr.clone(),
                     bytes_left_next_expr + word_len,
                 );
             });
-            // !q_input[cur] && !start_new_hash(cur) ==> bytes_left[cur + num_rows_per_round] + word_len == bytes_left[cur]
+            // !q_input[cur] && !start_new_hash(cur) ==> bytes_left[cur + num_rows_per_round] == bytes_left[cur]
             // !q_input[cur] && !start_new_hash(cur) === !(q_input[cur] || start_new_hash(cur))
             // Because q_input[cur] and start_new_hash(cur) are never both true at the same time, we use + instead of or in order to save a degree.
             cb.condition(not::expr(q(q_input, meta) + start_new_hash(meta, Rotation::cur())), |cb| {
