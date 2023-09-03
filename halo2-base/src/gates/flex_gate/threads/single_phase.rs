@@ -49,15 +49,14 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
     ///     * If false, the gate thread builder is used for keygen and mock prover (it can also be used for real prover) and the builder stores circuit information (e.g. copy constraints, fixed columns, enabled selectors).
     ///         * These values are fixed for the circuit at key generation time, and they do not need to be re-computed by the prover in the actual proving phase.
     pub fn new(witness_gen_only: bool, copy_manager: SharedCopyConstraintManager<F>) -> Self {
-        let mut builder = Self {
+        Self {
             threads: vec![],
             witness_gen_only,
             use_unknown: false,
             phase: 0,
             copy_manager,
             ..Default::default()
-        };
-        builder
+        }
     }
 
     /// Sets the phase to `phase`
@@ -119,8 +118,7 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
     }
 
     /// Creates new context but does not append to `self.threads`
-    pub(crate) fn new_context(&self, context_id: usize) -> Context<F> {
-        dbg!(self.phase);
+    pub fn new_context(&self, context_id: usize) -> Context<F> {
         Context::new(
             self.witness_gen_only,
             self.phase,
