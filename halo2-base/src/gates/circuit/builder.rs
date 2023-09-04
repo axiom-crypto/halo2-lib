@@ -184,6 +184,10 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
 
     /// Sets the break points of the circuit.
     pub fn set_break_points(&mut self, break_points: MultiPhaseThreadBreakPoints) {
+        if break_points.is_empty() {
+            return;
+        }
+        self.core.touch(break_points.len() - 1);
         for (pm, bp) in self.core.phase_manager.iter().zip_eq(break_points) {
             *pm.break_points.borrow_mut() = Some(bp);
         }

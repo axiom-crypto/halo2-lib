@@ -96,7 +96,7 @@ impl<F: ScalarField> MultiPhaseCoreManager<F> {
     }
 
     /// Populate `self` up to Phase `phase` (inclusive)
-    fn touch(&mut self, phase: usize) {
+    pub(crate) fn touch(&mut self, phase: usize) {
         while self.phase_manager.len() <= phase {
             let _phase = self.phase_manager.len();
             let pm = SinglePhaseCoreManager::new(self.witness_gen_only, self.copy_manager.clone())
