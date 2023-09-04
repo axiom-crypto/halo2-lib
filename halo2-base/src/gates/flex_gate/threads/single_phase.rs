@@ -96,7 +96,6 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
     /// Clears all threads and copy manager
     pub fn clear(&mut self) {
         self.threads = vec![];
-        self.phase = 0;
         self.copy_manager.lock().unwrap().clear();
     }
 

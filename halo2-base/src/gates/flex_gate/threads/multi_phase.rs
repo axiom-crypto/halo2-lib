@@ -87,6 +87,7 @@ impl<F: ScalarField> MultiPhaseCoreManager<F> {
     /// * `phase`: The phase (index) of the gate thread.
     pub fn new_thread(&mut self, phase: usize) -> &mut Context<F> {
         self.touch(phase);
+        dbg!(self.phase_manager[phase].type_of());
         self.phase_manager[phase].new_thread()
     }
 
@@ -101,6 +102,7 @@ impl<F: ScalarField> MultiPhaseCoreManager<F> {
             let _phase = self.phase_manager.len();
             let pm = SinglePhaseCoreManager::new(self.witness_gen_only, self.copy_manager.clone())
                 .in_phase(_phase);
+            dbg!(&pm.phase);
             self.phase_manager.push(pm);
         }
     }
