@@ -68,6 +68,14 @@ impl<F: ScalarField> MultiPhaseCoreManager<F> {
         self
     }
 
+    /// Clears all threads in all phases and copy manager.
+    pub fn clear(&mut self) {
+        for pm in &mut self.phase_manager {
+            pm.clear();
+        }
+        self.copy_manager.lock().unwrap().clear();
+    }
+
     /// Returns a mutable reference to the [Context] of a gate thread. Spawns a new thread for the given phase, if none exists.
     /// * `phase`: The challenge phase (as an index) of the gate thread.
     pub fn main(&mut self, phase: usize) -> &mut Context<F> {
@@ -88,7 +96,7 @@ impl<F: ScalarField> MultiPhaseCoreManager<F> {
     }
 
     /// Populate `self` up to Phase `phase` (inclusive)
-    fn touch(&mut self, phase: usize) {
+    pub(crate) fn touch(&mut self, phase: usize) {
         while self.phase_manager.len() <= phase {
             let _phase = self.phase_manager.len();
             let pm = SinglePhaseCoreManager::new(self.witness_gen_only, self.copy_manager.clone())

@@ -82,6 +82,11 @@ impl<F: Field + Ord> CopyConstraintManager<F> {
         self.assigned_advices.insert(context_cell, cell);
         context_cell
     }
+
+    /// Clears state
+    pub fn clear(&mut self) {
+        *self = Self::default();
+    }
 }
 
 impl<F: Field + Ord> Drop for CopyConstraintManager<F> {

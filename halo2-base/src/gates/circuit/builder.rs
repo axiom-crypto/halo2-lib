@@ -178,14 +178,18 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
         self.core
             .phase_manager
             .iter()
-            .map(|pm| pm.break_points.get().expect("break points not set").clone())
+            .map(|pm| pm.break_points.borrow().as_ref().expect("break points not set").clone())
             .collect()
     }
 
     /// Sets the break points of the circuit.
     pub fn set_break_points(&mut self, break_points: MultiPhaseThreadBreakPoints) {
+        if break_points.is_empty() {
+            return;
+        }
+        self.core.touch(break_points.len() - 1);
         for (pm, bp) in self.core.phase_manager.iter().zip_eq(break_points) {
-            pm.break_points.set(bp).unwrap();
+            *pm.break_points.borrow_mut() = Some(bp);
         }
     }
 
@@ -205,6 +209,15 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
     pub fn unknown(mut self, use_unknown: bool) -> Self {
         self.core = self.core.unknown(use_unknown);
         self
+    }
+
+    /// Clears state and copies, effectively resetting the circuit builder.
+    pub fn clear(&mut self) {
+        self.core.clear();
+        for lm in &mut self.lookup_manager {
+            lm.cells_to_lookup.lock().unwrap().clear();
+            lm.copy_manager.lock().unwrap().clear();
+        }
     }
 
     /// Returns a mutable reference to the [Context] of a gate thread. Spawns a new thread for the given phase, if none exists.

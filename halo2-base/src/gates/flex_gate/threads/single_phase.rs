@@ -1,4 +1,4 @@
-use std::{any::TypeId, cell::OnceCell};
+use std::{any::TypeId, cell::RefCell};
 
 use getset::CopyGetters;
 
@@ -39,7 +39,7 @@ pub struct SinglePhaseCoreManager<F: ScalarField> {
     pub(crate) phase: usize,
     /// A very simple computation graph for the basic vertical gate. Must be provided as a "pinning"
     /// when running the production prover.
-    pub break_points: OnceCell<ThreadBreakPoints>,
+    pub break_points: RefCell<Option<ThreadBreakPoints>>,
 }
 
 impl<F: ScalarField> SinglePhaseCoreManager<F> {
@@ -91,6 +91,12 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
     pub fn use_copy_manager(mut self, copy_manager: SharedCopyConstraintManager<F>) -> Self {
         self.set_copy_manager(copy_manager);
         self
+    }
+
+    /// Clears all threads and copy manager
+    pub fn clear(&mut self) {
+        self.threads = vec![];
+        self.copy_manager.lock().unwrap().clear();
     }
 
     /// Returns a mutable reference to the [Context] of a gate thread. Spawns a new thread for the given phase, if none exists.
@@ -147,7 +153,8 @@ impl<F: ScalarField> VirtualRegionManager<F> for SinglePhaseCoreManager<F> {
 
     fn assign_raw(&self, (config, usable_rows): &Self::Config, region: &mut Region<F>) {
         if self.witness_gen_only {
-            let break_points = self.break_points.get().expect("break points not set");
+            let binding = self.break_points.borrow();
+            let break_points = binding.as_ref().expect("break points not set");
             assign_witnesses(&self.threads, config, region, break_points);
         } else {
             let mut copy_manager = self.copy_manager.lock().unwrap();
@@ -159,13 +166,12 @@ impl<F: ScalarField> VirtualRegionManager<F> for SinglePhaseCoreManager<F> {
                 *usable_rows,
                 self.use_unknown,
             );
-            self.break_points.set(break_points).unwrap_or_else(|break_points| {
-                assert_eq!(
-                    self.break_points.get().unwrap(),
-                    &break_points,
-                    "previously set break points don't match"
-                );
-            });
+            let mut bp = self.break_points.borrow_mut();
+            if let Some(bp) = bp.as_ref() {
+                assert_eq!(bp, &break_points, "break points don't match");
+            } else {
+                *bp = Some(break_points);
+            }
         }
     }
 }
