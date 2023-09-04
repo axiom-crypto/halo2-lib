@@ -126,6 +126,15 @@ impl<F: ScalarField> BaseConfig<F> {
             MaybeRangeConfig::WithRange(config) => config.gate.max_rows = usable_rows,
         }
     }
+
+    /// Initialization of config at very beginning of `synthesize`.
+    /// Loads fixed lookup table, if using.
+    pub fn initialize(&self, layouter: &mut impl Layouter<F>) {
+        // only load lookup table if we are actually doing lookups
+        if let MaybeRangeConfig::WithRange(config) = &self.base {
+            config.load_lookup_table(layouter).expect("load lookup table should not fail");
+        }
+    }
 }
 
 impl<F: ScalarField> Circuit<F> for BaseCircuitBuilder<F> {
