@@ -83,6 +83,13 @@ impl<F: Field + Ord, const ADVICE_COLS: usize> LookupAnyManager<F, ADVICE_COLS> 
         let total = self.total_rows();
         (total + usable_rows - 1) / usable_rows
     }
+
+    /// Clears state
+    pub fn clear(&mut self) {
+        self.cells_to_lookup.lock().unwrap().clear();
+        self.copy_manager.lock().unwrap().clear();
+        self.assigned = Arc::new(OnceLock::new());
+    }
 }
 
 impl<F: Field + Ord, const ADVICE_COLS: usize> Drop for LookupAnyManager<F, ADVICE_COLS> {

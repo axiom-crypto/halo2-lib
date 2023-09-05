@@ -85,7 +85,12 @@ impl<F: Field + Ord> CopyConstraintManager<F> {
 
     /// Clears state
     pub fn clear(&mut self) {
-        *self = Self::default();
+        self.advice_equalities.clear();
+        self.constant_equalities.clear();
+        self.assigned_advices.clear();
+        self.assigned_constants.clear();
+        self.external_cell_count = 0;
+        self.assigned.take();
     }
 }
 

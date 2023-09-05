@@ -220,8 +220,7 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
     pub fn clear(&mut self) {
         self.core.clear();
         for lm in &mut self.lookup_manager {
-            lm.cells_to_lookup.lock().unwrap().clear();
-            lm.copy_manager.lock().unwrap().clear();
+            lm.clear();
         }
     }
 
