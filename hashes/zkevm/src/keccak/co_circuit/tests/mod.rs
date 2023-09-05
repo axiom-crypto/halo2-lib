@@ -14,6 +14,7 @@ fn test() {
     let publish_raw_outputs: bool = true;
 
     let inputs = vec![
+        (0u8..200).collect::<Vec<_>>(),
         vec![],
         (0u8..1).collect::<Vec<_>>(),
         (0u8..135).collect::<Vec<_>>(),

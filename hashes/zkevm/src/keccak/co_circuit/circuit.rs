@@ -354,6 +354,7 @@ impl<F: Field> KeccakCoprocessorCircuit<F> {
             let mut base_circuit_builder_mut = self.base_circuit_builder.borrow_mut();
             let ctx = base_circuit_builder_mut.main(0);
 
+            // TODO: wrap this into a function which should be shared wiht App circuits.
             // The length of outputs is determined at compile time.
             let output_commitment = self.hasher.borrow().hash_fix_len_array(
                 ctx,

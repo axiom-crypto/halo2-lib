@@ -18,7 +18,7 @@ use super::{circuit::LoadedKeccakF, param::*};
 /// Encode a native input bytes into its corresponding lookup key. This function can be considered as the spec of the encoding.
 pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {
     assert!(NUM_BITS_PER_WORD <= u128::BITS as usize);
-    let multipilers = get_words_to_witness_multipiler::<F>();
+    let multipilers = get_words_to_witness_multipilers::<F>();
     let num_word_per_witness = num_word_per_witness::<F>();
     let len = bytes.len();
 
@@ -93,12 +93,13 @@ pub(crate) fn encode_inputs_from_keccak_fs<F: Field>(
 
     // Constant witnesses
     let rate_witness = ctx.load_constant(F::from(POSEIDON_RATE as u64));
+    let one_witness = ctx.load_constant(F::ONE);
     let zero_witness = ctx.load_zero();
-    let multiplier_witnesses = ctx.assign_witnesses(get_words_to_witness_multipiler::<F>());
+    let multiplier_witnesses = ctx.assign_witnesses(get_words_to_witness_multipilers::<F>());
 
     let compact_input_len = loaded_keccak_fs.len() * num_poseidon_absorb_per_keccak_f;
     let mut compact_inputs = Vec::with_capacity(compact_input_len);
-    let mut is_final_last = zero_witness;
+    let mut is_final_last = one_witness;
     for loaded_keccak_f in loaded_keccak_fs {
         // If this keccak_f is the last of a logical input.
         let is_final = loaded_keccak_f.is_final;
@@ -180,7 +181,7 @@ pub fn num_poseidon_absorb_per_keccak_f<F: Field>() -> usize {
     (num_witness_per_keccak_f::<F>() - 1) / POSEIDON_RATE + 1
 }
 
-fn get_words_to_witness_multipiler<F: Field>() -> Vec<F> {
+fn get_words_to_witness_multipilers<F: Field>() -> Vec<F> {
     let num_word_per_witness = num_word_per_witness::<F>();
     let mut multiplier_f = F::ONE;
     let mut multipliers = Vec::with_capacity(num_word_per_witness);
