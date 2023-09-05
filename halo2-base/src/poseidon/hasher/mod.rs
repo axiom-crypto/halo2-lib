@@ -23,11 +23,12 @@ pub mod spec;
 pub mod state;
 
 /// Stateless Poseidon hasher.
+#[derive(Clone, Debug)]
 pub struct PoseidonHasher<F: ScalarField, const T: usize, const RATE: usize> {
     spec: OptimizedPoseidonSpec<F, T, RATE>,
     consts: OnceCell<PoseidonHasherConsts<F, T, RATE>>,
 }
-#[derive(Getters)]
+#[derive(Clone, Debug, Getters)]
 struct PoseidonHasherConsts<F: ScalarField, const T: usize, const RATE: usize> {
     #[getset(get = "pub")]
     init_state: PoseidonState<F, T, RATE>,
@@ -50,6 +51,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasherConsts<F, 
 }
 
 /// 1 logical row of compact input for Poseidon hasher.
+#[derive(Copy, Clone, Debug)]
 pub struct PoseidonCompactInput<F: ScalarField, const RATE: usize> {
     // Right padded inputs. No constrains on paddings.
     inputs: [AssignedValue<F>; RATE],
@@ -85,7 +87,7 @@ impl<F: ScalarField, const RATE: usize> PoseidonCompactInput<F, RATE> {
 }
 
 /// 1 logical row of compact output for Poseidon hasher.
-#[derive(Getters)]
+#[derive(Copy, Clone, Debug, Getters)]
 pub struct PoseidonCompactOutput<F: ScalarField> {
     /// hash of 1 logical input.
     #[getset(get = "pub")]

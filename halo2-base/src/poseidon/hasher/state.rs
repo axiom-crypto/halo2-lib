@@ -11,7 +11,7 @@ use crate::{
     QuantumCell::{Constant, Existing},
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct PoseidonState<F: ScalarField, const T: usize, const RATE: usize> {
     pub(crate) s: [AssignedValue<F>; T],
 }
