@@ -40,6 +40,12 @@ macro_rules! safe_primitive_impls {
                 &mut self.0
             }
         }
+
+        impl<F: ScalarField> From<$SafePrimitive> for AssignedValue<F> {
+            fn from(safe_primitive: $SafePrimitive) -> Self {
+                safe_primitive.0
+            }
+        }
     };
 }
 
