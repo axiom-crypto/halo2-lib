@@ -5,8 +5,11 @@ use super::circuit::{
 use halo2_base::halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use itertools::Itertools;
 
+#[cfg(test)]
+mod circuit;
+
 #[test]
-fn test() {
+fn test_mock_leaf_circuit() {
     let k: usize = 18;
     let num_unusable_row: usize = 109;
     let lookup_bits: usize = 4;
@@ -30,7 +33,7 @@ fn test() {
         publish_raw_outputs,
     );
     let circuit = KeccakCoprocessorCircuit::<Fr>::new(inputs.clone(), params.clone());
-    let circuit_outputs = multi_inputs_to_circuit_outputs::<Fr>(&inputs, &params);
+    let circuit_outputs = multi_inputs_to_circuit_outputs::<Fr>(&inputs, params.capacity());
 
     let instances = vec![
         circuit_outputs.iter().map(|o| o.key).collect_vec(),

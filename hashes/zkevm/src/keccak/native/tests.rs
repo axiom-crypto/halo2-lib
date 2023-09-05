@@ -1,4 +1,4 @@
-use super::*;
+use super::{witness::*, *};
 use crate::halo2_proofs::{
     circuit::SimpleFloorPlanner,
     dev::MockProver,

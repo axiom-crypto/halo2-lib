@@ -5,13 +5,13 @@ use super::{
     param::*,
 };
 use crate::{
-    keccak::{
-        keccak_packed_multi::get_num_keccak_f, multi_keccak, param::*, KeccakAssignedRow,
+    keccak::native::{
+        keccak_packed_multi::get_num_keccak_f, param::*, witness::multi_keccak, KeccakAssignedRow,
         KeccakCircuitConfig, KeccakConfigParams,
     },
     util::eth_types::Field,
 };
-use getset::Getters;
+use getset::{CopyGetters, Getters};
 use halo2_base::{
     gates::{
         circuit::{builder::BaseCircuitBuilder, BaseCircuitParams, BaseConfig},
@@ -33,6 +33,7 @@ pub struct KeccakCoprocessorCircuit<F: Field> {
     inputs: Vec<Vec<u8>>,
 
     /// Parameters of this circuit. The same parameters always construct the same circuit.
+    #[getset(get = "pub")]
     params: KeccakCoprocessorCircuitParams,
 
     base_circuit_builder: RefCell<BaseCircuitBuilder<F>>,
@@ -40,23 +41,23 @@ pub struct KeccakCoprocessorCircuit<F: Field> {
 }
 
 /// Parameters of KeccakCoprocessorCircuit.
-#[derive(Default, Clone, Getters)]
+#[derive(Default, Clone, CopyGetters)]
 pub struct KeccakCoprocessorCircuitParams {
     /// This circuit has 2^k rows.
-    #[getset(get = "pub")]
+    #[getset(get_copy = "pub")]
     k: usize,
     // Number of unusable rows withhold by Halo2.
-    #[getset(get = "pub")]
+    #[getset(get_copy = "pub")]
     num_unusable_row: usize,
     /// The bits of lookup table for RangeChip.
-    #[getset(get = "pub")]
+    #[getset(get_copy = "pub")]
     lookup_bits: usize,
     /// Max keccak_f this circuits can aceept. The circuit can at most process <capacity> of inputs
     /// with < NUM_BYTES_TO_ABSORB bytes or an input with <capacity> * NUM_BYTES_TO_ABSORB - 1 bytes.
-    #[getset(get = "pub")]
+    #[getset(get_copy = "pub")]
     capacity: usize,
     // If true, publish raw outputs. Otherwise, publish Poseidon commitment of raw outputs.
-    #[getset(get = "pub")]
+    #[getset(get_copy = "pub")]
     publish_raw_outputs: bool,
 
     // Derived parameters of sub-circuits.
@@ -74,7 +75,7 @@ impl KeccakCoprocessorCircuitParams {
     ) -> Self {
         assert!(1 << k > num_unusable_row, "Number of unusable rows must be less than 2^k");
         let max_rows = (1 << k) - num_unusable_row;
-        // Derived from [crate::keccak::keccak_packed_multi::get_keccak_capacity].
+        // Derived from [crate::keccak::native_circuit::keccak_packed_multi::get_keccak_capacity].
         let rows_per_round = max_rows / (capacity * (NUM_ROUNDS + 1) + 1 + NUM_WORDS_TO_ABSORB);
         assert!(rows_per_round > 0, "No enough rows for the speficied capacity");
         let keccak_circuit_params = KeccakConfigParams { k: k as u32, rows_per_round };
@@ -157,7 +158,7 @@ impl<F: Field> Circuit<F> for KeccakCoprocessorCircuit<F> {
 }
 
 /// Witnesses to be exposed as circuit outputs.
-#[derive(Clone)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct KeccakCircuitOutput<E> {
     /// Key for App circuits to lookup keccak hash.
     pub key: E,
@@ -341,7 +342,6 @@ impl<F: Field> KeccakCoprocessorCircuit<F> {
                 dummy_keccak_hi_witness,
                 loaded_keccak_f.is_final,
             );
-            println!("In circuit: {:?}", key.value());
             circuit_final_outputs.push(KeccakCircuitOutput { key, hash_lo, hash_hi });
         }
         circuit_final_outputs
@@ -388,13 +388,13 @@ impl<F: Field> KeccakCoprocessorCircuit<F> {
 /// Return circuit outputs of the specified Keccak corprocessor circuit for a specified input.
 pub fn multi_inputs_to_circuit_outputs<F: Field>(
     inputs: &[Vec<u8>],
-    params: &KeccakCoprocessorCircuitParams,
+    capacity: usize,
 ) -> Vec<KeccakCircuitOutput<F>> {
     assert!(u128::BITS <= F::CAPACITY);
     let mut outputs =
         inputs.iter().flat_map(|input| input_to_circuit_outputs::<F>(input)).collect_vec();
-    assert!(outputs.len() <= params.capacity);
-    outputs.resize(params.capacity, dummy_circuit_output());
+    assert!(outputs.len() <= capacity);
+    outputs.resize(capacity, dummy_circuit_output());
     outputs
 }
 

@@ -167,7 +167,7 @@ pub(crate) type KeccakAssignedValue<'v, F> = Halo2AssignedCell<'v, F>;
 /// Recombines parts back together
 pub(crate) mod decode {
     use super::{Expr, Part, PartValue, PrimeField};
-    use crate::{halo2_proofs::plonk::Expression, keccak::param::*};
+    use crate::{halo2_proofs::plonk::Expression, keccak::native::param::*};
 
     pub(crate) fn expr<F: PrimeField>(parts: Vec<Part<F>>) -> Expression<F> {
         parts.iter().rev().fold(0.expr(), |acc, part| {
@@ -190,7 +190,7 @@ pub(crate) mod split {
     };
     use crate::{
         halo2_proofs::plonk::{ConstraintSystem, Expression},
-        keccak::util::{pack, pack_part, unpack, WordParts},
+        keccak::native::util::{pack, pack_part, unpack, WordParts},
     };
 
     #[allow(clippy::too_many_arguments)]
@@ -261,7 +261,7 @@ pub(crate) mod split_uniform {
     use super::decode;
     use crate::{
         halo2_proofs::plonk::{ConstraintSystem, Expression},
-        keccak::{
+        keccak::native::{
             param::*,
             target_part_sizes,
             util::{pack, pack_part, rotate, rotate_rev, unpack, WordParts},
@@ -493,9 +493,9 @@ pub(crate) mod transform {
 pub(crate) mod transform_to {
     use crate::{
         halo2_proofs::plonk::{ConstraintSystem, TableColumn},
-        keccak::{
+        keccak::native::{
             util::{pack, to_bytes, unpack},
-            {Cell, Expr, Field, KeccakRegion, Part, PartValue, PrimeField},
+            Cell, Expr, Field, KeccakRegion, Part, PartValue, PrimeField,
         },
     };
 

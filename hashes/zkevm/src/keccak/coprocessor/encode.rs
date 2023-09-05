@@ -6,7 +6,7 @@ use halo2_base::{
 };
 use itertools::Itertools;
 
-use crate::{keccak::param::*, util::eth_types::Field};
+use crate::{keccak::native::param::*, util::eth_types::Field};
 
 use super::{circuit::LoadedKeccakF, param::*};
 
