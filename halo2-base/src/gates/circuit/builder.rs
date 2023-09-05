@@ -140,9 +140,14 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
         self
     }
 
+    /// Sets new `k` = log2 of domain
+    pub fn set_k(&mut self, k: usize) {
+        self.config_params.k = k;
+    }
+
     /// Returns new with `k` set
     pub fn use_k(mut self, k: usize) -> Self {
-        self.config_params.k = k;
+        self.set_k(k);
         self
     }
 
