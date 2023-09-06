@@ -82,8 +82,6 @@ impl<'range, F: BigPrimeField> FieldChip<F> for NativeFieldChip<'range, F> {
 
     // Input: a
     // Output: p - a if a != 0, else a
-    // Assume the actual value of `a` equals `a.truncation`
-    // Constrains a.truncation <= p using subtraction with carries
     fn negate(&self, ctx: &mut Context<F>, a: AssignedValue<F>) -> AssignedValue<F> {
         self.gate().neg(ctx, a)
     }
