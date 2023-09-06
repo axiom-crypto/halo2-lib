@@ -360,6 +360,7 @@ mod scalar_field_impls {
     };
     #[cfg(feature = "halo2-pse")]
     use ff::PrimeField;
+    use halo2curves::grumpkin::{Fq as grumpkinFq, Fr as grumpkinFr};
 
     /// To ensure `ScalarField` is only implemented for `ff:Field` where `Repr` is little endian, we use the following macro
     /// to implement the trait for each field.
@@ -411,6 +412,8 @@ mod scalar_field_impls {
     impl_scalar_field!(bn254Fq);
     impl_scalar_field!(secpFp);
     impl_scalar_field!(secpFq);
+    impl_scalar_field!(grumpkinFq);
+    impl_scalar_field!(grumpkinFr);
 }
 
 /// Module for reading parameters for Halo2 proving system from the file system.
