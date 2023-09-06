@@ -127,6 +127,12 @@ impl<F: ScalarField> AssignedValue<F> {
     }
 }
 
+impl<'a, F: ScalarField> From<&'a AssignedValue<F>> for AssignedValue<F> {
+    fn from(a: &'a AssignedValue<F>) -> Self {
+        Self { value: a.value, cell: a.cell }
+    }
+}
+
 /// Represents a single thread of an execution trace.
 /// * We keep the naming [Context] for historical reasons.
 #[derive(Clone, Debug)]

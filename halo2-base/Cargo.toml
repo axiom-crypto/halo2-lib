@@ -19,7 +19,7 @@ log = "0.4"
 # Use Axiom's custom halo2 monorepo for faster proving when feature = "halo2-axiom" is on
 halo2_proofs_axiom = { git = "https://github.com/axiom-crypto/halo2.git", branch = "axiom/dev", package = "halo2_proofs", optional = true }
 # Use PSE halo2 and halo2curves for compatibility when feature = "halo2-pse" is on
-halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2023_02_02", optional = true }
+halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", branch = "main", optional = true }
 
 # plotting circuit layout
 plotters = { version = "0.3.0", optional = true }
