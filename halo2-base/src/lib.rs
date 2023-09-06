@@ -104,7 +104,7 @@ impl<F: ScalarField> QuantumCell<F> {
 }
 
 /// Pointer to the position of a cell at `offset` in an advice column within a [Context] of `context_id`.
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ContextCell {
     /// The [TypeId] of the virtual region that this cell belongs to.
     pub type_id: TypeId,
