@@ -6,7 +6,7 @@ use crate::group::Curve;
 use halo2_base::{
     gates::RangeChip,
     halo2_proofs::halo2curves::grumpkin::{Fq, Fr, G1Affine},
-    utils::{biguint_to_fe, fe_to_biguint, testing::base_test, BigPrimeField},
+    utils::{biguint_to_fe, fe_to_biguint, testing::base_test},
     Context,
 };
 use num_bigint::BigUint;
@@ -32,17 +32,17 @@ struct CircuitParams {
     num_limbs: usize,
 }
 
-fn sm_test<F: BigPrimeField>(
-    ctx: &mut Context<F>,
-    range: &RangeChip<F>,
+fn sm_test(
+    ctx: &mut Context<Fq>,
+    range: &RangeChip<Fq>,
     params: CircuitParams,
     base: G1Affine,
     scalar: Fr,
     window_bits: usize,
 ) {
-    let fp_chip = FpChip::<F>::new(range);
-    let fq_chip = FqChip::<F>::new(range, params.limb_bits, params.num_limbs);
-    let ecc_chip = EccChip::<F, FpChip<F>>::new(&fp_chip);
+    let fp_chip = FpChip::<Fq>::new(range);
+    let fq_chip = FqChip::<Fq>::new(range, params.limb_bits, params.num_limbs);
+    let ecc_chip = EccChip::<Fq, FpChip<Fq>>::new(&fp_chip);
 
     let s = fq_chip.load_private(ctx, scalar);
     let P = ecc_chip.assign_point(ctx, base);
@@ -59,8 +59,8 @@ fn sm_test<F: BigPrimeField>(
 
     let sm_x = sm.x.value();
     let sm_y = sm.y.value();
-    assert_eq!(sm_x, fe_to_biguint(&sm_answer.x));
-    assert_eq!(sm_y, fe_to_biguint(&sm_answer.y));
+    assert_eq!(*sm_x, sm_answer.x);
+    assert_eq!(*sm_y, sm_answer.y);
 }
 
 fn run_test(base: G1Affine, scalar: Fr) {
@@ -76,16 +76,16 @@ fn run_test(base: G1Affine, scalar: Fr) {
 }
 
 #[test]
-fn test_secp_sm_random() {
+fn test_grumpkin_sm_random() {
     let mut rng = StdRng::seed_from_u64(0);
     run_test(G1Affine::random(&mut rng), Fr::random(&mut rng));
 }
 
 #[test]
-fn test_secp_sm_minus_1() {
+fn test_grumpkin_sm_minus_1() {
     let rng = StdRng::seed_from_u64(0);
     let base = G1Affine::random(rng);
-    let mut s = -Fq::one();
+    let mut s = -Fr::one();
     let mut n = fe_to_biguint(&s);
     loop {
         run_test(base, s);
@@ -98,7 +98,7 @@ fn test_secp_sm_minus_1() {
 }
 
 #[test]
-fn test_secp_sm_0_1() {
+fn test_grumpkin_sm_0_1() {
     let rng = StdRng::seed_from_u64(0);
     let base = G1Affine::random(rng);
     run_test(base, Fr::ZERO);

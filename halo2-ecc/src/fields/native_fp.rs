@@ -1,7 +1,5 @@
-use super::{BigPrimeField, FieldChip};
+use super::{BigPrimeField, FieldChip, Selectable};
 use halo2_base::gates::RangeChip;
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-use halo2_base::halo2_proofs::halo2curves::ff::PrimeField;
 use halo2_base::{gates::GateInstructions, utils::modulus, AssignedValue, Context};
 use num_bigint::BigUint;
 use std::marker::PhantomData;
@@ -176,7 +174,7 @@ impl<'range, F: BigPrimeField> FieldChip<F> for NativeFieldChip<'range, F> {
     }
 
     fn is_zero(&self, ctx: &mut Context<F>, a: impl Into<AssignedValue<F>>) -> AssignedValue<F> {
-        self.is_soft_nonzero(ctx, a)
+        self.is_soft_zero(ctx, a)
     }
 
     fn is_equal_unenforced(
@@ -196,5 +194,34 @@ impl<'range, F: BigPrimeField> FieldChip<F> for NativeFieldChip<'range, F> {
     ) {
         let is_equal = self.is_equal_unenforced(ctx, a.into(), b.into());
         self.gate().assert_is_const(ctx, &is_equal, &F::ONE);
+    }
+}
+
+impl<'range, F: BigPrimeField> Selectable<F, AssignedValue<F>> for NativeFieldChip<'range, F> {
+    fn select(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+        b: AssignedValue<F>,
+        sel: AssignedValue<F>,
+    ) -> AssignedValue<F> {
+        let gate = self.gate();
+        GateInstructions::select(gate, ctx, a, b, sel)
+    }
+
+    fn select_by_indicator(
+        &self,
+        ctx: &mut Context<F>,
+        a: &impl AsRef<[AssignedValue<F>]>,
+        coeffs: &[AssignedValue<F>],
+    ) -> AssignedValue<F> {
+        let a = a.as_ref().iter().cloned().collect::<Vec<_>>();
+        let gate = self.gate();
+        GateInstructions::select_by_indicator(
+            gate,
+            ctx,
+            a,
+            coeffs.iter().cloned().collect::<Vec<_>>(),
+        )
     }
 }
