@@ -4,7 +4,6 @@ use halo2_base::{gates::GateInstructions, utils::modulus, AssignedValue, Context
 use num_bigint::BigUint;
 use std::marker::PhantomData;
 
-// `Fp` always needs to be `BigPrimeField`, we may later want support for `F` being just `ScalarField` but for optimization reasons we'll assume it's also `BigPrimeField` for now
 // native field chip which implements FieldChip, use GateInstructions for basic arithmetic operations
 #[derive(Clone, Debug)]
 pub struct NativeFieldChip<'range, F: BigPrimeField> {
@@ -149,7 +148,7 @@ impl<'range, F: BigPrimeField> FieldChip<F> for NativeFieldChip<'range, F> {
         a
     }
 
-    /// Returns 1 iff `a` is 0 as a BigUint. This means that even if `a` is 0 modulo `p`, this may return 0.
+    /// Returns 1 iff `a` is 0 as a BigUint.
     fn is_soft_zero(
         &self,
         ctx: &mut Context<F>,
@@ -159,10 +158,6 @@ impl<'range, F: BigPrimeField> FieldChip<F> for NativeFieldChip<'range, F> {
         self.gate().is_zero(ctx, a)
     }
 
-    /// Given proper CRT integer `a`, returns 1 iff `a < modulus::<F>()` and `a != 0` as integers
-    ///
-    /// # Assumptions
-    /// * `a` is proper representation of BigUint
     fn is_soft_nonzero(
         &self,
         ctx: &mut Context<F>,
