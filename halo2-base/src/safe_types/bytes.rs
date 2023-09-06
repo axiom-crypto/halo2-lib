@@ -1,9 +1,15 @@
 #![allow(clippy::len_without_is_empty)]
-use crate::AssignedValue;
+use crate::{
+    gates::GateInstructions,
+    utils::bit_length,
+    AssignedValue, Context,
+    QuantumCell::{Constant, Existing},
+};
 
 use super::{SafeByte, SafeType, ScalarField};
 
 use getset::Getters;
+use itertools::Itertools;
 
 /// Represents a variable length byte array in circuit.
 ///
@@ -33,6 +39,18 @@ impl<F: ScalarField, const MAX_LEN: usize> VarLenBytes<F, MAX_LEN> {
     /// Returns the maximum length of the byte array.
     pub fn max_len(&self) -> usize {
         MAX_LEN
+    }
+
+    /// Left pads the variable length byte array with 0s to the MAX_LEN
+    pub fn left_pad_to_fixed(
+        &self,
+        ctx: &mut Context<F>,
+        gate: &impl GateInstructions<F>,
+    ) -> FixLenBytes<F, MAX_LEN> {
+        let padded = left_pad_var_array_to_fixed(ctx, gate, &self.bytes, self.len, MAX_LEN);
+        FixLenBytes::new(
+            padded.into_iter().map(|b| SafeByte(b)).collect::<Vec<_>>().try_into().unwrap(),
+        )
     }
 }
 
@@ -66,6 +84,16 @@ impl<F: ScalarField> VarLenBytesVec<F> {
     /// Returns the maximum length of the byte array.
     pub fn max_len(&self) -> usize {
         self.bytes.len()
+    }
+
+    /// Left pads the variable length byte array with 0s to the MAX_LEN
+    pub fn left_pad_to_fixed(
+        &self,
+        ctx: &mut Context<F>,
+        gate: &impl GateInstructions<F>,
+    ) -> FixLenBytesVec<F> {
+        let padded = left_pad_var_array_to_fixed(ctx, gate, &self.bytes, self.len, self.max_len());
+        padded.into_iter().map(|b| SafeByte(b)).collect()
     }
 }
 
@@ -106,4 +134,41 @@ impl<F: ScalarField, const TOTAL_BITS: usize>
         let bytes = bytes.bytes.into_iter().map(|b| b.0).collect::<Vec<_>>();
         Self::new(bytes)
     }
+}
+
+/// Represents a fixed length byte array in circuit as a vector, where length must be fixed.
+/// Not encouraged to use because `LEN` cannot be verified at compile time.
+pub type FixLenBytesVec<F> = Vec<SafeByte<F>>;
+
+/// Takes a fixed length array `arr` and returns a length `out_len` array equal to
+/// `[[0; out_len - len], arr[..len]].concat()`, i.e., we take `arr[..len]` and
+/// zero pad it on the left.
+///
+/// Assumes `0 < len <= max_len <= out_len`.
+pub fn left_pad_var_array_to_fixed<F: ScalarField>(
+    ctx: &mut Context<F>,
+    gate: &impl GateInstructions<F>,
+    arr: &[impl AsRef<AssignedValue<F>>],
+    len: AssignedValue<F>,
+    out_len: usize,
+) -> Vec<AssignedValue<F>> {
+    debug_assert!(arr.len() <= out_len);
+    debug_assert!(bit_length(out_len as u64) < F::CAPACITY as usize);
+
+    let mut padded = arr.iter().map(|b| *b.as_ref()).collect_vec();
+    padded.resize(out_len, padded[0]);
+    // We use a barrel shifter to shift `arr` to the right by `out_len - len` bits.
+    let shift = gate.sub(ctx, Constant(F::from(out_len as u64)), len);
+    let shift_bits = gate.num_to_bits(ctx, shift, bit_length(out_len as u64));
+    for (i, shift_bit) in shift_bits.into_iter().enumerate() {
+        let shifted = (0..out_len)
+            .map(|j| if j >= (1 << i) { Existing(padded[j - (1 << i)]) } else { Constant(F::ZERO) })
+            .collect_vec();
+        padded = padded
+            .into_iter()
+            .zip(shifted)
+            .map(|(noshift, shift)| gate.select(ctx, shift, noshift, shift_bit))
+            .collect_vec();
+    }
+    padded
 }
