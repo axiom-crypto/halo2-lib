@@ -133,6 +133,12 @@ pub struct AssignedValue<F: crate::ff::Field> {
     pub cell: Option<ContextCell>,
 }
 
+impl<'a, F: ScalarField> From<&'a AssignedValue<F>> for AssignedValue<F> {
+    fn from(a: &'a AssignedValue<F>) -> Self {
+        Self { value: a.value, cell: a.cell }
+    }
+}
+
 impl<F: ScalarField> AssignedValue<F> {
     /// Returns an immutable reference to the underlying value of an AssignedValue<F>.
     ///
