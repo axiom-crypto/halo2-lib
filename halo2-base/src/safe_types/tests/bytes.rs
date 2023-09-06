@@ -1,16 +1,20 @@
 use crate::{
-    gates::circuit::builder::RangeCircuitBuilder,
+    gates::{circuit::builder::RangeCircuitBuilder, RangeInstructions},
     halo2_proofs::{
         halo2curves::bn256::{Bn256, Fr},
         plonk::{keygen_pk, keygen_vk},
         poly::kzg::commitment::ParamsKZG,
     },
     safe_types::SafeTypeChip,
-    utils::testing::{base_test, check_proof, gen_proof},
+    utils::{
+        testing::{base_test, check_proof, gen_proof},
+        ScalarField,
+    },
     Context,
 };
 use rand::rngs::OsRng;
 use std::vec;
+use test_case::test_case;
 
 // =========== Utilies ===============
 fn mock_circuit_test<FM: FnMut(&mut Context<Fr>, SafeTypeChip<'_, Fr>)>(mut f: FM) {
@@ -37,6 +41,22 @@ fn pos_var_len_bytes() {
         let len = ctx.load_witness(Fr::from(4u64));
         safe.raw_to_var_len_bytes::<4>(ctx, bytes.try_into().unwrap(), len);
     });
+}
+
+#[test_case(vec![1,2,3], 4 => vec![0,1,2,3]; "pos left pad 3 to 4")]
+#[test_case(vec![1,2,3], 5 => vec![0,0,1,2,3]; "pos left pad 3 to 5")]
+#[test_case(vec![1,2,3], 6 => vec![0,0,0,1,2,3]; "pos left pad 3 to 6")]
+fn left_pad_var_len_bytes(mut bytes: Vec<u8>, max_len: usize) -> Vec<u8> {
+    base_test().k(10).lookup_bits(8).run(|ctx, range| {
+        let safe = SafeTypeChip::new(range);
+        let len = bytes.len();
+        bytes.resize(max_len, 0);
+        let bytes = ctx.assign_witnesses(bytes.into_iter().map(|b| Fr::from(b as u64)));
+        let len = ctx.load_witness(Fr::from(len as u64));
+        let bytes = safe.raw_to_var_len_bytes_vec(ctx, bytes, len, max_len);
+        let padded = bytes.left_pad_to_fixed(ctx, range.gate());
+        padded.iter().map(|b| b.as_ref().value().get_lower_64() as u8).collect()
+    })
 }
 
 // Checks circuit is unsatisfied for AssignedValue<F>'s are not in range 0..256
