@@ -1,12 +1,13 @@
-use super::circuit::{
-    multi_inputs_to_circuit_outputs, KeccakCoprocessorCircuit, KeccakCoprocessorCircuitParams,
+use super::{
+    circuit::leaf::{KeccakCoprocessorLeafCircuit, KeccakCoprocessorLeafCircuitParams},
+    output::multi_inputs_to_circuit_outputs,
 };
 
 use halo2_base::halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use itertools::Itertools;
 
 #[cfg(test)]
-mod circuit;
+mod output;
 
 #[test]
 fn test_mock_leaf_circuit() {
@@ -25,14 +26,14 @@ fn test_mock_leaf_circuit() {
         (0u8..200).collect::<Vec<_>>(),
     ];
 
-    let params = KeccakCoprocessorCircuitParams::new(
+    let params = KeccakCoprocessorLeafCircuitParams::new(
         k,
         num_unusable_row,
         lookup_bits,
         capacity,
         publish_raw_outputs,
     );
-    let circuit = KeccakCoprocessorCircuit::<Fr>::new(inputs.clone(), params.clone());
+    let circuit = KeccakCoprocessorLeafCircuit::<Fr>::new(inputs.clone(), params.clone());
     let circuit_outputs = multi_inputs_to_circuit_outputs::<Fr>(&inputs, params.capacity());
 
     let instances = vec![

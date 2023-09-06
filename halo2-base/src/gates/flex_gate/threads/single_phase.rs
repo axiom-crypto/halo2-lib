@@ -265,6 +265,7 @@ pub fn assign_with_constraints<F: ScalarField, const ROTATIONS: usize>(
             row_offset += 1;
         }
     }
+    println!("break points: {:?}", break_points);
     break_points
 }
 

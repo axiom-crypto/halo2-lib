@@ -1,14 +1,8 @@
-use halo2_base::{
-    gates::{GateInstructions, RangeInstructions},
-    poseidon::hasher::{PoseidonCompactInput, PoseidonCompactOutput, PoseidonHasher},
-    safe_types::SafeTypeChip,
-    Context,
-};
 use itertools::Itertools;
 
 use crate::{keccak::native::param::*, util::eth_types::Field};
 
-use super::{circuit::LoadedKeccakF, param::*};
+use super::param::*;
 
 // TODO: Abstract this module into a trait for all coprocessor circuits.
 
@@ -77,89 +71,6 @@ pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {
 
 // TODO: Add a function to encode a VarLenBytes into a lookup key. The function should be used by App Circuits.
 
-/// Encode raw inputs from Keccak circuit witnesses into lookup keys.
-///
-/// Each element in the return value corrresponds to a Keccak chunk. If is_final = true, this element is the lookup key of the corresponding logical input.
-pub(crate) fn encode_inputs_from_keccak_fs<F: Field>(
-    ctx: &mut Context<F>,
-    range_chip: &impl RangeInstructions<F>,
-    initialized_hasher: &PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE>,
-    loaded_keccak_fs: &[LoadedKeccakF<F>],
-) -> Vec<PoseidonCompactOutput<F>> {
-    // Circuit parameters
-    let num_poseidon_absorb_per_keccak_f = num_poseidon_absorb_per_keccak_f::<F>();
-    let num_word_per_witness = num_word_per_witness::<F>();
-    let num_witness_per_keccak_f = POSEIDON_RATE * num_poseidon_absorb_per_keccak_f;
-
-    // Constant witnesses
-    let rate_witness = ctx.load_constant(F::from(POSEIDON_RATE as u64));
-    let one_witness = ctx.load_constant(F::ONE);
-    let zero_witness = ctx.load_zero();
-    let multiplier_witnesses = ctx.assign_witnesses(get_words_to_witness_multipilers::<F>());
-
-    let compact_input_len = loaded_keccak_fs.len() * num_poseidon_absorb_per_keccak_f;
-    let mut compact_inputs = Vec::with_capacity(compact_input_len);
-    let mut is_final_last = one_witness;
-    for loaded_keccak_f in loaded_keccak_fs {
-        // If this keccak_f is the last of a logical input.
-        let is_final = loaded_keccak_f.is_final;
-        let mut poseidon_absorb_data = Vec::with_capacity(num_witness_per_keccak_f);
-
-        // First witness of a keccak_f: [<len_word>, word_values[0], word_values[1], ...]
-        // <len_word> is the length of the input if this is the first keccak_f of a logical input. Otherwise 0.
-        let mut words = Vec::with_capacity(num_word_per_witness);
-        let len_word =
-            range_chip.gate().select(ctx, loaded_keccak_f.bytes_left, zero_witness, is_final_last);
-        words.push(len_word);
-        words.extend_from_slice(&loaded_keccak_f.word_values[0..(num_word_per_witness - 1)]);
-        let first_witness = range_chip.gate().inner_product(
-            ctx,
-            multiplier_witnesses.clone(),
-            words.iter().map(|w| halo2_base::QuantumCell::Existing(*w)),
-        );
-        poseidon_absorb_data.push(first_witness);
-
-        // Turn every num_word_per_witness words later into a witness.
-        for words in &loaded_keccak_f
-            .word_values
-            .into_iter()
-            .skip(num_word_per_witness - 1)
-            .chunks(num_word_per_witness)
-        {
-            let mut words = words.collect_vec();
-            words.resize(num_word_per_witness, zero_witness);
-            let witness = range_chip.gate().inner_product(
-                ctx,
-                multiplier_witnesses.clone(),
-                words.iter().map(|w| halo2_base::QuantumCell::Existing(*w)),
-            );
-            poseidon_absorb_data.push(witness);
-        }
-        // Pad 0s to make sure poseidon_absorb_data.len() % RATE == 0.
-        poseidon_absorb_data.resize(num_witness_per_keccak_f, zero_witness);
-        for (i, poseidon_absorb) in poseidon_absorb_data.chunks(POSEIDON_RATE).enumerate() {
-            compact_inputs.push(PoseidonCompactInput::new(
-                poseidon_absorb.try_into().unwrap(),
-                if i + 1 == num_poseidon_absorb_per_keccak_f {
-                    SafeTypeChip::unsafe_to_bool(is_final)
-                } else {
-                    SafeTypeChip::unsafe_to_bool(zero_witness)
-                },
-                rate_witness,
-            ));
-        }
-        is_final_last = is_final;
-    }
-
-    let compact_outputs = initialized_hasher.hash_compact_input(ctx, range_chip, &compact_inputs);
-
-    compact_outputs
-        .into_iter()
-        .skip(num_poseidon_absorb_per_keccak_f - 1)
-        .step_by(num_poseidon_absorb_per_keccak_f)
-        .collect_vec()
-}
-
 /// Number of Keccak words in each encoded input for Poseidon.
 pub fn num_word_per_witness<F: Field>() -> usize {
     (F::CAPACITY as usize) / NUM_BITS_PER_WORD
@@ -181,7 +92,7 @@ pub fn num_poseidon_absorb_per_keccak_f<F: Field>() -> usize {
     (num_witness_per_keccak_f::<F>() - 1) / POSEIDON_RATE + 1
 }
 
-fn get_words_to_witness_multipilers<F: Field>() -> Vec<F> {
+pub(crate) fn get_words_to_witness_multipilers<F: Field>() -> Vec<F> {
     let num_word_per_witness = num_word_per_witness::<F>();
     let mut multiplier_f = F::ONE;
     let mut multipliers = Vec::with_capacity(num_word_per_witness);

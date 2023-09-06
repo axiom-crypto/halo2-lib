@@ -222,6 +222,7 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
         for lm in &mut self.lookup_manager {
             lm.clear();
         }
+        self.assigned_instances.clear();
     }
 
     /// Returns a mutable reference to the [Context] of a gate thread. Spawns a new thread for the given phase, if none exists.
