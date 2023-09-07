@@ -42,9 +42,7 @@ impl<'range, F: BigPrimeField> FieldChip<F> for NativeFieldChip<'range, F> {
     }
 
     fn load_private(&self, ctx: &mut Context<F>, a: F) -> AssignedValue<F> {
-        let a_loaded = ctx.load_witness(a);
-
-        a_loaded
+        ctx.load_witness(a)
     }
 
     fn load_constant(&self, ctx: &mut Context<F>, a: F) -> AssignedValue<F> {
@@ -208,13 +206,8 @@ impl<'range, F: BigPrimeField> Selectable<F, AssignedValue<F>> for NativeFieldCh
         a: &impl AsRef<[AssignedValue<F>]>,
         coeffs: &[AssignedValue<F>],
     ) -> AssignedValue<F> {
-        let a = a.as_ref().iter().cloned().collect::<Vec<_>>();
+        let a = a.as_ref().to_vec();
         let gate = self.gate();
-        GateInstructions::select_by_indicator(
-            gate,
-            ctx,
-            a,
-            coeffs.iter().cloned().collect::<Vec<_>>(),
-        )
+        GateInstructions::select_by_indicator(gate, ctx, a, coeffs.to_vec())
     }
 }
