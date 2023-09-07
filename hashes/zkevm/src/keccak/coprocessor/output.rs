@@ -1,5 +1,5 @@
-use super::encode::encode_native_input;
-use crate::{keccak::native::keccak_packed_multi::get_num_keccak_f, util::eth_types::Field};
+use super::{encode::encode_native_input, param::*};
+use crate::{keccak::vanilla::keccak_packed_multi::get_num_keccak_f, util::eth_types::Field};
 use itertools::Itertools;
 use sha3::{Digest, Keccak256};
 
@@ -56,4 +56,17 @@ pub fn dummy_circuit_output<F: Field>() -> KeccakCircuitOutput<F> {
     let hash_lo = F::from_u128(u128::from_be_bytes(hash[16..].try_into().unwrap()));
     let hash_hi = F::from_u128(u128::from_be_bytes(hash[..16].try_into().unwrap()));
     KeccakCircuitOutput { key, hash_lo, hash_hi }
+}
+
+/// Calculate the commitment of circuit outputs.
+pub fn calculate_circuit_outputs_commit<F: Field>(outputs: &[KeccakCircuitOutput<F>]) -> F {
+    let mut native_poseidon_sponge =
+        pse_poseidon::Poseidon::<F, POSEIDON_T, POSEIDON_RATE>::new(POSEIDON_R_F, POSEIDON_R_P);
+    native_poseidon_sponge.update(
+        &outputs
+            .iter()
+            .flat_map(|output| [output.key, output.hash_lo, output.hash_hi])
+            .collect_vec(),
+    );
+    native_poseidon_sponge.squeeze()
 }

@@ -10,7 +10,7 @@ use crate::{
             output::{dummy_circuit_output, KeccakCircuitOutput},
             param::*,
         },
-        native::{
+        vanilla::{
             param::*, witness::multi_keccak, KeccakAssignedRow, KeccakCircuitConfig,
             KeccakConfigParams,
         },
@@ -20,7 +20,7 @@ use crate::{
 use getset::{CopyGetters, Getters};
 use halo2_base::{
     gates::{
-        circuit::{builder::BaseCircuitBuilder, BaseCircuitParams, BaseConfig, MaybeRangeConfig},
+        circuit::{builder::BaseCircuitBuilder, BaseCircuitParams, BaseConfig},
         GateInstructions, RangeInstructions,
     },
     halo2_proofs::{
@@ -31,7 +31,6 @@ use halo2_base::{
         spec::OptimizedPoseidonSpec, PoseidonCompactInput, PoseidonCompactOutput, PoseidonHasher,
     },
     safe_types::SafeTypeChip,
-    virtual_region::manager::VirtualRegionManager,
     AssignedValue, Context,
 };
 use itertools::Itertools;
@@ -45,7 +44,6 @@ pub struct KeccakCoprocessorLeafCircuit<F: Field> {
     #[getset(get = "pub")]
     params: KeccakCoprocessorLeafCircuitParams,
 
-    witness_gen_only: bool,
     base_circuit_builder: RefCell<BaseCircuitBuilder<F>>,
     hasher: RefCell<PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE>>,
 }
@@ -157,16 +155,16 @@ impl<F: Field> Circuit<F> for KeccakCoprocessorLeafCircuit<F> {
             },
         )?;
 
-        // self.base_circuit_builder.replace(BaseCircuitBuilder::new(self.witness_gen_only));
-        self.base_circuit_builder.borrow_mut().clear();
-
         self.base_circuit_builder.borrow_mut().set_params(config.base_circuit_params);
         // Base circuit witness generation.
-        // let loaded_keccak_fs = self.load_keccak_assigned_rows(keccak_assigned_rows);
-        // self.generate_base_circuit_phase0_witnesses(&loaded_keccak_fs);
-        self.generate_base_circuit_phase0_witnesses(&[]);
+        let loaded_keccak_fs = self.load_keccak_assigned_rows(keccak_assigned_rows);
+        self.generate_base_circuit_phase0_witnesses(&loaded_keccak_fs);
 
         self.base_circuit_builder.borrow().synthesize(config.base_circuit_config, layouter)?;
+
+        // Reset the circuit to the initial state so synthesize could be called multiple times.
+        self.base_circuit_builder.borrow_mut().clear();
+        self.hasher.borrow_mut().clear();
         Ok(())
     }
 }
@@ -203,19 +201,11 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
         } else {
             OUTPUT_NUM_COL_COMMIT
         });
-        // Construct in-circuit Poseidon hasher.
-        let spec = OptimizedPoseidonSpec::<F, POSEIDON_T, POSEIDON_RATE>::new::<
-            POSEIDON_R_F,
-            POSEIDON_R_P,
-            POSEIDON_SECURE_MDS,
-        >();
-        let poseidon_hasher = PoseidonHasher::<F, POSEIDON_T, POSEIDON_RATE>::new(spec);
         Self {
             inputs,
             params,
-            witness_gen_only,
             base_circuit_builder: RefCell::new(base_circuit_builder),
-            hasher: RefCell::new(poseidon_hasher),
+            hasher: RefCell::new(create_hasher()),
         }
     }
 
@@ -226,9 +216,8 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
     ) -> BaseCircuitParams {
         // Create a simulation circuit to calculate base circuit parameters.
         let simulation_circuit = Self::new_impl(vec![], params.clone(), false);
-        // let loaded_keccak_fs = simulation_circuit.mock_load_keccak_assigned_rows();
-        // simulation_circuit.generate_base_circuit_phase0_witnesses(&loaded_keccak_fs);
-        simulation_circuit.generate_base_circuit_phase0_witnesses(&[]);
+        let loaded_keccak_fs = simulation_circuit.mock_load_keccak_assigned_rows();
+        simulation_circuit.generate_base_circuit_phase0_witnesses(&loaded_keccak_fs);
 
         let base_circuit_params = simulation_circuit
             .base_circuit_builder
@@ -287,7 +276,7 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
 
     /// Generate phase0 witnesses of the base circuit.
     fn generate_base_circuit_phase0_witnesses(&self, loaded_keccak_fs: &[LoadedKeccakF<F>]) {
-        // let circuit_final_outputs;
+        let circuit_final_outputs;
         {
             let range_chip = self.base_circuit_builder.borrow().range_chip();
             let mut base_circuit_builder_mut = self.base_circuit_builder.borrow_mut();
@@ -295,16 +284,16 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
             let mut hasher = self.hasher.borrow_mut();
             hasher.initialize_consts(ctx, range_chip.gate());
 
-            //     let lookup_key_per_keccak_f =
-            //         encode_inputs_from_keccak_fs(ctx, &range_chip, &hasher, loaded_keccak_fs);
-            //     circuit_final_outputs = Self::generate_circuit_final_outputs(
-            //         ctx,
-            //         &range_chip,
-            //         &lookup_key_per_keccak_f,
-            //         loaded_keccak_fs,
-            //     );
+            let lookup_key_per_keccak_f =
+                encode_inputs_from_keccak_fs(ctx, &range_chip, &hasher, loaded_keccak_fs);
+            circuit_final_outputs = Self::generate_circuit_final_outputs(
+                ctx,
+                &range_chip,
+                &lookup_key_per_keccak_f,
+                loaded_keccak_fs,
+            );
         }
-        // self.publish_outputs(&circuit_final_outputs);
+        self.publish_outputs(&circuit_final_outputs);
     }
 
     /// Combine lookup keys and Keccak results to generate final outputs of the circuit.
@@ -366,7 +355,7 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
                 &range_chip,
                 &outputs
                     .iter()
-                    .flat_map(|output| [output.key, output.hash_hi, output.hash_lo])
+                    .flat_map(|output| [output.key, output.hash_lo, output.hash_hi])
                     .collect_vec(),
             );
 
@@ -388,6 +377,16 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
             }
         }
     }
+}
+
+fn create_hasher<F: Field>() -> PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE> {
+    // Construct in-circuit Poseidon hasher.
+    let spec = OptimizedPoseidonSpec::<F, POSEIDON_T, POSEIDON_RATE>::new::<
+        POSEIDON_R_F,
+        POSEIDON_R_P,
+        POSEIDON_SECURE_MDS,
+    >();
+    PoseidonHasher::<F, POSEIDON_T, POSEIDON_RATE>::new(spec)
 }
 
 /// Encode raw inputs from Keccak circuit witnesses into lookup keys.

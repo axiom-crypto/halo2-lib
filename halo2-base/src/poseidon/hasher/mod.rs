@@ -107,6 +107,11 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
         self.consts.get_or_init(|| PoseidonHasherConsts::<F, T, RATE>::new(ctx, gate, &self.spec));
     }
 
+    /// Clear all consts.
+    pub fn clear(&mut self) {
+        self.consts.take();
+    }
+
     fn empty_hash(&self) -> &AssignedValue<F> {
         self.consts.get().unwrap().empty_hash()
     }

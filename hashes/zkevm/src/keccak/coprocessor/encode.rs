@@ -1,6 +1,6 @@
 use itertools::Itertools;
 
-use crate::{keccak::native::param::*, util::eth_types::Field};
+use crate::{keccak::vanilla::param::*, util::eth_types::Field};
 
 use super::param::*;
 
