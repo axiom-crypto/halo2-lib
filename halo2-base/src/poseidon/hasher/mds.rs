@@ -1,5 +1,5 @@
 #![allow(clippy::needless_range_loop)]
-use crate::utils::ScalarField;
+use crate::ff::PrimeField;
 
 /// The type used to hold the MDS matrix
 pub(crate) type Mds<F, const T: usize> = [[F; T]; T];
@@ -8,7 +8,7 @@ pub(crate) type Mds<F, const T: usize> = [[F; T]; T];
 /// also called `pre_sparse_mds` and sparse matrices that enables us to reduce
 /// number of multiplications in apply MDS step
 #[derive(Debug, Clone)]
-pub struct MDSMatrices<F: ScalarField, const T: usize, const RATE: usize> {
+pub struct MDSMatrices<F: PrimeField, const T: usize, const RATE: usize> {
     pub(crate) mds: MDSMatrix<F, T, RATE>,
     pub(crate) pre_sparse_mds: MDSMatrix<F, T, RATE>,
     pub(crate) sparse_matrices: Vec<SparseMDSMatrix<F, T, RATE>>,
@@ -17,16 +17,16 @@ pub struct MDSMatrices<F: ScalarField, const T: usize, const RATE: usize> {
 /// `SparseMDSMatrix` are in `[row], [hat | identity]` form and used in linear
 /// layer of partial rounds instead of the original MDS
 #[derive(Debug, Clone)]
-pub struct SparseMDSMatrix<F: ScalarField, const T: usize, const RATE: usize> {
+pub struct SparseMDSMatrix<F: PrimeField, const T: usize, const RATE: usize> {
     pub(crate) row: [F; T],
     pub(crate) col_hat: [F; RATE],
 }
 
 /// `MDSMatrix` is applied to `State` to achive linear layer of Poseidon
 #[derive(Clone, Debug)]
-pub struct MDSMatrix<F: ScalarField, const T: usize, const RATE: usize>(pub(crate) Mds<F, T>);
+pub struct MDSMatrix<F: PrimeField, const T: usize, const RATE: usize>(pub(crate) Mds<F, T>);
 
-impl<F: ScalarField, const T: usize, const RATE: usize> MDSMatrix<F, T, RATE> {
+impl<F: PrimeField, const T: usize, const RATE: usize> MDSMatrix<F, T, RATE> {
     pub(crate) fn mul_vector(&self, v: &[F; T]) -> [F; T] {
         let mut res = [F::ZERO; T];
         for i in 0..T {

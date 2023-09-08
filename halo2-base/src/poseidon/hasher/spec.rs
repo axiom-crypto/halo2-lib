@@ -1,4 +1,7 @@
-use crate::{poseidon::hasher::mds::*, utils::ScalarField};
+use crate::{
+    ff::{FromUniformBytes, PrimeField},
+    poseidon::hasher::mds::*,
+};
 
 use poseidon_rs::poseidon::primitives::Spec as PoseidonSpec; // trait
 use std::marker::PhantomData;
@@ -6,7 +9,7 @@ use std::marker::PhantomData;
 // struct so we can use PoseidonSpec trait to generate round constants and MDS matrix
 #[derive(Debug)]
 pub(crate) struct Poseidon128Pow5Gen<
-    F: ScalarField,
+    F: PrimeField,
     const T: usize,
     const RATE: usize,
     const R_F: usize,
@@ -17,7 +20,7 @@ pub(crate) struct Poseidon128Pow5Gen<
 }
 
 impl<
-        F: ScalarField,
+        F: PrimeField,
         const T: usize,
         const RATE: usize,
         const R_F: usize,
@@ -51,7 +54,7 @@ impl<
 /// `OptimizedPoseidonSpec` holds construction parameters as well as constants that are used in
 /// permutation step.
 #[derive(Debug, Clone)]
-pub struct OptimizedPoseidonSpec<F: ScalarField, const T: usize, const RATE: usize> {
+pub struct OptimizedPoseidonSpec<F: PrimeField, const T: usize, const RATE: usize> {
     pub(crate) r_f: usize,
     pub(crate) mds_matrices: MDSMatrices<F, T, RATE>,
     pub(crate) constants: OptimizedConstants<F, T>,
@@ -61,15 +64,18 @@ pub struct OptimizedPoseidonSpec<F: ScalarField, const T: usize, const RATE: usi
 /// full rounds has T sized constants there is a single constant for each
 /// partial round
 #[derive(Debug, Clone)]
-pub struct OptimizedConstants<F: ScalarField, const T: usize> {
+pub struct OptimizedConstants<F: PrimeField, const T: usize> {
     pub(crate) start: Vec<[F; T]>,
     pub(crate) partial: Vec<F>,
     pub(crate) end: Vec<[F; T]>,
 }
 
-impl<F: ScalarField, const T: usize, const RATE: usize> OptimizedPoseidonSpec<F, T, RATE> {
+impl<F: PrimeField, const T: usize, const RATE: usize> OptimizedPoseidonSpec<F, T, RATE> {
     /// Generate new spec with specific number of full and partial rounds. `SECURE_MDS` is usually 0, but may need to be specified because insecure matrices may sometimes be generated
-    pub fn new<const R_F: usize, const R_P: usize, const SECURE_MDS: usize>() -> Self {
+    pub fn new<const R_F: usize, const R_P: usize, const SECURE_MDS: usize>() -> Self
+    where
+        F: FromUniformBytes<64> + Ord,
+    {
         let (round_constants, mds, mds_inv) =
             Poseidon128Pow5Gen::<F, T, RATE, R_F, R_P, SECURE_MDS>::constants();
         let mds = MDSMatrix(mds);
