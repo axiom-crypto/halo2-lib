@@ -223,6 +223,8 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
             .base_circuit_builder
             .borrow_mut()
             .calculate_params(Some(params.num_unusable_row));
+        // prevent drop warnings
+        simulation_circuit.base_circuit_builder.borrow_mut().clear();
 
         base_circuit_params
     }

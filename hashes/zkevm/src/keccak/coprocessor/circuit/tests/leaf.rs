@@ -57,11 +57,28 @@ fn test_mock_leaf_circuit_raw_outputs() {
 
 #[test]
 fn test_prove_leaf_circuit_raw_outputs() {
+    let _ = env_logger::builder().is_test(true).try_init();
+
     let k: usize = 18;
     let num_unusable_row: usize = 109;
     let lookup_bits: usize = 4;
     let capacity: usize = 10;
     let publish_raw_outputs: bool = true;
+
+    let inputs = vec![];
+    let circuit_params = KeccakCoprocessorLeafCircuitParams::new(
+        k,
+        num_unusable_row,
+        lookup_bits,
+        capacity,
+        publish_raw_outputs,
+    );
+    let circuit = KeccakCoprocessorLeafCircuit::<Fr>::new(inputs, circuit_params.clone());
+
+    let params = ParamsKZG::<Bn256>::setup(k as u32, OsRng);
+
+    let vk = keygen_vk(&params, &circuit).unwrap();
+    let pk = keygen_pk(&params, vk, &circuit).unwrap();
 
     let inputs = vec![
         (0u8..200).collect::<Vec<_>>(),
@@ -71,31 +88,13 @@ fn test_prove_leaf_circuit_raw_outputs() {
         (0u8..136).collect::<Vec<_>>(),
         (0u8..200).collect::<Vec<_>>(),
     ];
-
-    let circuit_params = KeccakCoprocessorLeafCircuitParams::new(
-        k.clone(),
-        num_unusable_row,
-        lookup_bits,
-        capacity,
-        publish_raw_outputs,
-    );
-    let circuit = KeccakCoprocessorLeafCircuit::<Fr>::new(inputs.clone(), circuit_params.clone());
-
     let circuit_outputs = multi_inputs_to_circuit_outputs::<Fr>(&inputs, circuit_params.capacity());
     let instances: Vec<Vec<Fr>> = vec![
         circuit_outputs.iter().map(|o| o.key).collect_vec(),
         circuit_outputs.iter().map(|o| o.hash_lo).collect_vec(),
         circuit_outputs.iter().map(|o| o.hash_hi).collect_vec(),
     ];
-
-    let _ = env_logger::builder().is_test(true).try_init();
-
-    let params = ParamsKZG::<Bn256>::setup(k as u32, OsRng);
-
-    let vk = keygen_vk(&params, &circuit).unwrap();
-    let pk = keygen_pk(&params, vk, &circuit).unwrap();
-
-    let circuit = KeccakCoprocessorLeafCircuit::<Fr>::new(inputs.clone(), circuit_params.clone());
+    let circuit = KeccakCoprocessorLeafCircuit::<Fr>::new(inputs, circuit_params);
     let proof = gen_proof_with_instances(
         &params,
         &pk,
@@ -146,11 +145,28 @@ fn test_mock_leaf_circuit_commit() {
 
 #[test]
 fn test_prove_leaf_circuit_commit() {
+    let _ = env_logger::builder().is_test(true).try_init();
+
     let k: usize = 18;
     let num_unusable_row: usize = 109;
     let lookup_bits: usize = 4;
     let capacity: usize = 10;
     let publish_raw_outputs: bool = false;
+
+    let inputs = vec![];
+    let circuit_params = KeccakCoprocessorLeafCircuitParams::new(
+        k,
+        num_unusable_row,
+        lookup_bits,
+        capacity,
+        publish_raw_outputs,
+    );
+    let circuit = KeccakCoprocessorLeafCircuit::<Fr>::new(inputs, circuit_params.clone());
+
+    let params = ParamsKZG::<Bn256>::setup(k as u32, OsRng);
+
+    let vk = keygen_vk(&params, &circuit).unwrap();
+    let pk = keygen_pk(&params, vk, &circuit).unwrap();
 
     let inputs = vec![
         (0u8..200).collect::<Vec<_>>(),
@@ -160,27 +176,10 @@ fn test_prove_leaf_circuit_commit() {
         (0u8..136).collect::<Vec<_>>(),
         (0u8..200).collect::<Vec<_>>(),
     ];
-
-    let circuit_params = KeccakCoprocessorLeafCircuitParams::new(
-        k.clone(),
-        num_unusable_row,
-        lookup_bits,
-        capacity,
-        publish_raw_outputs,
-    );
     let circuit = KeccakCoprocessorLeafCircuit::<Fr>::new(inputs.clone(), circuit_params.clone());
-
     let circuit_outputs = multi_inputs_to_circuit_outputs::<Fr>(&inputs, circuit_params.capacity());
     let instances = vec![vec![calculate_circuit_outputs_commit(&circuit_outputs)]];
 
-    let _ = env_logger::builder().is_test(true).try_init();
-
-    let params = ParamsKZG::<Bn256>::setup(k as u32, OsRng);
-
-    let vk = keygen_vk(&params, &circuit).unwrap();
-    let pk = keygen_pk(&params, vk, &circuit).unwrap();
-
-    let circuit = KeccakCoprocessorLeafCircuit::<Fr>::new(inputs.clone(), circuit_params.clone());
     let proof = gen_proof_with_instances(
         &params,
         &pk,
