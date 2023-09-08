@@ -3,6 +3,7 @@ use crate::{
     poseidon::hasher::mds::*,
 };
 
+use getset::{CopyGetters, Getters};
 use poseidon_rs::poseidon::primitives::Spec as PoseidonSpec; // trait
 use std::marker::PhantomData;
 
@@ -53,20 +54,32 @@ impl<
 
 /// `OptimizedPoseidonSpec` holds construction parameters as well as constants that are used in
 /// permutation step.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Getters, CopyGetters)]
 pub struct OptimizedPoseidonSpec<F: PrimeField, const T: usize, const RATE: usize> {
+    /// Number of full rounds
+    #[getset(get_copy = "pub")]
     pub(crate) r_f: usize,
+    /// MDS matrices
+    #[getset(get = "pub")]
     pub(crate) mds_matrices: MDSMatrices<F, T, RATE>,
+    /// Round constants
+    #[getset(get = "pub")]
     pub(crate) constants: OptimizedConstants<F, T>,
 }
 
 /// `OptimizedConstants` has round constants that are added each round. While
 /// full rounds has T sized constants there is a single constant for each
 /// partial round
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Getters)]
 pub struct OptimizedConstants<F: PrimeField, const T: usize> {
+    /// start
+    #[getset(get = "pub")]
     pub(crate) start: Vec<[F; T]>,
+    /// partial
+    #[getset(get = "pub")]
     pub(crate) partial: Vec<F>,
+    /// end
+    #[getset(get = "pub")]
     pub(crate) end: Vec<[F; T]>,
 }
 
