@@ -16,8 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ecc::EccChip,
-    fields::{FieldChip, FpStrategy},
-    grumpkin::{FpChip, FqChip},
+    fields::{fp::FpChip, native_fp::NativeFieldChip, FieldChip, FpStrategy},
 };
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -40,9 +39,9 @@ fn sm_test(
     scalar: Fr,
     window_bits: usize,
 ) {
-    let fp_chip = FpChip::<Fq>::new(range);
-    let fq_chip = FqChip::<Fq>::new(range, params.limb_bits, params.num_limbs);
-    let ecc_chip = EccChip::<Fq, FpChip<Fq>>::new(&fp_chip);
+    let fp_chip = NativeFieldChip::<Fq>::new(range);
+    let fq_chip = FpChip::<Fq, Fr>::new(range, params.limb_bits, params.num_limbs);
+    let ecc_chip = EccChip::<Fq, NativeFieldChip<Fq>>::new(&fp_chip);
 
     let s = fq_chip.load_private(ctx, scalar);
     let P = ecc_chip.assign_point(ctx, base);

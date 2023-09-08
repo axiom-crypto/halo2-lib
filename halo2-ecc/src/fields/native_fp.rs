@@ -1,6 +1,9 @@
 use super::{BigPrimeField, FieldChip, Selectable};
 use halo2_base::gates::RangeChip;
-use halo2_base::{gates::GateInstructions, utils::modulus, AssignedValue, Context};
+use halo2_base::QuantumCell::Constant;
+use halo2_base::{
+    gates::GateInstructions, gates::RangeInstructions, utils::modulus, AssignedValue, Context,
+};
 use num_bigint::BigUint;
 use std::marker::PhantomData;
 
@@ -34,7 +37,7 @@ impl<'range, F: BigPrimeField> FieldChip<F> for NativeFieldChip<'range, F> {
         self.range
     }
     fn limb_bits(&self) -> usize {
-        F::CAPACITY as usize
+        F::NUM_BITS as usize
     }
 
     fn get_assigned_value(&self, x: &AssignedValue<F>) -> F {
@@ -65,8 +68,7 @@ impl<'range, F: BigPrimeField> FieldChip<F> for NativeFieldChip<'range, F> {
         a: impl Into<AssignedValue<F>>,
         c: F,
     ) -> AssignedValue<F> {
-        let c = self.load_constant(ctx, c);
-        self.add_no_carry(ctx, a, c)
+        self.gate().add(ctx, a.into(), Constant(c))
     }
 
     fn sub_no_carry(
@@ -98,8 +100,7 @@ impl<'range, F: BigPrimeField> FieldChip<F> for NativeFieldChip<'range, F> {
             -F::from(c_abs)
         };
 
-        let c_loaded = ctx.load_constant(c_f);
-        self.gate().mul(ctx, a.into(), c_loaded)
+        self.gate().mul(ctx, a.into(), Constant(c_f))
     }
 
     fn scalar_mul_and_add_no_carry(
@@ -109,8 +110,15 @@ impl<'range, F: BigPrimeField> FieldChip<F> for NativeFieldChip<'range, F> {
         b: impl Into<AssignedValue<F>>,
         c: i64,
     ) -> AssignedValue<F> {
-        let a_mul_c = self.scalar_mul_no_carry(ctx, a, c);
-        self.add_no_carry(ctx, a_mul_c, b)
+        let c_f = if c >= 0 {
+            let c_abs = u64::try_from(c).unwrap();
+            F::from(c_abs)
+        } else {
+            let c_abs = u64::try_from(-c).unwrap();
+            -F::from(c_abs)
+        };
+
+        self.gate().mul_add(ctx, a.into(), Constant(c_f), b.into())
     }
 
     fn mul_no_carry(
@@ -122,8 +130,10 @@ impl<'range, F: BigPrimeField> FieldChip<F> for NativeFieldChip<'range, F> {
         self.gate().mul(ctx, a.into(), b.into())
     }
 
-    // noop
-    fn check_carry_mod_to_zero(&self, _ctx: &mut Context<F>, _a: AssignedValue<F>) {}
+    fn check_carry_mod_to_zero(&self, ctx: &mut Context<F>, a: AssignedValue<F>) {
+        let is_zero = self.gate().is_zero(ctx, a);
+        self.gate().assert_is_const(ctx, &is_zero, &F::ONE);
+    }
 
     // noop
     fn carry_mod(&self, _ctx: &mut Context<F>, a: AssignedValue<F>) -> AssignedValue<F> {
@@ -132,12 +142,15 @@ impl<'range, F: BigPrimeField> FieldChip<F> for NativeFieldChip<'range, F> {
 
     fn range_check(
         &self,
-        _ctx: &mut Context<F>,
+        ctx: &mut Context<F>,
         a: impl Into<AssignedValue<F>>,
         max_bits: usize, // the maximum bits that a.value could take
     ) {
-        let a: AssignedValue<F> = a.into();
-        debug_assert!(a.value().to_bytes_le().len() <= max_bits);
+        // skip range chek if max_bits >= F::NUM_BITS
+        if max_bits < F::NUM_BITS as usize {
+            let a: AssignedValue<F> = a.into();
+            self.range().range_check(ctx, a, max_bits);
+        }
     }
 
     fn enforce_less_than(&self, _ctx: &mut Context<F>, a: AssignedValue<F>) -> AssignedValue<F> {
@@ -183,8 +196,7 @@ impl<'range, F: BigPrimeField> FieldChip<F> for NativeFieldChip<'range, F> {
         a: impl Into<AssignedValue<F>>,
         b: impl Into<AssignedValue<F>>,
     ) {
-        let is_equal = self.is_equal_unenforced(ctx, a.into(), b.into());
-        self.gate().assert_is_const(ctx, &is_equal, &F::ONE);
+        ctx.constrain_equal(&a.into(), &b.into());
     }
 }
 
