@@ -1,6 +1,16 @@
+use halo2_base::{
+    gates::{GateInstructions, RangeInstructions},
+    poseidon::hasher::{PoseidonCompactChunkInput, PoseidonHasher},
+    safe_types::{FixLenBytesVec, SafeByte, SafeTypeChip, VarLenBytesVec},
+    AssignedValue, Context,
+};
 use itertools::Itertools;
+use num_bigint::BigUint;
 
-use crate::{keccak::vanilla::param::*, util::eth_types::Field};
+use crate::{
+    keccak::vanilla::{keccak_packed_multi::get_num_keccak_f, param::*},
+    util::eth_types::Field,
+};
 
 use super::param::*;
 
@@ -69,7 +79,60 @@ pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {
     native_poseidon_sponge.squeeze()
 }
 
-// TODO: Add a function to encode a VarLenBytes into a lookup key. The function should be used by App Circuits.
+/// Encode a VarLenBytesVec into its corresponding lookup key.
+pub fn encode_var_len_bytes_vec<F: Field>(
+    ctx: &mut Context<F>,
+    range_chip: &impl RangeInstructions<F>,
+    initialized_hasher: &PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE>,
+    bytes: &VarLenBytesVec<F>,
+) -> AssignedValue<F> {
+    let max_len = bytes.max_len();
+    let max_num_keccak_f = get_num_keccak_f(max_len);
+    // num_keccak_f = len / NUM_BYTES_TO_ABSORB + 1
+    let num_bits = (usize::BITS - max_len.leading_zeros()) as usize;
+    let (num_keccak_f, _) =
+        range_chip.div_mod(ctx, *bytes.len(), BigUint::from(NUM_BYTES_TO_ABSORB), num_bits);
+    let f_indicator = range_chip.gate().idx_to_indicator(ctx, num_keccak_f, max_num_keccak_f);
+
+    let bytes = bytes.ensure_0_padding(ctx, range_chip.gate());
+    let chunk_input_per_f = format_input(ctx, range_chip.gate(), bytes.bytes(), *bytes.len());
+
+    let chunk_inputs = chunk_input_per_f
+        .into_iter()
+        .zip(&f_indicator)
+        .map(|(chunk_input, is_final)| {
+            let is_final = SafeTypeChip::unsafe_to_bool(*is_final);
+            PoseidonCompactChunkInput::new(chunk_input, is_final)
+        })
+        .collect_vec();
+
+    let compact_outputs =
+        initialized_hasher.hash_compact_chunk_inputs(ctx, range_chip, &chunk_inputs);
+    range_chip.gate().select_by_indicator(
+        ctx,
+        compact_outputs.into_iter().map(|o| *o.hash()),
+        f_indicator,
+    )
+}
+
+/// Encode a FixLenBytesVec into its corresponding lookup key.
+pub fn encode_fix_len_bytes_vec<F: Field>(
+    ctx: &mut Context<F>,
+    gate_chip: &impl GateInstructions<F>,
+    initialized_hasher: &PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE>,
+    bytes: &FixLenBytesVec<F>,
+) -> AssignedValue<F> {
+    // Constant witnesses
+    let len_witness = ctx.load_constant(F::from(bytes.len() as u64));
+
+    let chunk_input_per_f = format_input(ctx, gate_chip, bytes.bytes(), len_witness);
+    let flatten_inputs = chunk_input_per_f
+        .into_iter()
+        .flat_map(|chunk_input| chunk_input.into_iter().flat_map(|absorb| absorb))
+        .collect_vec();
+
+    initialized_hasher.hash_fix_len_array(ctx, gate_chip, &flatten_inputs)
+}
 
 // For reference, when F is bn254::Fr:
 // num_word_per_witness = 3
@@ -113,4 +176,85 @@ pub(crate) fn get_words_to_witness_multipliers<F: Field>() -> Vec<F> {
         multipliers.push(multiplier_f);
     }
     multipliers
+}
+
+pub(crate) fn get_bytes_to_words_multipliers<F: Field>() -> Vec<F> {
+    let mut multiplier_f = F::ONE;
+    let mut multipliers = Vec::with_capacity(NUM_BYTES_PER_WORD);
+    multipliers.push(multiplier_f);
+    let base_f = F::from_u128(1 << NUM_BITS_PER_BYTE);
+    for _ in 1..NUM_BYTES_PER_WORD {
+        multiplier_f *= base_f;
+        multipliers.push(multiplier_f);
+    }
+    multipliers
+}
+
+fn format_input<F: Field>(
+    ctx: &mut Context<F>,
+    gate: &impl GateInstructions<F>,
+    bytes: &[SafeByte<F>],
+    len: AssignedValue<F>,
+) -> Vec<Vec<[AssignedValue<F>; POSEIDON_RATE]>> {
+    // Constant witnesses
+    let zero_witness = ctx.load_zero();
+    let bytes_to_words_multiplier_witnesses =
+        ctx.load_constants(&get_bytes_to_words_multipliers::<F>());
+    let words_to_witness_multiplier_witnesses =
+        ctx.load_constants(&get_words_to_witness_multipliers::<F>());
+
+    let mut bytes_witnesses = bytes.to_vec();
+    // Append a zero to the end because An extra keccak_f is performed if len % NUM_BYTES_TO_ABSORB == 0.
+    bytes_witnesses.push(SafeTypeChip::unsafe_to_byte(zero_witness));
+    let words = bytes_witnesses
+        .chunks(NUM_BYTES_PER_WORD)
+        .map(|c| {
+            c.iter()
+                .zip(&bytes_to_words_multiplier_witnesses)
+                .fold(zero_witness, |acc, (byte, multiplier)| {
+                    gate.mul_add(ctx, *byte.as_ref(), *multiplier, acc)
+                })
+        })
+        .collect_vec();
+
+    let words_per_f = words
+        .chunks(NUM_WORDS_TO_ABSORB)
+        .enumerate()
+        .map(|(i, words_per_f)| {
+            let mut buffer = [zero_witness; NUM_WORDS_TO_ABSORB + 1];
+            buffer[0] = if i == 0 { len } else { zero_witness };
+            buffer[1..words_per_f.len() + 1].copy_from_slice(words_per_f);
+            buffer
+        })
+        .collect_vec();
+
+    let witnesses_per_f = words_per_f
+        .iter()
+        .map(|words| {
+            words
+                .chunks(num_word_per_witness::<F>())
+                .map(|c| {
+                    c.iter()
+                        .zip(&words_to_witness_multiplier_witnesses)
+                        .fold(zero_witness, |acc, (word, multiplier)| {
+                            gate.mul_add(ctx, *word, *multiplier, acc)
+                        })
+                })
+                .collect_vec()
+        })
+        .collect_vec();
+
+    witnesses_per_f
+        .iter()
+        .map(|words| {
+            words
+                .chunks(POSEIDON_RATE)
+                .map(|c| {
+                    let mut buffer = [zero_witness; POSEIDON_RATE];
+                    buffer[..c.len()].copy_from_slice(c);
+                    buffer
+                })
+                .collect_vec()
+        })
+        .collect_vec()
 }

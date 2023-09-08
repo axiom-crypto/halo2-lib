@@ -55,7 +55,7 @@ fn left_pad_var_len_bytes(mut bytes: Vec<u8>, max_len: usize) -> Vec<u8> {
         let len = ctx.load_witness(Fr::from(len as u64));
         let bytes = safe.raw_to_var_len_bytes_vec(ctx, bytes, len, max_len);
         let padded = bytes.left_pad_to_fixed(ctx, range.gate());
-        padded.iter().map(|b| b.as_ref().value().get_lower_64() as u8).collect()
+        padded.bytes().iter().map(|b| b.as_ref().value().get_lower_64() as u8).collect()
     })
 }
 
@@ -132,13 +132,38 @@ fn neg_var_len_bytes_vec_len_less_than_max_len() {
 
 // Circuit Satisfied for valid inputs
 #[test]
-fn pos_fix_len_bytes_vec() {
+fn pos_fix_len_bytes() {
     base_test().k(10).lookup_bits(8).run(|ctx, range| {
         let safe = SafeTypeChip::new(range);
         let fake_bytes = ctx.assign_witnesses(
             vec![255u64, 255u64, 255u64, 255u64].into_iter().map(Fr::from).collect::<Vec<_>>(),
         );
         safe.raw_to_fix_len_bytes::<4>(ctx, fake_bytes.try_into().unwrap());
+    });
+}
+
+// Assert inputs.len() == len
+#[test]
+#[should_panic]
+fn neg_fix_len_bytes_vec() {
+    base_test().k(10).lookup_bits(8).run(|ctx, range| {
+        let safe = SafeTypeChip::new(range);
+        let fake_bytes = ctx.assign_witnesses(
+            vec![255u64, 255u64, 255u64, 255u64].into_iter().map(Fr::from).collect::<Vec<_>>(),
+        );
+        safe.raw_to_fix_len_bytes_vec(ctx, fake_bytes, 5);
+    });
+}
+
+// Circuit Satisfied for valid inputs
+#[test]
+fn pos_fix_len_bytes_vec() {
+    base_test().k(10).lookup_bits(8).run(|ctx, range| {
+        let safe = SafeTypeChip::new(range);
+        let fake_bytes = ctx.assign_witnesses(
+            vec![255u64, 255u64, 255u64, 255u64].into_iter().map(Fr::from).collect::<Vec<_>>(),
+        );
+        safe.raw_to_fix_len_bytes_vec(ctx, fake_bytes, 4);
     });
 }
 
