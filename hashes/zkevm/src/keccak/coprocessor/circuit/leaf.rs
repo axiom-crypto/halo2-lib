@@ -4,7 +4,7 @@ use crate::{
     keccak::{
         coprocessor::{
             encode::{
-                get_words_to_witness_multipilers, num_poseidon_absorb_per_keccak_f,
+                get_words_to_witness_multipliers, num_poseidon_absorb_per_keccak_f,
                 num_word_per_witness,
             },
             output::{dummy_circuit_output, KeccakCircuitOutput},
@@ -407,7 +407,7 @@ fn encode_inputs_from_keccak_fs<F: Field>(
     let rate_witness = ctx.load_constant(F::from(POSEIDON_RATE as u64));
     let one_witness = ctx.load_constant(F::ONE);
     let zero_witness = ctx.load_zero();
-    let multiplier_witnesses = ctx.assign_witnesses(get_words_to_witness_multipilers::<F>());
+    let multiplier_witnesses = ctx.load_constants(&get_words_to_witness_multipliers::<F>());
 
     let compact_input_len = loaded_keccak_fs.len() * num_poseidon_absorb_per_keccak_f;
     let mut compact_inputs = Vec::with_capacity(compact_input_len);

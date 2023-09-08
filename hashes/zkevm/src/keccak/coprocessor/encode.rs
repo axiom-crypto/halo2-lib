@@ -12,7 +12,7 @@ use super::param::*;
 /// Encode a native input bytes into its corresponding lookup key. This function can be considered as the spec of the encoding.
 pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {
     assert!(NUM_BITS_PER_WORD <= u128::BITS as usize);
-    let multipilers = get_words_to_witness_multipilers::<F>();
+    let multipliers: Vec<F> = get_words_to_witness_multipliers::<F>();
     let num_word_per_witness = num_word_per_witness::<F>();
     let len = bytes.len();
 
@@ -48,7 +48,7 @@ pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {
             chunk
                 .chunks(num_word_per_witness)
                 .map(|c| {
-                    c.iter().zip(multipilers.iter()).fold(F::ZERO, |acc, (word, multipiler)| {
+                    c.iter().zip(multipliers.iter()).fold(F::ZERO, |acc, (word, multipiler)| {
                         acc + F::from_u128(*word) * multipiler
                     })
                 })
@@ -92,7 +92,7 @@ pub fn num_poseidon_absorb_per_keccak_f<F: Field>() -> usize {
     (num_witness_per_keccak_f::<F>() - 1) / POSEIDON_RATE + 1
 }
 
-pub(crate) fn get_words_to_witness_multipilers<F: Field>() -> Vec<F> {
+pub(crate) fn get_words_to_witness_multipliers<F: Field>() -> Vec<F> {
     let num_word_per_witness = num_word_per_witness::<F>();
     let mut multiplier_f = F::ONE;
     let mut multipliers = Vec::with_capacity(num_word_per_witness);
