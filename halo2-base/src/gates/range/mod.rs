@@ -445,7 +445,7 @@ impl<F: ScalarField> RangeChip<F> {
     fn add_cell_to_lookup(&self, ctx: &Context<F>, a: AssignedValue<F>) {
         let phase = ctx.phase();
         let manager = &self.lookup_manager[phase];
-        manager.add_lookup(ctx.context_id, [a]);
+        manager.add_lookup(ctx.tag(), [a]);
     }
 
     /// Checks and constrains that `a` lies in the range [0, 2<sup>range_bits</sup>).

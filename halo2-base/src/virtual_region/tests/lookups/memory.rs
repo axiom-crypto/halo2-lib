@@ -69,7 +69,7 @@ impl<F: ScalarField, const CYCLES: usize> RAMCircuit<F, CYCLES> {
             let value = self.memory[ptr];
             let ptr = ctx.load_witness(F::from(ptr as u64 + 1));
             let value = ctx.load_witness(value);
-            self.ram.add_lookup(ctx.id(), [ptr, value]);
+            self.ram.add_lookup((ctx.type_id(), ctx.id()), [ptr, value]);
             sum = gate.add(ctx, sum, value);
         }
     }
