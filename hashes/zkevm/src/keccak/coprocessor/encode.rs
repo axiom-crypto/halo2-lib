@@ -2,7 +2,9 @@ use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
     poseidon::hasher::{PoseidonCompactChunkInput, PoseidonHasher},
     safe_types::{FixLenBytesVec, SafeByte, SafeTypeChip, VarLenBytesVec},
+    utils::bit_length,
     AssignedValue, Context,
+    QuantumCell::Constant,
 };
 use itertools::Itertools;
 use num_bigint::BigUint;
@@ -41,7 +43,7 @@ pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {
     }
     // 1. Split Keccak words into keccak_fs(each keccak_f has NUM_WORDS_TO_ABSORB).
     // 2. Append an extra word into the beginning of each keccak_f. In the first keccak_f, this word is the byte length of the input. Otherwise 0.
-    let words_per_chunk = words
+    let words_per_keccak_f = words
         .chunks(NUM_WORDS_TO_ABSORB)
         .enumerate()
         .map(|(i, chunk)| {
@@ -52,7 +54,7 @@ pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {
         })
         .collect_vec();
     // Compress every num_word_per_witness words into a witness.
-    let witnesses_per_chunk = words_per_chunk
+    let witnesses_per_keccak_f = words_per_keccak_f
         .iter()
         .map(|chunk| {
             chunk
@@ -68,7 +70,7 @@ pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {
     // Absorb witnesses keccak_f by keccak_f.
     let mut native_poseidon_sponge =
         pse_poseidon::Poseidon::<F, POSEIDON_T, POSEIDON_RATE>::new(POSEIDON_R_F, POSEIDON_R_P);
-    for witnesses in witnesses_per_chunk {
+    for witnesses in witnesses_per_keccak_f {
         for absorbing in witnesses.chunks(POSEIDON_RATE) {
             // To avoid absorbing witnesses crossing keccak_fs together, pad 0s to make sure absorb.len() == RATE.
             let mut padded_absorb = [F::ZERO; POSEIDON_RATE];
@@ -89,7 +91,7 @@ pub fn encode_var_len_bytes_vec<F: Field>(
     let max_len = bytes.max_len();
     let max_num_keccak_f = get_num_keccak_f(max_len);
     // num_keccak_f = len / NUM_BYTES_TO_ABSORB + 1
-    let num_bits = (usize::BITS - max_len.leading_zeros()) as usize;
+    let num_bits = bit_length(max_len as u64);
     let (num_keccak_f, _) =
         range_chip.div_mod(ctx, *bytes.len(), BigUint::from(NUM_BYTES_TO_ABSORB), num_bits);
     let f_indicator = range_chip.gate().idx_to_indicator(ctx, num_keccak_f, max_num_keccak_f);
@@ -128,7 +130,7 @@ pub fn encode_fix_len_bytes_vec<F: Field>(
     let chunk_input_per_f = format_input(ctx, gate_chip, bytes.bytes(), len_witness);
     let flatten_inputs = chunk_input_per_f
         .into_iter()
-        .flat_map(|chunk_input| chunk_input.into_iter().flat_map(|absorb| absorb))
+        .flat_map(|chunk_input| chunk_input.into_iter().flatten())
         .collect_vec();
 
     initialized_hasher.hash_fix_len_array(ctx, gate_chip, &flatten_inputs)
@@ -197,23 +199,21 @@ fn format_input<F: Field>(
     len: AssignedValue<F>,
 ) -> Vec<Vec<[AssignedValue<F>; POSEIDON_RATE]>> {
     // Constant witnesses
-    let zero_witness = ctx.load_zero();
-    let bytes_to_words_multiplier_witnesses =
-        ctx.load_constants(&get_bytes_to_words_multipliers::<F>());
-    let words_to_witness_multiplier_witnesses =
-        ctx.load_constants(&get_words_to_witness_multipliers::<F>());
+    let zero_const = ctx.load_zero();
+    let bytes_to_words_multipliers_val =
+        get_bytes_to_words_multipliers::<F>().into_iter().map(|m| Constant(m)).collect_vec();
+    let words_to_witness_multipliers_val =
+        get_words_to_witness_multipliers::<F>().into_iter().map(|m| Constant(m)).collect_vec();
 
     let mut bytes_witnesses = bytes.to_vec();
     // Append a zero to the end because An extra keccak_f is performed if len % NUM_BYTES_TO_ABSORB == 0.
-    bytes_witnesses.push(SafeTypeChip::unsafe_to_byte(zero_witness));
+    bytes_witnesses.push(SafeTypeChip::unsafe_to_byte(zero_const));
     let words = bytes_witnesses
         .chunks(NUM_BYTES_PER_WORD)
         .map(|c| {
-            c.iter()
-                .zip(&bytes_to_words_multiplier_witnesses)
-                .fold(zero_witness, |acc, (byte, multiplier)| {
-                    gate.mul_add(ctx, *byte.as_ref(), *multiplier, acc)
-                })
+            let len = c.len();
+            let multipliers = bytes_to_words_multipliers_val[..len].to_vec();
+            gate.inner_product(ctx, c.iter().map(|sb| *sb.as_ref()), multipliers)
         })
         .collect_vec();
 
@@ -221,8 +221,8 @@ fn format_input<F: Field>(
         .chunks(NUM_WORDS_TO_ABSORB)
         .enumerate()
         .map(|(i, words_per_f)| {
-            let mut buffer = [zero_witness; NUM_WORDS_TO_ABSORB + 1];
-            buffer[0] = if i == 0 { len } else { zero_witness };
+            let mut buffer = [zero_const; NUM_WORDS_TO_ABSORB + 1];
+            buffer[0] = if i == 0 { len } else { zero_const };
             buffer[1..words_per_f.len() + 1].copy_from_slice(words_per_f);
             buffer
         })
@@ -234,11 +234,7 @@ fn format_input<F: Field>(
             words
                 .chunks(num_word_per_witness::<F>())
                 .map(|c| {
-                    c.iter()
-                        .zip(&words_to_witness_multiplier_witnesses)
-                        .fold(zero_witness, |acc, (word, multiplier)| {
-                            gate.mul_add(ctx, *word, *multiplier, acc)
-                        })
+                    gate.inner_product(ctx, c.to_vec(), words_to_witness_multipliers_val.clone())
                 })
                 .collect_vec()
         })
@@ -250,7 +246,7 @@ fn format_input<F: Field>(
             words
                 .chunks(POSEIDON_RATE)
                 .map(|c| {
-                    let mut buffer = [zero_witness; POSEIDON_RATE];
+                    let mut buffer = [zero_const; POSEIDON_RATE];
                     buffer[..c.len()].copy_from_slice(c);
                     buffer
                 })
