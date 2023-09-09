@@ -228,6 +228,18 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
         FixLenBytes::<F, MAX_LEN>::new(inputs.map(|input| Self::unsafe_to_byte(input)))
     }
 
+    /// Unsafe method that directly converts `inputs` to [`FixLenBytesVec`] **without any checks**.
+    /// This should **only** be used if an external library needs to convert their types to [`SafeByte`].
+    pub fn unsafe_to_fix_len_bytes_vec(
+        inputs: RawAssignedValues<F>,
+        len: usize,
+    ) -> FixLenBytesVec<F> {
+        FixLenBytesVec::<F>::new(
+            inputs.into_iter().map(|input| Self::unsafe_to_byte(input)).collect_vec(),
+            len,
+        )
+    }
+
     /// Converts a slice of AssignedValue(treated as little-endian) to VarLenBytes.
     ///
     /// * ctx: Circuit [Context]<F> to assign witnesses to.
@@ -249,7 +261,7 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
     /// * ctx: Circuit [Context]<F> to assign witnesses to.
     /// * inputs: Vector representing the byte array, right padded to `max_len`. See [VarLenBytesVec] for details about padding.
     /// * len: [AssignedValue]<F> witness representing the variable length of the byte array. Constrained to be `<= max_len`.
-    /// * max_len: [usize] representing the maximum length of the byte array and the number of elements it must contain.
+    /// * max_len: [usize] representing the maximum length of the byte array and the number of elements it must contain. We enforce this to be provided explictly to make sure length of `inputs` is determinstic.
     pub fn raw_to_var_len_bytes_vec(
         &self,
         ctx: &mut Context<F>,
@@ -276,6 +288,23 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
         inputs: [AssignedValue<F>; LEN],
     ) -> FixLenBytes<F, LEN> {
         FixLenBytes::<F, LEN>::new(inputs.map(|input| self.assert_byte(ctx, input)))
+    }
+
+    /// Converts a slice of AssignedValue(treated as little-endian) to FixLenBytesVec.
+    ///
+    /// * ctx: Circuit [Context]<F> to assign witnesses to.
+    /// * inputs: Slice representing the byte array.
+    /// * len: length of the byte array. We enforce this to be provided explictly to make sure length of `inputs` is determinstic.
+    pub fn raw_to_fix_len_bytes_vec(
+        &self,
+        ctx: &mut Context<F>,
+        inputs: RawAssignedValues<F>,
+        len: usize,
+    ) -> FixLenBytesVec<F> {
+        FixLenBytesVec::<F>::new(
+            inputs.into_iter().map(|input| self.assert_byte(ctx, input)).collect_vec(),
+            len,
+        )
     }
 
     fn add_bytes_constraints(

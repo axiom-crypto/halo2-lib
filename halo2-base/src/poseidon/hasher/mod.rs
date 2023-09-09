@@ -86,6 +86,22 @@ impl<F: ScalarField, const RATE: usize> PoseidonCompactInput<F, RATE> {
     }
 }
 
+/// A compact chunk input for Poseidon hasher. The end of a logical input could only be at the boundary of a chunk.
+#[derive(Clone, Debug)]
+pub struct PoseidonCompactChunkInput<F: ScalarField, const RATE: usize> {
+    // Inputs of a chunk. All witnesses will be absorbed.
+    inputs: Vec<[AssignedValue<F>; RATE]>,
+    // is_final = 1 triggers squeeze.
+    is_final: SafeBool<F>,
+}
+
+impl<F: ScalarField, const RATE: usize> PoseidonCompactChunkInput<F, RATE> {
+    /// Create a new PoseidonCompactInput.
+    pub fn new(inputs: Vec<[AssignedValue<F>; RATE]>, is_final: SafeBool<F>) -> Self {
+        Self { inputs, is_final }
+    }
+}
+
 /// 1 logical row of compact output for Poseidon hasher.
 #[derive(Copy, Clone, Debug, Getters)]
 pub struct PoseidonCompactOutput<F: ScalarField> {
@@ -229,6 +245,36 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
             // Reset state to init_state if this is the end of a logical input.
             // TODO: skip this if this is the last row.
             state.select(ctx, gate, input.is_final, self.init_state());
+        }
+        outputs
+    }
+
+    /// Constrains and returns hashes of chunk inputs in a compact format. Length of `chunk_inputs` should be determined at compile time.
+    pub fn hash_compact_chunk_inputs(
+        &self,
+        ctx: &mut Context<F>,
+        range: &impl RangeInstructions<F>,
+        chunk_inputs: &[PoseidonCompactChunkInput<F, RATE>],
+    ) -> Vec<PoseidonCompactOutput<F>>
+    where
+        F: BigPrimeField,
+    {
+        let zero_witness = ctx.load_zero();
+        let mut outputs = Vec::with_capacity(chunk_inputs.len());
+        let mut state = self.init_state().clone();
+        for chunk_input in chunk_inputs {
+            let is_final = chunk_input.is_final;
+            for absorb in &chunk_input.inputs {
+                state.permutation(ctx, range.gate(), absorb, None, &self.spec);
+            }
+            // Because the length of each absorb is always RATE. An extra permutation is needed for squeeze.
+            let mut output_state = state.clone();
+            output_state.permutation(ctx, range.gate(), &[], None, &self.spec);
+            let hash =
+                range.gate().select(ctx, output_state.s[1], zero_witness, *is_final.as_ref());
+            outputs.push(PoseidonCompactOutput { hash, is_final });
+            // Reset state to init_state if this is the end of a logical input.
+            state.select(ctx, range.gate(), is_final, self.init_state());
         }
         outputs
     }

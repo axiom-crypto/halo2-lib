@@ -592,7 +592,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
             let masked_input_bytes = input_bytes
                 .iter()
-                .zip(is_paddings.clone())
+                .zip_eq(is_paddings.clone())
                 .map(|(input_byte, is_padding)| {
                     input_byte.expr.clone() * not::expr(is_padding.expr().clone())
                 })

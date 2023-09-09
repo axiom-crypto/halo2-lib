@@ -360,7 +360,7 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
 
         let mut circuit_final_outputs = Vec::with_capacity(loaded_keccak_fs.len());
         for (compact_output, loaded_keccak_f) in
-            lookup_key_per_keccak_f.iter().zip(loaded_keccak_fs)
+            lookup_key_per_keccak_f.iter().zip_eq(loaded_keccak_fs)
         {
             let is_final = AssignedValue::from(loaded_keccak_f.is_final);
             let key = gate.select(ctx, *compact_output.hash(), dummy_key_witness, is_final);
@@ -413,7 +413,7 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
     }
 }
 
-fn create_hasher<F: Field>() -> PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE> {
+pub(crate) fn create_hasher<F: Field>() -> PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE> {
     // Construct in-circuit Poseidon hasher.
     let spec = OptimizedPoseidonSpec::<F, POSEIDON_T, POSEIDON_RATE>::new::<
         POSEIDON_R_F,
@@ -491,6 +491,7 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
         last_is_final = is_final.into();
     }
 
+    // TODO: use hash_compact_chunk_input instead.
     let compact_outputs = initialized_hasher.hash_compact_input(ctx, gate, &compact_inputs);
 
     compact_outputs

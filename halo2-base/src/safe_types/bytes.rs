@@ -52,6 +52,12 @@ impl<F: ScalarField, const MAX_LEN: usize> VarLenBytes<F, MAX_LEN> {
             padded.into_iter().map(|b| SafeByte(b)).collect::<Vec<_>>().try_into().unwrap(),
         )
     }
+
+    /// Return a copy of the byte array with 0 padding ensured.
+    pub fn ensure_0_padding(&self, ctx: &mut Context<F>, gate: &impl GateInstructions<F>) -> Self {
+        let bytes = ensure_0_padding(ctx, gate, &self.bytes, self.len);
+        Self::new(bytes.try_into().unwrap(), self.len)
+    }
 }
 
 /// Represents a variable length byte array in circuit. Not encouraged to use because `MAX_LEN` cannot be verified at compile time.
@@ -93,7 +99,13 @@ impl<F: ScalarField> VarLenBytesVec<F> {
         gate: &impl GateInstructions<F>,
     ) -> FixLenBytesVec<F> {
         let padded = left_pad_var_array_to_fixed(ctx, gate, &self.bytes, self.len, self.max_len());
-        padded.into_iter().map(|b| SafeByte(b)).collect()
+        FixLenBytesVec::new(padded.into_iter().map(|b| SafeByte(b)).collect_vec(), self.max_len())
+    }
+
+    /// Return a copy of the byte array with 0 padding ensured.
+    pub fn ensure_0_padding(&self, ctx: &mut Context<F>, gate: &impl GateInstructions<F>) -> Self {
+        let bytes = ensure_0_padding(ctx, gate, &self.bytes, self.len);
+        Self::new(bytes, self.len, self.max_len())
     }
 }
 
@@ -114,6 +126,27 @@ impl<F: ScalarField, const LEN: usize> FixLenBytes<F, LEN> {
     /// Returns the length of the byte array.
     pub fn len(&self) -> usize {
         LEN
+    }
+}
+
+/// Represents a fixed length byte array in circuit. Not encouraged to use because `MAX_LEN` cannot be verified at compile time.
+#[derive(Debug, Clone, Getters)]
+pub struct FixLenBytesVec<F: ScalarField> {
+    /// The byte array
+    #[getset(get = "pub")]
+    bytes: Vec<SafeByte<F>>,
+}
+
+impl<F: ScalarField> FixLenBytesVec<F> {
+    // FixLenBytes can be only created by SafeChip.
+    pub(super) fn new(bytes: Vec<SafeByte<F>>, len: usize) -> Self {
+        assert_eq!(bytes.len(), len, "bytes length doesn't match");
+        Self { bytes }
+    }
+
+    /// Returns the length of the byte array.
+    pub fn len(&self) -> usize {
+        self.bytes.len()
     }
 }
 
@@ -138,7 +171,7 @@ impl<F: ScalarField, const TOTAL_BITS: usize>
 
 /// Represents a fixed length byte array in circuit as a vector, where length must be fixed.
 /// Not encouraged to use because `LEN` cannot be verified at compile time.
-pub type FixLenBytesVec<F> = Vec<SafeByte<F>>;
+// pub type FixLenBytesVec<F> = Vec<SafeByte<F>>;
 
 /// Takes a fixed length array `arr` and returns a length `out_len` array equal to
 /// `[[0; out_len - len], arr[..len]].concat()`, i.e., we take `arr[..len]` and
@@ -171,4 +204,25 @@ pub fn left_pad_var_array_to_fixed<F: ScalarField>(
             .collect_vec();
     }
     padded
+}
+
+fn ensure_0_padding<F: ScalarField>(
+    ctx: &mut Context<F>,
+    gate: &impl GateInstructions<F>,
+    bytes: &[SafeByte<F>],
+    len: AssignedValue<F>,
+) -> Vec<SafeByte<F>> {
+    let max_len = bytes.len();
+    // Generate a mask array where a[i] = i < len for i = 0..max_len.
+    let idx = gate.dec(ctx, len);
+    let len_indicator = gate.idx_to_indicator(ctx, idx, max_len);
+    // inputs_mask[i] = sum(len_indicator[i..])
+    let mut mask = gate.partial_sums(ctx, len_indicator.clone().into_iter().rev()).collect_vec();
+    mask.reverse();
+
+    bytes
+        .iter()
+        .zip(mask.iter())
+        .map(|(byte, mask)| SafeByte(gate.mul(ctx, byte.0, *mask)))
+        .collect_vec()
 }
