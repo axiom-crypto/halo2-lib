@@ -1,4 +1,3 @@
-use std::any::TypeId;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -10,7 +9,7 @@ use crate::halo2_proofs::{
     plonk::{Advice, Column},
 };
 use crate::utils::halo2::raw_assign_advice;
-use crate::AssignedValue;
+use crate::{AssignedValue, ContextTag};
 
 use super::copy_constraints::SharedCopyConstraintManager;
 use super::manager::VirtualRegionManager;
@@ -42,8 +41,7 @@ use super::manager::VirtualRegionManager;
 pub struct LookupAnyManager<F: Field + Ord, const ADVICE_COLS: usize> {
     /// Shared cells to lookup, tagged by (type id, context id).
     #[allow(clippy::type_complexity)]
-    pub cells_to_lookup:
-        Arc<Mutex<BTreeMap<(TypeId, usize), Vec<[AssignedValue<F>; ADVICE_COLS]>>>>,
+    pub cells_to_lookup: Arc<Mutex<BTreeMap<ContextTag, Vec<[AssignedValue<F>; ADVICE_COLS]>>>>,
     /// Global shared copy manager
     pub copy_manager: SharedCopyConstraintManager<F>,
     /// Specify whether constraints should be imposed for additional safety.
@@ -65,7 +63,7 @@ impl<F: Field + Ord, const ADVICE_COLS: usize> LookupAnyManager<F, ADVICE_COLS> 
     }
 
     /// Add a lookup argument to the manager.
-    pub fn add_lookup(&self, tag: (TypeId, usize), cells: [AssignedValue<F>; ADVICE_COLS]) {
+    pub fn add_lookup(&self, tag: ContextTag, cells: [AssignedValue<F>; ADVICE_COLS]) {
         self.cells_to_lookup
             .lock()
             .unwrap()

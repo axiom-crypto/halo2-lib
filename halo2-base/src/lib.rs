@@ -103,6 +103,9 @@ impl<F: ScalarField> QuantumCell<F> {
     }
 }
 
+/// Unique tag for a context across all virtual regions
+pub type ContextTag = (TypeId, usize);
+
 /// Pointer to the position of a cell at `offset` in an advice column within a [Context] of `context_id`.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ContextCell {
@@ -222,7 +225,7 @@ impl<F: ScalarField> Context<F> {
     }
 
     /// A unique tag that should identify this context across all virtual regions and phases.
-    pub fn tag(&self) -> (TypeId, usize) {
+    pub fn tag(&self) -> ContextTag {
         (self.type_id, self.context_id)
     }
 
