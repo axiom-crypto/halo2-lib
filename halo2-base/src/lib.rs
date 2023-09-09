@@ -171,6 +171,7 @@ pub struct Context<F: ScalarField> {
     #[getset(get_copy = "pub")]
     phase: usize,
     /// Identifier for what virtual region this context is in
+    #[getset(get_copy = "pub")]
     type_id: TypeId,
     /// Identifier to reference cells from this [Context].
     context_id: usize,
@@ -218,6 +219,11 @@ impl<F: ScalarField> Context<F> {
     /// The context id, this can be used as a tag when CPU multi-threading
     pub fn id(&self) -> usize {
         self.context_id
+    }
+
+    /// A unique tag that should identify this context across all virtual regions and phases.
+    pub fn tag(&self) -> (TypeId, usize) {
+        (self.type_id, self.context_id)
     }
 
     fn latest_cell(&self) -> ContextCell {
