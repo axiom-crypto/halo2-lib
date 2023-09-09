@@ -910,6 +910,7 @@ impl<F: ScalarField> GateChip<F> {
     }
 
     /// Calculates and constrains the inner product of `<a, b>`.
+    /// If the first element of `b` is `Constant(F::ONE)`, then an optimization is performed to save 3 cells.
     ///
     /// Returns `true` if `b` start with `Constant(F::ONE)`, and `false` otherwise.
     ///
@@ -965,6 +966,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     }
 
     /// Constrains and returns the inner product of `<a, b>`.
+    /// If the first element of `b` is `Constant(F::ONE)`, then an optimization is performed to save 3 cells.
     ///
     /// Assumes 'a' and 'b' are the same length.
     /// * `ctx`: [Context] to add the constraints to
@@ -983,7 +985,11 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
         ctx.last().unwrap()
     }
 
-    /// Returns the inner product of `<a, b>` and returns a tuple of the last item of `a` after it is assigned and the item to its left `(left_a, last_a)`.
+    /// Returns the inner product of `<a, b>` and the last element of `a` after it has been assigned.
+    /// This is a low-level function, where you want to avoid first assigning `a` and then copying the last element into the
+    /// correct cell for this computation.
+    ///
+    /// **NOT** encouraged for general usage.
     ///
     /// Assumes 'a' and 'b' are the same length.
     /// * `ctx`: [Context] of the circuit
