@@ -10,6 +10,7 @@ use crate::{
     AssignedValue, Context,
     QuantumCell::{self, Constant, Existing, Witness, WitnessFraction},
 };
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{
     iter::{self},
@@ -355,7 +356,11 @@ pub trait GateInstructions<F: ScalarField> {
     where
         QA: Into<QuantumCell<F>>;
 
-    /// Returns the inner product of `<a, b>` and the last element of `a` now assigned, i.e. `(inner_product_<a, b>, last_element_a)`.
+    /// Returns the inner product of `<a, b>` and the last element of `a` after it has been assigned.
+    ///
+    /// **NOT** encouraged for general usage.
+    /// This is a low-level function, where you want to avoid first assigning `a` and then copying the last element into the
+    /// correct cell for this computation.
     ///
     /// Assumes 'a' and 'b' are the same length.
     /// * `ctx`: [Context] of the circuit
@@ -367,6 +372,24 @@ pub trait GateInstructions<F: ScalarField> {
         a: impl IntoIterator<Item = QA>,
         b: impl IntoIterator<Item = QuantumCell<F>>,
     ) -> (AssignedValue<F>, AssignedValue<F>)
+    where
+        QA: Into<QuantumCell<F>>;
+
+    /// Returns `(<a,b>, a_assigned)`. See `inner_product` for more details.
+    ///
+    /// **NOT** encouraged for general usage.
+    /// This is a low-level function, useful for when you want to simultaneously compute an inner product while assigning
+    /// private witnesses for the first time. This avoids first assigning `a` and then copying into the correct cells
+    /// for this computation. We do not return the assignments of `a` in `inner_product` as an optimization to avoid
+    /// the memory allocation of having to collect the vectors.
+    ///
+    /// Assumes 'a' and 'b' are the same length.
+    fn inner_product_left<QA>(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl IntoIterator<Item = QA>,
+        b: impl IntoIterator<Item = QuantumCell<F>>,
+    ) -> (AssignedValue<F>, Vec<AssignedValue<F>>)
     where
         QA: Into<QuantumCell<F>>;
 
@@ -910,6 +933,7 @@ impl<F: ScalarField> GateChip<F> {
     }
 
     /// Calculates and constrains the inner product of `<a, b>`.
+    /// If the first element of `b` is `Constant(F::ONE)`, then an optimization is performed to save 3 cells.
     ///
     /// Returns `true` if `b` start with `Constant(F::ONE)`, and `false` otherwise.
     ///
@@ -965,6 +989,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     }
 
     /// Constrains and returns the inner product of `<a, b>`.
+    /// If the first element of `b` is `Constant(F::ONE)`, then an optimization is performed to save 3 cells.
     ///
     /// Assumes 'a' and 'b' are the same length.
     /// * `ctx`: [Context] to add the constraints to
@@ -983,7 +1008,11 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
         ctx.last().unwrap()
     }
 
-    /// Returns the inner product of `<a, b>` and returns a tuple of the last item of `a` after it is assigned and the item to its left `(left_a, last_a)`.
+    /// Returns the inner product of `<a, b>` and the last element of `a` after it has been assigned.
+    ///
+    /// **NOT** encouraged for general usage.
+    /// This is a low-level function, where you want to avoid first assigning `a` and then copying the last element into the
+    /// correct cell for this computation.
     ///
     /// Assumes 'a' and 'b' are the same length.
     /// * `ctx`: [Context] of the circuit
@@ -1013,6 +1042,46 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
             ctx.get((row_offset + 1 + 3 * (len - 1)) as isize)
         };
         (ctx.last().unwrap(), a_last)
+    }
+
+    /// Returns `(<a,b>, a_assigned)`. See `inner_product` for more details.
+    ///
+    /// **NOT** encouraged for general usage.
+    /// This is a low-level function, useful for when you want to simultaneously compute an inner product while assigning
+    /// private witnesses for the first time. This avoids first assigning `a` and then copying into the correct cells
+    /// for this computation. We do not return the assignments of `a` in `inner_product` as an optimization to avoid
+    /// the memory allocation of having to collect the vectors.
+    ///
+    /// We do not return `b_assigned` because if `b` starts with `Constant(F::ONE)`, the first element of `b` is not assigned.
+    ///
+    /// Assumes 'a' and 'b' are the same length.
+    fn inner_product_left<QA>(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl IntoIterator<Item = QA>,
+        b: impl IntoIterator<Item = QuantumCell<F>>,
+    ) -> (AssignedValue<F>, Vec<AssignedValue<F>>)
+    where
+        QA: Into<QuantumCell<F>>,
+    {
+        let a = a.into_iter().collect_vec();
+        let len = a.len();
+        let row_offset = ctx.advice.len();
+        let b_starts_with_one = self.inner_product_simple(ctx, a, b);
+        let a_assigned = (0..len)
+            .map(|i| {
+                if b_starts_with_one {
+                    if i == 0 {
+                        ctx.get(row_offset as isize)
+                    } else {
+                        ctx.get((row_offset + 1 + 3 * (i - 1)) as isize)
+                    }
+                } else {
+                    ctx.get((row_offset + 1 + 3 * i) as isize)
+                }
+            })
+            .collect_vec();
+        (ctx.last().unwrap(), a_assigned)
     }
 
     /// Calculates and constrains the inner product.
