@@ -633,9 +633,11 @@ impl<F: Field> KeccakCircuitConfig<F> {
                     bytes_left_next_expr + word_len,
                 );
             });
-            // !q_input[cur] && !start_new_hash(cur) ==> bytes_left[cur + num_rows_per_round] == bytes_left[cur]
-            // !q_input[cur] && !start_new_hash(cur) === !(q_input[cur] || start_new_hash(cur))
-            // Because q_input[cur] and start_new_hash(cur) are never both true at the same time, we use + instead of or in order to save a degree.
+            // Logically here we want !q_input[cur] && !start_new_hash(cur) ==> bytes_left[cur + num_rows_per_round] == bytes_left[cur]
+            // In practice, in order to save a degree we use !(q_input[cur] ^ start_new_hash(cur)) ==> bytes_left[cur + num_rows_per_round] == bytes_left[cur]
+            // Because when both q_input[cur] and is_final in start_new_hash(cur) are true, is_final ==> bytes_left == 0 and this round must not be a final 
+            // round becuase q_input[cur] == 1. Therefore bytes_left_next must 0.
+            // Note: is_final could be true in rounds after the input rounds and before the last round, as long as the keccak_f is final.
             cb.condition(not::expr(q(q_input, meta) + start_new_hash(meta, Rotation::cur())), |cb| {
                 let bytes_left_next_expr =
                     meta.query_advice(keccak_table.bytes_left, Rotation(num_rows_per_round as i32));

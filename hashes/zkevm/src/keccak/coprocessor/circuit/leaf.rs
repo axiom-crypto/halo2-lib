@@ -11,8 +11,8 @@ use crate::{
             param::*,
         },
         vanilla::{
-            param::*, witness::multi_keccak, KeccakAssignedRow, KeccakCircuitConfig,
-            KeccakConfigParams,
+            keccak_packed_multi::get_num_keccak_f, param::*, witness::multi_keccak,
+            KeccakAssignedRow, KeccakCircuitConfig, KeccakConfigParams,
         },
     },
     util::eth_types::Field,
@@ -21,6 +21,7 @@ use getset::{CopyGetters, Getters};
 use halo2_base::{
     gates::{
         circuit::{builder::BaseCircuitBuilder, BaseCircuitParams, BaseConfig},
+        flex_gate::MultiPhaseThreadBreakPoints,
         GateInstructions, RangeInstructions,
     },
     halo2_proofs::{
@@ -70,7 +71,8 @@ pub struct KeccakCoprocessorLeafCircuitParams {
     publish_raw_outputs: bool,
 
     // Derived parameters of sub-circuits.
-    keccak_circuit_params: KeccakConfigParams,
+    pub keccak_circuit_params: KeccakConfigParams,
+    pub base_circuit_params: BaseCircuitParams,
 }
 
 impl KeccakCoprocessorLeafCircuitParams {
@@ -88,6 +90,16 @@ impl KeccakCoprocessorLeafCircuitParams {
         let rows_per_round = max_rows / (capacity * (NUM_ROUNDS + 1) + 1 + NUM_WORDS_TO_ABSORB);
         assert!(rows_per_round > 0, "No enough rows for the speficied capacity");
         let keccak_circuit_params = KeccakConfigParams { k: k as u32, rows_per_round };
+        let base_circuit_params = BaseCircuitParams {
+            k,
+            lookup_bits: Some(lookup_bits),
+            num_instance_columns: if publish_raw_outputs {
+                OUTPUT_NUM_COL_RAW
+            } else {
+                OUTPUT_NUM_COL_COMMIT
+            },
+            ..Default::default()
+        };
         Self {
             k,
             num_unusable_row,
@@ -95,6 +107,7 @@ impl KeccakCoprocessorLeafCircuitParams {
             capacity,
             publish_raw_outputs,
             keccak_circuit_params,
+            base_circuit_params,
         }
     }
 }
@@ -102,9 +115,8 @@ impl KeccakCoprocessorLeafCircuitParams {
 /// Circuit::Config for Keccak Coprocessor Leaf Circuit.
 #[derive(Clone)]
 pub struct KeccakCoprocessorLeafConfig<F: Field> {
-    base_circuit_params: BaseCircuitParams,
-    base_circuit_config: BaseConfig<F>,
-    keccak_circuit_config: KeccakCircuitConfig<F>,
+    pub base_circuit_config: BaseConfig<F>,
+    pub keccak_circuit_config: KeccakCircuitConfig<F>,
 }
 
 impl<F: Field> Circuit<F> for KeccakCoprocessorLeafCircuit<F> {
@@ -123,11 +135,11 @@ impl<F: Field> Circuit<F> for KeccakCoprocessorLeafCircuit<F> {
 
     /// Configures a new circuit using [`BaseConfigParams`]
     fn configure_with_params(meta: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config {
-        let base_circuit_params = Self::calculate_base_circuit_params(params.clone());
+        let base_circuit_params = params.base_circuit_params;
         let base_circuit_config =
             BaseCircuitBuilder::configure_with_params(meta, base_circuit_params.clone());
         let keccak_circuit_config = KeccakCircuitConfig::new(meta, params.keccak_circuit_params);
-        Self::Config { base_circuit_params, base_circuit_config, keccak_circuit_config }
+        Self::Config { base_circuit_config, keccak_circuit_config }
     }
 
     fn configure(_: &mut ConstraintSystem<F>) -> Self::Config {
@@ -156,10 +168,9 @@ impl<F: Field> Circuit<F> for KeccakCoprocessorLeafCircuit<F> {
             },
         )?;
 
-        self.base_circuit_builder.borrow_mut().set_params(config.base_circuit_params);
         // Base circuit witness generation.
         let loaded_keccak_fs = self.load_keccak_assigned_rows(keccak_assigned_rows);
-        self.generate_base_circuit_phase0_witnesses(&loaded_keccak_fs);
+        self.generate_base_circuit_witnesses(&loaded_keccak_fs);
 
         self.base_circuit_builder.borrow().synthesize(config.base_circuit_config, layouter)?;
 
@@ -203,25 +214,16 @@ impl<F: Field> LoadedKeccakF<F> {
 }
 
 impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
-    /// Create a new KeccakCoprocessorLeafCircuit
-    pub fn new(inputs: Vec<Vec<u8>>, params: KeccakCoprocessorLeafCircuitParams) -> Self {
-        Self::new_impl(inputs, params, false)
-    }
-
-    /// Implementation of Self::new. witness_gen_only can be customized.
-    fn new_impl(
+    /// Create a new KeccakCoprocessorLeafCircuit.
+    pub fn new(
         inputs: Vec<Vec<u8>>,
         params: KeccakCoprocessorLeafCircuitParams,
         witness_gen_only: bool,
     ) -> Self {
-        let mut base_circuit_builder = BaseCircuitBuilder::new(witness_gen_only)
-            .use_k(params.k)
-            .use_lookup_bits(params.lookup_bits);
-        base_circuit_builder.set_instance_columns(if params.publish_raw_outputs {
-            OUTPUT_NUM_COL_RAW
-        } else {
-            OUTPUT_NUM_COL_COMMIT
-        });
+        let input_size = inputs.iter().map(|input| get_num_keccak_f(input.len())).sum::<usize>();
+        assert!(input_size < params.capacity, "Input size exceeds capacity");
+        let mut base_circuit_builder = BaseCircuitBuilder::new(witness_gen_only);
+        base_circuit_builder.set_params(params.base_circuit_params.clone());
         Self {
             inputs,
             params,
@@ -230,15 +232,30 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
         }
     }
 
+    /// Get break points of BaseCircuitBuilder.
+    pub fn base_circuit_break_points(&self) -> MultiPhaseThreadBreakPoints {
+        self.base_circuit_builder.borrow().break_points()
+    }
+
+    /// Set break points of BaseCircuitBuilder.
+    pub fn set_base_circuit_break_points(&self, break_points: MultiPhaseThreadBreakPoints) {
+        self.base_circuit_builder.borrow_mut().set_break_points(break_points);
+    }
+
+    pub fn update_base_circuit_params(&mut self, params: &BaseCircuitParams) {
+        self.params.base_circuit_params = params.clone();
+        self.base_circuit_builder.borrow_mut().set_params(params.clone());
+    }
+
     /// Simulate witness generation of the base circuit to determine BaseCircuitParams because the number of columns
     /// of the base circuit can only be known after witness generation.
     pub fn calculate_base_circuit_params(
-        params: KeccakCoprocessorLeafCircuitParams,
+        params: &KeccakCoprocessorLeafCircuitParams,
     ) -> BaseCircuitParams {
         // Create a simulation circuit to calculate base circuit parameters.
-        let simulation_circuit = Self::new_impl(vec![], params.clone(), false);
+        let simulation_circuit = Self::new(vec![], params.clone(), false);
         let loaded_keccak_fs = simulation_circuit.mock_load_keccak_assigned_rows();
-        simulation_circuit.generate_base_circuit_phase0_witnesses(&loaded_keccak_fs);
+        simulation_circuit.generate_base_circuit_witnesses(&loaded_keccak_fs);
 
         let base_circuit_params = simulation_circuit
             .base_circuit_builder
@@ -297,8 +314,8 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
         loaded_keccak_fs
     }
 
-    /// Generate phase0 witnesses of the base circuit.
-    fn generate_base_circuit_phase0_witnesses(&self, loaded_keccak_fs: &[LoadedKeccakF<F>]) {
+    /// Generate witnesses of the base circuit.
+    fn generate_base_circuit_witnesses(&self, loaded_keccak_fs: &[LoadedKeccakF<F>]) {
         let range = self.base_circuit_builder.borrow().range_chip();
         let gate = range.gate();
         let circuit_final_outputs = {
@@ -316,7 +333,7 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
                 loaded_keccak_fs,
             )
         };
-        self.publish_outputs(gate, &circuit_final_outputs);
+        self.publish_outputs(&circuit_final_outputs);
     }
 
     /// Combine lookup keys and Keccak results to generate final outputs of the circuit.
@@ -365,17 +382,16 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
     }
 
     /// Publish outputs of the circuit as public instances.
-    fn publish_outputs(
-        &self,
-        gate: &impl GateInstructions<F>,
-        outputs: &[KeccakCircuitOutput<AssignedValue<F>>],
-    ) {
+    fn publish_outputs(&self, outputs: &[KeccakCircuitOutput<AssignedValue<F>>]) {
+        // The length of outputs should always equal to params.capacity.
+        assert_eq!(outputs.len(), self.params.capacity);
         if !self.params.publish_raw_outputs {
+            let range_chip = self.base_circuit_builder.borrow().range_chip();
+            let gate = range_chip.gate();
             let mut base_circuit_builder_mut = self.base_circuit_builder.borrow_mut();
             let ctx = base_circuit_builder_mut.main(0);
 
             // TODO: wrap this into a function which should be shared wiht App circuits.
-            // The length of outputs is determined at compile time.
             let output_commitment = self.hasher.borrow().hash_fix_len_array(
                 ctx,
                 gate,
@@ -430,27 +446,29 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
     let num_witness_per_keccak_f = POSEIDON_RATE * num_poseidon_absorb_per_keccak_f;
 
     // Constant witnesses
-    let rate = ctx.load_constant(F::from(POSEIDON_RATE as u64));
-    let one = ctx.load_constant(F::ONE);
-    let zero = ctx.load_zero();
-    let multipliers = get_words_to_witness_multipliers::<F>();
+    let rate_const = ctx.load_constant(F::from(POSEIDON_RATE as u64));
+    let one_const = ctx.load_constant(F::ONE);
+    let zero_const = ctx.load_zero();
+    let multipliers_val = get_words_to_witness_multipliers::<F>()
+        .into_iter()
+        .map(|multiplier| Constant(multiplier))
+        .collect_vec();
 
     let compact_input_len = loaded_keccak_fs.len() * num_poseidon_absorb_per_keccak_f;
     let mut compact_inputs = Vec::with_capacity(compact_input_len);
-    let mut last_is_final = one;
+    let mut last_is_final = one_const;
     for loaded_keccak_f in loaded_keccak_fs {
         // If this keccak_f is the last of a logical input.
         let is_final = loaded_keccak_f.is_final;
         let mut poseidon_absorb_data = Vec::with_capacity(num_witness_per_keccak_f);
 
-        // First witness of a keccak_f: [<len_word>, word_values[0], word_values[1], ...]
-        // <len_word> is the length of the input if this is the first keccak_f of a logical input. Otherwise 0.
+        // First witness of a keccak_f: [<length_placeholder>, word_values[0], word_values[1], ...]
+        // <length_placeholder> is the length of the input if this is the first keccak_f of a logical input. Otherwise 0.
         let mut words = Vec::with_capacity(num_word_per_witness);
-        let len_word = gate.mul(ctx, loaded_keccak_f.bytes_left, last_is_final);
-        words.push(len_word);
+        let input_bytes_len = gate.mul(ctx, loaded_keccak_f.bytes_left, last_is_final);
+        words.push(input_bytes_len);
         words.extend_from_slice(&loaded_keccak_f.word_values[0..(num_word_per_witness - 1)]);
-        let first_witness =
-            gate.inner_product(ctx, words, multipliers.iter().map(|c| Constant(*c)));
+        let first_witness = gate.inner_product(ctx, words, multipliers_val.clone());
         poseidon_absorb_data.push(first_witness);
 
         // Turn every num_word_per_witness words later into a witness.
@@ -461,21 +479,21 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
             .chunks(num_word_per_witness)
         {
             let mut words = words.collect_vec();
-            words.resize(num_word_per_witness, zero);
-            let witness = gate.inner_product(ctx, words, multipliers.iter().map(|c| Constant(*c)));
+            words.resize(num_word_per_witness, zero_const);
+            let witness = gate.inner_product(ctx, words, multipliers_val.clone());
             poseidon_absorb_data.push(witness);
         }
         // Pad 0s to make sure poseidon_absorb_data.len() % RATE == 0.
-        poseidon_absorb_data.resize(num_witness_per_keccak_f, zero);
+        poseidon_absorb_data.resize(num_witness_per_keccak_f, zero_const);
         for (i, poseidon_absorb) in poseidon_absorb_data.chunks(POSEIDON_RATE).enumerate() {
             compact_inputs.push(PoseidonCompactInput::new(
                 poseidon_absorb.try_into().unwrap(),
                 if i + 1 == num_poseidon_absorb_per_keccak_f {
                     SafeTypeChip::unsafe_to_bool(is_final)
                 } else {
-                    SafeTypeChip::unsafe_to_bool(zero)
+                    SafeTypeChip::unsafe_to_bool(zero_const)
                 },
-                rate,
+                rate_const,
             ));
         }
         last_is_final = is_final;

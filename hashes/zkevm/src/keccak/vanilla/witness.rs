@@ -1,3 +1,4 @@
+// This file is moved out from mod.rs.
 use super::*;
 
 /// Witness generation for multiple keccak hashes of little-endian `bytes`.

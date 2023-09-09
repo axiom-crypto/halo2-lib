@@ -59,10 +59,10 @@ pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {
     let mut native_poseidon_sponge =
         pse_poseidon::Poseidon::<F, POSEIDON_T, POSEIDON_RATE>::new(POSEIDON_R_F, POSEIDON_R_P);
     for witnesses in witnesses_per_chunk {
-        for absorb in witnesses.chunks(POSEIDON_RATE) {
+        for absorbing in witnesses.chunks(POSEIDON_RATE) {
             // To avoid abosring witnesses crossing keccak_fs together, pad 0s to make sure absorb.len() == RATE.
             let mut padded_absorb = [F::ZERO; POSEIDON_RATE];
-            padded_absorb[..absorb.len()].copy_from_slice(absorb);
+            padded_absorb[..absorbing.len()].copy_from_slice(absorbing);
             native_poseidon_sponge.update(&padded_absorb);
         }
     }
@@ -70,6 +70,11 @@ pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {
 }
 
 // TODO: Add a function to encode a VarLenBytes into a lookup key. The function should be used by App Circuits.
+
+// For reference, when F is bn254::Fr:
+// num_word_per_witness = 3
+// num_witness_per_keccak_f = 6
+// num_poseidon_absorb_per_keccak_f = 3
 
 /// Number of Keccak words in each encoded input for Poseidon.
 pub fn num_word_per_witness<F: Field>() -> usize {
@@ -97,7 +102,7 @@ pub(crate) fn get_words_to_witness_multipliers<F: Field>() -> Vec<F> {
     let mut multiplier_f = F::ONE;
     let mut multipliers = Vec::with_capacity(num_word_per_witness);
     multipliers.push(multiplier_f);
-    let base_f = F::from_u128(1 << NUM_BITS_PER_WORD);
+    let base_f = F::from_u128(1u128 << NUM_BITS_PER_WORD);
     for _ in 1..num_word_per_witness {
         multiplier_f *= base_f;
         multipliers.push(multiplier_f);
