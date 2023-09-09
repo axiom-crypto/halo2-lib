@@ -60,7 +60,7 @@ pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {
         pse_poseidon::Poseidon::<F, POSEIDON_T, POSEIDON_RATE>::new(POSEIDON_R_F, POSEIDON_R_P);
     for witnesses in witnesses_per_chunk {
         for absorbing in witnesses.chunks(POSEIDON_RATE) {
-            // To avoid abosring witnesses crossing keccak_fs together, pad 0s to make sure absorb.len() == RATE.
+            // To avoid absorbing witnesses crossing keccak_fs together, pad 0s to make sure absorb.len() == RATE.
             let mut padded_absorb = [F::ZERO; POSEIDON_RATE];
             padded_absorb[..absorbing.len()].copy_from_slice(absorbing);
             native_poseidon_sponge.update(&padded_absorb);
