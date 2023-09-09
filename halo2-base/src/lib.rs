@@ -12,6 +12,7 @@
 use std::any::TypeId;
 
 use getset::CopyGetters;
+use itertools::Itertools;
 // Different memory allocator options:
 #[cfg(feature = "jemallocator")]
 use jemallocator::Jemalloc;
@@ -452,6 +453,12 @@ impl<F: ScalarField> Context<F> {
             self.selector.resize(self.advice.len(), false);
         }
         self.last().unwrap()
+    }
+
+    /// Assigns a list of constant values and returns the corresponding assigned cells.
+    /// * `c`: the list of constant values to be assigned
+    pub fn load_constants(&mut self, c: &[F]) -> Vec<AssignedValue<F>> {
+        c.iter().map(|v| self.load_constant(*v)).collect_vec()
     }
 
     /// Assigns the 0 value to a new cell or returns a previously assigned zero cell from `zero_cell`.

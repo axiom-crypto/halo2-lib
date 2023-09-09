@@ -107,6 +107,11 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
         self.consts.get_or_init(|| PoseidonHasherConsts::<F, T, RATE>::new(ctx, gate, &self.spec));
     }
 
+    /// Clear all consts.
+    pub fn clear(&mut self) {
+        self.consts.take();
+    }
+
     fn empty_hash(&self) -> &AssignedValue<F> {
         self.consts.get().unwrap().empty_hash()
     }
@@ -187,21 +192,21 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
     pub fn hash_fix_len_array(
         &self,
         ctx: &mut Context<F>,
-        range: &impl RangeInstructions<F>,
+        gate: &impl GateInstructions<F>,
         inputs: &[AssignedValue<F>],
     ) -> AssignedValue<F>
     where
         F: BigPrimeField,
     {
         let mut state = self.init_state().clone();
-        fix_len_array_squeeze(ctx, range.gate(), inputs, &mut state, &self.spec)
+        fix_len_array_squeeze(ctx, gate, inputs, &mut state, &self.spec)
     }
 
     /// Constrains and returns hashes of inputs in a compact format. Length of `compact_inputs` should be determined at compile time.
     pub fn hash_compact_input(
         &self,
         ctx: &mut Context<F>,
-        range: &impl RangeInstructions<F>,
+        gate: &impl GateInstructions<F>,
         compact_inputs: &[PoseidonCompactInput<F, RATE>],
     ) -> Vec<PoseidonCompactOutput<F>>
     where
@@ -212,18 +217,18 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
         for input in compact_inputs {
             // Assume this is the last row of a logical input:
             // Depending on if len == RATE.
-            let is_full = range.gate().is_equal(ctx, input.len, Constant(F::from(RATE as u64)));
+            let is_full = gate.is_equal(ctx, input.len, Constant(F::from(RATE as u64)));
             // Case 1: if len != RATE.
-            state.permutation(ctx, range.gate(), &input.inputs, Some(input.len), &self.spec);
+            state.permutation(ctx, gate, &input.inputs, Some(input.len), &self.spec);
             // Case 2: if len == RATE, an extra permuation is needed for squeeze.
             let mut state_2 = state.clone();
-            state_2.permutation(ctx, range.gate(), &[], None, &self.spec);
+            state_2.permutation(ctx, gate, &[], None, &self.spec);
             // Select the result of case 1/2 depending on if len == RATE.
-            let hash = range.gate().select(ctx, state_2.s[1], state.s[1], is_full);
+            let hash = gate.select(ctx, state_2.s[1], state.s[1], is_full);
             outputs.push(PoseidonCompactOutput { hash, is_final: input.is_final });
             // Reset state to init_state if this is the end of a logical input.
             // TODO: skip this if this is the last row.
-            state.select(ctx, range.gate(), input.is_final, self.init_state());
+            state.select(ctx, gate, input.is_final, self.init_state());
         }
         outputs
     }

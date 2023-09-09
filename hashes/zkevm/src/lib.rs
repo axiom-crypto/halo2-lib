@@ -7,5 +7,3 @@ use halo2_base::halo2_proofs;
 pub mod keccak;
 /// Util
 pub mod util;
-
-pub use keccak::KeccakCircuitConfig as KeccakConfig;
