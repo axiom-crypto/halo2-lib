@@ -299,30 +299,30 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
 
     /// Generate phase0 witnesses of the base circuit.
     fn generate_base_circuit_phase0_witnesses(&self, loaded_keccak_fs: &[LoadedKeccakF<F>]) {
-        let circuit_final_outputs;
-        {
-            let range_chip = self.base_circuit_builder.borrow().range_chip();
+        let range = self.base_circuit_builder.borrow().range_chip();
+        let gate = range.gate();
+        let circuit_final_outputs = {
             let mut base_circuit_builder_mut = self.base_circuit_builder.borrow_mut();
             let ctx = base_circuit_builder_mut.main(0);
             let mut hasher = self.hasher.borrow_mut();
-            hasher.initialize_consts(ctx, range_chip.gate());
+            hasher.initialize_consts(ctx, gate);
 
             let lookup_key_per_keccak_f =
-                encode_inputs_from_keccak_fs(ctx, &range_chip, &hasher, loaded_keccak_fs);
-            circuit_final_outputs = Self::generate_circuit_final_outputs(
+                encode_inputs_from_keccak_fs(ctx, gate, &hasher, loaded_keccak_fs);
+            Self::generate_circuit_final_outputs(
                 ctx,
-                &range_chip,
+                gate,
                 &lookup_key_per_keccak_f,
                 loaded_keccak_fs,
-            );
-        }
-        self.publish_outputs(&circuit_final_outputs);
+            )
+        };
+        self.publish_outputs(gate, &circuit_final_outputs);
     }
 
     /// Combine lookup keys and Keccak results to generate final outputs of the circuit.
     fn generate_circuit_final_outputs(
         ctx: &mut Context<F>,
-        range_chip: &impl RangeInstructions<F>,
+        gate: &impl GateInstructions<F>,
         lookup_key_per_keccak_f: &[PoseidonCompactOutput<F>],
         loaded_keccak_fs: &[LoadedKeccakF<F>],
     ) -> Vec<KeccakCircuitOutput<AssignedValue<F>>> {
@@ -341,19 +341,19 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
         for (compact_output, loaded_keccak_f) in
             lookup_key_per_keccak_f.iter().zip(loaded_keccak_fs)
         {
-            let key = range_chip.gate().select(
+            let key = gate.select(
                 ctx,
                 *compact_output.hash(),
                 dummy_key_witness,
                 loaded_keccak_f.is_final,
             );
-            let hash_lo = range_chip.gate().select(
+            let hash_lo = gate.select(
                 ctx,
                 loaded_keccak_f.hash_lo,
                 dummy_keccak_lo_witness,
                 loaded_keccak_f.is_final,
             );
-            let hash_hi = range_chip.gate().select(
+            let hash_hi = gate.select(
                 ctx,
                 loaded_keccak_f.hash_hi,
                 dummy_keccak_hi_witness,
@@ -365,9 +365,12 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
     }
 
     /// Publish outputs of the circuit as public instances.
-    fn publish_outputs(&self, outputs: &[KeccakCircuitOutput<AssignedValue<F>>]) {
+    fn publish_outputs(
+        &self,
+        gate: &impl GateInstructions<F>,
+        outputs: &[KeccakCircuitOutput<AssignedValue<F>>],
+    ) {
         if !self.params.publish_raw_outputs {
-            let range_chip = self.base_circuit_builder.borrow().range_chip();
             let mut base_circuit_builder_mut = self.base_circuit_builder.borrow_mut();
             let ctx = base_circuit_builder_mut.main(0);
 
@@ -375,7 +378,7 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
             // The length of outputs is determined at compile time.
             let output_commitment = self.hasher.borrow().hash_fix_len_array(
                 ctx,
-                &range_chip,
+                gate,
                 &outputs
                     .iter()
                     .flat_map(|output| [output.key, output.hash_lo, output.hash_hi])
@@ -417,7 +420,7 @@ fn create_hasher<F: Field>() -> PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE> {
 /// Each element in the return value corrresponds to a Keccak chunk. If is_final = true, this element is the lookup key of the corresponding logical input.
 pub fn encode_inputs_from_keccak_fs<F: Field>(
     ctx: &mut Context<F>,
-    range_chip: &impl RangeInstructions<F>,
+    gate: &impl GateInstructions<F>,
     initialized_hasher: &PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE>,
     loaded_keccak_fs: &[LoadedKeccakF<F>],
 ) -> Vec<PoseidonCompactOutput<F>> {
@@ -443,11 +446,11 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
         // First witness of a keccak_f: [<len_word>, word_values[0], word_values[1], ...]
         // <len_word> is the length of the input if this is the first keccak_f of a logical input. Otherwise 0.
         let mut words = Vec::with_capacity(num_word_per_witness);
-        let len_word = range_chip.gate().mul(ctx, loaded_keccak_f.bytes_left, last_is_final);
+        let len_word = gate.mul(ctx, loaded_keccak_f.bytes_left, last_is_final);
         words.push(len_word);
         words.extend_from_slice(&loaded_keccak_f.word_values[0..(num_word_per_witness - 1)]);
         let first_witness =
-            range_chip.gate().inner_product(ctx, words, multipliers.iter().map(|c| Constant(*c)));
+            gate.inner_product(ctx, words, multipliers.iter().map(|c| Constant(*c)));
         poseidon_absorb_data.push(first_witness);
 
         // Turn every num_word_per_witness words later into a witness.
@@ -459,11 +462,7 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
         {
             let mut words = words.collect_vec();
             words.resize(num_word_per_witness, zero);
-            let witness = range_chip.gate().inner_product(
-                ctx,
-                words,
-                multipliers.iter().map(|c| Constant(*c)),
-            );
+            let witness = gate.inner_product(ctx, words, multipliers.iter().map(|c| Constant(*c)));
             poseidon_absorb_data.push(witness);
         }
         // Pad 0s to make sure poseidon_absorb_data.len() % RATE == 0.
@@ -482,7 +481,7 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
         last_is_final = is_final;
     }
 
-    let compact_outputs = initialized_hasher.hash_compact_input(ctx, range_chip, &compact_inputs);
+    let compact_outputs = initialized_hasher.hash_compact_input(ctx, gate, &compact_inputs);
 
     compact_outputs
         .into_iter()

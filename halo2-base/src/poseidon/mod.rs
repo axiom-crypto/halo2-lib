@@ -107,7 +107,7 @@ impl<'a, F: ScalarField, const T: usize, const RATE: usize> PoseidonInstructions
     {
         self.hasher.hash_fix_len_array(
             ctx,
-            self.range_chip,
+            self.range_chip.gate(),
             inputs.bytes().map(|sb| *sb.as_ref()).as_ref(),
         )
     }

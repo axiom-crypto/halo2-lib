@@ -97,7 +97,7 @@ fn hasher_compact_inputs_compatiblity_verification<
         let native_result = native_sponge.squeeze();
         native_results.push(native_result);
     }
-    let compact_outputs = hasher.hash_compact_input(ctx, range, &compact_inputs);
+    let compact_outputs = hasher.hash_compact_input(ctx, range.gate(), &compact_inputs);
     let mut output_offset = 0;
     for (compact_output, compact_input) in compact_outputs.iter().zip(compact_inputs) {
         // into() doesn't work if ! is in the beginning in the bool expression...
