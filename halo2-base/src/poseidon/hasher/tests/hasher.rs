@@ -160,10 +160,10 @@ fn hasher_compact_chunk_inputs_compatiblity_verification<
     let mut output_offset = 0;
     for (compact_output, chunk_input) in compact_outputs.iter().zip(chunk_inputs) {
         // into() doesn't work if ! is in the beginning in the bool expression...
-        let is_not_final_input: bool = chunk_input.is_final.as_ref().value().is_zero().into();
-        let is_not_final_output: bool = compact_output.is_final().as_ref().value().is_zero().into();
-        assert_eq!(is_not_final_input, is_not_final_output);
-        if !is_not_final_output {
+        let is_final_input = chunk_input.is_final.as_ref().value();
+        let is_final_output = compact_output.is_final().as_ref().value();
+        assert_eq!(is_final_input, is_final_output);
+        if is_final_output == &Fr::ONE {
             assert_eq!(native_results[output_offset], *compact_output.hash().value());
             output_offset += 1;
         }
