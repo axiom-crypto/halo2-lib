@@ -2,7 +2,7 @@
 use super::*;
 use crate::utils::biguint_to_fe;
 use crate::utils::testing::base_test;
-use crate::QuantumCell::Witness;
+use crate::QuantumCell::{Witness,Constant};
 use crate::{gates::flex_gate::GateInstructions, QuantumCell};
 use itertools::Itertools;
 use num_bigint::BigUint;
@@ -96,6 +96,19 @@ pub fn test_inner_product_left_last(
     base_test().run_gate(|ctx, chip| {
         let a = chip.inner_product_left_last(ctx, input.0, input.1);
         (*a.0.value(), *a.1.value())
+    })
+}
+
+#[test_case([4,5,6].map(Fr::from).to_vec(), [1,2,3].map(|x| Constant(Fr::from(x))).to_vec() => (Fr::from(32), [4,5,6].map(Fr::from).to_vec()); 
+"inner_product_left(): <[1,2,3],[4,5,6]> Constant b starts with 1")]
+#[test_case([1,2,3].map(Fr::from).to_vec(), [4,5,6].map(|x| Witness(Fr::from(x))).to_vec() => (Fr::from(32), [1,2,3].map(Fr::from).to_vec()); 
+"inner_product_left(): <[1,2,3],[4,5,6]> Witness")]
+pub fn test_inner_product_left(
+    a: Vec<Fr>,b: Vec<QuantumCell<Fr>>,
+) -> (Fr, Vec<Fr>) {
+    base_test().run_gate(|ctx, chip| {
+        let (prod, a) = chip.inner_product_left(ctx, a.into_iter().map(Witness), b);
+        (*prod.value(), a.iter().map(|v| *v.value()).collect())
     })
 }
 
