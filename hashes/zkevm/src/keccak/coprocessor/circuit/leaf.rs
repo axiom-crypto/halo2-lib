@@ -170,15 +170,35 @@ impl<F: Field> Circuit<F> for KeccakCoprocessorLeafCircuit<F> {
 }
 
 /// Witnesses of a keccak_f which are necessary to be loaded into halo2-lib.
-pub(crate) struct LoadedKeccakF<F: Field> {
-    // bytes_left of the first row of the first round of this keccak_f. This could be used to determine the length of the input.
+#[derive(Clone, Copy, Debug, CopyGetters, Getters)]
+pub struct LoadedKeccakF<F: Field> {
+    /// bytes_left of the first row of the first round of this keccak_f. This could be used to determine the length of the input.
+    #[getset(get_copy = "pub")]
     pub(crate) bytes_left: AssignedValue<F>,
-    // Input words of this keccak_f.
+    /// Input words (u64) of this keccak_f.
+    #[getset(get = "pub")]
     pub(crate) word_values: [AssignedValue<F>; NUM_WORDS_TO_ABSORB],
-    // The output of this keccak_f. is_final/hash_lo/hash_hi come from the first row of the last round(NUM_ROUNDS).
+    /// The output of this keccak_f. is_final/hash_lo/hash_hi come from the first row of the last round(NUM_ROUNDS).
+    #[getset(get_copy = "pub")]
     pub(crate) is_final: AssignedValue<F>,
+    /// The lower 16 bits (in big-endian, 16..) of the output of this keccak_f.
+    #[getset(get_copy = "pub")]
     pub(crate) hash_lo: AssignedValue<F>,
+    /// The high 16 bits (in big-endian, ..16) of the output of this keccak_f.
+    #[getset(get_copy = "pub")]
     pub(crate) hash_hi: AssignedValue<F>,
+}
+
+impl<F: Field> LoadedKeccakF<F> {
+    pub fn new(
+        bytes_left: AssignedValue<F>,
+        word_values: [AssignedValue<F>; NUM_WORDS_TO_ABSORB],
+        is_final: AssignedValue<F>,
+        hash_lo: AssignedValue<F>,
+        hash_hi: AssignedValue<F>,
+    ) -> Self {
+        Self { bytes_left, word_values, is_final, hash_lo, hash_hi }
+    }
 }
 
 impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
@@ -394,7 +414,7 @@ fn create_hasher<F: Field>() -> PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE> {
 /// Encode raw inputs from Keccak circuit witnesses into lookup keys.
 ///
 /// Each element in the return value corrresponds to a Keccak chunk. If is_final = true, this element is the lookup key of the corresponding logical input.
-fn encode_inputs_from_keccak_fs<F: Field>(
+pub fn encode_inputs_from_keccak_fs<F: Field>(
     ctx: &mut Context<F>,
     range_chip: &impl RangeInstructions<F>,
     initialized_hasher: &PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE>,
