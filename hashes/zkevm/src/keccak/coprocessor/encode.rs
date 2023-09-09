@@ -77,6 +77,7 @@ pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {
 // num_poseidon_absorb_per_keccak_f = 3
 
 /// Number of Keccak words in each encoded input for Poseidon.
+/// When `F` is `bn254::Fr`, this is 3.
 pub const fn num_word_per_witness<F: Field>() -> usize {
     (F::CAPACITY as usize) / NUM_BITS_PER_WORD
 }
@@ -84,6 +85,8 @@ pub const fn num_word_per_witness<F: Field>() -> usize {
 /// Number of witnesses to represent inputs in a keccak_f.
 ///
 /// Assume the representation of <length of raw input> is not longer than a Keccak word.
+///
+/// When `F` is `bn254::Fr`, this is 6.
 pub const fn num_witness_per_keccak_f<F: Field>() -> usize {
     // With <length of raw input>, a keccak_f could have NUM_WORDS_TO_ABSORB + 1 words.
     // ceil((NUM_WORDS_TO_ABSORB + 1) / num_word_per_witness)
@@ -91,6 +94,8 @@ pub const fn num_witness_per_keccak_f<F: Field>() -> usize {
 }
 
 /// Number of Poseidon absorb rounds per keccak_f.
+///
+/// When `F` is `bn254::Fr`, with our fixed `POSEIDON_RATE = 2`, this is 3.
 pub const fn num_poseidon_absorb_per_keccak_f<F: Field>() -> usize {
     // Each absorb round consumes RATE witnesses.
     // ceil(num_witness_per_keccak_f / RATE)
