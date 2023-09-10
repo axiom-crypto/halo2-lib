@@ -35,3 +35,7 @@ incremental = false
 [profile.flamegraph]
 inherits = "release"
 debug = true
+
+[patch."https://github.com/axiom-crypto/halo2-lib.git"]
+halo2-base = { path = "../halo2-lib/halo2-base" }
+halo2-ecc = { path = "../halo2-lib/halo2-ecc" }

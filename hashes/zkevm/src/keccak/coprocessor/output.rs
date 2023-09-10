@@ -2,6 +2,7 @@ use super::{encode::encode_native_input, param::*};
 use crate::{keccak::vanilla::keccak_packed_multi::get_num_keccak_f, util::eth_types::Field};
 use itertools::Itertools;
 use sha3::{Digest, Keccak256};
+use snark_verifier::loader::native::NativeLoader;
 
 /// Witnesses to be exposed as circuit outputs.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -61,7 +62,11 @@ pub fn dummy_circuit_output<F: Field>() -> KeccakCircuitOutput<F> {
 /// Calculate the commitment of circuit outputs.
 pub fn calculate_circuit_outputs_commit<F: Field>(outputs: &[KeccakCircuitOutput<F>]) -> F {
     let mut native_poseidon_sponge =
-        pse_poseidon::Poseidon::<F, POSEIDON_T, POSEIDON_RATE>::new(POSEIDON_R_F, POSEIDON_R_P);
+        snark_verifier::util::hash::Poseidon::<F, F, POSEIDON_T, POSEIDON_RATE>::new::<
+            POSEIDON_R_F,
+            POSEIDON_R_P,
+            POSEIDON_SECURE_MDS,
+        >(&NativeLoader);
     native_poseidon_sponge.update(
         &outputs
             .iter()
