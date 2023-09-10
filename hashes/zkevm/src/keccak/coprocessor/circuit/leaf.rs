@@ -341,7 +341,7 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
     }
 
     /// Combine lookup keys and Keccak results to generate final outputs of the circuit.
-    fn generate_circuit_final_outputs(
+    pub fn generate_circuit_final_outputs(
         ctx: &mut Context<F>,
         gate: &impl GateInstructions<F>,
         lookup_key_per_keccak_f: &[PoseidonCompactOutput<F>],
