@@ -80,6 +80,19 @@ impl<F: ScalarField, const BYTES_PER_ELE: usize, const TOTAL_BITS: usize> AsRef<
     }
 }
 
+impl<F: ScalarField, const TOTAL_BITS: usize> TryFrom<Vec<SafeByte<F>>>
+    for SafeType<F, 1, TOTAL_BITS>
+{
+    type Error = String;
+
+    fn try_from(value: Vec<SafeByte<F>>) -> Result<Self, Self::Error> {
+        if value.len() * 8 != TOTAL_BITS {
+            return Err("Invalid length".to_owned());
+        }
+        Ok(Self::new(value.into_iter().map(|b| b.0).collect::<Vec<_>>()))
+    }
+}
+
 /// Represent TOTAL_BITS with the least number of AssignedValue<F>.
 /// (2^(F::NUM_BITS) - 1) might not be a valid value for F. e.g. max value of F is a prime in [2^(F::NUM_BITS-1), 2^(F::NUM_BITS) - 1]
 #[allow(type_alias_bounds)]
