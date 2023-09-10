@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use getset::Getters;
+use getset::{CopyGetters, Getters, Setters};
 
 use crate::ff::Field;
 use crate::halo2_proofs::{
@@ -37,15 +37,16 @@ use super::manager::VirtualRegionManager;
 /// The assumption is that the [Context] is thread-local.
 ///
 /// Cheap to clone across threads because everything is in [Arc].
-#[derive(Clone, Debug, Getters)]
+#[derive(Clone, Debug, Getters, CopyGetters, Setters)]
 pub struct LookupAnyManager<F: Field + Ord, const ADVICE_COLS: usize> {
     /// Shared cells to lookup, tagged by (type id, context id).
     #[allow(clippy::type_complexity)]
     pub cells_to_lookup: Arc<Mutex<BTreeMap<ContextTag, Vec<[AssignedValue<F>; ADVICE_COLS]>>>>,
     /// Global shared copy manager
-    pub copy_manager: SharedCopyConstraintManager<F>,
+    #[getset(get = "pub", set = "pub")]
+    copy_manager: SharedCopyConstraintManager<F>,
     /// Specify whether constraints should be imposed for additional safety.
-    #[getset(get = "pub")]
+    #[getset(get_copy = "pub")]
     witness_gen_only: bool,
     /// Flag for whether `assign_raw` has been called, for safety only.
     pub(crate) assigned: Arc<OnceLock<()>>,
@@ -89,6 +90,16 @@ impl<F: Field + Ord, const ADVICE_COLS: usize> LookupAnyManager<F, ADVICE_COLS> 
         self.cells_to_lookup.lock().unwrap().clear();
         self.copy_manager.lock().unwrap().clear();
         self.assigned = Arc::new(OnceLock::new());
+    }
+
+    /// Deep clone with the specified copy manager. Unsets `assigned`.
+    pub fn deep_clone(&self, copy_manager: SharedCopyConstraintManager<F>) -> Self {
+        Self {
+            witness_gen_only: self.witness_gen_only,
+            cells_to_lookup: Arc::new(Mutex::new(self.cells_to_lookup.lock().unwrap().clone())),
+            copy_manager,
+            assigned: Default::default(),
+        }
     }
 }
 

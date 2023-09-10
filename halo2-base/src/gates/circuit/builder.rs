@@ -101,7 +101,7 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
     /// Sets the copy manager to the given one in all shared references.
     pub fn set_copy_manager(&mut self, copy_manager: SharedCopyConstraintManager<F>) {
         for lm in &mut self.lookup_manager {
-            lm.copy_manager = copy_manager.clone();
+            lm.set_copy_manager(copy_manager.clone());
         }
         self.core.set_copy_manager(copy_manager);
     }
@@ -116,10 +116,9 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
     pub fn deep_clone(&self) -> Self {
         let cm: CopyConstraintManager<F> = self.core.copy_manager.lock().unwrap().clone();
         let cm_ref = Arc::new(Mutex::new(cm));
-        let mut clone = self.clone().use_copy_manager(cm_ref);
+        let mut clone = self.clone().use_copy_manager(cm_ref.clone());
         for lm in &mut clone.lookup_manager {
-            let ctl_clone = lm.cells_to_lookup.lock().unwrap().clone();
-            lm.cells_to_lookup = Arc::new(Mutex::new(ctl_clone));
+            *lm = lm.deep_clone(cm_ref.clone());
         }
         clone
     }

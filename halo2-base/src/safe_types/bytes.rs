@@ -127,6 +127,11 @@ impl<F: ScalarField, const LEN: usize> FixLenBytes<F, LEN> {
     pub fn len(&self) -> usize {
         LEN
     }
+
+    /// Returns inner array of [SafeByte]s.
+    pub fn into_bytes(self) -> [SafeByte<F>; LEN] {
+        self.bytes
+    }
 }
 
 /// Represents a fixed length byte array in circuit. Not encouraged to use because `MAX_LEN` cannot be verified at compile time.
@@ -147,6 +152,11 @@ impl<F: ScalarField> FixLenBytesVec<F> {
     /// Returns the length of the byte array.
     pub fn len(&self) -> usize {
         self.bytes.len()
+    }
+
+    /// Returns inner array of [SafeByte]s.
+    pub fn into_bytes(self) -> Vec<SafeByte<F>> {
+        self.bytes
     }
 }
 
