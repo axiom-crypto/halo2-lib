@@ -1,20 +1,20 @@
-# ZKEVM Keccka
+# ZKEVM Keccak
 ## Vanilla
-Keccak circuit in vanilla halo2. This implementation starts from Scroll's version then adopts some changes from [this PR](https://github.com/scroll-tech/zkevm-circuits/pull/216) and [PSE version](https://github.com/privacy-scaling-explorations/zkevm-circuits/tree/main/zkevm-circuits/src/keccak_circuit).
+Keccak circuit in vanilla halo2. This implementation starts from [PSE version](https://github.com/privacy-scaling-explorations/zkevm-circuits/tree/main/zkevm-circuits/src/keccak_circuit), then adopts some changes from [this PR](https://github.com/scroll-tech/zkevm-circuits/pull/216) and later updates in PSE version.
 
-The majoir differences is that this version directly represent raw inputs and Keccak results as witnesses, while the original version only has RLCs(random linear combination) of raw inputs and Keccak results. Becuase this version doesn't need RLCs, it doesn't have the 2nd phase or use challenage APIs.
+The major differences is that this version directly represent raw inputs and Keccak results as witnesses, while the original version only has RLCs(random linear combination) of raw inputs and Keccak results. Because this version doesn't need RLCs, it doesn't have the 2nd phase or use challenge APIs.
 
 ### Logical Input/Output
-Logically the circuit takes an array of bytes and Keccak results of these bytes. 
+Logically the circuit takes an array of bytes as inputs and Keccak results of these bytes as outputs. 
 
 `keccak::vanilla::witness::multi_keccak` generates the witnesses of the ciruit for a given input.
 ### Background Knowledge
-All these items are same in all versions.
+All these items remain consistent across all versions.
 - Keccak process a logical input `keccak_f` by `keccak_f`. 
 - Each `keccak_f` has `NUM_ROUNDS`(24) rounds.
 - The number of rows of a round(`rows_per_round`) is configurable. Usually less rows means less wasted cells.
 - Each `keccak_f` takes `(NUM_ROUNDS + 1) * rows_per_round` rows. The last `rows_per_round` rows could be considered as a virtual round for "squeeze".
-- An input is always padded to a multiple of `RATE`(136) bytes. If the length of a logical input is already a multiple of `RATE`, another `RATE` bytes will be padded.
+- Every input is padded to be a multiple of RATE (136 bytes). If the length of the logical input already matches a multiple of RATE, an additional RATE bytes are added as padding.
 - Each `keccak_f` absorbs `RATE` bytes, which are splitted into `NUM_WORDS_TO_ABSORB`(17) words. Each word has `NUM_BYTES_PER_WORD`(8) bytes.
 - Each of the first `NUM_WORDS_TO_ABSORB`(17) rounds of each `keccak_f` absorbs a word.
 - `is_final`(anothe name is `is_enabled`) can be true only at the first row of a round. It must be true if at least a padding has been absorbed by this round. It indicates the end of a logical input.
@@ -31,25 +31,25 @@ All these items are same in all versions.
 ### Keccak Results
 - In this version, we added column `hash_lo`/`hash_hi` to represent Keccak results.
 - `hash_lo`/`hash_hi` of a logical input could be found at the first row of the virtual round of the last `keccak_f`.
-- `hash_lo` is the low 128 bits of Keccak results. `hash_hi` is the low 128 bits of Keccak results.
+- `hash_lo` is the low 128 bits of Keccak results. `hash_hi` is the high 128 bits of Keccak results.
 
 ### Change Details
 - Removed column `input_rlc`/`input_len` and related gates.
 - Removed column `output_rlc` and related gates.
 - Removed challenges.
-- Refactored the folder strcuture to follow [Scroll's repo](https://github.com/scroll-tech/zkevm-circuits/tree/95f82762cfec46140d6866c34a420ee1fc1e27c7/zkevm-circuits/src/keccak_circuit). `mod.rs` and `witness.rs` could be found [here](https://github.com/scroll-tech/zkevm-circuits/blob/develop/zkevm-circuits/src/keccak_circuit.rs). `KeccakTable` could be found [here](https://github.com/scroll-tech/zkevm-circuits/blob/95f82762cfec46140d6866c34a420ee1fc1e27c7/zkevm-circuits/src/table.rs#L1308).
+- Refactored the folder structure to follow [Scroll's repo](https://github.com/scroll-tech/zkevm-circuits/tree/95f82762cfec46140d6866c34a420ee1fc1e27c7/zkevm-circuits/src/keccak_circuit). `mod.rs` and `witness.rs` could be found [here](https://github.com/scroll-tech/zkevm-circuits/blob/develop/zkevm-circuits/src/keccak_circuit.rs). `KeccakTable` could be found [here](https://github.com/scroll-tech/zkevm-circuits/blob/95f82762cfec46140d6866c34a420ee1fc1e27c7/zkevm-circuits/src/table.rs#L1308).
 - Imported utilites from [PSE zkevm-circuits repo](https://github.com/privacy-scaling-explorations/zkevm-circuits/blob/588b8b8c55bf639fc5cbf7eae575da922ea7f1fd/zkevm-circuits/src/util/word.rs). 
 
 ## Coprocessor
-Keccak coprocessor circuits and utilities based on Halo2lib.
+Keccak coprocessor circuits and utilities based on halo2-lib.
 
 ### Motivation
-Move expensive Keccak computation into standalone circuits(**Coprocessor Circuits**) and circuits with actual business logic(**App Circuits**) can read Keccak results from coprocessor circuits. Then we have better scalability the maximum size of a single circuit could be managed and coprocessor/app circuits could be proved in paralle.
+Move expensive Keccak computation into standalone circuits(**Coprocessor Circuits**) and circuits with actual business logic(**App Circuits**) can read Keccak results from coprocessor circuits. Then we achieve better scalability - the maximum size of a single circuit could be managed and coprocessor/app circuits could be proved in paralle.
 
 ### Output
-Logically a coprocessor ciruit outputs 3 columns `lookup_key`, `hash_lo`, `hash_hi` with `capacity` rows, where `capacity` is a configurable parameter and it means the maximum number of keccak_f this circuit can perform.
+Logically a coprocessor circuit outputs 3 columns `lookup_key`, `hash_lo`, `hash_hi` with `capacity` rows, where `capacity` is a configurable parameter and it means the maximum number of keccak_f this circuit can perform.
 
-- `lookup_key` can be cheaply derived from a bytes input. Specs can be found at `keccak::coprocessor::encode::encode_native_input`. Also `keccak::coprocessor::encode` provides some utilities to encode bytes inputs in halo2lib.
+- `lookup_key` can be cheaply derived from a bytes input. Specs can be found at `keccak::coprocessor::encode::encode_native_input`. Also `keccak::coprocessor::encode` provides some utilities to encode bytes inputs in halo2-lib.
 - `hash_lo`/`hash_hi` are low/high 128 bits of the corresponding Keccak result.
 
 There 2 ways to publish circuit outputs:
@@ -59,7 +59,7 @@ There 2 ways to publish circuit outputs:
 
 Developers can choose either way according to their needs. Specs of these 2 ways can be found at `keccak::coprocessor::circuit::leaf::KeccakCoprocessorLeafCircuit::publish_outputs`.
 
-`keccak::coprocessor::output` provides utilities to compute coprocessor circuit outputs for given inputs. App circuits could use these utilities to load Keccak results before witness generation of corpocessor circuits.
+`keccak::coprocessor::output` provides utilities to compute coprocessor circuit outputs for given inputs. App circuits could use these utilities to load Keccak results before witness generation of coprocessor circuits.
 
 ### Leaf Circuit
 Implementation: `keccak::coprocessor::circuit::leaf::KeccakCoprocessorLeafCircuit`
@@ -70,6 +70,6 @@ Implementation: `keccak::coprocessor::circuit::leaf::KeccakCoprocessorLeafCircui
 - Leaf circuits' outputs have Keccak results of all logical inputs. Outputs are padded into `capacity` rows with Keccak results of "". Paddings might be inserted between Keccak results of logical inputs.
 
 ### Aggregation Circuit
-Aggregation circuits aggregate Keecak results of leaf circuits and smaller aggregation circuits. Aggregation circuits can bring better scalability.
+Aggregation circuits aggregate Keccak results of leaf circuits and smaller aggregation circuits. Aggregation circuits can bring better scalability.
 
 Implementation is TODO.
