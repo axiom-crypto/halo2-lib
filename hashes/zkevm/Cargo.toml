@@ -18,7 +18,7 @@ halo2-base = { path = "../../halo2-base", default-features = false, features = [
 rayon = "1.7"
 sha3 = "0.10.8"
 # always included but without features to use Native poseidon
-snark-verifier = { git = "https://github.com/axiom-crypto/snark-verifier.git", branch = "release-0.1.6-rc0", default-features = false }
+snark-verifier = { git = "https://github.com/axiom-crypto/snark-verifier.git", branch = "develop", default-features = false }
 getset = "0.1.2"
 
 [dev-dependencies]
