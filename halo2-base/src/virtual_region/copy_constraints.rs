@@ -68,7 +68,7 @@ impl<F: Field + Ord> CopyConstraintManager<F> {
             }
             #[cfg(not(feature = "halo2-axiom"))]
             {
-                value = Assigned::Trivial(*v);
+                value = *v;
             }
         });
         AssignedValue { value, cell: Some(context_cell) }

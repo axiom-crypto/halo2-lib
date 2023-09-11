@@ -810,6 +810,7 @@ pub struct KeccakAssignedRow<'v, F: Field> {
     pub hash_hi: KeccakAssignedValue<'v, F>,
     pub bytes_left: KeccakAssignedValue<'v, F>,
     pub word_value: KeccakAssignedValue<'v, F>,
+    pub _marker: PhantomData<&'v ()>,
 }
 
 impl<F: Field> KeccakCircuitConfig<F> {
@@ -864,7 +865,14 @@ impl<F: Field> KeccakCircuitConfig<F> {
         // Round constant
         raw_assign_fixed(region, self.round_cst, offset, row.round_cst);
 
-        KeccakAssignedRow { is_final, hash_lo, hash_hi, bytes_left, word_value }
+        KeccakAssignedRow {
+            is_final,
+            hash_lo,
+            hash_hi,
+            bytes_left,
+            word_value,
+            _marker: PhantomData,
+        }
     }
 
     pub fn load_aux_tables(&self, layouter: &mut impl Layouter<F>, k: u32) -> Result<(), Error> {

@@ -7,8 +7,9 @@ use crate::halo2_proofs::{
 /// Raw (physical) assigned cell in Plonkish arithmetization.
 #[cfg(feature = "halo2-axiom")]
 pub type Halo2AssignedCell<'v, F> = AssignedCell<&'v Assigned<F>, F>;
+/// Raw (physical) assigned cell in Plonkish arithmetization.
 #[cfg(not(feature = "halo2-axiom"))]
-pub type Halo2AssignedCell<'v, F> = AssignedCell<F, F>;
+pub type Halo2AssignedCell<'v, F> = AssignedCell<Assigned<F>, F>;
 
 /// Assign advice to physical region.
 #[inline(always)]
@@ -24,6 +25,7 @@ pub fn raw_assign_advice<'v, F: Field>(
     }
     #[cfg(feature = "halo2-pse")]
     {
+        let value = value.map(|a| Into::<Assigned<F>>::into(a));
         region
             .assign_advice(
                 || format!("assign advice {column:?} offset {offset}"),

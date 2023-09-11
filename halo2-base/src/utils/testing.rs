@@ -8,7 +8,9 @@ use crate::{
     halo2_proofs::{
         dev::MockProver,
         halo2curves::bn256::{Bn256, Fr, G1Affine},
-        plonk::{create_proof, verify_proof, Circuit, ProvingKey, VerifyingKey},
+        plonk::{
+            create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey,
+        },
         poly::commitment::ParamsProver,
         poly::kzg::{
             commitment::KZGCommitmentScheme, commitment::ParamsKZG, multiopen::ProverSHPLONK,
@@ -21,7 +23,6 @@ use crate::{
     Context,
 };
 use ark_std::{end_timer, perf_trace::TimerInfo, start_timer};
-use halo2_proofs_axiom::plonk::{keygen_pk, keygen_vk};
 use rand::{rngs::StdRng, SeedableRng};
 
 use super::fs::gen_srs;
