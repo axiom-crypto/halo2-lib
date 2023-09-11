@@ -458,18 +458,12 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
         let mut words = Vec::with_capacity(num_word_per_witness);
         let input_bytes_len = gate.mul(ctx, loaded_keccak_f.bytes_left, last_is_final);
         words.push(input_bytes_len);
-        words.extend_from_slice(&loaded_keccak_f.word_values[0..(num_word_per_witness - 1)]);
-        let first_witness = gate.inner_product(ctx, words, multipliers_val.clone());
-        poseidon_absorb_data.push(first_witness);
+        words.extend_from_slice(&loaded_keccak_f.word_values);
 
         // Turn every num_word_per_witness words later into a witness.
-        for words in &loaded_keccak_f
-            .word_values
-            .into_iter()
-            .skip(num_word_per_witness - 1)
-            .chunks(num_word_per_witness)
+        for words in words.chunks(num_word_per_witness)
         {
-            let mut words = words.collect_vec();
+            let mut words = words.to_vec();
             words.resize(num_word_per_witness, zero_const);
             let witness = gate.inner_product(ctx, words, multipliers_val.clone());
             poseidon_absorb_data.push(witness);
@@ -480,6 +474,7 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
             .chunks_exact(POSEIDON_RATE)
             .map(|chunk| chunk.to_vec().try_into().unwrap())
             .collect_vec();
+        debug_assert_eq!(compact_inputs.len(), num_poseidon_absorb_per_keccak_f);
         compact_chunk_inputs.push(PoseidonCompactChunkInput::new(compact_inputs, is_final));
         last_is_final = is_final.into();
     }
