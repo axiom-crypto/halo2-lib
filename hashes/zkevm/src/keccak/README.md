@@ -17,7 +17,7 @@ All these items remain consistent across all versions.
 - Every input is padded to be a multiple of RATE (136 bytes). If the length of the logical input already matches a multiple of RATE, an additional RATE bytes are added as padding.
 - Each `keccak_f` absorbs `RATE` bytes, which are splitted into `NUM_WORDS_TO_ABSORB`(17) words. Each word has `NUM_BYTES_PER_WORD`(8) bytes.
 - Each of the first `NUM_WORDS_TO_ABSORB`(17) rounds of each `keccak_f` absorbs a word.
-- `is_final`(anothe name is `is_enabled`) can be true only at the first row of a round. It must be true if at least a padding has been absorbed by this round. It indicates the end of a logical input.
+- `is_final`(anothe name is `is_enabled`) is meaningful only at the first row of the "squeeze" round. It must be true if this is the last `keccak_f` of an logical input.
 - The first round of the circuit is a dummy round, which doesn't crespond to any input.
 
 ### Raw inputs
@@ -40,22 +40,22 @@ Let's say `rows_per_round = 10` and `inputs = [[], [0x89, 0x88, .., 0x01]]`. The
 | row | input idx | round | word_value           | bytes_left | is_final | hash_lo | hash_hi |
 |--------------|-------------------|-------|----------------------|------------|----------|---------|---------|
 | 0 (dummy)    | -                 | -     | -                    | -          | false    | -       | -       |
-| 10            | 0                 | 1     | `0` | 0          | true     | -       | -       |
-| ...          | 0                 | ...   | ...                  | 0          | true     | -       | -       |
-| 170           | 0                 | 17    | `0`  | 0          | true     | -       | -       |
-| 180           | 0                 | 18    | -                    | 0          | true     | -       | -       |
-| ...          | 0                 | ...   | ...                  | 0          | true     | -       | -       |
+| 10            | 0                 | 1     | `0` | 0          | -     | -       | -       |
+| ...          | 0                 | ...   | ...                  | 0          | -     | -       | -       |
+| 170           | 0                 | 17    | `0`  | 0          | -     | -       | -       |
+| 180           | 0                 | 18    | -                    | 0          | -     | -       | -       |
+| ...          | 0                 | ...   | ...                  | 0          | -     | -       | -       |
 | 250 (squeeze) | 0                 | 25    | -                    | 0          | true     | RESULT  | RESULT  |
-| 260           | 1                 | 1     | `0x8283848586878889`           | 137         | false    | -       | -       |
-| 270           | 1                 | 2     | `0x7A7B7C7D7E7F8081`           | 129         | false    | -       | -       |
-| ...          | 1                 | ...   | ...                  | ...        | false    | -       | -       |
-| 420           | 1                 | 17    | `0x0203040506070809`                    | 9          | false    | -       | -       |
-| 430           | 1                 | 18    | -                    | 1          | false    | -       | -       |
-| ...          | 1                 | ...   | ...                  | 0          | false    | -       | -       |
+| 260           | 1                 | 1     | `0x8283848586878889`           | 137         | -    | -       | -       |
+| 270           | 1                 | 2     | `0x7A7B7C7D7E7F8081`           | 129         | -    | -       | -       |
+| ...          | 1                 | ...   | ...                  | ...        | -    | -       | -       |
+| 420           | 1                 | 17    | `0x0203040506070809`                    | 9          | -   | -       | -       |
+| 430           | 1                 | 18    | -                    | 1          | -    | -       | -       |
+| ...          | 1                 | ...   | ...                  | 0          | -    | -       | -       |
 | 500 (squeeze) | 1                 | 25    | -                    | 0          | false    | -  | -  |
-| 510           | 1                 | 1     | `0x01`           | 1         | true    | -       | -       |
-| 520           | 1                 | 2     | -           | 0         | true    | -       | -       |
-| ...          | 1                 | ...   | ...                  | 0          | true    | -       | -       |
+| 510           | 1                 | 1     | `0x01`           | 1         | -    | -       | -       |
+| 520           | 1                 | 2     | -           | 0         | -    | -       | -       |
+| ...          | 1                 | ...   | ...                  | 0          | -    | -       | -       |
 | 750 (squeeze) | 1                 | 25    | -                    | 0          | true    | RESULT  | RESULT  |
 
 ### Change Details

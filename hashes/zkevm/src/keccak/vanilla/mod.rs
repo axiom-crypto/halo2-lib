@@ -621,7 +621,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
             cb.condition(meta.query_advice(is_final, Rotation::cur()), |cb| {
                 cb.require_zero("bytes_left should be 0 when is_final", bytes_left_expr.clone());
             });
-            //q_input[cur] ==> bytes_left[cur + num_rows_per_round] + word_len == bytes_left[cur]
+            // q_input[cur] ==> bytes_left[cur + num_rows_per_round] + word_len == bytes_left[cur]
             cb.condition(q(q_input, meta), |cb| {
                 // word_len = NUM_BYTES_PER_WORD - sum(is_paddings)
                 let word_len = NUM_BYTES_PER_WORD.expr() - sum::expr(is_paddings.clone());
@@ -635,9 +635,9 @@ impl<F: Field> KeccakCircuitConfig<F> {
             });
             // Logically here we want !q_input[cur] && !start_new_hash(cur) ==> bytes_left[cur + num_rows_per_round] == bytes_left[cur]
             // In practice, in order to save a degree we use !(q_input[cur] ^ start_new_hash(cur)) ==> bytes_left[cur + num_rows_per_round] == bytes_left[cur]
-            // Because when both q_input[cur] and is_final in start_new_hash(cur) are true, is_final ==> bytes_left == 0 and this round must not be a final 
-            // round becuase q_input[cur] == 1. Therefore bytes_left_next must 0.
-            // Note: is_final could be true in rounds after the input rounds and before the last round, as long as the keccak_f is final.
+            // When q_input[cur] is true, the above constraint q_input[cur] ==> bytes_left[cur + num_rows_per_round] + word_len == bytes_left[cur] has 
+            // already been enabled. Even is_final in start_new_hash(cur) is true, it's just over-constrainted.
+            // Note: At the first row of any round except the last round, is_final could be either true or false.
             cb.condition(not::expr(q(q_input, meta) + start_new_hash(meta, Rotation::cur())), |cb| {
                 let bytes_left_next_expr =
                     meta.query_advice(keccak_table.bytes_left, Rotation(num_rows_per_round as i32));
