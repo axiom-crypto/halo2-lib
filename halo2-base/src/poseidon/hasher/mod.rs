@@ -253,7 +253,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
     pub fn hash_compact_chunk_inputs(
         &self,
         ctx: &mut Context<F>,
-        range: &impl RangeInstructions<F>,
+        gate: &impl GateInstructions<F>,
         chunk_inputs: &[PoseidonCompactChunkInput<F, RATE>],
     ) -> Vec<PoseidonCompactOutput<F>>
     where
@@ -265,16 +265,15 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
         for chunk_input in chunk_inputs {
             let is_final = chunk_input.is_final;
             for absorb in &chunk_input.inputs {
-                state.permutation(ctx, range.gate(), absorb, None, &self.spec);
+                state.permutation(ctx, gate, absorb, None, &self.spec);
             }
             // Because the length of each absorb is always RATE. An extra permutation is needed for squeeze.
             let mut output_state = state.clone();
-            output_state.permutation(ctx, range.gate(), &[], None, &self.spec);
-            let hash =
-                range.gate().select(ctx, output_state.s[1], zero_witness, *is_final.as_ref());
+            output_state.permutation(ctx, gate, &[], None, &self.spec);
+            let hash = gate.select(ctx, output_state.s[1], zero_witness, *is_final.as_ref());
             outputs.push(PoseidonCompactOutput { hash, is_final });
             // Reset state to init_state if this is the end of a logical input.
-            state.select(ctx, range.gate(), is_final, self.init_state());
+            state.select(ctx, gate, is_final, self.init_state());
         }
         outputs
     }

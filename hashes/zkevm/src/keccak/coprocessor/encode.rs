@@ -114,7 +114,7 @@ pub fn encode_var_len_bytes_vec<F: Field>(
         .collect_vec();
 
     let compact_outputs =
-        initialized_hasher.hash_compact_chunk_inputs(ctx, range_chip, &chunk_inputs);
+        initialized_hasher.hash_compact_chunk_inputs(ctx, range_chip.gate(), &chunk_inputs);
     range_chip.gate().select_by_indicator(
         ctx,
         compact_outputs.into_iter().map(|o| *o.hash()),

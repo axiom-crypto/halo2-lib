@@ -155,7 +155,7 @@ fn hasher_compact_chunk_inputs_compatiblity_verification<
             native_sponge = Poseidon::<Fr, T, RATE>::new(R_F, R_P);
         }
     }
-    let compact_outputs = hasher.hash_compact_chunk_inputs(ctx, range, &chunk_inputs);
+    let compact_outputs = hasher.hash_compact_chunk_inputs(ctx, range.gate(), &chunk_inputs);
     assert_eq!(chunk_inputs.len(), compact_outputs.len());
     let mut output_offset = 0;
     for (compact_output, chunk_input) in compact_outputs.iter().zip(chunk_inputs) {
