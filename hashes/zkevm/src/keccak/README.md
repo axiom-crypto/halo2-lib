@@ -33,6 +33,31 @@ All these items remain consistent across all versions.
 - `hash_lo`/`hash_hi` of a logical input could be found at the first row of the virtual round of the last `keccak_f`.
 - `hash_lo` is the low 128 bits of Keccak results. `hash_hi` is the high 128 bits of Keccak results.
 
+### Example
+In this version, we care more about the first row of each round(`offset = x * rows_per_round`). So we only show the first row of each round in the following example.
+Let's say `rows_per_round = 10` and `inputs = [[], [0x89, 0x88, .., 0x01]]`. The corresponding table is:
+
+| row | input idx | round | word_value           | bytes_left | is_final | hash_lo | hash_hi |
+|--------------|-------------------|-------|----------------------|------------|----------|---------|---------|
+| 0 (dummy)    | -                 | -     | -                    | -          | false    | -       | -       |
+| 10            | 0                 | 1     | `0` | 0          | true     | -       | -       |
+| ...          | 0                 | ...   | ...                  | 0          | true     | -       | -       |
+| 170           | 0                 | 17    | `0`  | 0          | true     | -       | -       |
+| 180           | 0                 | 18    | -                    | 0          | true     | -       | -       |
+| ...          | 0                 | ...   | ...                  | 0          | true     | -       | -       |
+| 250 (squeeze) | 0                 | 25    | -                    | 0          | true     | RESULT  | RESULT  |
+| 260           | 1                 | 1     | `0x8283848586878889`           | 137         | false    | -       | -       |
+| 270           | 1                 | 2     | `0x7A7B7C7D7E7F8081`           | 129         | false    | -       | -       |
+| ...          | 1                 | ...   | ...                  | ...        | false    | -       | -       |
+| 420           | 1                 | 17    | `0x0203040506070809`                    | 9          | false    | -       | -       |
+| 430           | 1                 | 18    | -                    | 1          | false    | -       | -       |
+| ...          | 1                 | ...   | ...                  | 0          | false    | -       | -       |
+| 500 (squeeze) | 1                 | 25    | -                    | 0          | false    | -  | -  |
+| 510           | 1                 | 1     | `0x01`           | 1         | true    | -       | -       |
+| 520           | 1                 | 2     | -           | 0         | true    | -       | -       |
+| ...          | 1                 | ...   | ...                  | 0          | true    | -       | -       |
+| 750 (squeeze) | 1                 | 25    | -                    | 0          | true    | RESULT  | RESULT  |
+
 ### Change Details
 - Removed column `input_rlc`/`input_len` and related gates.
 - Removed column `output_rlc` and related gates.
@@ -60,6 +85,33 @@ There 2 ways to publish circuit outputs:
 Developers can choose either way according to their needs. Specs of these 2 ways can be found at `keccak::coprocessor::circuit::leaf::KeccakCoprocessorLeafCircuit::publish_outputs`.
 
 `keccak::coprocessor::output` provides utilities to compute coprocessor circuit outputs for given inputs. App circuits could use these utilities to load Keccak results before witness generation of coprocessor circuits.
+
+### Lookup Key Encode
+For easier understanding specs at `keccak::coprocessor::encode::encode_native_input`, here we provide an example of encoding `[0x89, 0x88, .., 0x01]`(137 bytes):
+| keccak_f| round | word | witness | Note |
+|---------|-------|------|---------| ---- |
+| 0       | 1     | `0x8283848586878889`    | - | |
+| 0       | 2     | `0x7A7B7C7D7E7F8081`    | `0x7A7B7C7D7E7F808182838485868788890000000000000089` | [length, word[0], word[1]] |
+| 0       | 3     | `0x7273747576777879`    | - | |
+| 0       | 4     | `0x6A6B6C6D6E6F7071`    | - | |
+| 0       | 5     | `0x6263646566676869`    | `0x62636465666768696A6B6C6D6E6F70717273747576777879` | [word[2], word[3], word[4]] |
+| ...     | ...     | ...    | ... | ... |
+| 0       | 15     | `0x1213141516171819`    | - | |
+| 0       | 16     | `0x0A0B0C0D0E0F1011`    | - | |
+| 0       | 17     | `0x0203040506070809`    | `0x02030405060708090A0B0C0D0E0F10111213141516171819` | [word[15], word[16], word[17]] |
+| 1       | 1     | `0x0000000000000001`    | - | |
+| 1       | 2     | `0x0000000000000000`    | `0x000000000000000000000000000000010000000000000000` | [0, word[0], word[1]] |
+| 1       | 3     | `0x0000000000000000`    | - | |
+| 1       | 4     | `0x0000000000000000`    | - | |
+| 1       | 5     | `0x0000000000000000`    | `0x000000000000000000000000000000000000000000000000` | [word[2], word[3], word[4]] |
+| ...     | ...     | ...    | ... | ... |
+| 1       | 15     | `0x0000000000000000`    | - | |
+| 1       | 16     | `0x0000000000000000`    | - | |
+| 1       | 17     | `0x0000000000000000`    | `0x000000000000000000000000000000000000000000000000` | [word[15], word[16], word[17]] |
+
+The raw input is transformed into `payload = [0x7A7B7C7D7E7F808182838485868788890000000000000089, 0x62636465666768696A6B6C6D6E6F70717273747576777879, ... , 0x02030405060708090A0B0C0D0E0F10111213141516171819, 0x000000000000000000000000000000010000000000000000, 0x000000000000000000000000000000000000000000000000, ... , 0x000000000000000000000000000000000000000000000000]`. 2 keccak_fs, 6 witnesses each keecak_f, 12 witnesses in total.
+
+Finally the lookup key will be `Poseidon(payload)`.
 
 ### Leaf Circuit
 Implementation: `keccak::coprocessor::circuit::leaf::KeccakCoprocessorLeafCircuit`
