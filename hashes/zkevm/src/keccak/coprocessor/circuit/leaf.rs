@@ -29,7 +29,8 @@ use halo2_base::{
         plonk::{Circuit, ConstraintSystem, Error},
     },
     poseidon::hasher::{
-        spec::OptimizedPoseidonSpec, PoseidonCompactInput, PoseidonCompactOutput, PoseidonHasher,
+        spec::OptimizedPoseidonSpec, PoseidonCompactChunkInput, PoseidonCompactOutput,
+        PoseidonHasher,
     },
     safe_types::{SafeBool, SafeTypeChip},
     AssignedValue, Context,
@@ -438,7 +439,6 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
     let num_witness_per_keccak_f = POSEIDON_RATE * num_poseidon_absorb_per_keccak_f;
 
     // Constant witnesses
-    let rate_const = ctx.load_constant(F::from(POSEIDON_RATE as u64));
     let one_const = ctx.load_constant(F::ONE);
     let zero_const = ctx.load_zero();
     let multipliers_val = get_words_to_witness_multipliers::<F>()
@@ -446,8 +446,7 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
         .map(|multiplier| Constant(multiplier))
         .collect_vec();
 
-    let compact_input_len = loaded_keccak_fs.len() * num_poseidon_absorb_per_keccak_f;
-    let mut compact_inputs = Vec::with_capacity(compact_input_len);
+    let mut compact_chunk_inputs = Vec::with_capacity(loaded_keccak_fs.len());
     let mut last_is_final = one_const;
     for loaded_keccak_f in loaded_keccak_fs {
         // If this keccak_f is the last of a logical input.
@@ -477,26 +476,13 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
         }
         // Pad 0s to make sure poseidon_absorb_data.len() % RATE == 0.
         poseidon_absorb_data.resize(num_witness_per_keccak_f, zero_const);
-        for (i, poseidon_absorb) in poseidon_absorb_data.chunks(POSEIDON_RATE).enumerate() {
-            compact_inputs.push(PoseidonCompactInput::new(
-                poseidon_absorb.try_into().unwrap(),
-                if i + 1 == num_poseidon_absorb_per_keccak_f {
-                    is_final
-                } else {
-                    SafeTypeChip::unsafe_to_bool(zero_const)
-                },
-                rate_const,
-            ));
-        }
+        let compact_inputs: Vec<_> = poseidon_absorb_data
+            .chunks_exact(POSEIDON_RATE)
+            .map(|chunk| chunk.to_vec().try_into().unwrap())
+            .collect_vec();
+        compact_chunk_inputs.push(PoseidonCompactChunkInput::new(compact_inputs, is_final));
         last_is_final = is_final.into();
     }
 
-    // TODO: use hash_compact_chunk_input instead.
-    let compact_outputs = initialized_hasher.hash_compact_input(ctx, gate, &compact_inputs);
-
-    compact_outputs
-        .into_iter()
-        .skip(num_poseidon_absorb_per_keccak_f - 1)
-        .step_by(num_poseidon_absorb_per_keccak_f)
-        .collect_vec()
+    initialized_hasher.hash_compact_chunk_inputs(ctx, gate, &compact_chunk_inputs)
 }
