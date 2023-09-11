@@ -461,8 +461,7 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
         words.extend_from_slice(&loaded_keccak_f.word_values);
 
         // Turn every num_word_per_witness words later into a witness.
-        for words in words.chunks(num_word_per_witness)
-        {
+        for words in words.chunks(num_word_per_witness) {
             let mut words = words.to_vec();
             words.resize(num_word_per_witness, zero_const);
             let witness = gate.inner_product(ctx, words, multipliers_val.clone());
