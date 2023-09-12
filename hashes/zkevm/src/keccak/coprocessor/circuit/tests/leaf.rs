@@ -22,7 +22,6 @@ use rand_core::OsRng;
 fn test_mock_leaf_circuit_raw_outputs() {
     let k: usize = 18;
     let num_unusable_row: usize = 109;
-    let lookup_bits: usize = 4;
     let capacity: usize = 10;
     let publish_raw_outputs: bool = true;
 
@@ -35,13 +34,8 @@ fn test_mock_leaf_circuit_raw_outputs() {
         (0u8..200).collect::<Vec<_>>(),
     ];
 
-    let mut params = KeccakCoprocessorLeafCircuitParams::new(
-        k,
-        num_unusable_row,
-        lookup_bits,
-        capacity,
-        publish_raw_outputs,
-    );
+    let mut params =
+        KeccakCoprocessorLeafCircuitParams::new(k, num_unusable_row, capacity, publish_raw_outputs);
     let base_circuit_params =
         KeccakCoprocessorLeafCircuit::<Fr>::calculate_base_circuit_params(&params);
     params.base_circuit_params = base_circuit_params;
@@ -64,18 +58,12 @@ fn test_prove_leaf_circuit_raw_outputs() {
 
     let k: usize = 18;
     let num_unusable_row: usize = 109;
-    let lookup_bits: usize = 4;
     let capacity: usize = 10;
     let publish_raw_outputs: bool = true;
 
     let inputs = vec![];
-    let mut circuit_params = KeccakCoprocessorLeafCircuitParams::new(
-        k,
-        num_unusable_row,
-        lookup_bits,
-        capacity,
-        publish_raw_outputs,
-    );
+    let mut circuit_params =
+        KeccakCoprocessorLeafCircuitParams::new(k, num_unusable_row, capacity, publish_raw_outputs);
     let base_circuit_params =
         KeccakCoprocessorLeafCircuit::<Fr>::calculate_base_circuit_params(&circuit_params);
     circuit_params.base_circuit_params = base_circuit_params;
@@ -124,7 +112,6 @@ fn test_prove_leaf_circuit_raw_outputs() {
 fn test_mock_leaf_circuit_commit() {
     let k: usize = 18;
     let num_unusable_row: usize = 109;
-    let lookup_bits: usize = 4;
     let capacity: usize = 10;
     let publish_raw_outputs: bool = false;
 
@@ -137,13 +124,8 @@ fn test_mock_leaf_circuit_commit() {
         (0u8..200).collect::<Vec<_>>(),
     ];
 
-    let mut params = KeccakCoprocessorLeafCircuitParams::new(
-        k,
-        num_unusable_row,
-        lookup_bits,
-        capacity,
-        publish_raw_outputs,
-    );
+    let mut params =
+        KeccakCoprocessorLeafCircuitParams::new(k, num_unusable_row, capacity, publish_raw_outputs);
     let base_circuit_params =
         KeccakCoprocessorLeafCircuit::<Fr>::calculate_base_circuit_params(&params);
     params.base_circuit_params = base_circuit_params;
@@ -162,18 +144,12 @@ fn test_prove_leaf_circuit_commit() {
 
     let k: usize = 18;
     let num_unusable_row: usize = 109;
-    let lookup_bits: usize = 4;
     let capacity: usize = 10;
     let publish_raw_outputs: bool = false;
 
     let inputs = vec![];
-    let mut circuit_params = KeccakCoprocessorLeafCircuitParams::new(
-        k,
-        num_unusable_row,
-        lookup_bits,
-        capacity,
-        publish_raw_outputs,
-    );
+    let mut circuit_params =
+        KeccakCoprocessorLeafCircuitParams::new(k, num_unusable_row, capacity, publish_raw_outputs);
     let base_circuit_params =
         KeccakCoprocessorLeafCircuit::<Fr>::calculate_base_circuit_params(&circuit_params);
     circuit_params.base_circuit_params = base_circuit_params;
