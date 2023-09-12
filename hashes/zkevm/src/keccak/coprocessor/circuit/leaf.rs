@@ -136,10 +136,12 @@ impl<F: Field> Circuit<F> for KeccakCoprocessorLeafCircuit<F> {
 
     /// Configures a new circuit using [`BaseConfigParams`]
     fn configure_with_params(meta: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config {
+        let keccak_circuit_config = KeccakCircuitConfig::new(meta, params.keccak_circuit_params);
         let base_circuit_params = params.base_circuit_params;
+        // BaseCircuitBuilder::configure_with_params must be called in the end in order to get the correct
+        // unusable_rows.
         let base_circuit_config =
             BaseCircuitBuilder::configure_with_params(meta, base_circuit_params.clone());
-        let keccak_circuit_config = KeccakCircuitConfig::new(meta, params.keccak_circuit_params);
         Self::Config { base_circuit_config, keccak_circuit_config }
     }
 
