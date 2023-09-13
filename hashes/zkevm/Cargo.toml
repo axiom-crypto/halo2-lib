@@ -19,6 +19,7 @@ rayon = "1.7"
 sha3 = "0.10.8"
 # always included but without features to use Native poseidon
 snark-verifier = { git = "https://github.com/axiom-crypto/snark-verifier.git", branch = "develop", default-features = false }
+snark-verifier-sdk = { git = "https://github.com/axiom-crypto/snark-verifier.git", branch = "develop", default-features = false, optional = true }
 getset = "0.1.2"
 
 [dev-dependencies]
@@ -34,10 +35,12 @@ env_logger = "0.10"
 test-case = "3.1.0"
 
 [features]
-default = ["halo2-axiom", "display"]
-display = ["halo2-base/display", "snark-verifier/display"]
+default = ["halo2-axiom", "display", "aggregation"]
+display = ["halo2-base/display", "snark-verifier/display", "snark-verifier-sdk?/display"]
 halo2-pse = ["halo2-base/halo2-pse", "snark-verifier/halo2-pse"]
 halo2-axiom = ["halo2-base/halo2-axiom", "snark-verifier/halo2-axiom"]
 jemallocator = ["halo2-base/jemallocator"]
 mimalloc = ["halo2-base/mimalloc"]
 asm = ["halo2-base/asm"]
+aggregation = ["snark-verifier/loader_halo2", "snark-verifier-sdk/loader_halo2"]
+evm = ["aggregation", "snark-verifier-sdk/loader_evm"]

@@ -482,3 +482,56 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
 
     initialized_hasher.hash_compact_chunk_inputs(ctx, gate, &compact_chunk_inputs)
 }
+
+/// Implementing trait so [KeccakCoprocessorLeafCircuit] can be used in [snark_verifier_sdk].
+#[cfg(feature = "aggregation")]
+mod aggregatable {
+    use halo2_base::halo2_proofs::plonk::Selector;
+    use snark_verifier_sdk::CircuitExt;
+
+    use crate::{
+        keccak::coprocessor::{
+            output::{calculate_circuit_outputs_commit, multi_inputs_to_circuit_outputs},
+            param::{OUTPUT_NUM_COL_COMMIT, OUTPUT_NUM_COL_RAW},
+        },
+        util::eth_types::Field,
+    };
+
+    use super::KeccakCoprocessorLeafCircuit;
+
+    impl<F: Field> CircuitExt<F> for KeccakCoprocessorLeafCircuit<F> {
+        fn instances(&self) -> Vec<Vec<F>> {
+            let circuit_outputs =
+                multi_inputs_to_circuit_outputs(&self.inputs, self.params.capacity);
+            if self.params.publish_raw_outputs {
+                vec![
+                    circuit_outputs.iter().map(|o| o.key).collect(),
+                    circuit_outputs.iter().map(|o| o.hash_lo).collect(),
+                    circuit_outputs.iter().map(|o| o.hash_hi).collect(),
+                ]
+            } else {
+                vec![vec![calculate_circuit_outputs_commit(&circuit_outputs)]]
+            }
+        }
+
+        fn num_instance(&self) -> Vec<usize> {
+            if self.params.publish_raw_outputs {
+                vec![self.params.capacity; OUTPUT_NUM_COL_RAW]
+            } else {
+                vec![1; OUTPUT_NUM_COL_COMMIT]
+            }
+        }
+
+        fn accumulator_indices() -> Option<Vec<(usize, usize)>> {
+            None
+        }
+
+        fn selectors(config: &Self::Config) -> Vec<Selector> {
+            // the vanilla keccak circuit does not use selectors
+            config.base_circuit_config.gate().basic_gates[0]
+                .iter()
+                .map(|basic| basic.q_enable)
+                .collect()
+        }
+    }
+}

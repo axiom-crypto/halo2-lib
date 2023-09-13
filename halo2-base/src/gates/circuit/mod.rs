@@ -82,6 +82,7 @@ impl<F: ScalarField> BaseConfig<F> {
                 params.lookup_bits.unwrap(),
             ))
         } else {
+            log::info!("No range checks used. Not enabling lookup argument or lookup table.");
             MaybeRangeConfig::WithoutRange(FlexGateConfig::configure(meta, params.gate_params()))
         };
         let instance = (0..params.num_instance_columns)
