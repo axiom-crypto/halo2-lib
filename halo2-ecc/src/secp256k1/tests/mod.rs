@@ -33,6 +33,7 @@ use crate::{
 
 pub mod ecdsa;
 pub mod ecdsa_tests;
+pub mod inner_product_argument_test;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 struct CircuitParams {

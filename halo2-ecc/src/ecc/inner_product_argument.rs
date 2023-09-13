@@ -58,7 +58,7 @@ pub fn verification_scalars<'range, F: PrimeField, SF: PrimeField>(
 // p = base field modulus
 // n = scalar field modulus
 /// follow verification equation in https://doc-internal.dalek.rs/bulletproofs/inner_product_proof/index.html
-pub fn inner_product_proof<F: PrimeField, CF: PrimeField, SF: PrimeField, GA>(
+pub fn inner_product_argument<F: PrimeField, CF: PrimeField, SF: PrimeField, GA>(
     chip: &EccChip<F, FpChip<F, CF>>,
     ctx: &mut Context<F>,
     P: EcPoint<F, <FpChip<F, CF> as FieldChip<F>>::FieldPoint>, // commitment with form P = <a, G> + <b, H> + <a, b>Q
