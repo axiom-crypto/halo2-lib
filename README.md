@@ -1,5 +1,7 @@
 # halo2-lib
 
+> ⚠️ **This branch contains un-audited contributions from the community.** Community contributions in this branch have been reviewed by maintainers of this repository, but they have not undergone official audit. To use the latest audited version make sure to use the correct commit. The tagged versions that have undergone official audit and are ready for production use can be found in the [releases](https://github.com/axiom-crypto/halo2-lib/releases).
+
 This repository aims to provide basic primitives for writing zero-knowledge proof circuits using the [Halo 2](https://zcash.github.io/halo2/) proving stack. To discuss or collaborate, join our community on [Telegram](https://t.me/halo2lib).
 
 ## Getting Started
@@ -286,6 +288,6 @@ cargo test --release --no-default-features --features "halo2-axiom, mimalloc" --
   - [halo2-rsa](https://github.com/zkemail/halo2-rsa/tree/feat/new_bigint)
 - [halo2-fri-gadget](https://github.com/maxgillett/halo2-fri-gadget) -- FRI verifier in halo2.
 - [eth-voice-recovery](https://github.com/SoraSuegami/voice_recovery_circuit)
-- [zkevm tx-circuit](https://github.com/scroll-tech/zkevm-circuits/tree/develop/zkevm-circuits/src/tx_circuit)
+- [zkevm signature verification circuit](https://github.com/scroll-tech/zkevm-circuits/tree/develop/zkevm-circuits/src/sig_circuit.rs)
 - [webauthn-halo2](https://github.com/zkwebauthn/webauthn-halo2) -- Proving and verifying WebAuthn with halo2.
 - [Fixed Point Arithmetic](https://github.com/DCMMC/halo2-scaffold/tree/main/src/gadget) -- Fixed point arithmetic library in halo2.
