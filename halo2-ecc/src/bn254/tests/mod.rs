@@ -1,5 +1,4 @@
 #![allow(non_snake_case)]
-use super::bls_signature::BlsSignatureChip;
 use super::pairing::PairingChip;
 use super::*;
 use crate::ecc::EccChip;
