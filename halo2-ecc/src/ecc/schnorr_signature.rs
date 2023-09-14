@@ -1,6 +1,10 @@
 use crate::bigint::{big_is_equal, ProperCrtUint};
-use crate::fields::{fp::FpChip, FieldChip, PrimeField};
-use halo2_base::{gates::GateInstructions, utils::CurveAffineExt, AssignedValue, Context};
+use crate::fields::{fp::FpChip, FieldChip};
+use halo2_base::{
+    gates::GateInstructions,
+    utils::{BigPrimeField, CurveAffineExt},
+    AssignedValue, Context,
+};
 
 use super::{fixed_base, scalar_multiply, EcPoint, EccChip};
 
@@ -12,7 +16,7 @@ use super::{fixed_base, scalar_multiply, EcPoint, EccChip};
 // this circuit applies over constraints that s > 0, msgHash > 0 cause scalar_multiply can't handle zero scalar
 /// `pubkey` should not be the identity point
 /// follow spec in https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
-pub fn schnorr_verify_no_pubkey_check<F: PrimeField, CF: PrimeField, SF: PrimeField, GA>(
+pub fn schnorr_verify_no_pubkey_check<F: BigPrimeField, CF: BigPrimeField, SF: BigPrimeField, GA>(
     chip: &EccChip<F, FpChip<F, CF>>,
     ctx: &mut Context<F>,
     pubkey: EcPoint<F, <FpChip<F, CF> as FieldChip<F>>::FieldPoint>,

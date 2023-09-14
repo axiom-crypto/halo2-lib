@@ -79,8 +79,8 @@ pub fn crt<F: BigPrimeField>(
         // transpose of:
         // | prod | -1 | a | prod - a |
         let check_val = *prod.value() - a_limb.value();
-        let check_cell = ctx
-            .assign_region_last([Constant(-F::one()), Existing(a_limb), Witness(check_val)], [-1]);
+        let check_cell =
+            ctx.assign_region_last([Constant(-F::ONE), Existing(a_limb), Witness(check_val)], [-1]);
 
         quot_assigned.push(new_quot_cell);
         check_assigned.push(check_cell);
@@ -119,7 +119,7 @@ pub fn crt<F: BigPrimeField>(
     // Check `0 + modulus * quotient - a = 0` in native field
     // | 0 | modulus | quotient | a |
     ctx.assign_region(
-        [Constant(F::zero()), Constant(mod_native), Existing(quot_native), Existing(a.native)],
+        [Constant(F::ZERO), Constant(mod_native), Existing(quot_native), Existing(a.native)],
         [0],
     );
 }

@@ -2,52 +2,66 @@ name: Tests
 
 on:
   push:
-    branches: ["main", "community-edition"]
+    branches: ["main"]
   pull_request:
-    branches: ["main", "community-edition"]
+    branches: ["main", "develop", "community-edition"]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   build:
-    runs-on: ubuntu-latest-m
+    runs-on: ubuntu-latest-64core-256ram
 
     steps:
       - uses: actions/checkout@v3
       - name: Build
         run: cargo build --verbose
       - name: Run halo2-base tests
-        working-directory: 'halo2-base'
+        working-directory: "halo2-base"
         run: |
-          cargo test -- --test-threads=1
-      - name: Run poseidon tests
-        working-directory: 'hashes/poseidon'
+          cargo test
+      - name: Run halo2-ecc tests (mock prover)
+        working-directory: "halo2-ecc"
         run: |
-          cargo test test_poseidon_compatibility
-      - name: Run halo2-ecc tests MockProver
-        working-directory: 'halo2-ecc'
+          cargo test --lib -- --skip bench
+      - name: Run halo2-ecc tests (real prover)
+        working-directory: "halo2-ecc"
         run: |
-          cargo test -- --test-threads=1 test_fp
-          cargo test -- test_ecc
-          cargo test -- test_secp
-          cargo test -- test_ecdsa
-          cargo test -- test_ec_add
-          cargo test -- test_fixed
-          cargo test -- test_msm
-          cargo test -- test_sm
-          cargo test -- test_fb
-          cargo test -- test_pairing
-          cargo test -- test_bls_signature
-      - name: Run halo2-ecc tests real prover
-        working-directory: 'halo2-ecc'
-        run: |
-          cargo test --release -- test_fp_assert_eq
-          cargo test --release -- --nocapture bench_secp256k1_ecdsa
-          cargo test --release -- --nocapture bench_ec_add
           mv configs/bn254/bench_fixed_msm.t.config configs/bn254/bench_fixed_msm.config
+          mv configs/bn254/bench_msm.t.config configs/bn254/bench_msm.config
+          mv configs/bn254/bench_pairing.t.config configs/bn254/bench_pairing.config
+          mv configs/secp256k1/bench_ecdsa.t.config configs/secp256k1/bench_ecdsa.config
+          cargo test --release -- --nocapture bench_secp256k1_ecdsa
           cargo test --release -- --nocapture bench_fixed_base_msm
           mv configs/bn254/bench_msm.t.config configs/bn254/bench_msm.config
           cargo test --release -- --nocapture bench_msm
           mv configs/bn254/bench_pairing.t.config configs/bn254/bench_pairing.config
           cargo test --release -- --nocapture bench_pairing
+      - name: Run zkevm tests
+        working-directory: "hashes/zkevm"
+        run: |
+          cargo test packed_multi_keccak_prover::k_14
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          override: false
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v1
+        with:
+          cache-on-failure: true
+
+      - name: Run fmt
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy --all -- -D warnings

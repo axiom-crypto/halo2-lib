@@ -1,8 +1,7 @@
+use crate::ff::Field;
+use crate::gates::circuit::{builder::RangeCircuitBuilder, CircuitBuilderStage};
 use crate::{
-    gates::{
-        builder::{GateCircuitBuilder, GateThreadBuilder},
-        GateChip, GateInstructions,
-    },
+    gates::{GateChip, GateInstructions},
     halo2_proofs::{
         halo2curves::bn256::Fr,
         plonk::keygen_pk,
@@ -12,42 +11,43 @@ use crate::{
     utils::testing::{check_proof, gen_proof},
     QuantumCell::Witness,
 };
-use ff::Field;
 use itertools::Itertools;
 use rand::{rngs::OsRng, thread_rng, Rng};
+use test_log::test;
 
 // soundness checks for `idx_to_indicator` function
 fn test_idx_to_indicator_gen(k: u32, len: usize) {
     // first create proving and verifying key
-    let mut builder = GateThreadBuilder::keygen();
+    let mut builder =
+        RangeCircuitBuilder::from_stage(CircuitBuilderStage::Keygen).use_k(k as usize);
     let gate = GateChip::default();
     let dummy_idx = Witness(Fr::zero());
     let indicator = gate.idx_to_indicator(builder.main(0), dummy_idx, len);
     // get the offsets of the indicator cells for later 'pranking'
     let ind_offsets = indicator.iter().map(|ind| ind.cell.unwrap().offset).collect::<Vec<_>>();
-    // set env vars
-    builder.config(k as usize, Some(9));
-    let circuit = GateCircuitBuilder::keygen(builder);
+    let config_params = builder.calculate_params(Some(9));
 
     let params = ParamsKZG::setup(k, OsRng);
     // generate proving key
-    let vk = keygen_vk(&params, &circuit).unwrap();
-    let pk = keygen_pk(&params, vk, &circuit).unwrap();
+    let vk = keygen_vk(&params, &builder).unwrap();
+    let pk = keygen_pk(&params, vk, &builder).unwrap();
     let vk = pk.get_vk(); // pk consumed vk
+    let break_points = builder.break_points();
+    drop(builder);
 
     // now create different proofs to test the soundness of the circuit
 
     let gen_pf = |idx: usize, ind_witnesses: &[Fr]| {
-        let mut builder = GateThreadBuilder::prover();
+        let mut builder = RangeCircuitBuilder::prover(config_params.clone(), break_points.clone());
         let gate = GateChip::default();
         let idx = Witness(Fr::from(idx as u64));
-        gate.idx_to_indicator(builder.main(0), idx, len);
+        let ctx = builder.main(0);
+        gate.idx_to_indicator(ctx, idx, len);
         // prank the indicator cells
         for (offset, witness) in ind_offsets.iter().zip_eq(ind_witnesses) {
-            builder.main(0).advice[*offset] = Assigned::Trivial(*witness);
+            ctx.advice[*offset] = Assigned::Trivial(*witness);
         }
-        let circuit = GateCircuitBuilder::prover(builder, vec![vec![]]); // no break points
-        gen_proof(&params, &pk, circuit)
+        gen_proof(&params, &pk, builder)
     };
 
     // expected answer
