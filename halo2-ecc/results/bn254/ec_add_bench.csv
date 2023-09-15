@@ -1,3 +1,0 @@
-degree,num_advice,num_lookup,num_fixed,lookup_bits,limb_bits,num_limbs,batch_size,proof_time,proof_size,verify_time
-15,10,2,1,14,88,3,100,36.6454095s,4128,205.55931ms
-16,5,1,1,15,90,3,100,33.917584642s,2272,261.71498ms
