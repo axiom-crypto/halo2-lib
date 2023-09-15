@@ -6,23 +6,13 @@ use std::{
 use super::*;
 use crate::{fields::FpStrategy, halo2_proofs::halo2curves::bn256::G2Affine};
 use halo2_base::{
-    gates::{
-        builder::{
-            CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
-            RangeCircuitBuilder,
-        },
-        RangeChip,
-    },
-    halo2_proofs::{
-        halo2curves::{
-            bn256::{multi_miller_loop, G2Prepared, Gt},
-            pairing::MillerLoopResult,
-        },
-        poly::kzg::multiopen::{ProverGWC, VerifierGWC},
-    },
-    utils::fs::gen_srs,
+    gates::RangeChip,
+    halo2_proofs::halo2curves::bn256::{G2Prepared, multi_miller_loop, Gt},
+    utils::BigPrimeField,
     Context,
 };
+extern crate pairing;
+use pairing::{MillerLoopResult, group::ff::Field};
 use rand_core::OsRng;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -39,8 +29,9 @@ struct BlsSignatureCircuitParams {
 }
 
 /// Verify e(g1, signature_agg) = e(pubkey_agg, H(m))
-fn bls_signature_test<F: PrimeField>(
+fn bls_signature_test<F: BigPrimeField>(
     ctx: &mut Context<F>,
+    range: &RangeChip<F>,
     params: BlsSignatureCircuitParams,
     g1: G1Affine,
     signatures: &[G2Affine],
@@ -49,7 +40,6 @@ fn bls_signature_test<F: PrimeField>(
 ) {
     // Calculate halo2 pairing by multipairing
     std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
-    let range = RangeChip::<F>::default(params.lookup_bits);
     let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
     let pairing_chip = PairingChip::new(&fp_chip);
     let bls_signature_chip = BlsSignatureChip::new(&fp_chip, &pairing_chip);
@@ -77,56 +67,6 @@ fn bls_signature_test<F: PrimeField>(
     assert_eq!(*result.value(), F::from(actual_result == Gt::identity()))
 }
 
-fn random_bls_signature_circuit(
-    params: BlsSignatureCircuitParams,
-    stage: CircuitBuilderStage,
-    break_points: Option<MultiPhaseThreadBreakPoints>,
-) -> RangeCircuitBuilder<Fr> {
-    let k = params.degree as usize;
-    let mut builder = match stage {
-        CircuitBuilderStage::Mock => GateThreadBuilder::mock(),
-        CircuitBuilderStage::Prover => GateThreadBuilder::prover(),
-        CircuitBuilderStage::Keygen => GateThreadBuilder::keygen(),
-    };
-
-    assert!(params.num_aggregation > 0, "Cannot aggregate 0 signatures!");
-
-    // TODO: Implement hash_to_curve(msg) for arbitrary message
-    let msg_hash = G2Affine::random(OsRng);
-    let g1 = G1Affine::generator();
-
-    let mut sks: Vec<Fr> = Vec::new();
-    let mut signatures: Vec<G2Affine> = Vec::new();
-    let mut pubkeys: Vec<G1Affine> = Vec::new();
-
-    for _ in 0..params.num_aggregation {
-        let sk = Fr::random(OsRng);
-        let signature = G2Affine::from(msg_hash * sk);
-        let pubkey = G1Affine::from(G1Affine::generator() * sk);
-
-        sks.push(sk);
-        signatures.push(signature);
-        pubkeys.push(pubkey);
-    }
-
-    let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
-    bls_signature_test::<Fr>(builder.main(0), params, g1, &signatures, &pubkeys, msg_hash);
-
-    let circuit = match stage {
-        CircuitBuilderStage::Mock => {
-            builder.config(k, Some(20));
-            RangeCircuitBuilder::mock(builder)
-        }
-        CircuitBuilderStage::Keygen => {
-            builder.config(k, Some(20));
-            RangeCircuitBuilder::keygen(builder)
-        }
-        CircuitBuilderStage::Prover => RangeCircuitBuilder::prover(builder, break_points.unwrap()),
-    };
-    end_timer!(start0);
-    circuit
-}
-
 #[test]
 fn test_bls_signature() {
     let run_path = "configs/bn254/bls_signature_circuit.config";
@@ -136,13 +76,28 @@ fn test_bls_signature() {
     )
     .unwrap();
     println!("num_advice: {num_advice}", num_advice = params.num_advice);
-    let circuit = random_bls_signature_circuit(params, CircuitBuilderStage::Mock, None);
-    MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
+
+    let msg_hash = G2Affine::random(OsRng);
+    let g1 = G1Affine::generator();
+    let mut signatures: Vec<G2Affine> = Vec::new();
+    let mut pubkeys: Vec<G1Affine> = Vec::new();
+    for _ in 0..params.num_aggregation {
+        let sk = Fr::random(OsRng);
+        let signature = G2Affine::from(msg_hash * sk);
+        let pubkey = G1Affine::from(G1Affine::generator() * sk);
+
+        signatures.push(signature);
+        pubkeys.push(pubkey);
+    }
+
+    base_test().k(params.degree).lookup_bits(params.lookup_bits).run(|ctx, range| {
+        // signatures: &[G2Affine], pubkeys: &[G1Affine], msghash: G2Affine)
+        bls_signature_test(ctx, range, params, g1, &signatures, &pubkeys, msg_hash);
+    })
 }
 
 #[test]
 fn bench_bls_signature() -> Result<(), Box<dyn std::error::Error>> {
-    let rng = OsRng;
     let config_path = "configs/bn254/bench_bls_signature.config";
     let bench_params_file =
         File::open(config_path).unwrap_or_else(|e| panic!("{config_path} does not exist: {e:?}"));
@@ -160,70 +115,26 @@ fn bench_bls_signature() -> Result<(), Box<dyn std::error::Error>> {
         let k = bench_params.degree;
         println!("---------------------- degree = {k} ------------------------------",);
 
-        let params = gen_srs(k);
-        let circuit = random_bls_signature_circuit(bench_params, CircuitBuilderStage::Keygen, None);
+        let msg_hash = G2Affine::random(OsRng);
+        let g1 = G1Affine::generator();
+        let mut signatures: Vec<G2Affine> = Vec::new();
+        let mut pubkeys: Vec<G1Affine> = Vec::new();
+        for _ in 0..bench_params.num_aggregation {
+            let sk = Fr::random(OsRng);
+            let signature = G2Affine::from(msg_hash * sk);
+            let pubkey = G1Affine::from(G1Affine::generator() * sk);
 
-        let vk_time = start_timer!(|| "Generating vkey");
-        let vk = keygen_vk(&params, &circuit)?;
-        end_timer!(vk_time);
+            signatures.push(signature);
+            pubkeys.push(pubkey);
+        }
 
-        let pk_time = start_timer!(|| "Generating pkey");
-        let pk = keygen_pk(&params, vk, &circuit)?;
-        end_timer!(pk_time);
-
-        let break_points = circuit.0.break_points.take();
-        drop(circuit);
-        // create a proof
-        let proof_time = start_timer!(|| "Proving time");
-        let circuit = random_bls_signature_circuit(
-            bench_params,
-            CircuitBuilderStage::Prover,
-            Some(break_points),
+        let stats = base_test().k(k).lookup_bits(bench_params.lookup_bits).bench_builder(
+            (g1, signatures.clone(), pubkeys.clone(), msg_hash),
+            (g1, signatures, pubkeys, msg_hash),
+            |pool, range, (g1, signatures, pubkeys, msg_hash)| {
+                bls_signature_test(pool.main(), range, bench_params, g1, &signatures, &pubkeys, msg_hash);
+            },
         );
-        let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-        create_proof::<
-            KZGCommitmentScheme<Bn256>,
-            ProverGWC<'_, Bn256>,
-            Challenge255<G1Affine>,
-            _,
-            Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
-            _,
-        >(&params, &pk, &[circuit], &[&[]], rng, &mut transcript)?;
-        let proof = transcript.finalize();
-        end_timer!(proof_time);
-
-        let proof_size = {
-            let path = format!(
-                "data/bls_signature_bn254_circuit_proof_{}_{}_{}_{}_{}_{}_{}_{}.data",
-                bench_params.degree,
-                bench_params.num_advice,
-                bench_params.num_lookup_advice,
-                bench_params.num_fixed,
-                bench_params.lookup_bits,
-                bench_params.limb_bits,
-                bench_params.num_limbs,
-                bench_params.num_aggregation
-            );
-            let mut fd = File::create(&path)?;
-            fd.write_all(&proof)?;
-            let size = fd.metadata().unwrap().len();
-            fs::remove_file(path)?;
-            size
-        };
-
-        let verify_time = start_timer!(|| "Verify time");
-        let verifier_params = params.verifier_params();
-        let strategy = SingleStrategy::new(&params);
-        let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
-        verify_proof::<
-            KZGCommitmentScheme<Bn256>,
-            VerifierGWC<'_, Bn256>,
-            Challenge255<G1Affine>,
-            Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
-            SingleStrategy<'_, Bn256>,
-        >(verifier_params, pk.get_vk(), strategy, &[&[]], &mut transcript)
-        .unwrap();
-        end_timer!(verify_time);
 
         writeln!(
             fs_results,
@@ -236,9 +147,9 @@ fn bench_bls_signature() -> Result<(), Box<dyn std::error::Error>> {
             bench_params.limb_bits,
             bench_params.num_limbs,
             bench_params.num_aggregation,
-            proof_time.time.elapsed(),
-            proof_size,
-            verify_time.time.elapsed()
+            stats.proof_time.time.elapsed(),
+            stats.proof_size,
+            stats.verify_time.time.elapsed()
         )?;
     }
     Ok(())
