@@ -4,17 +4,17 @@ use crate::halo2_proofs::{
     halo2curves::bn256::Fr,
     halo2curves::secp256k1::{Fp, Fq, Secp256k1Affine},
 };
-use halo2_base::{halo2_proofs::arithmetic::Field, utils::testing::base_test};
 use crate::secp256k1::{FpChip, FqChip};
 use crate::{
     ecc::{schnorr_signature::schnorr_verify_no_pubkey_check, EccChip},
     fields::FieldChip,
 };
-use halo2_base::utils::BigPrimeField;
-use halo2_base::utils::fe_to_biguint;
-use num_bigint::BigUint;
 use halo2_base::gates::RangeChip;
+use halo2_base::utils::fe_to_biguint;
+use halo2_base::utils::BigPrimeField;
 use halo2_base::Context;
+use halo2_base::{halo2_proofs::arithmetic::Field, utils::testing::base_test};
+use num_bigint::BigUint;
 use num_integer::Integer;
 use rand::rngs::StdRng;
 use rand_core::SeedableRng;
@@ -37,7 +37,7 @@ pub fn schnorr_signature_test<F: BigPrimeField>(
     ctx: &mut Context<F>,
     range: &RangeChip<F>,
     params: CircuitParams,
-    input: SchnorrInput
+    input: SchnorrInput,
 ) -> F {
     let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
     let fq_chip = FqChip::<F>::new(&range, params.limb_bits, params.num_limbs);
@@ -57,8 +57,7 @@ pub fn schnorr_signature_test<F: BigPrimeField>(
 pub fn random_schnorr_signature_input(rng: &mut StdRng) -> SchnorrInput {
     let sk = <Secp256k1Affine as CurveAffine>::ScalarExt::random(rng.clone());
     let pk = Secp256k1Affine::from(Secp256k1Affine::generator() * sk);
-    let msg_hash =
-        <Secp256k1Affine as CurveAffine>::ScalarExt::random(rng.clone());
+    let msg_hash = <Secp256k1Affine as CurveAffine>::ScalarExt::random(rng.clone());
 
     let mut k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(rng.clone());
 
@@ -68,7 +67,7 @@ pub fn random_schnorr_signature_input(rng: &mut StdRng) -> SchnorrInput {
     let mut y: &Fp = r_point.y();
     // make sure R.y is even
     while fe_to_biguint(y).mod_floor(&BigUint::from(2u64)) != BigUint::from(0u64) {
-        k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(rng.clone());
+        k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(StdRng::from_seed([0u8; 32]));
         r_point = Secp256k1Affine::from(Secp256k1Affine::generator() * k).coordinates().unwrap();
         x = r_point.x();
         y = r_point.y();
@@ -77,7 +76,7 @@ pub fn random_schnorr_signature_input(rng: &mut StdRng) -> SchnorrInput {
     let r = *x;
     let s = k + sk * msg_hash;
 
-    SchnorrInput {r, s, msg_hash, pk}
+    SchnorrInput { r, s, msg_hash, pk }
 }
 
 pub fn run_test(input: SchnorrInput) {
@@ -88,9 +87,9 @@ pub fn run_test(input: SchnorrInput) {
     .unwrap();
 
     let res = base_test()
-    .k(params.degree)
-    .lookup_bits(params.lookup_bits)
-    .run(|ctx, range| schnorr_signature_test(ctx, range, params, input));
+        .k(params.degree)
+        .lookup_bits(params.lookup_bits)
+        .run(|ctx, range| schnorr_signature_test(ctx, range, params, input));
     assert_eq!(res, Fr::ONE);
 }
 

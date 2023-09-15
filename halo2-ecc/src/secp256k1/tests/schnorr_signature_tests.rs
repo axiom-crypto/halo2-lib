@@ -3,13 +3,9 @@ use rand::{random, rngs::StdRng};
 use rand_core::SeedableRng;
 use test_case::test_case;
 
-use super::schnorr_signature::{SchnorrInput, run_test, random_schnorr_signature_input};
+use super::schnorr_signature::{random_schnorr_signature_input, run_test, SchnorrInput};
 
-fn custom_parameters_schnorr_signature(
-    sk: u64,
-    msg_hash: u64,
-    k: u64,
-) -> SchnorrInput {
+fn custom_parameters_schnorr_signature(sk: u64, msg_hash: u64, k: u64) -> SchnorrInput {
     let sk = <Secp256k1Affine as CurveAffine>::ScalarExt::from(sk);
     let pk = Secp256k1Affine::from(Secp256k1Affine::generator() * sk);
     let msg_hash = <Secp256k1Affine as CurveAffine>::ScalarExt::from(msg_hash);
@@ -22,22 +18,20 @@ fn custom_parameters_schnorr_signature(
     let r = *x;
     let s = k + sk * msg_hash;
 
-    SchnorrInput {r, s, msg_hash, pk}
+    SchnorrInput { r, s, msg_hash, pk }
 }
 
 #[test]
 #[should_panic(expected = "assertion failed: `(left == right)`")]
 fn test_schnorr_signature_msg_hash_zero() {
-    let input =
-        custom_parameters_schnorr_signature(random::<u64>(), 0, random::<u64>());
+    let input = custom_parameters_schnorr_signature(random::<u64>(), 0, random::<u64>());
     run_test(input);
 }
 
 #[test]
 #[should_panic(expected = "assertion failed: `(left == right)`")]
 fn test_schnorr_signature_private_key_zero() {
-    let input =
-        custom_parameters_schnorr_signature(0, random::<u64>(), random::<u64>());
+    let input = custom_parameters_schnorr_signature(0, random::<u64>(), random::<u64>());
     run_test(input);
 }
 
