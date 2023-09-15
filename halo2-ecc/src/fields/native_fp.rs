@@ -131,8 +131,7 @@ impl<'range, F: BigPrimeField> FieldChip<F> for NativeFieldChip<'range, F> {
     }
 
     fn check_carry_mod_to_zero(&self, ctx: &mut Context<F>, a: AssignedValue<F>) {
-        let is_zero = self.gate().is_zero(ctx, a);
-        self.gate().assert_is_const(ctx, &is_zero, &F::ONE);
+        self.gate().assert_is_const(ctx, &a, &F::ZERO);
     }
 
     // noop
