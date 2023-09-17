@@ -1,9 +1,30 @@
-use crate::util::rlc;
-
-use super::*;
-
+use halo2_base::halo2_proofs::circuit::{Region, Value};
 use itertools::Itertools;
 use rayon::prelude::*;
+
+use crate::{
+    sha256::vanilla::util::{decode, rotate, shift},
+    util::eth_types::Field,
+};
+
+use super::{columns::Sha256CircuitConfig, param::*};
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ShaRowFirstPhase {
+    w: [bool; NUM_BITS_PER_WORD_W],
+    a: [bool; NUM_BITS_PER_WORD_EXT],
+    e: [bool; NUM_BITS_PER_WORD_EXT],
+    pub is_final: bool,
+    pub length: usize,
+    pub is_paddings: [bool; ABSORB_WIDTH_PER_ROW_BYTES],
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ShaRowSecondPhase<F> {
+    pub data_rlc: F,
+    pub hash_rlc: F,
+    data_rlcs: [F; ABSORB_WIDTH_PER_ROW_BYTES],
+}
 
 /// First phase witness, returns the final `length` after each 512-bit chunk of SHA-256 permutation.
 /// This is the `length` in the last row of every [`SHA256_NUM_ROWS`] chunk of rows.
@@ -24,7 +45,7 @@ pub struct MultiSha256Trace<'v, F: Field> {
     pub output_rlcs: Vec<ShaAssignedValue<'v, F>>,
 }
 
-impl<F: Field> Sha256BitConfig<F> {
+impl<F: Field> Sha256CircuitConfig<F> {
     /// Computes FirstPhase witnesses for computes SHA-256 for each bytearray in `bytes`
     /// and assigns the witnesses to Halo2 cells
     pub fn multi_sha256_phase0<'v>(

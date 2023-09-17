@@ -1,45 +1,27 @@
-//! The configuration and constraints of the Sha256 circuit
-use super::*;
+//! The constraints of the Sha256 circuit
 
-/// Configuration parameters to define [`Sha256BitConfig`]
-#[derive(Copy, Clone, Debug, Default)]
-pub struct Sha256ConfigParams {
-    pub k: u32,
-}
+use halo2_base::halo2_proofs::{
+    plonk::{Advice, Column, ConstraintSystem, Expression, VirtualCells},
+    poly::Rotation,
+};
 
-/// Sha256BitConfig
-#[derive(Clone, Debug)]
-pub struct Sha256BitConfig<F> {
-    pub(super) challenge: Challenge,
-    pub(super) q_enable: Column<Fixed>,
-    pub(super) q_first: Column<Fixed>,
-    pub(super) q_extend: Column<Fixed>,
-    pub(super) q_start: Column<Fixed>,
-    pub(super) q_compression: Column<Fixed>,
-    pub(super) q_end: Column<Fixed>,
-    pub(super) q_padding: Column<Fixed>,
-    pub(super) q_padding_last: Column<Fixed>,
-    pub(super) q_squeeze: Column<Fixed>,
-    pub(super) word_w: [Column<Advice>; NUM_BITS_PER_WORD_W],
-    pub(super) word_a: [Column<Advice>; NUM_BITS_PER_WORD_EXT],
-    pub(super) word_e: [Column<Advice>; NUM_BITS_PER_WORD_EXT],
-    pub(super) is_final: Column<Advice>,
-    pub(super) is_paddings: [Column<Advice>; ABSORB_WIDTH_PER_ROW_BYTES],
-    pub(super) data_rlcs: [Column<Advice>; ABSORB_WIDTH_PER_ROW_BYTES],
-    pub(super) round_cst: Column<Fixed>,
-    pub(super) h_a: Column<Fixed>,
-    pub(super) h_e: Column<Fixed>,
-    /// The columns for other circuits to lookup hash results
-    pub hash_table: ShaTable,
-    _marker: PhantomData<F>,
-}
+use crate::{
+    sha256::vanilla::{
+        columns::ShaTable,
+        util::{decode, rotate, shift, to_be_bytes},
+    },
+    util::{
+        constraint_builder::BaseConstraintBuilder,
+        eth_types::Field,
+        expression::{and, not, select, sum, xor, Expr},
+    },
+};
 
-impl<F: Field> Sha256BitConfig<F> {
-    pub fn challenge(&self) -> Challenge {
-        self.challenge
-    }
+use super::columns::Sha256CircuitConfig;
+use super::param::*;
 
-    pub fn configure(meta: &mut ConstraintSystem<F>, challenge: Challenge) -> Self {
+impl<F: Field> Sha256CircuitConfig<F> {
+    pub fn new(meta: &mut ConstraintSystem<F>) -> Self {
         let q_enable = meta.fixed_column();
         let q_first = meta.fixed_column();
         let q_extend = meta.fixed_column();
@@ -60,9 +42,6 @@ impl<F: Field> Sha256BitConfig<F> {
         let h_e = meta.fixed_column();
         let hash_table = ShaTable::construct(meta);
         let is_enabled = hash_table.is_enabled;
-        let length = hash_table.input_len;
-        let data_rlc = hash_table.input_rlc;
-        let hash_rlc = hash_table.output_rlc;
 
         // State bits
         let mut w_ext = vec![0u64.expr(); NUM_BITS_PER_WORD_W];
