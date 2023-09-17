@@ -44,10 +44,9 @@ fn test_schnorr_signature_k_zero(sk: u64, msg_hash: u64, k: u64) {
 
 #[test]
 fn test_schnorr_signature_random_valid_inputs() {
-    for i in 0..10 {
-        let mut rng = StdRng::seed_from_u64(i);
+    let mut rng = StdRng::seed_from_u64(0);
+    for _ in 0..10 {
         let input = random_schnorr_signature_input(&mut rng);
-        println!("{:?}", input);
         run_test(input);
     }
 }

@@ -54,12 +54,14 @@ pub fn schnorr_signature_test<F: BigPrimeField>(
     *res.value()
 }
 
+// This function mut rng internal state
 pub fn random_schnorr_signature_input(rng: &mut StdRng) -> SchnorrInput {
-    let sk = <Secp256k1Affine as CurveAffine>::ScalarExt::random(rng.clone());
+    let mut tmp = rng.clone();
+    let sk = <Secp256k1Affine as CurveAffine>::ScalarExt::random(&mut tmp);
     let pk = Secp256k1Affine::from(Secp256k1Affine::generator() * sk);
-    let msg_hash = <Secp256k1Affine as CurveAffine>::ScalarExt::random(rng.clone());
+    let msg_hash = <Secp256k1Affine as CurveAffine>::ScalarExt::random(&mut tmp);
 
-    let mut k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(rng.clone());
+    let mut k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(&mut tmp);
 
     let mut r_point =
         Secp256k1Affine::from(Secp256k1Affine::generator() * k).coordinates().unwrap();
@@ -67,7 +69,7 @@ pub fn random_schnorr_signature_input(rng: &mut StdRng) -> SchnorrInput {
     let mut y: &Fp = r_point.y();
     // make sure R.y is even
     while fe_to_biguint(y).mod_floor(&BigUint::from(2u64)) != BigUint::from(0u64) {
-        k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(StdRng::from_seed([0u8; 32]));
+        k = <Secp256k1Affine as CurveAffine>::ScalarExt::random(&mut tmp);
         r_point = Secp256k1Affine::from(Secp256k1Affine::generator() * k).coordinates().unwrap();
         x = r_point.x();
         y = r_point.y();
@@ -75,6 +77,9 @@ pub fn random_schnorr_signature_input(rng: &mut StdRng) -> SchnorrInput {
 
     let r = *x;
     let s = k + sk * msg_hash;
+
+    // change rng internal state
+    *rng = tmp;
 
     SchnorrInput { r, s, msg_hash, pk }
 }
