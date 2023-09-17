@@ -4,12 +4,14 @@ use crate::util::eth_types::Field;
 
 use super::param::*;
 
-pub const fn get_num_sha2_chunks(byte_length: usize) -> usize {
-    // ceil( (byte_length + 1 + NUM_BYTES_PADDING_LENGTH))
+/// The number of 512-bit blocks of SHA-256 necessary to hash an _unpadded_ byte array of `byte_length`,
+/// where the number of blocks does account for padding.
+pub const fn get_num_sha2_blocks(byte_length: usize) -> usize {
+    // ceil( (byte_length + 1 + NUM_BYTES_PADDING_LENGTH) / RATE)
     (byte_length + NUM_BYTES_PADDING_LENGTH) / RATE + 1
 }
 
-/// The number of 512-bit chunks of SHA-256 that can be done in a circuit
+/// The number of 512-bit blocks of SHA-256 that can be done in a circuit
 /// with `num_rows` usable rows. Usable rows means rows without blinding factors.
 pub const fn get_sha2_capacity(num_rows: usize) -> usize {
     num_rows / SHA256_NUM_ROWS

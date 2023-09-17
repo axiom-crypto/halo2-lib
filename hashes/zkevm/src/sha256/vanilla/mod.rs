@@ -3,22 +3,6 @@
 //! The number of columns are fixed (~130). Unlike keccak, it is not configurable.
 //!
 //! More details here: https://github.com/privacy-scaling-explorations/zkevm-circuits/pull/756
-//!
-use std::{marker::PhantomData, vec};
-
-use crate::{
-    halo2_proofs::{
-        circuit::{Region, Value},
-        plonk::{Advice, Challenge, Column, ConstraintSystem, Expression, Fixed, VirtualCells},
-        poly::Rotation,
-    },
-    util::{
-        constraint_builder::BaseConstraintBuilder,
-        eth_types::Field,
-        expression::{and, not, select, sum, xor, Expr},
-    },
-};
-use log::{debug, info};
 
 pub mod columns;
 pub mod constraints;

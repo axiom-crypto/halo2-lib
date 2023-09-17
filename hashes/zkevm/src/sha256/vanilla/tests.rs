@@ -1,4 +1,6 @@
-use super::*;
+use std::marker::PhantomData;
+
+use super::{columns::Sha256CircuitConfig, util::get_sha2_capacity, *};
 use crate::halo2_proofs::{
     circuit::SimpleFloorPlanner,
     dev::MockProver,
@@ -19,11 +21,16 @@ use crate::halo2_proofs::{
     },
 };
 use halo2_base::{
-    halo2_proofs::{circuit::Layouter, plonk::Error},
+    halo2_proofs::{
+        circuit::Layouter,
+        plonk::{ConstraintSystem, Error},
+    },
     SKIP_FIRST_PASS,
 };
 use rand_core::OsRng;
 use test_case::test_case;
+
+use crate::util::eth_types::Field;
 
 /// Sha256BitCircuit
 #[derive(Default)]
@@ -34,7 +41,7 @@ pub struct Sha256BitCircuit<F: Field> {
 }
 
 impl<F: Field> Circuit<F> for Sha256BitCircuit<F> {
-    type Config = Sha256BitConfig<F>;
+    type Config = Sha256CircuitConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -42,10 +49,7 @@ impl<F: Field> Circuit<F> for Sha256BitCircuit<F> {
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        // MockProver complains if you only have columns in SecondPhase, so let's just make an empty column in FirstPhase
-        meta.advice_column();
-        let challenge = meta.challenge_usable_after(FirstPhase);
-        Sha256BitConfig::configure(meta, challenge)
+        Sha256CircuitConfig::new(meta)
     }
 
     fn synthesize(
@@ -53,29 +57,17 @@ impl<F: Field> Circuit<F> for Sha256BitCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let mut challenge = layouter.get_challenge(config.challenge);
-        let mut first_pass = SKIP_FIRST_PASS;
         layouter.assign_region(
-            || "sha256 bit circuit",
+            || "SHA256 Bit Circuit",
             |mut region| {
-                if first_pass {
-                    first_pass = false;
-                    return Ok(());
-                }
-                let w = config.multi_sha256_phase0(
+                let blocks = config.multi_sha256(
                     &mut region,
                     self.inputs.clone(),
                     self.num_rows.map(get_sha2_capacity),
                 );
-                for length in &w.input_len {
-                    println!("len: {:?}", length.value());
+                for block in &blocks {
+                    println!("{:?}", block.length().value());
                 }
-                #[cfg(feature = "halo2-axiom")]
-                {
-                    region.next_phase();
-                    challenge = region.get_challenge(config.challenge);
-                }
-                config.multi_sha256_phase1(&mut region, w, challenge);
                 Ok(())
             },
         )
@@ -107,8 +99,8 @@ fn bit_sha256_simple(k: u32) {
         vec![],
         (0u8..1).collect::<Vec<_>>(),
         (0u8..54).collect::<Vec<_>>(),
-        (0u8..55).collect::<Vec<_>>(),
-        (0u8..56).collect::<Vec<_>>(),
+        (0u8..55).collect::<Vec<_>>(), // with padding 55 + 1 + 8 = 64 bytes, still fits in 1 block
+        (0u8..56).collect::<Vec<_>>(), // needs 2 blocks, due to padding
         (0u8..200).collect::<Vec<_>>(),
     ];
     verify::<Fr>(k, inputs, true);
