@@ -1,7 +1,7 @@
 use std::{cmp::max, iter};
 
 use halo2_base::{
-    gates::{range::RangeStrategy, GateInstructions, RangeInstructions},
+    gates::{GateInstructions, RangeInstructions},
     utils::{decompose_bigint, BigPrimeField},
     AssignedValue, Context,
     QuantumCell::{Constant, Existing, Witness},
@@ -108,32 +108,27 @@ pub fn crt<F: BigPrimeField>(
         );
         // let gate_index = prod.column();
 
-        let out_cell;
-        let check_cell;
         // perform step 2: compute prod - a + out
         let temp1 = *prod.value() - a_limb.value();
         let check_val = temp1 + out_v;
 
-        match range.strategy() {
-            RangeStrategy::Vertical => {
-                // transpose of:
-                // | prod | -1 | a | prod - a | 1 | out | prod - a + out
-                // where prod is at relative row `offset`
-                ctx.assign_region(
-                    [
-                        Constant(-F::one()),
-                        Existing(a_limb),
-                        Witness(temp1),
-                        Constant(F::one()),
-                        Witness(out_v),
-                        Witness(check_val),
-                    ],
-                    [-1, 2], // note the NEGATIVE index! this is using gate overlapping with the previous inner product call
-                );
-                check_cell = ctx.last().unwrap();
-                out_cell = ctx.get(-2);
-            }
-        }
+        // transpose of:
+        // | prod | -1 | a | prod - a | 1 | out | prod - a + out
+        // where prod is at relative row `offset`
+        ctx.assign_region(
+            [
+                Constant(-F::ONE),
+                Existing(a_limb),
+                Witness(temp1),
+                Constant(F::ONE),
+                Witness(out_v),
+                Witness(check_val),
+            ],
+            [-1, 2], // note the NEGATIVE index! this is using gate overlapping with the previous inner product call
+        );
+        let check_cell = ctx.last().unwrap();
+        let out_cell = ctx.get(-2);
+
         quot_assigned.push(new_quot_cell);
         out_assigned.push(out_cell);
         check_assigned.push(check_cell);

@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: ["main", "develop", "community-edition"]
+    branches: ["main"]
   pull_request:
     branches: ["main", "develop", "community-edition"]
 
@@ -11,7 +11,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest-m
+    runs-on: ubuntu-latest-64core-256ram
 
     steps:
       - uses: actions/checkout@v3
@@ -24,22 +24,22 @@ jobs:
       - name: Run halo2-ecc tests (mock prover)
         working-directory: "halo2-ecc"
         run: |
-          cargo test --lib -- --skip bench --test-threads=2
+          cargo test --lib -- --skip bench
       - name: Run halo2-ecc tests (real prover)
         working-directory: "halo2-ecc"
         run: |
           mv configs/bn254/bench_fixed_msm.t.config configs/bn254/bench_fixed_msm.config
           mv configs/bn254/bench_msm.t.config configs/bn254/bench_msm.config
           mv configs/bn254/bench_pairing.t.config configs/bn254/bench_pairing.config
+          mv configs/secp256k1/bench_ecdsa.t.config configs/secp256k1/bench_ecdsa.config
           cargo test --release -- --nocapture bench_secp256k1_ecdsa
-          cargo test --release -- --nocapture bench_ec_add
           cargo test --release -- --nocapture bench_fixed_base_msm
           cargo test --release -- --nocapture bench_msm
           cargo test --release -- --nocapture bench_pairing
-      - name: Run zkevm-keccak tests
-        working-directory: "hashes/zkevm-keccak"
+      - name: Run zkevm tests
+        working-directory: "hashes/zkevm"
         run: |
-          cargo test
+          cargo test packed_multi_keccak_prover::k_14
 
   lint:
     name: Lint

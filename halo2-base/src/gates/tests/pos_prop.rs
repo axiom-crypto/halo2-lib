@@ -1,17 +1,15 @@
 use std::cmp::max;
 
+use crate::ff::{Field, PrimeField};
 use crate::gates::tests::{flex_gate, range, utils::*, Fr};
 use crate::utils::{biguint_to_fe, bit_length, fe_to_biguint};
 use crate::{QuantumCell, QuantumCell::Witness};
 
-use ff::{Field, PrimeField};
 use num_bigint::{BigUint, RandBigInt, RandomBits};
 use proptest::{collection::vec, prelude::*};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-//TODO: implement Copy for rand witness and rand fr to allow for array creation
-//  create vec and convert to array???
-//TODO: implement arbitrary for fr using looks like you'd probably need to implement your own TestFr struct to implement Arbitrary: https://docs.rs/quickcheck/latest/quickcheck/trait.Arbitrary.html , can probably just hack it from Fr = [u64; 4]
+
 prop_compose! {
     pub fn rand_fr()(seed in any::<u64>()) -> Fr {
         let rng = StdRng::seed_from_u64(seed);
@@ -113,6 +111,13 @@ proptest! {
     }
 
     #[test]
+    fn prop_test_sub_mul(input in vec(rand_witness(), 3)) {
+        let ground_truth = sub_mul_ground_truth(input.as_slice());
+        let result = flex_gate::test_sub_mul(input.as_slice());
+        prop_assert_eq!(result, ground_truth);
+    }
+
+    #[test]
     fn prop_test_neg(input in rand_witness()) {
         let ground_truth = neg_ground_truth(input);
         let result = flex_gate::test_neg(input);
@@ -161,14 +166,18 @@ proptest! {
 
     #[test]
     fn prop_test_inner_product(inputs in (vec(rand_witness(), 0..=100), vec(rand_witness(), 0..=100)).prop_filter("Input vectors must have equal length", |(a, b)| a.len() == b.len())) {
-        let ground_truth = inner_product_ground_truth(&inputs);
+        let a = inputs.0.iter().map(|x| *x.value()).collect::<Vec<_>>();
+        let b = inputs.1.iter().map(|x| *x.value()).collect::<Vec<_>>();
+        let ground_truth = inner_product_ground_truth(&a, &b);
         let result = flex_gate::test_inner_product(inputs);
         prop_assert_eq!(result, ground_truth);
     }
 
     #[test]
     fn prop_test_inner_product_left_last(inputs in (vec(rand_witness(), 1..=100), vec(rand_witness(), 1..=100)).prop_filter("Input vectors must have equal length", |(a, b)| a.len() == b.len())) {
-        let ground_truth = inner_product_left_last_ground_truth(&inputs);
+        let a = inputs.0.iter().map(|x| *x.value()).collect::<Vec<_>>();
+        let b = inputs.1.iter().map(|x| *x.value()).collect::<Vec<_>>();
+        let ground_truth = inner_product_left_last_ground_truth(&a, &b);
         let result = flex_gate::test_inner_product_left_last(inputs);
         prop_assert_eq!(result, ground_truth);
     }
@@ -264,6 +273,13 @@ proptest! {
         }
         let result = flex_gate::test_num_to_bits(num as usize, bits.len());
         prop_assert_eq!(bits.into_iter().map(Fr::from).collect::<Vec<_>>(), result);
+    }
+
+    #[test]
+    fn prop_test_pow_var(a in rand_fr(), num in any::<u64>()) {
+        let native_res = a.pow_vartime([num]);
+        let result = flex_gate::test_pow_var(a, BigUint::from(num), Fr::CAPACITY as usize);
+        prop_assert_eq!(result, native_res);
     }
 
     /*

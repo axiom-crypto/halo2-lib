@@ -1,13 +1,10 @@
 [workspace]
-members = [
-    "halo2-base",
-    "halo2-ecc",
-    "hashes/zkevm"
-]
+members = ["halo2-base", "halo2-ecc", "hashes/zkevm"]
+resolver = "2"
 
 [profile.dev]
 opt-level = 3
-debug = 1 # change to 0 or 2 for more or less debug info
+debug = 2              # change to 0 or 2 for more or less debug info
 overflow-checks = true
 incremental = true
 
@@ -28,7 +25,7 @@ codegen-units = 16
 opt-level = 3
 debug = false
 debug-assertions = false
-lto = "fat" 
+lto = "fat"
 # `codegen-units = 1` can lead to WORSE performance - always bench to find best profile for your machine!
 # codegen-units = 1
 panic = "unwind"
@@ -39,7 +36,6 @@ incremental = false
 inherits = "release"
 debug = true
 
-# patch so snark-verifier uses this crate's halo2-base 
 [patch."https://github.com/axiom-crypto/halo2-lib.git"]
-halo2-base = { path = "./halo2-base" }
-halo2-ecc = { path = "./halo2-ecc" }
+halo2-base = { path = "../halo2-lib/halo2-base" }
+halo2-ecc = { path = "../halo2-lib/halo2-ecc" }

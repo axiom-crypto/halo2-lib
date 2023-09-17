@@ -4,11 +4,11 @@ use std::io::{BufRead, BufReader};
 
 use super::*;
 use crate::fields::{FieldChip, FpStrategy};
+use crate::group::cofactor::CofactorCurveAffine;
 use crate::halo2_proofs::halo2curves::bn256::G2Affine;
-use group::cofactor::CofactorCurveAffine;
-use halo2_base::gates::builder::{set_lookup_bits, GateThreadBuilder, RangeCircuitBuilder};
 use halo2_base::gates::RangeChip;
-use halo2_base::utils::fs::gen_srs;
+use halo2_base::utils::testing::base_test;
+use halo2_base::utils::BigPrimeField;
 use halo2_base::Context;
 use itertools::Itertools;
 use rand_core::OsRng;
@@ -26,10 +26,13 @@ struct CircuitParams {
     batch_size: usize,
 }
 
-fn g2_add_test<F: PrimeField>(ctx: &mut Context<F>, params: CircuitParams, _points: Vec<G2Affine>) {
-    set_lookup_bits(params.lookup_bits);
-    let range = RangeChip::<F>::default(params.lookup_bits);
-    let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
+fn g2_add_test<F: BigPrimeField>(
+    ctx: &mut Context<F>,
+    range: &RangeChip<F>,
+    params: CircuitParams,
+    _points: Vec<G2Affine>,
+) {
+    let fp_chip = FpChip::<F>::new(range, params.limb_bits, params.num_limbs);
     let fp2_chip = Fp2Chip::<F>::new(&fp_chip);
     let g2_chip = EccChip::new(&fp2_chip);
 
@@ -56,12 +59,10 @@ fn test_ec_add() {
     let k = params.degree;
     let points = (0..params.batch_size).map(|_| G2Affine::random(OsRng)).collect_vec();
 
-    let mut builder = GateThreadBuilder::<Fr>::mock();
-    g2_add_test(builder.main(0), params, points);
-
-    builder.config(k as usize, Some(20));
-    let circuit = RangeCircuitBuilder::mock(builder);
-    MockProver::run(k, &circuit, vec![]).unwrap().assert_satisfied();
+    base_test()
+        .k(k)
+        .lookup_bits(params.lookup_bits)
+        .run(|ctx, range| g2_add_test(ctx, range, params, points));
 }
 
 #[test]
@@ -83,84 +84,13 @@ fn bench_ec_add() -> Result<(), Box<dyn std::error::Error>> {
         println!("---------------------- degree = {k} ------------------------------",);
         let mut rng = OsRng;
 
-        let params_time = start_timer!(|| "Params construction");
-        let params = gen_srs(k);
-        end_timer!(params_time);
-
-        let start0 = start_timer!(|| "Witness generation for empty circuit");
-        let circuit = {
-            let points = vec![G2Affine::generator(); bench_params.batch_size];
-            let mut builder = GateThreadBuilder::<Fr>::keygen();
-            g2_add_test(builder.main(0), bench_params, points);
-            builder.config(k as usize, Some(20));
-            RangeCircuitBuilder::keygen(builder)
-        };
-        end_timer!(start0);
-
-        let vk_time = start_timer!(|| "Generating vkey");
-        let vk = keygen_vk(&params, &circuit)?;
-        end_timer!(vk_time);
-        let pk_time = start_timer!(|| "Generating pkey");
-        let pk = keygen_pk(&params, vk, &circuit)?;
-        end_timer!(pk_time);
-
-        let break_points = circuit.0.break_points.take();
-        drop(circuit);
-
-        // create a proof
-        let points = (0..bench_params.batch_size).map(|_| G2Affine::random(&mut rng)).collect_vec();
-        let proof_time = start_timer!(|| "Proving time");
-        let proof_circuit = {
-            let mut builder = GateThreadBuilder::<Fr>::prover();
-            g2_add_test(builder.main(0), bench_params, points);
-            builder.config(k as usize, Some(20));
-            RangeCircuitBuilder::prover(builder, break_points)
-        };
-        let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-        create_proof::<
-            KZGCommitmentScheme<Bn256>,
-            ProverSHPLONK<'_, Bn256>,
-            Challenge255<G1Affine>,
-            _,
-            Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
-            _,
-        >(&params, &pk, &[proof_circuit], &[&[]], rng, &mut transcript)?;
-        let proof = transcript.finalize();
-        end_timer!(proof_time);
-
-        let proof_size = {
-            let path = format!(
-                "data/ec_add_circuit_proof_{}_{}_{}_{}_{}_{}_{}_{}.data",
-                bench_params.degree,
-                bench_params.num_advice,
-                bench_params.num_lookup_advice,
-                bench_params.num_fixed,
-                bench_params.lookup_bits,
-                bench_params.limb_bits,
-                bench_params.num_limbs,
-                bench_params.batch_size,
-            );
-            let mut fd = File::create(&path)?;
-            fd.write_all(&proof)?;
-            let size = fd.metadata().unwrap().len();
-            fs::remove_file(path)?;
-            size
-        };
-
-        let verify_time = start_timer!(|| "Verify time");
-        let verifier_params = params.verifier_params();
-        let strategy = SingleStrategy::new(&params);
-        let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
-        verify_proof::<
-            KZGCommitmentScheme<Bn256>,
-            VerifierSHPLONK<'_, Bn256>,
-            Challenge255<G1Affine>,
-            Blake2bRead<&[u8], G1Affine, Challenge255<G1Affine>>,
-            SingleStrategy<'_, Bn256>,
-        >(verifier_params, pk.get_vk(), strategy, &[&[]], &mut transcript)
-        .unwrap();
-        end_timer!(verify_time);
-
+        let stats = base_test().k(k).lookup_bits(bench_params.lookup_bits).bench_builder(
+            vec![G2Affine::generator(); bench_params.batch_size],
+            (0..bench_params.batch_size).map(|_| G2Affine::random(&mut rng)).collect_vec(),
+            |pool, range, points| {
+                g2_add_test(pool.main(), range, bench_params, points);
+            },
+        );
         writeln!(
             fs_results,
             "{},{},{},{},{},{},{},{},{:?},{},{:?}",
@@ -172,9 +102,9 @@ fn bench_ec_add() -> Result<(), Box<dyn std::error::Error>> {
             bench_params.limb_bits,
             bench_params.num_limbs,
             bench_params.batch_size,
-            proof_time.time.elapsed(),
-            proof_size,
-            verify_time.time.elapsed()
+            stats.proof_time.time.elapsed(),
+            stats.proof_size,
+            stats.verify_time.time.elapsed()
         )?;
     }
     Ok(())

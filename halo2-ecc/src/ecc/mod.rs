@@ -1,9 +1,10 @@
 #![allow(non_snake_case)]
-use crate::fields::{fp::FpChip, FieldChip, PrimeField, Selectable};
+use crate::ff::Field;
+use crate::fields::{fp::FpChip, FieldChip, Selectable};
+use crate::group::{Curve, Group};
 use crate::halo2_proofs::arithmetic::CurveAffine;
-use group::{Curve, Group};
-use halo2_base::gates::builder::GateThreadBuilder;
-use halo2_base::utils::modulus;
+use halo2_base::gates::flex_gate::threads::SinglePhaseCoreManager;
+use halo2_base::utils::{modulus, BigPrimeField};
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
     utils::CurveAffineExt,
@@ -21,20 +22,20 @@ pub mod pippenger;
 
 // EcPoint and EccChip take in a generic `FieldChip` to implement generic elliptic curve operations on arbitrary field extensions (provided chip exists) for short Weierstrass curves (currently further assuming a4 = 0 for optimization purposes)
 #[derive(Debug)]
-pub struct EcPoint<F: PrimeField, FieldPoint> {
+pub struct EcPoint<F: BigPrimeField, FieldPoint> {
     pub x: FieldPoint,
     pub y: FieldPoint,
     _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField, FieldPoint: Clone> Clone for EcPoint<F, FieldPoint> {
+impl<F: BigPrimeField, FieldPoint: Clone> Clone for EcPoint<F, FieldPoint> {
     fn clone(&self) -> Self {
         Self { x: self.x.clone(), y: self.y.clone(), _marker: PhantomData }
     }
 }
 
 // Improve readability by allowing `&EcPoint` to be converted to `EcPoint` via cloning
-impl<'a, F: PrimeField, FieldPoint: Clone> From<&'a EcPoint<F, FieldPoint>>
+impl<'a, F: BigPrimeField, FieldPoint: Clone> From<&'a EcPoint<F, FieldPoint>>
     for EcPoint<F, FieldPoint>
 {
     fn from(value: &'a EcPoint<F, FieldPoint>) -> Self {
@@ -42,7 +43,7 @@ impl<'a, F: PrimeField, FieldPoint: Clone> From<&'a EcPoint<F, FieldPoint>>
     }
 }
 
-impl<F: PrimeField, FieldPoint> EcPoint<F, FieldPoint> {
+impl<F: BigPrimeField, FieldPoint> EcPoint<F, FieldPoint> {
     pub fn new(x: FieldPoint, y: FieldPoint) -> Self {
         Self { x, y, _marker: PhantomData }
     }
@@ -58,25 +59,25 @@ impl<F: PrimeField, FieldPoint> EcPoint<F, FieldPoint> {
 
 /// An elliptic curve point where it is easy to compare the x-coordinate of two points
 #[derive(Clone, Debug)]
-pub struct StrictEcPoint<F: PrimeField, FC: FieldChip<F>> {
+pub struct StrictEcPoint<F: BigPrimeField, FC: FieldChip<F>> {
     pub x: FC::ReducedFieldPoint,
     pub y: FC::FieldPoint,
     _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField, FC: FieldChip<F>> StrictEcPoint<F, FC> {
+impl<F: BigPrimeField, FC: FieldChip<F>> StrictEcPoint<F, FC> {
     pub fn new(x: FC::ReducedFieldPoint, y: FC::FieldPoint) -> Self {
         Self { x, y, _marker: PhantomData }
     }
 }
 
-impl<F: PrimeField, FC: FieldChip<F>> From<StrictEcPoint<F, FC>> for EcPoint<F, FC::FieldPoint> {
+impl<F: BigPrimeField, FC: FieldChip<F>> From<StrictEcPoint<F, FC>> for EcPoint<F, FC::FieldPoint> {
     fn from(value: StrictEcPoint<F, FC>) -> Self {
         Self::new(value.x.into(), value.y)
     }
 }
 
-impl<'a, F: PrimeField, FC: FieldChip<F>> From<&'a StrictEcPoint<F, FC>>
+impl<'a, F: BigPrimeField, FC: FieldChip<F>> From<&'a StrictEcPoint<F, FC>>
     for EcPoint<F, FC::FieldPoint>
 {
     fn from(value: &'a StrictEcPoint<F, FC>) -> Self {
@@ -87,18 +88,18 @@ impl<'a, F: PrimeField, FC: FieldChip<F>> From<&'a StrictEcPoint<F, FC>>
 /// An elliptic curve point where the x-coordinate has already been constrained to be reduced or not.
 /// In the reduced case one can more optimally compare equality of x-coordinates.
 #[derive(Clone, Debug)]
-pub enum ComparableEcPoint<F: PrimeField, FC: FieldChip<F>> {
+pub enum ComparableEcPoint<F: BigPrimeField, FC: FieldChip<F>> {
     Strict(StrictEcPoint<F, FC>),
     NonStrict(EcPoint<F, FC::FieldPoint>),
 }
 
-impl<F: PrimeField, FC: FieldChip<F>> From<StrictEcPoint<F, FC>> for ComparableEcPoint<F, FC> {
+impl<F: BigPrimeField, FC: FieldChip<F>> From<StrictEcPoint<F, FC>> for ComparableEcPoint<F, FC> {
     fn from(pt: StrictEcPoint<F, FC>) -> Self {
         Self::Strict(pt)
     }
 }
 
-impl<F: PrimeField, FC: FieldChip<F>> From<EcPoint<F, FC::FieldPoint>>
+impl<F: BigPrimeField, FC: FieldChip<F>> From<EcPoint<F, FC::FieldPoint>>
     for ComparableEcPoint<F, FC>
 {
     fn from(pt: EcPoint<F, FC::FieldPoint>) -> Self {
@@ -106,7 +107,7 @@ impl<F: PrimeField, FC: FieldChip<F>> From<EcPoint<F, FC::FieldPoint>>
     }
 }
 
-impl<'a, F: PrimeField, FC: FieldChip<F>> From<&'a StrictEcPoint<F, FC>>
+impl<'a, F: BigPrimeField, FC: FieldChip<F>> From<&'a StrictEcPoint<F, FC>>
     for ComparableEcPoint<F, FC>
 {
     fn from(pt: &'a StrictEcPoint<F, FC>) -> Self {
@@ -114,7 +115,7 @@ impl<'a, F: PrimeField, FC: FieldChip<F>> From<&'a StrictEcPoint<F, FC>>
     }
 }
 
-impl<'a, F: PrimeField, FC: FieldChip<F>> From<&'a EcPoint<F, FC::FieldPoint>>
+impl<'a, F: BigPrimeField, FC: FieldChip<F>> From<&'a EcPoint<F, FC::FieldPoint>>
     for ComparableEcPoint<F, FC>
 {
     fn from(pt: &'a EcPoint<F, FC::FieldPoint>) -> Self {
@@ -122,7 +123,7 @@ impl<'a, F: PrimeField, FC: FieldChip<F>> From<&'a EcPoint<F, FC::FieldPoint>>
     }
 }
 
-impl<F: PrimeField, FC: FieldChip<F>> From<ComparableEcPoint<F, FC>>
+impl<F: BigPrimeField, FC: FieldChip<F>> From<ComparableEcPoint<F, FC>>
     for EcPoint<F, FC::FieldPoint>
 {
     fn from(pt: ComparableEcPoint<F, FC>) -> Self {
@@ -149,7 +150,7 @@ impl<F: PrimeField, FC: FieldChip<F>> From<ComparableEcPoint<F, FC>>
 ///
 /// # Assumptions
 /// * Neither `P` nor `Q` is the point at infinity (undefined behavior otherwise)
-pub fn ec_add_unequal<F: PrimeField, FC: FieldChip<F>>(
+pub fn ec_add_unequal<F: BigPrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
     P: impl Into<ComparableEcPoint<F, FC>>,
@@ -179,7 +180,7 @@ pub fn ec_add_unequal<F: PrimeField, FC: FieldChip<F>>(
 
 /// If `do_check = true`, then this function constrains that `P.x != Q.x`.
 /// Otherwise does nothing.
-fn check_points_are_unequal<F: PrimeField, FC: FieldChip<F>>(
+fn check_points_are_unequal<F: BigPrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
     P: impl Into<ComparableEcPoint<F, FC>>,
@@ -195,7 +196,7 @@ fn check_points_are_unequal<F: PrimeField, FC: FieldChip<F>>(
             ComparableEcPoint::NonStrict(pt) => chip.enforce_less_than(ctx, pt.x.clone()),
         });
         let x_is_equal = chip.is_equal_unenforced(ctx, x1, x2);
-        chip.gate().assert_is_const(ctx, &x_is_equal, &F::zero());
+        chip.gate().assert_is_const(ctx, &x_is_equal, &F::ZERO);
     }
     (EcPoint::from(P), EcPoint::from(Q))
 }
@@ -215,7 +216,7 @@ fn check_points_are_unequal<F: PrimeField, FC: FieldChip<F>>(
 ///
 /// # Assumptions
 /// * Neither `P` nor `Q` is the point at infinity (undefined behavior otherwise)
-pub fn ec_sub_unequal<F: PrimeField, FC: FieldChip<F>>(
+pub fn ec_sub_unequal<F: BigPrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
     P: impl Into<ComparableEcPoint<F, FC>>,
@@ -249,7 +250,7 @@ pub fn ec_sub_unequal<F: PrimeField, FC: FieldChip<F>>(
 ///
 /// Assumptions
 /// # Neither P or Q is the point at infinity
-pub fn ec_sub_strict<F: PrimeField, FC: FieldChip<F>>(
+pub fn ec_sub_strict<F: BigPrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
     P: impl Into<EcPoint<F, FC::FieldPoint>>,
@@ -279,7 +280,7 @@ where
     P = ec_select(chip, ctx, rand_pt, P, is_identity);
 
     let out = ec_sub_unequal(chip, ctx, P, Q, false);
-    let zero = chip.load_constant(ctx, FC::FieldType::zero());
+    let zero = chip.load_constant(ctx, FC::FieldType::ZERO);
     ec_select(chip, ctx, EcPoint::new(zero.clone(), zero), out, is_identity)
 }
 
@@ -298,7 +299,7 @@ where
 /// # Assumptions
 /// * `P.y != 0`
 /// * `P` is not the point at infinity (undefined behavior otherwise)
-pub fn ec_double<F: PrimeField, FC: FieldChip<F>>(
+pub fn ec_double<F: BigPrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
     P: impl Into<EcPoint<F, FC::FieldPoint>>,
@@ -337,7 +338,7 @@ pub fn ec_double<F: PrimeField, FC: FieldChip<F>>(
 ///
 /// # Assumptions
 /// * Neither `P` nor `Q` is the point at infinity (undefined behavior otherwise)
-pub fn ec_double_and_add_unequal<F: PrimeField, FC: FieldChip<F>>(
+pub fn ec_double_and_add_unequal<F: BigPrimeField, FC: FieldChip<F>>(
     chip: &FC,
     ctx: &mut Context<F>,
     P: impl Into<ComparableEcPoint<F, FC>>,
@@ -354,7 +355,7 @@ pub fn ec_double_and_add_unequal<F: PrimeField, FC: FieldChip<F>>(
             ComparableEcPoint::NonStrict(pt) => chip.enforce_less_than(ctx, pt.x.clone()),
         });
         let x_is_equal = chip.is_equal_unenforced(ctx, x0.clone(), x1);
-        chip.gate().assert_is_const(ctx, &x_is_equal, &F::zero());
+        chip.gate().assert_is_const(ctx, &x_is_equal, &F::ZERO);
         x_0 = Some(x0);
     }
     let P = EcPoint::from(P);
@@ -375,7 +376,7 @@ pub fn ec_double_and_add_unequal<F: PrimeField, FC: FieldChip<F>>(
         // TODO: when can we remove this check?
         // constrains that x_2 != x_0
         let x_is_equal = chip.is_equal_unenforced(ctx, x_0.unwrap(), x_2);
-        chip.range().gate().assert_is_const(ctx, &x_is_equal, &F::zero());
+        chip.range().gate().assert_is_const(ctx, &x_is_equal, &F::ZERO);
     }
     // lambda_1 = lambda_0 + 2 * y_0 / (x_2 - x_0)
     let two_y_0 = chip.scalar_mul_no_carry(ctx, &P.y, 2);
@@ -398,7 +399,7 @@ pub fn ec_double_and_add_unequal<F: PrimeField, FC: FieldChip<F>>(
     EcPoint::new(x_res, y_res)
 }
 
-pub fn ec_select<F: PrimeField, FC>(
+pub fn ec_select<F: BigPrimeField, FC>(
     chip: &FC,
     ctx: &mut Context<F>,
     P: EcPoint<F, FC::FieldPoint>,
@@ -415,7 +416,7 @@ where
 
 // takes the dot product of points with sel, where each is intepreted as
 // a _vector_
-pub fn ec_select_by_indicator<F: PrimeField, FC, Pt>(
+pub fn ec_select_by_indicator<F: BigPrimeField, FC, Pt>(
     chip: &FC,
     ctx: &mut Context<F>,
     points: &[Pt],
@@ -438,7 +439,7 @@ where
 }
 
 // `sel` is little-endian binary
-pub fn ec_select_from_bits<F: PrimeField, FC, Pt>(
+pub fn ec_select_from_bits<F: BigPrimeField, FC, Pt>(
     chip: &FC,
     ctx: &mut Context<F>,
     points: &[Pt],
@@ -455,7 +456,7 @@ where
 }
 
 // `sel` is little-endian binary
-pub fn strict_ec_select_from_bits<F: PrimeField, FC>(
+pub fn strict_ec_select_from_bits<F: BigPrimeField, FC>(
     chip: &FC,
     ctx: &mut Context<F>,
     points: &[StrictEcPoint<F, FC>],
@@ -484,7 +485,7 @@ where
 /// - The curve has no points of order 2.
 /// - `scalar_i < 2^{max_bits} for all i`
 /// - `max_bits <= modulus::<F>.bits()`, and equality only allowed when the order of `P` equals the modulus of `F`
-pub fn scalar_multiply<F: PrimeField, FC, C>(
+pub fn scalar_multiply<F: BigPrimeField, FC, C>(
     chip: &FC,
     ctx: &mut Context<F>,
     P: EcPoint<F, FC::FieldPoint>,
@@ -587,7 +588,7 @@ where
 /// Checks that `P` is indeed a point on the elliptic curve `C`.
 pub fn check_is_on_curve<F, FC, C>(chip: &FC, ctx: &mut Context<F>, P: &EcPoint<F, FC::FieldPoint>)
 where
-    F: PrimeField,
+    F: BigPrimeField,
     FC: FieldChip<F>,
     C: CurveAffine<Base = FC::FieldType>,
 {
@@ -602,7 +603,7 @@ where
 
 pub fn load_random_point<F, FC, C>(chip: &FC, ctx: &mut Context<F>) -> EcPoint<F, FC::FieldPoint>
 where
-    F: PrimeField,
+    F: BigPrimeField,
     FC: FieldChip<F>,
     C: CurveAffineExt<Base = FC::FieldType>,
 {
@@ -624,7 +625,7 @@ pub fn into_strict_point<F, FC>(
     pt: EcPoint<F, FC::FieldPoint>,
 ) -> StrictEcPoint<F, FC>
 where
-    F: PrimeField,
+    F: BigPrimeField,
     FC: FieldChip<F>,
 {
     let x = chip.enforce_less_than(ctx, pt.x);
@@ -647,7 +648,7 @@ where
 /// * `points` are all on the curve or the point at infinity
 /// * `points[i]` is allowed to be (0, 0) to represent the point at infinity (identity point)
 /// * Currently implementation assumes that the only point on curve with y-coordinate equal to `0` is identity point
-pub fn multi_scalar_multiply<F: PrimeField, FC, C>(
+pub fn multi_scalar_multiply<F: BigPrimeField, FC, C>(
     chip: &FC,
     ctx: &mut Context<F>,
     P: &[EcPoint<F, FC::FieldPoint>],
@@ -811,12 +812,12 @@ pub type BaseFieldEccChip<'chip, C> = EccChip<
 >;
 
 #[derive(Clone, Debug)]
-pub struct EccChip<'chip, F: PrimeField, FC: FieldChip<F>> {
+pub struct EccChip<'chip, F: BigPrimeField, FC: FieldChip<F>> {
     pub field_chip: &'chip FC,
     _marker: PhantomData<F>,
 }
 
-impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
+impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
     pub fn new(field_chip: &'chip FC) -> Self {
         Self { field_chip, _marker: PhantomData }
     }
@@ -856,11 +857,11 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
     pub fn assign_point<C>(&self, ctx: &mut Context<F>, g: C) -> EcPoint<F, FC::FieldPoint>
     where
         C: CurveAffineExt<Base = FC::FieldType>,
-        C::Base: ff::PrimeField,
+        C::Base: crate::ff::PrimeField,
     {
         let pt = self.assign_point_unchecked(ctx, g);
         let is_on_curve = self.is_on_curve_or_infinity::<C>(ctx, &pt);
-        self.field_chip.gate().assert_is_const(ctx, &is_on_curve, &F::one());
+        self.field_chip.gate().assert_is_const(ctx, &is_on_curve, &F::ONE);
         pt
     }
 
@@ -1009,7 +1010,7 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
     }
 }
 
-impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC>
+impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC>
 where
     FC: Selectable<F, FC::FieldPoint>,
 {
@@ -1042,7 +1043,7 @@ where
     /// See [`pippenger::multi_exp_par`] for more details.
     pub fn variable_base_msm<C>(
         &self,
-        thread_pool: &mut GateThreadBuilder<F>,
+        thread_pool: &mut SinglePhaseCoreManager<F>,
         P: &[EcPoint<F, FC::FieldPoint>],
         scalars: Vec<Vec<AssignedValue<F>>>,
         max_bits: usize,
@@ -1052,18 +1053,17 @@ where
         FC: Selectable<F, FC::ReducedFieldPoint>,
     {
         // window_bits = 4 is optimal from empirical observations
-        self.variable_base_msm_in::<C>(thread_pool, P, scalars, max_bits, 4, 0)
+        self.variable_base_msm_custom::<C>(thread_pool, P, scalars, max_bits, 4)
     }
 
     // TODO: add asserts to validate input assumptions described in docs
-    pub fn variable_base_msm_in<C>(
+    pub fn variable_base_msm_custom<C>(
         &self,
-        builder: &mut GateThreadBuilder<F>,
+        builder: &mut SinglePhaseCoreManager<F>,
         P: &[EcPoint<F, FC::FieldPoint>],
         scalars: Vec<Vec<AssignedValue<F>>>,
         max_bits: usize,
         window_bits: usize,
-        phase: usize,
     ) -> EcPoint<F, FC::FieldPoint>
     where
         C: CurveAffineExt<Base = FC::FieldType>,
@@ -1075,7 +1075,7 @@ where
         if P.len() <= 25 {
             multi_scalar_multiply::<F, FC, C>(
                 self.field_chip,
-                builder.main(phase),
+                builder.main(),
                 P,
                 scalars,
                 max_bits,
@@ -1097,13 +1097,12 @@ where
                 scalars,
                 max_bits,
                 window_bits, // clump_factor := window_bits
-                phase,
             )
         }
     }
 }
 
-impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
+impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
     /// See [`fixed_base::scalar_multiply`] for more details.
     // TODO: put a check in place that scalar is < modulus of C::Scalar
     pub fn fixed_base_scalar_mult<C>(
@@ -1131,7 +1130,7 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
     // default for most purposes
     pub fn fixed_base_msm<C>(
         &self,
-        builder: &mut GateThreadBuilder<F>,
+        builder: &mut SinglePhaseCoreManager<F>,
         points: &[C],
         scalars: Vec<Vec<AssignedValue<F>>>,
         max_scalar_bits_per_cell: usize,
@@ -1140,7 +1139,7 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         C: CurveAffineExt,
         FC: FieldChip<F, FieldType = C::Base> + Selectable<F, FC::FieldPoint>,
     {
-        self.fixed_base_msm_in::<C>(builder, points, scalars, max_scalar_bits_per_cell, 4, 0)
+        self.fixed_base_msm_custom::<C>(builder, points, scalars, max_scalar_bits_per_cell, 4)
     }
 
     // `radix = 0` means auto-calculate
@@ -1148,14 +1147,13 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
     /// `clump_factor = 0` means auto-calculate
     ///
     /// The user should filter out base points that are identity beforehand; we do not separately do this here
-    pub fn fixed_base_msm_in<C>(
+    pub fn fixed_base_msm_custom<C>(
         &self,
-        builder: &mut GateThreadBuilder<F>,
+        builder: &mut SinglePhaseCoreManager<F>,
         points: &[C],
         scalars: Vec<Vec<AssignedValue<F>>>,
         max_scalar_bits_per_cell: usize,
         clump_factor: usize,
-        phase: usize,
     ) -> EcPoint<F, FC::FieldPoint>
     where
         C: CurveAffineExt,
@@ -1165,15 +1163,7 @@ impl<'chip, F: PrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         #[cfg(feature = "display")]
         println!("computing length {} fixed base msm", points.len());
 
-        fixed_base::msm_par(
-            self,
-            builder,
-            points,
-            scalars,
-            max_scalar_bits_per_cell,
-            clump_factor,
-            phase,
-        )
+        fixed_base::msm_par(self, builder, points, scalars, max_scalar_bits_per_cell, clump_factor)
 
         // Empirically does not seem like pippenger is any better for fixed base msm right now, because of the cost of `select_by_indicator`
         // Cell usage becomes around comparable when `points.len() > 100`, and `clump_factor` should always be 4

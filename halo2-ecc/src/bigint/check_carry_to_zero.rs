@@ -62,14 +62,14 @@ pub fn truncate<F: BigPrimeField>(
     // let num_windows = (k - 1) / window + 1; // = ((k - 1) - (window - 1) + window - 1) / window + 1;
 
     let mut previous = None;
-    for (a_limb, carry) in a.limbs.into_iter().zip(carries.into_iter()) {
+    for (a_limb, carry) in a.limbs.into_iter().zip(carries) {
         let neg_carry_val = bigint_to_fe(&-carry);
         ctx.assign_region(
             [
                 Existing(a_limb),
                 Witness(neg_carry_val),
                 Constant(limb_base),
-                previous.map(Existing).unwrap_or_else(|| Constant(F::zero())),
+                previous.map(Existing).unwrap_or_else(|| Constant(F::ZERO)),
             ],
             [0],
         );

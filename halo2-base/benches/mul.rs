@@ -1,15 +1,12 @@
-use ff::Field;
-use halo2_base::gates::builder::{GateThreadBuilder, RangeCircuitBuilder};
+use halo2_base::gates::circuit::{builder::RangeCircuitBuilder, CircuitBuilderStage};
 use halo2_base::gates::flex_gate::{GateChip, GateInstructions};
 use halo2_base::halo2_proofs::{
-    halo2curves::bn256::{Bn256, Fr, G1Affine},
+    halo2curves::bn256::{Bn256, Fr},
+    halo2curves::ff::Field,
     plonk::*,
-    poly::kzg::{
-        commitment::{KZGCommitmentScheme, ParamsKZG},
-        multiopen::ProverGWC,
-    },
-    transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer},
+    poly::kzg::commitment::ParamsKZG,
 };
+use halo2_base::utils::testing::gen_proof;
 use halo2_base::utils::ScalarField;
 use halo2_base::Context;
 use rand::rngs::OsRng;
@@ -34,16 +31,16 @@ fn mul_bench<F: ScalarField>(ctx: &mut Context<F>, inputs: [F; 2]) {
 
 fn bench(c: &mut Criterion) {
     // create circuit for keygen
-    let mut builder = GateThreadBuilder::new(false);
+    let mut builder =
+        RangeCircuitBuilder::from_stage(CircuitBuilderStage::Keygen).use_k(K as usize);
     mul_bench(builder.main(0), [Fr::zero(); 2]);
-    builder.config(K as usize, Some(9));
-    let circuit = RangeCircuitBuilder::keygen(builder);
+    let config_params = builder.calculate_params(Some(9));
 
     let params = ParamsKZG::<Bn256>::setup(K, OsRng);
-    let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
-    let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
+    let vk = keygen_vk(&params, &builder).expect("vk should not fail");
+    let pk = keygen_pk(&params, vk, &builder).expect("pk should not fail");
 
-    let break_points = circuit.0.break_points.take();
+    let break_points = builder.break_points();
 
     let a = Fr::random(OsRng);
     let b = Fr::random(OsRng);
@@ -53,21 +50,12 @@ fn bench(c: &mut Criterion) {
         &(&params, &pk, [a, b]),
         |bencher, &(params, pk, inputs)| {
             bencher.iter(|| {
-                let mut builder = GateThreadBuilder::new(true);
+                let mut builder =
+                    RangeCircuitBuilder::prover(config_params.clone(), break_points.clone());
                 // do the computation
                 mul_bench(builder.main(0), inputs);
-                let circuit = RangeCircuitBuilder::prover(builder, break_points.clone());
 
-                let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-                create_proof::<
-                    KZGCommitmentScheme<Bn256>,
-                    ProverGWC<'_, Bn256>,
-                    Challenge255<G1Affine>,
-                    _,
-                    Blake2bWrite<Vec<u8>, G1Affine, Challenge255<_>>,
-                    _,
-                >(params, pk, &[circuit], &[&[]], OsRng, &mut transcript)
-                .unwrap();
+                gen_proof(params, pk, builder);
             })
         },
     );

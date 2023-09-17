@@ -1,8 +1,11 @@
 #![allow(clippy::type_complexity)]
 use super::*;
+use crate::utils::biguint_to_fe;
 use crate::utils::testing::base_test;
-use crate::QuantumCell::Witness;
+use crate::QuantumCell::{Constant, Witness};
 use crate::{gates::flex_gate::GateInstructions, QuantumCell};
+use itertools::Itertools;
+use num_bigint::BigUint;
 use test_case::test_case;
 
 #[test_case(&[10, 12].map(Fr::from).map(Witness)=> Fr::from(22); "add(): 10 + 12 == 22")]
@@ -11,13 +14,30 @@ pub fn test_add(inputs: &[QuantumCell<Fr>]) -> Fr {
     base_test().run_gate(|ctx, chip| *chip.add(ctx, inputs[0], inputs[1]).value())
 }
 
+#[test_case(Witness(Fr::from(10))=> Fr::from(11); "inc(): 10 -> 11")]
+#[test_case(Witness(Fr::from(1))=> Fr::from(2); "inc(): 1 -> 2")]
+pub fn test_inc(input: QuantumCell<Fr>) -> Fr {
+    base_test().run_gate(|ctx, chip| *chip.inc(ctx, input).value())
+}
+
 #[test_case(&[10, 12].map(Fr::from).map(Witness)=> -Fr::from(2) ; "sub(): 10 - 12 == -2")]
 #[test_case(&[1, 1].map(Fr::from).map(Witness)=> Fr::from(0) ; "sub(): 1 - 1 == 0")]
 pub fn test_sub(inputs: &[QuantumCell<Fr>]) -> Fr {
     base_test().run_gate(|ctx, chip| *chip.sub(ctx, inputs[0], inputs[1]).value())
 }
 
-#[test_case(Witness(Fr::from(1)) => -Fr::from(1); "neg(): 1 -> -1")]
+#[test_case(Witness(Fr::from(10))=> Fr::from(9); "dec(): 10 -> 9")]
+#[test_case(Witness(Fr::from(1))=> Fr::from(0); "dec(): 1 -> 0")]
+pub fn test_dec(input: QuantumCell<Fr>) -> Fr {
+    base_test().run_gate(|ctx, chip| *chip.dec(ctx, input).value())
+}
+
+#[test_case(&[1, 1, 1].map(Fr::from).map(Witness) => Fr::from(0) ; "sub_mul(): 1 - 1 * 1 == 0")]
+pub fn test_sub_mul(inputs: &[QuantumCell<Fr>]) -> Fr {
+    base_test().run_gate(|ctx, chip| *chip.sub_mul(ctx, inputs[0], inputs[1], inputs[2]).value())
+}
+
+#[test_case(Witness(Fr::from(1)) => -Fr::from(1) ; "neg(): 1 -> -1")]
 pub fn test_neg(a: QuantumCell<Fr>) -> Fr {
     base_test().run_gate(|ctx, chip| *chip.neg(ctx, a).value())
 }
@@ -76,6 +96,17 @@ pub fn test_inner_product_left_last(
     base_test().run_gate(|ctx, chip| {
         let a = chip.inner_product_left_last(ctx, input.0, input.1);
         (*a.0.value(), *a.1.value())
+    })
+}
+
+#[test_case([4,5,6].map(Fr::from).to_vec(), [1,2,3].map(|x| Constant(Fr::from(x))).to_vec() => (Fr::from(32), [4,5,6].map(Fr::from).to_vec());
+"inner_product_left(): <[1,2,3],[4,5,6]> Constant b starts with 1")]
+#[test_case([1,2,3].map(Fr::from).to_vec(), [4,5,6].map(|x| Witness(Fr::from(x))).to_vec() => (Fr::from(32), [1,2,3].map(Fr::from).to_vec());
+"inner_product_left(): <[1,2,3],[4,5,6]> Witness")]
+pub fn test_inner_product_left(a: Vec<Fr>, b: Vec<QuantumCell<Fr>>) -> (Fr, Vec<Fr>) {
+    base_test().run_gate(|ctx, chip| {
+        let (prod, a) = chip.inner_product_left(ctx, a.into_iter().map(Witness), b);
+        (*prod.value(), a.iter().map(|v| *v.value()).collect())
     })
 }
 
@@ -146,9 +177,19 @@ pub fn test_select_by_indicator(array: Vec<QuantumCell<Fr>>, idx: QuantumCell<Fr
 
 #[test_case((0..3).map(Fr::from).map(Witness).collect(), Witness(Fr::from(1)) => Fr::from(1); "select_from_idx(): [0, 1, 2] -> 1")]
 pub fn test_select_from_idx(array: Vec<QuantumCell<Fr>>, idx: QuantumCell<Fr>) -> Fr {
+    base_test().run_gate(|ctx, chip| *chip.select_from_idx(ctx, array, idx).value())
+}
+
+#[test_case(vec![vec![1,2,3], vec![4,5,6], vec![7,8,9]].into_iter().map(|a| a.into_iter().map(Fr::from).collect_vec()).collect_vec(),
+Fr::from(1) =>
+[4,5,6].map(Fr::from).to_vec();
+"select_array_by_indicator(1): [[1,2,3], [4,5,6], [7,8,9]] -> [4,5,6]")]
+pub fn test_select_array_by_indicator(array2d: Vec<Vec<Fr>>, idx: Fr) -> Vec<Fr> {
     base_test().run_gate(|ctx, chip| {
-        let a = chip.idx_to_indicator(ctx, idx, array.len());
-        *chip.select_by_indicator(ctx, array, a).value()
+        let array2d = array2d.into_iter().map(|a| ctx.assign_witnesses(a)).collect_vec();
+        let idx = ctx.load_witness(idx);
+        let ind = chip.idx_to_indicator(ctx, idx, array2d.len());
+        chip.select_array_by_indicator(ctx, &array2d, &ind).iter().map(|a| *a.value()).collect()
     })
 }
 
@@ -170,5 +211,15 @@ pub fn test_num_to_bits(num: usize, bits: usize) -> Vec<Fr> {
     base_test().run_gate(|ctx, chip| {
         let num = ctx.load_witness(Fr::from(num as u64));
         chip.num_to_bits(ctx, num, bits).iter().map(|a| *a.value()).collect()
+    })
+}
+
+#[test_case(Fr::from(3), BigUint::from(3u32), 4 => Fr::from(27); "pow_var(): 3^3 = 27")]
+pub fn test_pow_var(a: Fr, exp: BigUint, max_bits: usize) -> Fr {
+    assert!(exp.bits() <= max_bits as u64);
+    base_test().run_gate(|ctx, chip| {
+        let a = ctx.load_witness(a);
+        let exp = ctx.load_witness(biguint_to_fe(&exp));
+        *chip.pow_var(ctx, a, exp, max_bits).value()
     })
 }

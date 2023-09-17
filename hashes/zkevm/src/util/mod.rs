@@ -53,3 +53,4 @@ pub(crate) mod rlc {
         values.into_iter().fold(F::zero(), |acc, value| acc * randomness + F::from(*value as u64))
     }
 }
+pub mod word;

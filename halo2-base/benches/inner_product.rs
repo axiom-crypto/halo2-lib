@@ -1,28 +1,17 @@
-#![allow(unused_imports)]
-#![allow(unused_variables)]
-use halo2_base::gates::builder::{GateCircuitBuilder, GateThreadBuilder, RangeCircuitBuilder};
-use halo2_base::gates::flex_gate::{FlexGateConfig, GateChip, GateInstructions, GateStrategy};
+use halo2_base::gates::circuit::{builder::RangeCircuitBuilder, CircuitBuilderStage};
+use halo2_base::gates::flex_gate::{GateChip, GateInstructions};
 use halo2_base::halo2_proofs::{
     arithmetic::Field,
-    circuit::*,
     dev::MockProver,
-    halo2curves::bn256::{Bn256, Fr, G1Affine},
+    halo2curves::bn256::{Bn256, Fr},
     plonk::*,
-    poly::kzg::{
-        commitment::{KZGCommitmentScheme, ParamsKZG},
-        multiopen::ProverSHPLONK,
-    },
-    transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer},
+    poly::kzg::commitment::ParamsKZG,
 };
+use halo2_base::utils::testing::gen_proof;
 use halo2_base::utils::ScalarField;
-use halo2_base::{
-    Context,
-    QuantumCell::{Existing, Witness},
-    SKIP_FIRST_PASS,
-};
+use halo2_base::{Context, QuantumCell::Existing};
 use itertools::Itertools;
 use rand::rngs::OsRng;
-use std::marker::PhantomData;
 
 use criterion::{criterion_group, criterion_main};
 use criterion::{BenchmarkId, Criterion};
@@ -47,20 +36,20 @@ fn inner_prod_bench<F: ScalarField>(ctx: &mut Context<F>, a: Vec<F>, b: Vec<F>) 
 fn bench(c: &mut Criterion) {
     let k = 19u32;
     // create circuit for keygen
-    let mut builder = GateThreadBuilder::new(false);
+    let mut builder =
+        RangeCircuitBuilder::from_stage(CircuitBuilderStage::Keygen).use_k(k as usize);
     inner_prod_bench(builder.main(0), vec![Fr::zero(); 5], vec![Fr::zero(); 5]);
-    builder.config(k as usize, Some(20));
-    let circuit = RangeCircuitBuilder::mock(builder);
+    let config_params = builder.calculate_params(Some(20));
 
     // check the circuit is correct just in case
-    MockProver::run(k, &circuit, vec![]).unwrap().assert_satisfied();
+    MockProver::run(k, &builder, vec![]).unwrap().assert_satisfied();
 
     let params = ParamsKZG::<Bn256>::setup(k, OsRng);
-    let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
-    let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
+    let vk = keygen_vk(&params, &builder).expect("vk should not fail");
+    let pk = keygen_pk(&params, vk, &builder).expect("pk should not fail");
 
-    let break_points = circuit.0.break_points.take();
-    drop(circuit);
+    let break_points = builder.break_points();
+    drop(builder);
 
     let mut group = c.benchmark_group("plonk-prover");
     group.sample_size(10);
@@ -69,22 +58,12 @@ fn bench(c: &mut Criterion) {
         &(&params, &pk),
         |bencher, &(params, pk)| {
             bencher.iter(|| {
-                let mut builder = GateThreadBuilder::new(true);
+                let mut builder =
+                    RangeCircuitBuilder::prover(config_params.clone(), break_points.clone());
                 let a = (0..5).map(|_| Fr::random(OsRng)).collect_vec();
                 let b = (0..5).map(|_| Fr::random(OsRng)).collect_vec();
                 inner_prod_bench(builder.main(0), a, b);
-                let circuit = RangeCircuitBuilder::prover(builder, break_points.clone());
-
-                let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-                create_proof::<
-                    KZGCommitmentScheme<Bn256>,
-                    ProverSHPLONK<'_, Bn256>,
-                    Challenge255<G1Affine>,
-                    _,
-                    Blake2bWrite<Vec<u8>, G1Affine, Challenge255<_>>,
-                    _,
-                >(params, pk, &[circuit], &[&[]], OsRng, &mut transcript)
-                .expect("prover should not fail");
+                gen_proof(params, pk, builder);
             })
         },
     );

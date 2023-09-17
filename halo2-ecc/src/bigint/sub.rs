@@ -46,7 +46,7 @@ pub fn assign<F: ScalarField>(
                     Existing(lt),
                     Constant(limb_base),
                     Witness(a_with_borrow_val),
-                    Constant(-F::one()),
+                    Constant(-F::ONE),
                     Existing(bottom),
                     Witness(out_val),
                 ],

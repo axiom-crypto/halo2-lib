@@ -1,26 +1,22 @@
 use ark_std::{end_timer, start_timer};
+use halo2_base::gates::circuit::BaseCircuitParams;
+use halo2_base::gates::flex_gate::MultiPhaseThreadBreakPoints;
+use halo2_base::gates::{
+    circuit::{builder::RangeCircuitBuilder, CircuitBuilderStage},
+    RangeChip,
+};
 use halo2_base::{
-    gates::{
-        builder::{
-            set_lookup_bits, CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
-            RangeCircuitBuilder,
-        },
-        RangeChip,
-    },
     halo2_proofs::{
         arithmetic::Field,
-        halo2curves::bn256::{Bn256, Fq, Fr, G1Affine},
+        halo2curves::bn256::{Bn256, Fq, Fr},
         plonk::*,
-        poly::kzg::{
-            commitment::{KZGCommitmentScheme, ParamsKZG},
-            multiopen::ProverSHPLONK,
-        },
-        transcript::{Blake2bWrite, Challenge255, TranscriptWriterBuffer},
+        poly::kzg::commitment::ParamsKZG,
     },
+    utils::{testing::gen_proof, BigPrimeField},
     Context,
 };
 use halo2_ecc::fields::fp::FpChip;
-use halo2_ecc::fields::{FieldChip, PrimeField};
+use halo2_ecc::fields::FieldChip;
 use rand::rngs::OsRng;
 
 use criterion::{criterion_group, criterion_main};
@@ -32,17 +28,15 @@ use pprof::criterion::{Output, PProfProfiler};
 
 const K: u32 = 19;
 
-fn fp_mul_bench<F: PrimeField>(
+fn fp_mul_bench<F: BigPrimeField>(
     ctx: &mut Context<F>,
-    lookup_bits: usize,
+    range: &RangeChip<F>,
     limb_bits: usize,
     num_limbs: usize,
     _a: Fq,
     _b: Fq,
 ) {
-    set_lookup_bits(lookup_bits);
-    let range = RangeChip::<F>::default(lookup_bits);
-    let chip = FpChip::<F, Fq>::new(&range, limb_bits, num_limbs);
+    let chip = FpChip::<F, Fq>::new(range, limb_bits, num_limbs);
 
     let [a, b] = [_a, _b].map(|x| chip.load_private(ctx, x));
     for _ in 0..2857 {
@@ -54,40 +48,36 @@ fn fp_mul_circuit(
     stage: CircuitBuilderStage,
     a: Fq,
     b: Fq,
+    config_params: Option<BaseCircuitParams>,
     break_points: Option<MultiPhaseThreadBreakPoints>,
 ) -> RangeCircuitBuilder<Fr> {
     let k = K as usize;
+    let lookup_bits = k - 1;
     let mut builder = match stage {
-        CircuitBuilderStage::Mock => GateThreadBuilder::mock(),
-        CircuitBuilderStage::Prover => GateThreadBuilder::prover(),
-        CircuitBuilderStage::Keygen => GateThreadBuilder::keygen(),
+        CircuitBuilderStage::Prover => {
+            RangeCircuitBuilder::prover(config_params.unwrap(), break_points.unwrap())
+        }
+        _ => RangeCircuitBuilder::from_stage(stage).use_k(k).use_lookup_bits(lookup_bits),
     };
 
     let start0 = start_timer!(|| format!("Witness generation for circuit in {stage:?} stage"));
-    fp_mul_bench(builder.main(0), k - 1, 88, 3, a, b);
-
-    let circuit = match stage {
-        CircuitBuilderStage::Mock => {
-            builder.config(k, Some(20));
-            RangeCircuitBuilder::mock(builder)
-        }
-        CircuitBuilderStage::Keygen => {
-            builder.config(k, Some(20));
-            RangeCircuitBuilder::keygen(builder)
-        }
-        CircuitBuilderStage::Prover => RangeCircuitBuilder::prover(builder, break_points.unwrap()),
-    };
+    let range = builder.range_chip();
+    fp_mul_bench(builder.main(0), &range, 88, 3, a, b);
     end_timer!(start0);
-    circuit
+    if !stage.witness_gen_only() {
+        builder.calculate_params(Some(20));
+    }
+    builder
 }
 
 fn bench(c: &mut Criterion) {
-    let circuit = fp_mul_circuit(CircuitBuilderStage::Keygen, Fq::zero(), Fq::zero(), None);
+    let circuit = fp_mul_circuit(CircuitBuilderStage::Keygen, Fq::zero(), Fq::zero(), None, None);
+    let config_params = circuit.params();
 
     let params = ParamsKZG::<Bn256>::setup(K, OsRng);
     let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
     let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
-    let break_points = circuit.0.break_points.take();
+    let break_points = circuit.break_points();
 
     let a = Fq::random(OsRng);
     let b = Fq::random(OsRng);
@@ -98,19 +88,15 @@ fn bench(c: &mut Criterion) {
         &(&params, &pk, a, b),
         |bencher, &(params, pk, a, b)| {
             bencher.iter(|| {
-                let circuit =
-                    fp_mul_circuit(CircuitBuilderStage::Prover, a, b, Some(break_points.clone()));
+                let circuit = fp_mul_circuit(
+                    CircuitBuilderStage::Prover,
+                    a,
+                    b,
+                    Some(config_params.clone()),
+                    Some(break_points.clone()),
+                );
 
-                let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-                create_proof::<
-                    KZGCommitmentScheme<Bn256>,
-                    ProverSHPLONK<'_, Bn256>,
-                    Challenge255<G1Affine>,
-                    _,
-                    Blake2bWrite<Vec<u8>, G1Affine, Challenge255<_>>,
-                    _,
-                >(params, pk, &[circuit], &[&[]], OsRng, &mut transcript)
-                .expect("prover should not fail");
+                gen_proof(params, pk, circuit);
             })
         },
     );
