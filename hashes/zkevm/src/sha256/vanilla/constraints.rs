@@ -342,7 +342,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
                     input_byte.clone() * not::expr(meta.query_advice(is_padding, Rotation::cur()))
                 })
                 .collect_vec();
-            // Convert to u32 as little-endian bytes. Use LE so it doesn't care about trailing zeros.
+            // Convert to u32 as little-endian bytes. Choice of LE is arbitrary, but consistent with Keccak impl.
             let input_word = from_bytes::expr(&masked_input_bytes);
             cb.require_equal(
                 "word value",
