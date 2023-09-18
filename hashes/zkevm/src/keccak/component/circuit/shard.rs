@@ -2,7 +2,7 @@ use std::cell::RefCell;
 
 use crate::{
     keccak::{
-        coprocessor::{
+        component::{
             encode::{
                 get_words_to_witness_multipliers, num_poseidon_absorb_per_keccak_f,
                 num_word_per_witness,
@@ -38,23 +38,23 @@ use halo2_base::{
 };
 use itertools::Itertools;
 
-/// Keccak Coprocessor Leaf Circuit
+/// Keccak Component Shard Circuit
 #[derive(Getters)]
-pub struct KeccakCoprocessorLeafCircuit<F: Field> {
+pub struct KeccakComponentShardCircuit<F: Field> {
     inputs: Vec<Vec<u8>>,
 
     /// Parameters of this circuit. The same parameters always construct the same circuit.
     #[getset(get = "pub")]
-    params: KeccakCoprocessorLeafCircuitParams,
+    params: KeccakComponentShardCircuitParams,
 
     base_circuit_builder: RefCell<BaseCircuitBuilder<F>>,
     hasher: RefCell<PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE>>,
     gate_chip: GateChip<F>,
 }
 
-/// Parameters of KeccakCoprocessorLeafCircuit.
+/// Parameters of KeccakComponentCircuit.
 #[derive(Default, Clone, CopyGetters)]
-pub struct KeccakCoprocessorLeafCircuitParams {
+pub struct KeccakComponentShardCircuitParams {
     /// This circuit has 2^k rows.
     #[getset(get_copy = "pub")]
     k: usize,
@@ -74,8 +74,8 @@ pub struct KeccakCoprocessorLeafCircuitParams {
     pub base_circuit_params: BaseCircuitParams,
 }
 
-impl KeccakCoprocessorLeafCircuitParams {
-    /// Create a new KeccakCoprocessorLeafCircuitParams.
+impl KeccakComponentShardCircuitParams {
+    /// Create a new KeccakComponentShardCircuitParams.
     pub fn new(
         k: usize,
         num_unusable_row: usize,
@@ -109,17 +109,17 @@ impl KeccakCoprocessorLeafCircuitParams {
     }
 }
 
-/// Circuit::Config for Keccak Coprocessor Leaf Circuit.
+/// Circuit::Config for Keccak Component Shard Circuit.
 #[derive(Clone)]
-pub struct KeccakCoprocessorLeafConfig<F: Field> {
+pub struct KeccakComponentShardConfig<F: Field> {
     pub base_circuit_config: BaseConfig<F>,
     pub keccak_circuit_config: KeccakCircuitConfig<F>,
 }
 
-impl<F: Field> Circuit<F> for KeccakCoprocessorLeafCircuit<F> {
-    type Config = KeccakCoprocessorLeafConfig<F>;
+impl<F: Field> Circuit<F> for KeccakComponentShardCircuit<F> {
+    type Config = KeccakComponentShardConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
-    type Params = KeccakCoprocessorLeafCircuitParams;
+    type Params = KeccakComponentShardCircuitParams;
 
     fn params(&self) -> Self::Params {
         self.params.clone()
@@ -212,11 +212,11 @@ impl<F: Field> LoadedKeccakF<F> {
     }
 }
 
-impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
-    /// Create a new KeccakCoprocessorLeafCircuit.
+impl<F: Field> KeccakComponentShardCircuit<F> {
+    /// Create a new KeccakComponentShardCircuit.
     pub fn new(
         inputs: Vec<Vec<u8>>,
-        params: KeccakCoprocessorLeafCircuitParams,
+        params: KeccakComponentShardCircuitParams,
         witness_gen_only: bool,
     ) -> Self {
         let input_size = inputs.iter().map(|input| get_num_keccak_f(input.len())).sum::<usize>();
@@ -250,7 +250,7 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
     /// Simulate witness generation of the base circuit to determine BaseCircuitParams because the number of columns
     /// of the base circuit can only be known after witness generation.
     pub fn calculate_base_circuit_params(
-        params: &KeccakCoprocessorLeafCircuitParams,
+        params: &KeccakComponentShardCircuitParams,
     ) -> BaseCircuitParams {
         // Create a simulation circuit to calculate base circuit parameters.
         let simulation_circuit = Self::new(vec![], params.clone(), false);
