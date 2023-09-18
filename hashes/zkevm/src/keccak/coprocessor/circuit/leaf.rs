@@ -22,7 +22,7 @@ use halo2_base::{
     gates::{
         circuit::{builder::BaseCircuitBuilder, BaseCircuitParams, BaseConfig},
         flex_gate::MultiPhaseThreadBreakPoints,
-        GateInstructions, RangeInstructions,
+        GateChip, GateInstructions,
     },
     halo2_proofs::{
         circuit::{Layouter, SimpleFloorPlanner},
@@ -49,6 +49,7 @@ pub struct KeccakCoprocessorLeafCircuit<F: Field> {
 
     base_circuit_builder: RefCell<BaseCircuitBuilder<F>>,
     hasher: RefCell<PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE>>,
+    gate_chip: GateChip<F>,
 }
 
 /// Parameters of KeccakCoprocessorLeafCircuit.
@@ -60,9 +61,6 @@ pub struct KeccakCoprocessorLeafCircuitParams {
     // Number of unusable rows withhold by Halo2.
     #[getset(get_copy = "pub")]
     num_unusable_row: usize,
-    /// The bits of lookup table for RangeChip.
-    #[getset(get_copy = "pub")]
-    lookup_bits: usize,
     /// Max keccak_f this circuits can aceept. The circuit can at most process <capacity> of inputs
     /// with < NUM_BYTES_TO_ABSORB bytes or an input with <capacity> * NUM_BYTES_TO_ABSORB - 1 bytes.
     #[getset(get_copy = "pub")]
@@ -81,7 +79,6 @@ impl KeccakCoprocessorLeafCircuitParams {
     pub fn new(
         k: usize,
         num_unusable_row: usize,
-        lookup_bits: usize,
         capacity: usize,
         publish_raw_outputs: bool,
     ) -> Self {
@@ -93,7 +90,7 @@ impl KeccakCoprocessorLeafCircuitParams {
         let keccak_circuit_params = KeccakConfigParams { k: k as u32, rows_per_round };
         let base_circuit_params = BaseCircuitParams {
             k,
-            lookup_bits: Some(lookup_bits),
+            lookup_bits: None,
             num_instance_columns: if publish_raw_outputs {
                 OUTPUT_NUM_COL_RAW
             } else {
@@ -104,7 +101,6 @@ impl KeccakCoprocessorLeafCircuitParams {
         Self {
             k,
             num_unusable_row,
-            lookup_bits,
             capacity,
             publish_raw_outputs,
             keccak_circuit_params,
@@ -129,7 +125,7 @@ impl<F: Field> Circuit<F> for KeccakCoprocessorLeafCircuit<F> {
         self.params.clone()
     }
 
-    /// Creates a new instance of the [RangeCircuitBuilder] without witnesses by setting the witness_gen_only flag to false
+    /// Creates a new instance of the [KeccakCoprocessorLeafCircuit] without witnesses by setting the witness_gen_only flag to false
     fn without_witnesses(&self) -> Self {
         unimplemented!()
     }
@@ -232,6 +228,7 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
             params,
             base_circuit_builder: RefCell::new(base_circuit_builder),
             hasher: RefCell::new(create_hasher()),
+            gate_chip: GateChip::new(),
         }
     }
 
@@ -323,8 +320,7 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
 
     /// Generate witnesses of the base circuit.
     fn generate_base_circuit_witnesses(&self, loaded_keccak_fs: &[LoadedKeccakF<F>]) {
-        let range = self.base_circuit_builder.borrow().range_chip();
-        let gate = range.gate();
+        let gate = &self.gate_chip;
         let circuit_final_outputs = {
             let mut base_circuit_builder_mut = self.base_circuit_builder.borrow_mut();
             let ctx = base_circuit_builder_mut.main(0);
@@ -381,8 +377,7 @@ impl<F: Field> KeccakCoprocessorLeafCircuit<F> {
         // The length of outputs should always equal to params.capacity.
         assert_eq!(outputs.len(), self.params.capacity);
         if !self.params.publish_raw_outputs {
-            let range_chip = self.base_circuit_builder.borrow().range_chip();
-            let gate = range_chip.gate();
+            let gate = &self.gate_chip;
             let mut base_circuit_builder_mut = self.base_circuit_builder.borrow_mut();
             let ctx = base_circuit_builder_mut.main(0);
 
