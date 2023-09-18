@@ -3,7 +3,7 @@ use ethers_core::{types::H256, utils::keccak256};
 use crate::keccak::vanilla::param::NUM_BYTES_TO_ABSORB;
 
 /// Fixed length format for one keccak_f.
-/// This closely matches [zkevm_hashes::keccak::coprocessor::circuit::leaf::LoadedKeccakF].
+/// This closely matches [crate::keccak::component::circuit::shard::LoadedKeccakF].
 #[derive(Clone, Debug)]
 pub struct KeccakIngestionFormat {
     pub bytes_per_keccak_f: [u8; NUM_BYTES_TO_ABSORB],
@@ -39,7 +39,7 @@ impl KeccakIngestionFormat {
 /// We split each input into `KeccakIngestionFormat` chunks, one for each keccak_f needed to compute `keccak(input)`.
 /// We then resize so there are exactly `capacity` total chunks.
 ///
-/// Very similar to [zkevm_hashes::keccak::coprocessor::encode::encode_native_input] except we do not do the
+/// Very similar to [crate::keccak::component::encode::encode_native_input] except we do not do the
 /// encoding part (that will be done in circuit, not natively).
 ///
 /// Returns `Err(true_capacity)` if `true_capacity > capacity`, where `true_capacity` is the number of keccak_f needed
