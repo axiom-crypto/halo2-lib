@@ -8,8 +8,8 @@ use halo2_base::{
 };
 use itertools::Itertools;
 
-use crate::keccak::coprocessor::{
-    circuit::leaf::create_hasher,
+use crate::keccak::component::{
+    circuit::shard::create_hasher,
     encode::{encode_fix_len_bytes_vec, encode_native_input, encode_var_len_bytes_vec},
 };
 
