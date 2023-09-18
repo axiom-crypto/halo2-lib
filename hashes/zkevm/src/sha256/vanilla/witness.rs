@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use getset::Getters;
 use halo2_base::{
     halo2_proofs::circuit::{Region, Value},
@@ -46,6 +48,7 @@ struct AssignedShaTableRow<'v, F: Field> {
     /// Length in bytes of the input processed so far. Does not include padding.
     /// Only constrained on rows with `q_input` true.
     length: Halo2AssignedCell<'v, F>,
+    _marker: PhantomData<&'v F>,
 }
 
 /// The assigned cells from a chunk of `SHA256_NUM_ROWS` rows corresponding to a 512-bit SHA-256 input block.
@@ -65,6 +68,7 @@ pub struct AssignedSha256Block<'v, F: Field> {
     /// This should only be used if `is_final` is true.
     #[getset(get = "pub")]
     pub(crate) length: Halo2AssignedCell<'v, F>,
+    _marker: PhantomData<&'v F>,
 }
 
 // Functions for assigning witnesses to Halo2AssignedCells.
@@ -113,7 +117,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
                     .try_into()
                     .unwrap();
                 let length = input_rows.last().unwrap().length.clone();
-                AssignedSha256Block { is_final, output, word_values, length }
+                AssignedSha256Block { is_final, output, word_values, length, _marker: PhantomData }
             })
             .collect()
     }
@@ -202,6 +206,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
             output: Word::new([hash_lo, hash_hi]),
             word_value,
             length,
+            _marker: PhantomData,
         }
     }
 }

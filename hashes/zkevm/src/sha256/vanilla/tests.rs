@@ -45,6 +45,7 @@ pub struct Sha256BitCircuit<F: Field> {
 impl<F: Field> Circuit<F> for Sha256BitCircuit<F> {
     type Config = Sha256CircuitConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
+    type Params = ();
 
     fn without_witnesses(&self) -> Self {
         unimplemented!()
@@ -89,7 +90,11 @@ impl<F: Field> Sha256BitCircuit<F> {
         let mut input_offset = 0;
         let mut input = vec![];
         let extract_value = |a: Halo2AssignedCell<F>| {
-            let value = **value_to_option(a.value()).unwrap();
+            let value = *value_to_option(a.value()).unwrap();
+            #[cfg(feature = "halo2-axiom")]
+            let value = *value;
+            #[cfg(not(feature = "halo2-axiom"))]
+            let value = value.clone();
             match value {
                 Assigned::Trivial(v) => v,
                 Assigned::Zero => F::ZERO,
@@ -97,7 +102,8 @@ impl<F: Field> Sha256BitCircuit<F> {
             }
         };
         for input_block in assigned_blocks {
-            let AssignedSha256Block { is_final, output, word_values, length } = input_block.clone();
+            let AssignedSha256Block { is_final, output, word_values, length, .. } =
+                input_block.clone();
             let [is_final, output_lo, output_hi, length] =
                 [is_final, output.lo(), output.hi(), length].map(extract_value);
             let word_values = word_values.iter().cloned().map(extract_value).collect::<Vec<_>>();
