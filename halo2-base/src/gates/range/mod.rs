@@ -78,8 +78,9 @@ impl<F: ScalarField> RangeConfig<F> {
         for (phase, &num_columns) in num_lookup_advice.iter().enumerate() {
             let num_advice = *gate_params.num_advice_per_phase.get(phase).unwrap_or(&0);
             let mut columns = Vec::new();
-            // if num_columns is set to 0, then we assume you do not want to perform any lookups in that phase
-            if num_advice == 1 && num_columns != 0 {
+            // If num_columns is set to 0, then we assume you do not want to perform any lookups in that phase.
+            // Disable this optimization in phase > 0 because you might set selectors based a cell from other columns.
+            if phase == 0 && num_advice == 1 && num_columns != 0 {
                 q_lookup.push(Some(meta.complex_selector()));
             } else {
                 q_lookup.push(None);
