@@ -17,10 +17,10 @@ use crate::{
 
 use super::param::*;
 
-// TODO: Abstract this module into a trait for all coprocessor circuits.
+// TODO: Abstract this module into a trait for all component circuits.
 
 /// Module to encode raw inputs into lookup keys for looking up keccak results. The encoding is
-/// designed to be efficient in coprocessor circuits.
+/// designed to be efficient in component circuits.
 
 /// Encode a native input bytes into its corresponding lookup key. This function can be considered as the spec of the encoding.
 pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {

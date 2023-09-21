@@ -1,4 +1,4 @@
-use crate::keccak::coprocessor::output::{
+use crate::keccak::component::output::{
     dummy_circuit_output, input_to_circuit_outputs, multi_inputs_to_circuit_outputs,
     KeccakCircuitOutput,
 };

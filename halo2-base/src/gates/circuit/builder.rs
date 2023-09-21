@@ -343,6 +343,11 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
                     let cell = advice[0].cell.as_ref().unwrap();
                     let copy_manager = self.core.copy_manager.lock().unwrap();
                     let acell = copy_manager.assigned_advices[cell];
+                    assert_eq!(
+                        acell.column,
+                        config.gate.basic_gates[phase][0].value.into(),
+                        "lookup column does not match"
+                    );
                     q_lookup.enable(region, acell.row_offset).unwrap();
                 }
             }
