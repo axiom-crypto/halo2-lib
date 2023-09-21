@@ -4,18 +4,18 @@ use super::pairing::PairingChip;
 use super::{Fp12Chip, Fp2Chip, FpChip};
 use crate::ecc::EccChip;
 use crate::fields::FieldChip;
-use crate::fields::PrimeField;
 use crate::halo2_proofs::halo2curves::bn256::Fq12;
 use crate::halo2_proofs::halo2curves::bn256::{G1Affine, G2Affine};
+use halo2_base::utils::BigPrimeField;
 use halo2_base::{AssignedValue, Context};
 
 // To avoid issues with mutably borrowing twice (not allowed in Rust), we only store fp_chip and construct g2_chip and fp12_chip in scope when needed for temporary mutable borrows
-pub struct BlsSignatureChip<'chip, F: PrimeField> {
+pub struct BlsSignatureChip<'chip, F: BigPrimeField> {
     pub fp_chip: &'chip FpChip<'chip, F>,
     pub pairing_chip: &'chip PairingChip<'chip, F>,
 }
 
-impl<'chip, F: PrimeField> BlsSignatureChip<'chip, F> {
+impl<'chip, F: BigPrimeField> BlsSignatureChip<'chip, F> {
     pub fn new(fp_chip: &'chip FpChip<F>, pairing_chip: &'chip PairingChip<F>) -> Self {
         Self { fp_chip, pairing_chip }
     }

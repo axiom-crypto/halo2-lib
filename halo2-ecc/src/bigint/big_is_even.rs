@@ -1,7 +1,9 @@
 use super::OverflowInteger;
-use halo2_base::gates::GateInstructions;
-use halo2_base::gates::RangeChip;
-use halo2_base::{safe_types::RangeInstructions, utils::ScalarField, AssignedValue, Context};
+use halo2_base::{
+    gates::{GateInstructions, RangeChip, RangeInstructions},
+    utils::ScalarField,
+    AssignedValue, Context,
+};
 
 /// # Assumptions
 /// * `a` has nonzero number of limbs

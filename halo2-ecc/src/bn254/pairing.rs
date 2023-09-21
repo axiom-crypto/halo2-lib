@@ -7,8 +7,9 @@ use crate::halo2_proofs::halo2curves::bn256::{
 use crate::{
     ecc::{EcPoint, EccChip},
     fields::fp12::mul_no_carry_w6,
-    fields::{FieldChip, PrimeField},
+    fields::FieldChip,
 };
+use halo2_base::utils::BigPrimeField;
 use halo2_base::Context;
 
 const XI_0: i64 = 9;
@@ -21,7 +22,7 @@ const XI_0: i64 = 9;
 //  line_{Psi(Q0), Psi(Q1)}(P) where Psi(x,y) = (w^2 x, w^3 y)
 //  - equals w^3 (y_1 - y_2) X + w^2 (x_2 - x_1) Y + w^5 (x_1 y_2 - x_2 y_1) =: out3 * w^3 + out2 * w^2 + out5 * w^5 where out2, out3, out5 are Fp2 points
 // Output is [None, None, out2, out3, None, out5] as vector of `Option<FqPoint>`s
-pub fn sparse_line_function_unequal<F: PrimeField>(
+pub fn sparse_line_function_unequal<F: BigPrimeField>(
     fp2_chip: &Fp2Chip<F>,
     ctx: &mut Context<F>,
     Q: (&EcPoint<F, FqPoint<F>>, &EcPoint<F, FqPoint<F>>),
@@ -60,7 +61,7 @@ pub fn sparse_line_function_unequal<F: PrimeField>(
 //  line_{Psi(Q), Psi(Q)}(P) where Psi(x,y) = (w^2 x, w^3 y)
 //  - equals (3x^3 - 2y^2)(XI_0 + u) + w^4 (-3 x^2 * Q.x) + w^3 (2 y * Q.y) =: out0 + out4 * w^4 + out3 * w^3 where out0, out3, out4 are Fp2 points
 // Output is [out0, None, None, out3, out4, None] as vector of `Option<FqPoint>`s
-pub fn sparse_line_function_equal<F: PrimeField>(
+pub fn sparse_line_function_equal<F: BigPrimeField>(
     fp2_chip: &Fp2Chip<F>,
     ctx: &mut Context<F>,
     Q: &EcPoint<F, FqPoint<F>>,
@@ -95,7 +96,7 @@ pub fn sparse_line_function_equal<F: PrimeField>(
 
 // multiply Fp12 point `a` with Fp12 point `b` where `b` is len 6 vector of Fp2 points, where some are `None` to represent zero.
 // Assumes `b` is not vector of all `None`s
-pub fn sparse_fp12_multiply<F: PrimeField>(
+pub fn sparse_fp12_multiply<F: BigPrimeField>(
     fp2_chip: &Fp2Chip<F>,
     ctx: &mut Context<F>,
     a: &FqPoint<F>,
@@ -162,7 +163,7 @@ pub fn sparse_fp12_multiply<F: PrimeField>(
 // - P is point in E(Fp)
 // Output:
 // - out = g * l_{Psi(Q0), Psi(Q1)}(P) as Fp12 point
-pub fn fp12_multiply_with_line_unequal<F: PrimeField>(
+pub fn fp12_multiply_with_line_unequal<F: BigPrimeField>(
     fp2_chip: &Fp2Chip<F>,
     ctx: &mut Context<F>,
     g: &FqPoint<F>,
@@ -179,7 +180,7 @@ pub fn fp12_multiply_with_line_unequal<F: PrimeField>(
 // - P is point in E(Fp)
 // Output:
 // - out = g * l_{Psi(Q), Psi(Q)}(P) as Fp12 point
-pub fn fp12_multiply_with_line_equal<F: PrimeField>(
+pub fn fp12_multiply_with_line_equal<F: BigPrimeField>(
     fp2_chip: &Fp2Chip<F>,
     ctx: &mut Context<F>,
     g: &FqPoint<F>,
@@ -208,7 +209,7 @@ pub fn fp12_multiply_with_line_equal<F: PrimeField>(
 //  - `0 <= loop_count < r` and `loop_count < p` (to avoid [loop_count]Q' = Frob_p(Q'))
 //  - x^3 + b = 0 has no solution in Fp2, i.e., the y-coordinate of Q cannot be 0.
 
-pub fn miller_loop_BN<F: PrimeField>(
+pub fn miller_loop_BN<F: BigPrimeField>(
     ecc_chip: &EccChip<F, Fp2Chip<F>>,
     ctx: &mut Context<F>,
     Q: &EcPoint<F, FqPoint<F>>,
@@ -294,7 +295,7 @@ pub fn miller_loop_BN<F: PrimeField>(
 
 // let pairs = [(a_i, b_i)], a_i in G_1, b_i in G_2
 // output is Prod_i e'(a_i, b_i), where e'(a_i, b_i) is the output of `miller_loop_BN(b_i, a_i)`
-pub fn multi_miller_loop_BN<F: PrimeField>(
+pub fn multi_miller_loop_BN<F: BigPrimeField>(
     ecc_chip: &EccChip<F, Fp2Chip<F>>,
     ctx: &mut Context<F>,
     pairs: Vec<(&EcPoint<F, FpPoint<F>>, &EcPoint<F, FqPoint<F>>)>,
@@ -397,7 +398,7 @@ pub fn multi_miller_loop_BN<F: PrimeField>(
 // - coeff[1][2], coeff[1][3] as assigned cells: this is an optimization to avoid loading new constants
 // Output:
 // - (coeff[1][2] * x^p, coeff[1][3] * y^p) point in E(Fp2)
-pub fn twisted_frobenius<F: PrimeField>(
+pub fn twisted_frobenius<F: BigPrimeField>(
     ecc_chip: &EccChip<F, Fp2Chip<F>>,
     ctx: &mut Context<F>,
     Q: impl Into<EcPoint<F, FqPoint<F>>>,
@@ -423,7 +424,7 @@ pub fn twisted_frobenius<F: PrimeField>(
 // - Q = (x, y) point in E(Fp2)
 // Output:
 // - (coeff[1][2] * x^p, coeff[1][3] * -y^p) point in E(Fp2)
-pub fn neg_twisted_frobenius<F: PrimeField>(
+pub fn neg_twisted_frobenius<F: BigPrimeField>(
     ecc_chip: &EccChip<F, Fp2Chip<F>>,
     ctx: &mut Context<F>,
     Q: impl Into<EcPoint<F, FqPoint<F>>>,
@@ -444,11 +445,11 @@ pub fn neg_twisted_frobenius<F: PrimeField>(
 }
 
 // To avoid issues with mutably borrowing twice (not allowed in Rust), we only store fp_chip and construct g2_chip and fp12_chip in scope when needed for temporary mutable borrows
-pub struct PairingChip<'chip, F: PrimeField> {
+pub struct PairingChip<'chip, F: BigPrimeField> {
     pub fp_chip: &'chip FpChip<'chip, F>,
 }
 
-impl<'chip, F: PrimeField> PairingChip<'chip, F> {
+impl<'chip, F: BigPrimeField> PairingChip<'chip, F> {
     pub fn new(fp_chip: &'chip FpChip<F>) -> Self {
         Self { fp_chip }
     }
