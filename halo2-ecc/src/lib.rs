@@ -8,6 +8,7 @@ pub mod ecc;
 pub mod fields;
 
 pub mod bn254;
+pub mod grumpkin;
 pub mod secp256k1;
 
 pub use halo2_base;

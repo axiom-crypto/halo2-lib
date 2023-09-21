@@ -11,6 +11,7 @@ use std::fmt::Debug;
 pub mod fp;
 pub mod fp12;
 pub mod fp2;
+pub mod native_fp;
 pub mod vector;
 
 #[cfg(test)]
