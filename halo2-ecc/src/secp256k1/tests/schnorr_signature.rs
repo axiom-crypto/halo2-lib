@@ -39,8 +39,8 @@ pub fn schnorr_signature_test<F: BigPrimeField>(
     params: CircuitParams,
     input: SchnorrInput,
 ) -> F {
-    let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
-    let fq_chip = FqChip::<F>::new(&range, params.limb_bits, params.num_limbs);
+    let fp_chip = FpChip::<F>::new(range, params.limb_bits, params.num_limbs);
+    let fq_chip = FqChip::<F>::new(range, params.limb_bits, params.num_limbs);
 
     let [m, s] = [input.msg_hash, input.s].map(|x| fq_chip.load_private(ctx, x));
     let r = fp_chip.load_private(ctx, input.r);

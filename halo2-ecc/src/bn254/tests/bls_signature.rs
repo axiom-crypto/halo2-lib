@@ -4,15 +4,18 @@ use std::{
 };
 
 use super::*;
-use crate::{fields::FpStrategy, halo2_proofs::halo2curves::bn256::G2Affine};
+use crate::{
+    bn254::bls_signature::BlsSignatureChip, fields::FpStrategy,
+    halo2_proofs::halo2curves::bn256::G2Affine,
+};
 use halo2_base::{
     gates::RangeChip,
-    halo2_proofs::halo2curves::bn256::{G2Prepared, multi_miller_loop, Gt},
+    halo2_proofs::halo2curves::bn256::{multi_miller_loop, G2Prepared, Gt},
     utils::BigPrimeField,
     Context,
 };
 extern crate pairing;
-use pairing::{MillerLoopResult, group::ff::Field};
+use pairing::{group::ff::Field, MillerLoopResult};
 use rand_core::OsRng;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -39,22 +42,21 @@ fn bls_signature_test<F: BigPrimeField>(
     msghash: G2Affine,
 ) {
     // Calculate halo2 pairing by multipairing
-    std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
-    let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
+    let fp_chip = FpChip::<F>::new(range, params.limb_bits, params.num_limbs);
     let pairing_chip = PairingChip::new(&fp_chip);
     let bls_signature_chip = BlsSignatureChip::new(&fp_chip, &pairing_chip);
     let result = bls_signature_chip.bls_signature_verify(ctx, g1, signatures, pubkeys, msghash);
 
     // Calculate non-halo2 pairing by multipairing
     let mut signatures_g2: G2Affine = signatures[0];
-    for i in 1..signatures.len() {
-        signatures_g2 = (signatures_g2 + signatures[i]).into();
+    for sig in signatures.iter().skip(1) {
+        signatures_g2 = (signatures_g2 + sig).into();
     }
     let signature_g2_prepared = G2Prepared::from(signatures_g2);
 
     let mut pubkeys_g1: G1Affine = pubkeys[0];
-    for i in 1..signatures.len() {
-        pubkeys_g1 = (pubkeys_g1 + pubkeys[i]).into();
+    for pubkey in pubkeys.iter().skip(1) {
+        pubkeys_g1 = (pubkeys_g1 + pubkey).into();
     }
     let pubkey_aggregated = pubkeys_g1;
 
@@ -132,7 +134,15 @@ fn bench_bls_signature() -> Result<(), Box<dyn std::error::Error>> {
             (g1, signatures.clone(), pubkeys.clone(), msg_hash),
             (g1, signatures, pubkeys, msg_hash),
             |pool, range, (g1, signatures, pubkeys, msg_hash)| {
-                bls_signature_test(pool.main(), range, bench_params, g1, &signatures, &pubkeys, msg_hash);
+                bls_signature_test(
+                    pool.main(),
+                    range,
+                    bench_params,
+                    g1,
+                    &signatures,
+                    &pubkeys,
+                    msg_hash,
+                );
             },
         );
 

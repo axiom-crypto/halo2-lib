@@ -67,7 +67,7 @@ fn pairing_check_test<F: BigPrimeField>(
     Q: G2Affine,
     S: G1Affine,
 ) {
-    let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
+    let fp_chip = FpChip::<F>::new(range, params.limb_bits, params.num_limbs);
     let chip = PairingChip::new(&fp_chip);
     let P_assigned = chip.load_private_g1(ctx, P);
     let Q_assigned = chip.load_private_g2(ctx, Q);

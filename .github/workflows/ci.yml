@@ -34,9 +34,7 @@ jobs:
           mv configs/secp256k1/bench_ecdsa.t.config configs/secp256k1/bench_ecdsa.config
           cargo test --release -- --nocapture bench_secp256k1_ecdsa
           cargo test --release -- --nocapture bench_fixed_base_msm
-          mv configs/bn254/bench_msm.t.config configs/bn254/bench_msm.config
           cargo test --release -- --nocapture bench_msm
-          mv configs/bn254/bench_pairing.t.config configs/bn254/bench_pairing.config
           cargo test --release -- --nocapture bench_pairing
       - name: Run zkevm tests
         working-directory: "hashes/zkevm"
