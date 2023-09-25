@@ -373,9 +373,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
         meta.create_gate("cross block data consistency", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
             let start_new_hash = start_new_hash(meta);
-            let to_const =
-                |value: &String| -> &'static str { Box::leak(value.clone().into_boxed_str()) };
-            let mut add = |name: &'static str, column: Column<Advice>| {
+            let mut add = |_name: &'static str, column: Column<Advice>| {
                 let last_rot =
                     Rotation(-((NUM_END_ROWS + NUM_ROUNDS - NUM_WORDS_TO_ABSORB) as i32));
                 let value_to_copy = meta.query_advice(column, last_rot);
@@ -383,11 +381,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
                 let cur_value = meta.query_advice(column, Rotation::cur());
                 // On squeeze rows fetch the last used value
                 cb.condition(meta.query_fixed(q_squeeze, Rotation::cur()), |cb| {
-                    cb.require_equal(
-                        to_const(&format!("{name} copy check")),
-                        cur_value.expr(),
-                        value_to_copy.expr(),
-                    );
+                    cb.require_equal("copy check", cur_value.expr(), value_to_copy.expr());
                 });
                 // On first rows keep the length the same, or reset the length when starting a
                 // new hash
@@ -396,7 +390,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
                         - meta.query_fixed(q_first, Rotation::cur()),
                     |cb| {
                         cb.require_equal(
-                            to_const(&format!("{name} equality check")),
+                            "equality check",
                             cur_value.expr(),
                             prev_value.expr() * not::expr(start_new_hash.expr()),
                         );
@@ -404,11 +398,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
                 );
                 // Set the value to zero on the first row
                 cb.condition(meta.query_fixed(q_first, Rotation::cur()), |cb| {
-                    cb.require_equal(
-                        to_const(&format!("{name} initialized to 0")),
-                        cur_value.clone(),
-                        0.expr(),
-                    );
+                    cb.require_equal("initialized to 0", cur_value.clone(), 0.expr());
                 });
             };
             add("length", length);
