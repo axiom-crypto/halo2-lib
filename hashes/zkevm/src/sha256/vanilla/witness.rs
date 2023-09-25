@@ -135,7 +135,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
 
         // Fixed values
         for (_name, column, value) in &[
-            ("q_enable", self.q_enable, F::from(true)),
+            ("q_enable", self.hash_table.q_enable, F::from(true)),
             ("q_first", self.q_first, F::from(offset == 0)),
             (
                 "q_extend",

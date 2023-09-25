@@ -10,6 +10,8 @@ use super::param::*;
 /// ShaTable, copied from KeccakTable. However note that `NUM_BYTES_PER_WORD` is different for SHA256
 #[derive(Clone, Debug)]
 pub struct ShaTable {
+    /// Selector always turned on except in blinding rows.
+    pub(super) q_enable: Column<Fixed>,
     /// is_enabled := q_squeeze && is_final
     /// q_squeeze is selector for dedicated row per input block for squeezing
     /// is_final is flag for whether this block actually is the last block of an input
@@ -25,6 +27,7 @@ pub struct ShaTable {
 impl ShaTable {
     /// Construct a new ShaTable
     pub fn construct<F: Field>(meta: &mut ConstraintSystem<F>) -> Self {
+        let q_enable = meta.fixed_column();
         let is_enabled = meta.advice_column();
         let word_value = meta.advice_column();
         let length = meta.advice_column();
@@ -35,15 +38,13 @@ impl ShaTable {
         meta.enable_equality(length);
         meta.enable_equality(hash_lo);
         meta.enable_equality(hash_hi);
-        Self { is_enabled, output: Word::new([hash_lo, hash_hi]), word_value, length }
+        Self { q_enable, is_enabled, output: Word::new([hash_lo, hash_hi]), word_value, length }
     }
 }
 
 /// Columns for the Sha256 circuit
 #[derive(Clone, Debug)]
 pub struct Sha256CircuitConfig<F> {
-    /// Selector always turned on except in blinding rows.
-    pub(super) q_enable: Column<Fixed>,
     pub(super) q_first: Column<Fixed>,
     pub(super) q_extend: Column<Fixed>,
     pub(super) q_start: Column<Fixed>,

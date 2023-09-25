@@ -27,7 +27,6 @@ use super::param::*;
 
 impl<F: Field> Sha256CircuitConfig<F> {
     pub fn new(meta: &mut ConstraintSystem<F>) -> Self {
-        let q_enable = meta.fixed_column();
         let q_first = meta.fixed_column();
         let q_extend = meta.fixed_column();
         let q_start = meta.fixed_column();
@@ -47,6 +46,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
         let hash_table = ShaTable::construct(meta);
         let is_enabled = hash_table.is_enabled;
         let length = hash_table.length;
+        let q_enable = hash_table.q_enable;
 
         // State bits
         let mut w_ext = vec![0u64.expr(); NUM_BITS_PER_WORD_W];
@@ -427,7 +427,6 @@ impl<F: Field> Sha256CircuitConfig<F> {
         info!("degree: {}", meta.degree());
 
         Sha256CircuitConfig {
-            q_enable,
             q_first,
             q_extend,
             q_start,
