@@ -354,7 +354,6 @@ impl<F: Field> Sha256CircuitConfig<F> {
         // Update the length on rows where we absorb data
         meta.create_gate("length", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-            let start_new_hash = start_new_hash(meta);
             let length_prev = meta.query_advice(length, Rotation::prev());
             let length = meta.query_advice(length, Rotation::cur());
             // Length increases by the number of bytes that aren't padding
@@ -362,7 +361,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
             cb.require_equal(
                 "update length",
                 length.clone(),
-                length_prev.clone() * not::expr(start_new_hash.expr())
+                length_prev.clone()
                     + sum::expr(is_paddings.map(|is_padding| {
                         not::expr(meta.query_advice(is_padding, Rotation::cur()))
                     })),
