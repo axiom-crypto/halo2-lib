@@ -1,3 +1,7 @@
+use std::ops::Deref;
+
+use crate::QuantumCell;
+
 use super::*;
 /// SafeType for bool (1 bit).
 ///
@@ -23,27 +27,29 @@ macro_rules! safe_primitive_impls {
             }
         }
 
-        impl<F: ScalarField> AsMut<AssignedValue<F>> for $SafePrimitive {
-            fn as_mut(&mut self) -> &mut AssignedValue<F> {
-                &mut self.0
-            }
-        }
-
         impl<F: ScalarField> Borrow<AssignedValue<F>> for $SafePrimitive {
             fn borrow(&self) -> &AssignedValue<F> {
                 &self.0
             }
         }
 
-        impl<F: ScalarField> BorrowMut<AssignedValue<F>> for $SafePrimitive {
-            fn borrow_mut(&mut self) -> &mut AssignedValue<F> {
-                &mut self.0
+        impl<F: ScalarField> Deref for $SafePrimitive {
+            type Target = AssignedValue<F>;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
             }
         }
 
         impl<F: ScalarField> From<$SafePrimitive> for AssignedValue<F> {
             fn from(safe_primitive: $SafePrimitive) -> Self {
                 safe_primitive.0
+            }
+        }
+
+        impl<F: ScalarField> From<$SafePrimitive> for QuantumCell<F> {
+            fn from(safe_primitive: $SafePrimitive) -> Self {
+                QuantumCell::Existing(safe_primitive.0)
             }
         }
     };
