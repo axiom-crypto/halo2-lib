@@ -42,12 +42,12 @@ impl KeccakIngestionFormat {
 /// Very similar to [crate::keccak::component::encode::encode_native_input] except we do not do the
 /// encoding part (that will be done in circuit, not natively).
 ///
-/// Returns `Err(true_capacity)` if `true_capacity > capacity`, where `true_capacity` is the number of keccak_f needed
-/// to compute all requests.
+/// Returns `(ingestions, true_capacity)`, where `ingestions` is resized to `capacity` length
+/// and `true_capacity` is the number of keccak_f needed to compute all requests.
 pub fn format_requests_for_ingestion<B>(
     requests: impl IntoIterator<Item = (B, Option<H256>)>,
     capacity: usize,
-) -> Result<Vec<KeccakIngestionFormat>, usize>
+) -> (Vec<KeccakIngestionFormat>, usize)
 where
     B: AsRef<[u8]>,
 {
@@ -77,10 +77,7 @@ where
         last_mut.hash_lo = u128::from_be_bytes(hash[16..].try_into().unwrap());
     }
     log::info!("Actual number of keccak_f used = {}", ingestions.len());
-    if ingestions.len() > capacity {
-        Err(ingestions.len())
-    } else {
-        ingestions.resize_with(capacity, Default::default);
-        Ok(ingestions)
-    }
+    let true_capacity = ingestions.len();
+    ingestions.resize_with(capacity, Default::default);
+    (ingestions, true_capacity)
 }
