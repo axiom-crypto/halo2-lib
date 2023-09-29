@@ -828,7 +828,7 @@ pub trait GateInstructions<F: ScalarField> {
 
     /// Constrains and returns little-endian bit vector representation of `a`.
     ///
-    /// Assumes `range_bits <= number of bits in a`.
+    /// Assumes `range_bits >= bit_length(a)`.
     /// * `a`: [QuantumCell] of the value to convert
     /// * `range_bits`: range of bits needed to represent `a`
     fn num_to_bits(
