@@ -19,7 +19,7 @@ pub mod builder;
 
 /// A struct defining the configuration parameters for a halo2-base circuit
 /// - this is used to configure [BaseConfig].
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Hash, Serialize, Deserialize)]
 pub struct BaseCircuitParams {
     // Keeping FlexGateConfigParams expanded for backwards compatibility
     /// Specifies the number of rows in the circuit to be 2<sup>k</sup>
