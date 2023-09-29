@@ -1,15 +1,22 @@
-use std::{fs, path::Path};
+use std::{fs, path::Path, time::Instant};
 
 use crate::{
     halo2_proofs::halo2curves::bn256::Fr,
-    keccak::coprocessor::circuit::leaf::{
-        KeccakCoprocessorLeafCircuit, KeccakCoprocessorLeafCircuitParams,
+    keccak::{
+        coprocessor::circuit::{
+            bench_circuit,
+            leaf::{KeccakCoprocessorLeafCircuit, KeccakCoprocessorLeafCircuitParams},
+            BenchRecord,
+        },
+        vanilla::param::NUM_ROUNDS,
     },
 };
 
+use field_names::FieldNames;
 use halo2_base::{
     gates::circuit::CircuitBuilderStage, halo2_proofs::plonk::Circuit, utils::fs::gen_srs,
 };
+use serde::{Deserialize, Serialize};
 use snark_verifier_sdk::{
     gen_pk,
     halo2::{
@@ -18,9 +25,12 @@ use snark_verifier_sdk::{
     },
     Snark, SHPLONK,
 };
-use test_case::test_case;
 
-fn create_snark_leaf_circuit_commit(k: usize, unusable_rows: usize, capacity: usize) -> Snark {
+fn create_snark_leaf_circuit_commit(
+    k: usize,
+    unusable_rows: usize,
+    capacity: usize,
+) -> (Snark, u128) {
     let lookup_bits: usize = 4; // keccak leaf circuit doesn't actually use range checks. put dummy value for now so `.range_chip()` doesn't panic
     let publish_raw_outputs: bool = false;
 
@@ -55,7 +65,10 @@ fn create_snark_leaf_circuit_commit(k: usize, unusable_rows: usize, capacity: us
         KeccakCoprocessorLeafCircuit::<Fr>::new(inputs.clone(), circuit_params.clone(), true);
     circuit.set_base_circuit_break_points(break_points);
 
-    gen_snark_shplonk(&params, &pk, circuit, None::<&str>)
+    let start = Instant::now();
+    let snark = gen_snark_shplonk(&params, &pk, circuit, None::<&str>);
+    let shard_proof_ms = start.elapsed().as_millis();
+    (snark, shard_proof_ms)
 }
 
 // RUST_LOG=info cargo t single_layer_aggregate_leaf_circuits_commit::_1_rows_per_round_single_shard -- --nocapture
@@ -67,15 +80,16 @@ fn create_snark_leaf_circuit_commit(k: usize, unusable_rows: usize, capacity: us
 fn single_layer_aggregate_leaf_circuits_commit(
     leaf_k: usize,
     unusable_rows: usize,
-    target_capacity: usize,
+    agg_capacity: usize,
     num_shards: usize,
     agg_k: u32,
-) {
+) -> AggBenchRecord {
     let _ = env_logger::builder().is_test(true).try_init();
-    let capacity = target_capacity / num_shards;
+    let capacity = agg_capacity / num_shards;
 
     fs::remove_file("keccak_leaf.pk").unwrap_or_default();
-    let shard = create_snark_leaf_circuit_commit(leaf_k, unusable_rows, capacity);
+    let (shard, shard_proof_ms) = create_snark_leaf_circuit_commit(leaf_k, unusable_rows, capacity);
+
     let shards = vec![shard; num_shards];
     fs::remove_file("keccak_leaf.pk").unwrap_or_default();
 
@@ -101,28 +115,51 @@ fn single_layer_aggregate_leaf_circuits_commit(
     let break_points = circuit.break_points();
     drop(circuit);
 
+    let start = Instant::now();
     let circuit = aggregate_shards(CircuitBuilderStage::Prover)
-        .use_params(agg_config)
+        .use_params(agg_config.clone())
         .use_break_points(break_points);
     gen_snark_shplonk(&params, &pk, circuit, None::<&str>);
+    let agg_proof_ms = start.elapsed().as_millis();
+
+    let AggregationConfigParams {
+        degree: _,
+        num_advice,
+        num_lookup_advice,
+        num_fixed,
+        lookup_bits,
+    } = agg_config;
+    AggBenchRecord {
+        agg_capacity,
+        num_shards,
+        agg_k: agg_k as usize,
+        leaf_k,
+        agg_proof_ms,
+        shard_proof_ms,
+        num_advice,
+        num_lookup_advice,
+        num_fixed,
+        lookup_bits,
+    }
 }
 
 #[derive(Serialize, Deserialize, FieldNames, Default)]
-struct HeaderBenchRecord {
-    k: usize,
-    n_pow: usize,
-    capacity: usize,
-    proof_ms: u128,
-    verify_ms: u128,
-    gate_advice_phase0: usize,
-    gate_advice_phase1: usize,
-    lookup_advice_phase0: usize,
-    rlc_advice: usize,
+struct AggBenchRecord {
+    agg_capacity: usize,
+    num_shards: usize,
+    agg_k: usize,
+    leaf_k: usize,
+    agg_proof_ms: u128,
+    shard_proof_ms: u128,
+    num_advice: usize,
+    num_lookup_advice: usize,
+    num_fixed: usize,
+    lookup_bits: usize,
 }
 
-impl BenchRecord<(usize, usize)> for HeaderBenchRecord {
+impl BenchRecord<(usize, usize)> for AggBenchRecord {
     fn get_parameter(&self) -> (usize, usize) {
-        (self.k, self.n_pow)
+        (self.agg_capacity, self.num_shards)
     }
 }
 
@@ -130,19 +167,40 @@ impl BenchRecord<(usize, usize)> for HeaderBenchRecord {
 #[ignore = "bench"]
 fn bench_keccak_aggregation() {
     let agg_capacity_list = [200, 500, 1000, 5000];
-    let num_shards_list = [1, 2, 4, 8];
-    let leaf_k = 20;
-    let agg_k = 20;
-    let unusable_rows = 55;
+    let num_shards_list = [1, 2, 4];
+    let mut parameters = vec![];
     for agg_capacity in agg_capacity_list {
         for num_shards in num_shards_list {
+            parameters.push((agg_capacity, num_shards));
+        }
+    }
+    bench_circuit(
+        "keccakagg",
+        parameters,
+        &AggBenchRecord::FIELDS,
+        |(agg_capacity, num_shards)| {
+            let mut leaf_k = 20;
+            let target_capacity = agg_capacity / num_shards;
+            // To fix # of halo2-lib column
+            // 14000 is a rough estimation of cell consumation for a keccak_f.
+            let halo2_lib_columns = 8;
+            let halo2_lib_rows = target_capacity * 14000 / halo2_lib_columns;
+
+            let agg_k = 20;
+            let unusable_rows = 100;
+
+            let maximum_k = ((halo2_lib_rows + unusable_rows) as f64).log2().ceil() as usize;
+            if leaf_k > maximum_k {
+                leaf_k = maximum_k;
+            }
             single_layer_aggregate_leaf_circuits_commit(
                 leaf_k,
                 unusable_rows,
                 agg_capacity,
                 num_shards,
                 agg_k,
-            );
-        }
-    }
+            )
+        },
+    )
+    .unwrap();
 }

@@ -11,7 +11,6 @@ use std::{
     path::Path,
 };
 
-use hex::serde;
 use serde::{de::DeserializeOwned, Serialize};
 
 pub trait BenchRecord<P>: Serialize + DeserializeOwned {
