@@ -53,6 +53,29 @@ mod bn256 {
 }
 
 #[cfg(feature = "halo2-axiom")]
+mod secp256k1 {
+    use crate::halo2_proofs::halo2curves::secp256k1::{Fq, Fp};
+
+    impl super::BigPrimeField for Fp {
+        #[inline(always)]
+        fn from_u64_digits(val: &[u64]) -> Self {
+            let mut raw = [0u64; 4];
+            raw[..val.len()].copy_from_slice(val);
+            Self::from(raw)
+        }
+    }
+
+    impl super::BigPrimeField for Fq {
+        #[inline(always)]
+        fn from_u64_digits(val: &[u64]) -> Self {
+            let mut raw = [0u64; 4];
+            raw[..val.len()].copy_from_slice(val);
+            Self::from(raw)
+        }
+    }
+}
+
+#[cfg(feature = "halo2-axiom")]
 mod bls12_381 {
     use crate::halo2_proofs::halo2curves::bls12_381::{Fq, Fr};
 
@@ -75,15 +98,6 @@ mod bls12_381 {
     }
 }
 
-// mod bls12_381 {
-//     use super::BigPrimeField;
-
-//     impl BigPrimeField for crate::halo2_proofs::halo2curves::bls12_381::Fq {
-//         fn from_u64_digits(val: &[u64]) -> Self {
-//             todo!()
-//         }
-//     }
-// }
 
 /// Helper trait to represent a field element that can be converted into [u64] limbs.
 ///
