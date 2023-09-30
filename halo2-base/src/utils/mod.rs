@@ -30,18 +30,60 @@ pub trait BigPrimeField: ScalarField {
     fn from_u64_digits(val: &[u64]) -> Self;
 }
 #[cfg(feature = "halo2-axiom")]
-impl<F> BigPrimeField for F
-where
-    F: ScalarField + From<[u64; 4]>, // Assume [u64; 4] is little-endian. We only implement ScalarField when this is true.
-{
-    #[inline(always)]
-    fn from_u64_digits(val: &[u64]) -> Self {
-        debug_assert!(val.len() <= 4);
-        let mut raw = [0u64; 4];
-        raw[..val.len()].copy_from_slice(val);
-        Self::from(raw)
+mod bn256 {
+    use crate::halo2_proofs::halo2curves::bn256::{Fq, Fr};
+
+    impl super::BigPrimeField for Fr {
+        #[inline(always)]
+        fn from_u64_digits(val: &[u64]) -> Self {
+            let mut raw = [0u64; 4];
+            raw[..val.len()].copy_from_slice(val);
+            Self::from(raw)
+        }
+    }
+
+    impl super::BigPrimeField for Fq {
+        #[inline(always)]
+        fn from_u64_digits(val: &[u64]) -> Self {
+            let mut raw = [0u64; 4];
+            raw[..val.len()].copy_from_slice(val);
+            Self::from(raw)
+        }
     }
 }
+
+#[cfg(feature = "halo2-axiom")]
+mod bls12_381 {
+    use crate::halo2_proofs::halo2curves::bls12_381::{Fq, Fr};
+
+    // impl super::BigPrimeField for Fr {
+    //     #[inline(always)]
+    //     fn from_u64_digits(val: &[u64]) -> Self {
+    //         let mut raw = [0u64; 4];
+    //         raw[..val.len()].copy_from_slice(val);
+    //         Self::from(raw)
+    //     }
+    // }
+
+    impl super::BigPrimeField for Fq {
+        #[inline(always)]
+        fn from_u64_digits(val: &[u64]) -> Self {
+            let mut raw = [0u64; 6];
+            raw[..val.len()].copy_from_slice(val);
+            Self::from(raw)
+        }
+    }
+}
+
+// mod bls12_381 {
+//     use super::BigPrimeField;
+
+//     impl BigPrimeField for crate::halo2_proofs::halo2curves::bls12_381::Fq {
+//         fn from_u64_digits(val: &[u64]) -> Self {
+//             todo!()
+//         }
+//     }
+// }
 
 /// Helper trait to represent a field element that can be converted into [u64] limbs.
 ///

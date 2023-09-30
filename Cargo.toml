@@ -39,3 +39,12 @@ debug = true
 [patch."https://github.com/axiom-crypto/halo2-lib.git"]
 halo2-base = { path = "../halo2-lib/halo2-base" }
 halo2-ecc = { path = "../halo2-lib/halo2-ecc" }
+
+[patch."https://github.com/privacy-scaling-explorations/halo2curves"]
+# halo2curves = { git = "https://github.com/timoftime/halo2curves", rev = "b682183" }
+halo2curves = { path = "../halo2curves" }
+
+
+[patch."https://github.com/axiom-crypto/halo2curves"]
+# halo2curves = { git = "https://github.com/timoftime/halo2curves", rev = "b682183" }
+halo2curves = { path = "../halo2curves" }

@@ -130,3 +130,17 @@ mod bn254 {
         }
     }
 }
+
+mod bls12_381 {
+    use crate::fields::FieldExtConstructor;
+    use crate::halo2_proofs::halo2curves::bls12_381::{Fq, Fq2};
+    impl FieldExtConstructor<Fq, 2> for Fq2 {
+        fn new(c: [Fq; 2]) -> Self {
+            Fq2 { c0: c[0], c1: c[1] }
+        }
+
+        fn coeffs(&self) -> Vec<Fq> {
+            vec![self.c0, self.c1]
+        }
+    }
+}

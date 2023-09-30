@@ -1,18 +1,16 @@
-use super::pairing::fq2_mul_by_nonresidue;
 use super::{Fp12Chip, Fp2Chip, FpChip, FqPoint};
-use crate::halo2_proofs::arithmetic::Field;
+use crate::halo2_proofs::halo2curves::bls12_381::{Fq, Fq12, Fq2, BLS_X, FROBENIUS_COEFF_FQ12_C1};
 use crate::{
     ecc::get_naf,
-    fields::{fp12::mul_no_carry_w6, vector::FieldVector, FieldChip, PrimeField},
+    fields::{fp12::mul_no_carry_w6, vector::FieldVector, FieldChip},
 };
+use halo2_base::utils::BigPrimeField;
 use halo2_base::{gates::GateInstructions, utils::modulus, Context, QuantumCell::Constant};
-use halo2curves::bls12_381::{Fq, Fq12, Fq2, BLS_X, FROBENIUS_COEFF_FQ12_C1};
-use itertools::Itertools;
 use num_bigint::BigUint;
 
 const XI_0: i64 = 1;
 
-impl<'chip, F: PrimeField> Fp12Chip<'chip, F> {
+impl<'chip, F: BigPrimeField> Fp12Chip<'chip, F> {
     // computes a ** (p ** power)
     // only works for p = 3 (mod 4) and p = 1 (mod 6)
     pub fn frobenius_map(
@@ -30,7 +28,7 @@ impl<'chip, F: PrimeField> Fp12Chip<'chip, F> {
         let fp_chip = self.fp_chip();
         let fp2_chip = Fp2Chip::<F>::new(fp_chip);
         for i in 0..6 {
-            let frob_coeff = FROBENIUS_COEFF_FQ12_C1[pow].pow_vartime([i as u64]);
+            let frob_coeff = FROBENIUS_COEFF_FQ12_C1[pow].pow_vartime(&[i as u64]);
             // possible optimization (not implemented): load `frob_coeff` as we multiply instead of loading first
             // frobenius map is used infrequently so this is a small optimization
 
@@ -172,8 +170,8 @@ impl<'chip, F: PrimeField> Fp12Chip<'chip, F> {
 
         // compute `g0 + 1`
         g0[0].truncation.limbs[0] =
-            fp2_chip.gate().add(ctx, g0[0].truncation.limbs[0], Constant(F::one()));
-        g0[0].native = fp2_chip.gate().add(ctx, g0[0].native, Constant(F::one()));
+            fp2_chip.gate().add(ctx, g0[0].truncation.limbs[0], Constant(F::ONE));
+        g0[0].native = fp2_chip.gate().add(ctx, g0[0].native, Constant(F::ONE));
         g0[0].truncation.max_limb_bits += 1;
         g0[0].value += 1usize;
 
