@@ -2,13 +2,10 @@ use std::{fs, path::Path, time::Instant};
 
 use crate::{
     halo2_proofs::halo2curves::bn256::Fr,
-    keccak::{
-        coprocessor::circuit::{
-            bench_circuit,
-            leaf::{KeccakCoprocessorLeafCircuit, KeccakCoprocessorLeafCircuitParams},
-            BenchRecord,
-        },
-        vanilla::param::NUM_ROUNDS,
+    keccak::coprocessor::circuit::{
+        bench_circuit,
+        leaf::{KeccakCoprocessorLeafCircuit, KeccakCoprocessorLeafCircuitParams},
+        BenchRecord,
     },
 };
 
@@ -140,6 +137,7 @@ fn single_layer_aggregate_leaf_circuits_commit(
         num_lookup_advice,
         num_fixed,
         lookup_bits,
+        shard_num_advice: shards[0].protocol.num_witness[0],
     }
 }
 
@@ -155,6 +153,7 @@ struct AggBenchRecord {
     num_lookup_advice: usize,
     num_fixed: usize,
     lookup_bits: usize,
+    shard_num_advice: usize,
 }
 
 impl BenchRecord<(usize, usize)> for AggBenchRecord {
