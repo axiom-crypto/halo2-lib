@@ -5,17 +5,14 @@ use crate::ecc::EccChip;
 use crate::group::Curve;
 use crate::{
     fields::FpStrategy,
-    halo2_proofs::halo2curves::bls12_381::{pairing, Fr, G1Affine},
+    halo2_proofs::halo2curves::bls12_381::{pairing, Fr as Scalar, G1Affine},
+    halo2_proofs::halo2curves::bn256::Fr,
 };
-use halo2_base::utils::fe_to_biguint;
-use halo2_base::{
-    gates::{flex_gate::threads::SinglePhaseCoreManager, RangeChip},
-    halo2_proofs::halo2curves::bls12_381::G1,
-    utils::testing::base_test,
-};
+use halo2_base::utils::testing::base_test;
 use rand::rngs::StdRng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 
+pub mod ec_add;
 pub mod pairing;
