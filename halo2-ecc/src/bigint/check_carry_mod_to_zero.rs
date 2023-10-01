@@ -7,7 +7,7 @@ use halo2_base::{
 };
 use num_bigint::BigInt;
 use num_integer::Integer;
-use num_traits::{One, Signed, Zero};
+use num_traits::One;
 use std::{cmp::max, iter};
 
 // same as carry_mod::crt but `out = 0` so no need to range check
@@ -36,7 +36,7 @@ pub fn crt<F: BigPrimeField>(
     let quot_max_bits = trunc_len - 1 + (F::NUM_BITS as usize) - 1 - (modulus.bits() as usize);
     assert!(quot_max_bits < trunc_len);
     // FIXME: hotfix for BLS12 support
-    let quot_last_limb_bits = 0; // quot_max_bits - n * (k - 1);
+    let _quot_last_limb_bits = 0; // quot_max_bits - n * (k - 1);
 
     // these are witness vectors:
     // we need to find `quot_vec` as a proper BigInt with k limbs
@@ -94,7 +94,11 @@ pub fn crt<F: BigPrimeField>(
     // range check that quot_cell in quot_assigned is in [-2^n, 2^n) except for last cell check it's in [-2^quot_last_limb_bits, 2^quot_last_limb_bits)
     for (q_index, quot_cell) in quot_assigned.iter().enumerate() {
         // FIXME: hotfix for BLS12 support
-        let limb_bits = if q_index == k - 1 { n /* quot_last_limb_bits */ } else { n };
+        let limb_bits = if q_index == k - 1 {
+            n /* quot_last_limb_bits */
+        } else {
+            n
+        };
         let limb_base =
             if q_index == k - 1 { range.gate().pow_of_two()[limb_bits] } else { limb_bases[1] };
 

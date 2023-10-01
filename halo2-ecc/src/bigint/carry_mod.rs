@@ -8,7 +8,7 @@ use halo2_base::{
 };
 use num_bigint::BigInt;
 use num_integer::Integer;
-use num_traits::{One, Signed};
+use num_traits::One;
 
 use super::{check_carry_to_zero, CRTInteger, OverflowInteger, ProperCrtUint, ProperUint};
 
@@ -58,7 +58,7 @@ pub fn crt<F: BigPrimeField>(
     // If quot[i] <= 2^n for i < k - 1 and quot[k-1] <= 2^{n'} then
     // quot < 2^{n(k-1)+1} + 2^{n' + n(k-1)} = (2+2^{n'}) 2^{n(k-1)} < 2^{n'+1} * 2^{n(k-1)} <= 2^{quot_max_bits - n(k-1)} * 2^{n(k-1)}
     // FIXME: hotfix for BLS12 support
-    let quot_last_limb_bits = 0; //quot_max_bits - n * (k - 1);
+    let _quot_last_limb_bits = 0; //quot_max_bits - n * (k - 1);
 
     let out_max_bits = modulus.bits() as usize;
     // we assume `modulus` requires *exactly* `k` limbs to represent (if `< k` limbs ok, you should just be using that)
@@ -148,7 +148,12 @@ pub fn crt<F: BigPrimeField>(
     // range check that quot_cell in quot_assigned is in [-2^n, 2^n) except for last cell check it's in [-2^quot_last_limb_bits, 2^quot_last_limb_bits)
     for (q_index, quot_cell) in quot_assigned.iter().enumerate() {
         // FIXME: hotfix for BLS12 support
-        let limb_bits = if q_index == k - 1 { /* quot_last_limb_bits */ n } else { n };
+        let limb_bits = if q_index == k - 1 {
+            /* quot_last_limb_bits */
+            n
+        } else {
+            n
+        };
         let limb_base =
             if q_index == k - 1 { range.gate().pow_of_two()[limb_bits] } else { limb_bases[1] };
 
