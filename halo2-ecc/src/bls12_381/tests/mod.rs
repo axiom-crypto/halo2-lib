@@ -6,7 +6,6 @@ use crate::group::Curve;
 use crate::{
     fields::FpStrategy,
     halo2_proofs::halo2curves::bls12_381::{pairing, Fr as Scalar, G1Affine},
-    halo2_proofs::halo2curves::bn256::Fr,
 };
 use halo2_base::utils::testing::base_test;
 use rand::rngs::StdRng;
