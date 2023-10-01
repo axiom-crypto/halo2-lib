@@ -215,3 +215,15 @@ impl CircuitBuilderStage {
         matches!(self, CircuitBuilderStage::Prover)
     }
 }
+
+impl<F: ScalarField> AsRef<BaseConfig<F>> for BaseConfig<F> {
+    fn as_ref(&self) -> &BaseConfig<F> {
+        self
+    }
+}
+
+impl<F: ScalarField> AsMut<BaseConfig<F>> for BaseConfig<F> {
+    fn as_mut(&mut self) -> &mut BaseConfig<F> {
+        self
+    }
+}
