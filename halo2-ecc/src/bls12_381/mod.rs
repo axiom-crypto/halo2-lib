@@ -3,6 +3,7 @@ use crate::fields::vector::FieldVector;
 use crate::fields::{fp, fp12, fp2};
 use crate::halo2_proofs::halo2curves::bls12_381::{Fq, Fq12, Fq2};
 
+pub mod bls_signature;
 pub mod final_exp;
 pub mod pairing;
 
