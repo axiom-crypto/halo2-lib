@@ -62,10 +62,10 @@ pub fn sparse_line_function_unequal<F: BigPrimeField>(
 pub fn sparse_line_function_equal<F: BigPrimeField>(
     fp2_chip: &Fp2Chip<F>,
     ctx: &mut Context<F>,
-    Q: &EcPoint<F, FpPoint<F>>,
-    P: &EcPoint<F, FqPoint<F>>,
+    P: &EcPoint<F, FpPoint<F>>,
+    Q: &EcPoint<F, FqPoint<F>>,
 ) -> Vec<Option<FqPoint<F>>> {
-    let (x, y) = (&P.x, &P.y);
+    let (x, y) = (&Q.x, &Q.y);
     assert_eq!(x.0.len(), 2);
     assert_eq!(y.0.len(), 2);
 
@@ -77,10 +77,10 @@ pub fn sparse_line_function_equal<F: BigPrimeField>(
     let two_y_sq = fp2_chip.scalar_mul_no_carry(ctx, &y_sq, 2);
     let out0 = fp2_chip.sub_no_carry(ctx, &three_x_cu, &two_y_sq);
 
-    let x_sq_Px = fp2_chip.0.fp_mul_no_carry(ctx, x_sq, &Q.x);
+    let x_sq_Px = fp2_chip.0.fp_mul_no_carry(ctx, x_sq, &P.x);
     let out2 = fp2_chip.scalar_mul_no_carry(ctx, x_sq_Px, -3);
 
-    let y_Py = fp2_chip.0.fp_mul_no_carry(ctx, y.clone(), &Q.y);
+    let y_Py = fp2_chip.0.fp_mul_no_carry(ctx, y.clone(), &P.y);
     let out3 = fp2_chip.scalar_mul_no_carry(ctx, &y_Py, 2);
 
     // so far we have not "carried mod p" for any of the outputs
@@ -181,19 +181,24 @@ pub fn fp12_multiply_with_line_equal<F: BigPrimeField>(
     fp2_chip: &Fp2Chip<F>,
     ctx: &mut Context<F>,
     g: &FqPoint<F>,
-    P: &EcPoint<F, FqPoint<F>>,
-    Q: &EcPoint<F, FpPoint<F>>,
+    P: &EcPoint<F, FpPoint<F>>,
+    Q: &EcPoint<F, FqPoint<F>>,
 ) -> FqPoint<F> {
-    let line = sparse_line_function_equal::<F>(fp2_chip, ctx, Q, P);
+    let line = sparse_line_function_equal::<F>(fp2_chip, ctx, P, Q);
     sparse_fp12_multiply::<F>(fp2_chip, ctx, g, &line)
 }
 
 pub fn miller_loop<F: BigPrimeField>(
     ecc_chip: &EccChip<F, Fp2Chip<F>>,
     ctx: &mut Context<F>,
-    Q: &EcPoint<F, FqPoint<F>>,
     P: &EcPoint<F, FpPoint<F>>,
+    Q: &EcPoint<F, FqPoint<F>>,
 ) -> FqPoint<F> {
+    let fp_chip: &crate::fields::fp::FpChip<'_, F, Fq> = ecc_chip.field_chip.fp_chip();
+
+    // let sparse_f = sparse_line_function_equal::<F>(ecc_chip.field_chip(), ctx, Q, P);
+
+
     todo!()
 }
 
@@ -204,7 +209,7 @@ pub fn multi_miller_loop<F: BigPrimeField>(
     ctx: &mut Context<F>,
     pairs: Vec<(&EcPoint<F, FpPoint<F>>, &EcPoint<F, FqPoint<F>>)>,
 ) -> FqPoint<F> {
-    let fp_chip = ecc_chip.field_chip.fp_chip();
+    let fp_chip: &crate::fields::fp::FpChip<'_, F, Fq> = ecc_chip.field_chip.fp_chip();
 
     // initialize the first line function into Fq12 point with first (Q,P) pair
     // this is to skip first iteration by leveraging the fact that f = 1
@@ -233,7 +238,7 @@ pub fn multi_miller_loop<F: BigPrimeField>(
     };
 
     // process second (Q,P) pair
-    for &(q, p) in pairs.iter().skip(1) {
+    for &(p, q) in pairs.iter().skip(1) {
         f = fp12_multiply_with_line_equal::<F>(ecc_chip.field_chip(), ctx, &f, p, q);
     }
 
@@ -249,7 +254,7 @@ pub fn multi_miller_loop<F: BigPrimeField>(
     }
 
     // skip two bits after init (first beacuse f = 1, second because 1-ft found_one = false)
-    // restrucuture loop to perfrom additiona step for the previous iteration first and then doubling step
+    // resequence the loop to perfrom additiona step for the previous iteration first and then doubling step
     for bit in (0..62).rev().map(|i| ((BLS_X >> i) & 1) == 1) {
         if prev_bit {
             for (r, &(q, p)) in r.iter_mut().zip(pairs.iter()) {
@@ -267,8 +272,8 @@ pub fn multi_miller_loop<F: BigPrimeField>(
 
         f = fp12_chip.mul(ctx, &f, &f);
 
-        for (r, &(q, _p)) in r.iter_mut().zip(pairs.iter()) {
-            f = fp12_multiply_with_line_equal::<F>(ecc_chip.field_chip(), ctx, &f, r, q);
+        for (r, &(p, _q)) in r.iter_mut().zip(pairs.iter()) {
+            f = fp12_multiply_with_line_equal::<F>(ecc_chip.field_chip(), ctx, &f, p, r);
             *r = ecc_chip.double(ctx, r.clone());
         }
     }
@@ -303,31 +308,31 @@ pub fn twisted_frobenius<F: BigPrimeField>(
     EcPoint::new(out_x, out_y)
 }
 
-// Frobenius coefficient coeff[1][j] = ((9+u)^{(p-1)/6})^j
-// -Frob_p( twist(Q) ) = ( (w^2 x)^p, -(w^3 y)^p ) = twist( coeff[1][2] * x^p, coeff[1][3] * -y^p )
-// Input:
-// - Q = (x, y) point in E(Fp2)
-// Output:
-// - (coeff[1][2] * x^p, coeff[1][3] * -y^p) point in E(Fp2)
-pub fn neg_twisted_frobenius<F: BigPrimeField>(
-    ecc_chip: &EccChip<F, Fp2Chip<F>>,
-    ctx: &mut Context<F>,
-    Q: impl Into<EcPoint<F, FqPoint<F>>>,
-    c2: impl Into<FqPoint<F>>,
-    c3: impl Into<FqPoint<F>>,
-) -> EcPoint<F, FqPoint<F>> {
-    let Q = Q.into();
-    let c2 = c2.into();
-    let c3 = c3.into();
-    assert_eq!(c2.0.len(), 2);
-    assert_eq!(c3.0.len(), 2);
+// // Frobenius coefficient coeff[1][j] = ((9+u)^{(p-1)/6})^j
+// // -Frob_p( twist(Q) ) = ( (w^2 x)^p, -(w^3 y)^p ) = twist( coeff[1][2] * x^p, coeff[1][3] * -y^p )
+// // Input:
+// // - Q = (x, y) point in E(Fp2)
+// // Output:
+// // - (coeff[1][2] * x^p, coeff[1][3] * -y^p) point in E(Fp2)
+// pub fn neg_twisted_frobenius<F: BigPrimeField>(
+//     ecc_chip: &EccChip<F, Fp2Chip<F>>,
+//     ctx: &mut Context<F>,
+//     Q: impl Into<EcPoint<F, FqPoint<F>>>,
+//     c2: impl Into<FqPoint<F>>,
+//     c3: impl Into<FqPoint<F>>,
+// ) -> EcPoint<F, FqPoint<F>> {
+//     let Q = Q.into();
+//     let c2 = c2.into();
+//     let c3 = c3.into();
+//     assert_eq!(c2.0.len(), 2);
+//     assert_eq!(c3.0.len(), 2);
 
-    let frob_x = ecc_chip.field_chip.conjugate(ctx, Q.x);
-    let neg_frob_y = ecc_chip.field_chip.neg_conjugate(ctx, Q.y);
-    let out_x = ecc_chip.field_chip.mul(ctx, c2, frob_x);
-    let out_y = ecc_chip.field_chip.mul(ctx, c3, neg_frob_y);
-    EcPoint::new(out_x, out_y)
-}
+//     let frob_x = ecc_chip.field_chip.conjugate(ctx, Q.x);
+//     let neg_frob_y = ecc_chip.field_chip.neg_conjugate(ctx, Q.y);
+//     let out_x = ecc_chip.field_chip.mul(ctx, c2, frob_x);
+//     let out_y = ecc_chip.field_chip.mul(ctx, c3, neg_frob_y);
+//     EcPoint::new(out_x, out_y)
+// }
 
 // To avoid issues with mutably borrowing twice (not allowed in Rust), we only store fp_chip and construct g2_chip and fp12_chip in scope when needed for temporary mutable borrows
 pub struct PairingChip<'chip, F: BigPrimeField> {
@@ -361,12 +366,12 @@ impl<'chip, F: BigPrimeField> PairingChip<'chip, F> {
     pub fn miller_loop(
         &self,
         ctx: &mut Context<F>,
-        Q: &EcPoint<F, FqPoint<F>>,
         P: &EcPoint<F, FpPoint<F>>,
+        Q: &EcPoint<F, FqPoint<F>>,
     ) -> FqPoint<F> {
         let fp2_chip = Fp2Chip::<F>::new(self.fp_chip);
         let g2_chip = EccChip::new(&fp2_chip);
-        miller_loop::<F>(&g2_chip, ctx, Q, P)
+        miller_loop::<F>(&g2_chip, ctx, P, Q)
     }
 
     pub fn multi_miller_loop(
@@ -391,7 +396,7 @@ impl<'chip, F: BigPrimeField> PairingChip<'chip, F> {
         Q: &EcPoint<F, FqPoint<F>>,
         P: &EcPoint<F, FpPoint<F>>,
     ) -> FqPoint<F> {
-        let f0 = self.miller_loop(ctx, Q, P);
+        let f0 = self.miller_loop(ctx, P, Q);
         let fp12_chip = Fp12Chip::<F>::new(self.fp_chip);
         // final_exp implemented in final_exp module
         fp12_chip.final_exp(ctx, f0)
