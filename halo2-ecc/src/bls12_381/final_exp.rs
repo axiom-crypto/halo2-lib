@@ -1,3 +1,4 @@
+use super::XI_0;
 use super::{Fp12Chip, Fp2Chip, FpChip, FqPoint};
 use crate::halo2_proofs::halo2curves::bls12_381::{Fq, Fq12, Fq2, BLS_X, FROBENIUS_COEFF_FQ12_C1};
 use crate::{
@@ -7,8 +8,6 @@ use crate::{
 use halo2_base::utils::BigPrimeField;
 use halo2_base::{gates::GateInstructions, utils::modulus, Context, QuantumCell::Constant};
 use num_bigint::BigUint;
-
-const XI_0: i64 = 1;
 
 impl<'chip, F: BigPrimeField> Fp12Chip<'chip, F> {
     // computes a ** (p ** power)
