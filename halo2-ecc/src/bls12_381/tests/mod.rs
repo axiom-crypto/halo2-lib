@@ -13,5 +13,6 @@ use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 
+pub mod bls_signature;
 pub mod ec_add;
 pub mod pairing;
