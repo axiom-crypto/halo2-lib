@@ -38,6 +38,7 @@ impl<'chip, F: BigPrimeField> BlsSignatureChip<'chip, F> {
         self.assert_valid_signature(ctx, signature_assigned, hash_m_assigned, pubkey_assigned);
     }
 
+    /// Verifies BLS signature and returns assigned selector.
     pub fn is_valid_signature(
         &self,
         ctx: &mut Context<F>,
@@ -57,6 +58,7 @@ impl<'chip, F: BigPrimeField> BlsSignatureChip<'chip, F> {
         fp12_chip.is_equal(ctx, gt, fp12_one)
     }
 
+    /// Verifies BLS signature with equality check.
     pub fn assert_valid_signature(
         &self,
         ctx: &mut Context<F>,
