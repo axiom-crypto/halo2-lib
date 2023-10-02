@@ -1,5 +1,5 @@
 #![allow(non_snake_case)]
-use super::{Fp12Chip, Fp2Chip, FpChip, FpPoint, Fq, FqPoint};
+use super::{Fp12Chip, Fp2Chip, FpChip, FpPoint, Fq, FqPoint, XI_0};
 use crate::fields::vector::FieldVector;
 use crate::halo2_proofs::halo2curves::bls12_381::{Fq12, G1Affine, G2Affine, BLS_X};
 use crate::{
@@ -10,8 +10,6 @@ use crate::{
 use halo2_base::halo2_proofs::halo2curves::bls12_381::BLS_X_IS_NEGATIVE;
 use halo2_base::utils::BigPrimeField;
 use halo2_base::Context;
-
-const XI_0: i64 = 1;
 
 // Inputs:
 //  Q0 = (x_1, y_1) and Q1 = (x_2, y_2) are points in E(Fp2)
@@ -189,6 +187,16 @@ pub fn fp12_multiply_with_line_equal<F: BigPrimeField>(
     sparse_fp12_multiply::<F>(fp2_chip, ctx, g, &line)
 }
 
+// Assuming curve is of form `y^2 = x^3 + b` for now (a = 0) for less operations
+// Value of `b` is never used
+// Inputs:
+// - Q = (x, y) is a point in E(Fp2)
+// - P is a point in E(Fp)
+// Output:
+//  - f_{loop_count}(Q,P) * l_{[loop_count] Q', Frob_p(Q')}(P) * l_{[loop_count] Q' + Frob_p(Q'), -Frob_p^2(Q')}(P)
+//  - where we start with `f_1(Q,P) = 1` and use Miller's algorithm f_{i+j} = f_i * f_j * l_{i,j}(Q,P)
+//  - Q' = Psi(Q) in E(Fp12)
+//  - Frob_p(x,y) = (x^p, y^p)
 pub fn miller_loop<F: BigPrimeField>(
     ecc_chip: &EccChip<F, Fp2Chip<F>>,
     ctx: &mut Context<F>,
@@ -331,10 +339,16 @@ pub fn multi_miller_loop<F: BigPrimeField>(
         }
     }
 
+    // Apperently Gt conjugation can be skipped for multi miller loop. However, cannot find evidence for this.
+    // if BLS_X_IS_NEGATIVE {
+    //     f = fp12_chip.conjugate(ctx, f)
+    // }
+
     f
 }
 
-// To avoid issues with mutably borrowing twice (not allowed in Rust), we only store fp_chip and construct g2_chip and fp12_chip in scope when needed for temporary mutable borrows
+/// Pairing chip for BLS12-381.
+/// To avoid issues with mutably borrowing twice (not allowed in Rust), we only store `fp_chip` and construct `g2_chip` in scope when needed for temporary mutable borrows
 pub struct PairingChip<'chip, F: BigPrimeField> {
     pub fp_chip: &'chip FpChip<'chip, F>,
 }
@@ -344,6 +358,7 @@ impl<'chip, F: BigPrimeField> PairingChip<'chip, F> {
         Self { fp_chip }
     }
 
+    /// Assigns a constant G1 point without checking if it's on the curve.
     pub fn load_private_g1_unchecked(
         &self,
         ctx: &mut Context<F>,
@@ -353,6 +368,7 @@ impl<'chip, F: BigPrimeField> PairingChip<'chip, F> {
         g1_chip.load_private_unchecked(ctx, (point.x, point.y))
     }
 
+    /// Assigns a constant G2 point without checking if it's on the curve.
     pub fn load_private_g2_unchecked(
         &self,
         ctx: &mut Context<F>,
@@ -363,6 +379,7 @@ impl<'chip, F: BigPrimeField> PairingChip<'chip, F> {
         g2_chip.load_private_unchecked(ctx, (point.x, point.y))
     }
 
+    /// Miller loop for a single pair of (G1, G2).
     pub fn miller_loop(
         &self,
         ctx: &mut Context<F>,
@@ -374,6 +391,7 @@ impl<'chip, F: BigPrimeField> PairingChip<'chip, F> {
         miller_loop::<F>(&g2_chip, ctx, P, Q)
     }
 
+    /// Multi-pairing Miller loop.
     pub fn multi_miller_loop(
         &self,
         ctx: &mut Context<F>,
@@ -384,6 +402,7 @@ impl<'chip, F: BigPrimeField> PairingChip<'chip, F> {
         multi_miller_loop::<F>(&g2_chip, ctx, pairs)
     }
 
+    /// Final exponentiation to complete the pairing.
     pub fn final_exp(&self, ctx: &mut Context<F>, f: FqPoint<F>) -> FqPoint<F> {
         let fp12_chip = Fp12Chip::<F>::new(self.fp_chip);
         fp12_chip.final_exp(ctx, f)
