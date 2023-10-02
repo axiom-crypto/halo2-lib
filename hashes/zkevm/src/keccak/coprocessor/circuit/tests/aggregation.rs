@@ -13,6 +13,7 @@ use field_names::FieldNames;
 use halo2_base::{
     gates::circuit::CircuitBuilderStage, halo2_proofs::plonk::Circuit, utils::fs::gen_srs,
 };
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use snark_verifier_sdk::{
     gen_pk,
@@ -156,9 +157,9 @@ struct AggBenchRecord {
     shard_num_advice: usize,
 }
 
-impl BenchRecord<(usize, usize)> for AggBenchRecord {
-    fn get_parameter(&self) -> (usize, usize) {
-        (self.agg_capacity, self.num_shards)
+impl BenchRecord<(usize, usize, usize)> for AggBenchRecord {
+    fn get_parameter(&self) -> (usize, usize, usize) {
+        (self.agg_capacity, self.num_shards, self.agg_k)
     }
 }
 
@@ -170,14 +171,21 @@ fn bench_keccak_aggregation() {
     let mut parameters = vec![];
     for agg_capacity in agg_capacity_list {
         for num_shards in num_shards_list {
-            parameters.push((agg_capacity, num_shards));
+            parameters.push((agg_capacity, num_shards, 20));
         }
     }
+    let agg_k_list = 15usize..20;
+    for agg_capacity in agg_capacity_list {
+        for agg_k in agg_k_list.clone() {
+            parameters.push((agg_capacity, 1, agg_k));
+        }
+    }
+    // for agg
     bench_circuit(
         "keccakagg",
         parameters,
         &AggBenchRecord::FIELDS,
-        |(agg_capacity, num_shards)| {
+        |(agg_capacity, num_shards, agg_k)| {
             let mut leaf_k = 20;
             let target_capacity = agg_capacity / num_shards;
             // To fix # of halo2-lib column
@@ -185,7 +193,7 @@ fn bench_keccak_aggregation() {
             let halo2_lib_columns = 8;
             let halo2_lib_rows = target_capacity * 14000 / halo2_lib_columns;
 
-            let agg_k = 20;
+            // let agg_k = 20;
             let unusable_rows = 100;
 
             let maximum_k = ((halo2_lib_rows + unusable_rows) as f64).log2().ceil() as usize;
@@ -197,7 +205,7 @@ fn bench_keccak_aggregation() {
                 unusable_rows,
                 agg_capacity,
                 num_shards,
-                agg_k,
+                agg_k as u32,
             )
         },
     )
