@@ -27,6 +27,7 @@ halo2-base={ path="../halo2-base", default-features=false, features=["test-utils
 test-log="0.2.12"
 env_logger="0.10.0"
 pairing="0.23.0"
+sha2="0.10.6"
 
 [features]
 default=["jemallocator", "halo2-axiom", "display"]

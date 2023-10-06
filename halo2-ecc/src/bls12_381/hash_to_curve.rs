@@ -13,7 +13,7 @@ use crate::{
     ecc::EccChip,
     fields::{vector::FieldVector, FieldChip, Selectable},
 };
-use halo2_base::gates::{GateInstructions, RangeChip, RangeInstructions};
+use halo2_base::gates::{GateInstructions, RangeInstructions};
 use halo2_base::halo2_proofs::halo2curves::bls12_381::{Fq2, G2};
 use halo2_base::halo2_proofs::halo2curves::CurveExt;
 use halo2_base::utils::BigPrimeField;
@@ -37,8 +37,6 @@ pub trait HashInstructions<F: BigPrimeField> {
         input: impl Iterator<Item = QuantumCell<F>>,
         strict: bool,
     ) -> Result<AssignedHashResult<F>, Error>;
-
-    fn range(&self) -> &RangeChip<F>;
 }
 
 pub trait HashEccChip<F: BigPrimeField, FC: FieldChipExt<F>, C: HashCurveExt<Base = FC::FieldType>>
@@ -328,7 +326,7 @@ impl<'chip, F: BigPrimeField> HashEccChip<F, Fp2Chip<'chip, F>, G2>
         dst: impl AsRef<[u8]>,
     ) -> Result<[Fp2Point<F>; 2], Error> {
         let fp_chip = self.field_chip().fp_chip();
-        let range = hash_chip.range();
+        let range = fp_chip.range();
         let gate = range.gate();
 
         // constants
@@ -344,7 +342,7 @@ impl<'chip, F: BigPrimeField> HashEccChip<F, Fp2Chip<'chip, F>, G2>
             .collect_vec();
 
         let len_in_bytes = 2 * G2_EXT_DEGREE * L;
-        let extended_msg = expand_message_xmd(ctx, hash_chip, assigned_msg, len_in_bytes, dst)?;
+        let extended_msg = expand_message_xmd(ctx, hash_chip, range, assigned_msg, len_in_bytes, dst)?;
 
         // 2^256
         let two_pow_256 = fp_chip.load_constant_uint(ctx, BigUint::from(2u8).pow(256));
@@ -478,11 +476,11 @@ impl<'chip, F: BigPrimeField> HashEccChip<F, Fp2Chip<'chip, F>, G2>
 fn expand_message_xmd<F: BigPrimeField, HC: HashInstructions<F, ThreadBuidler = Context<F>>>(
     ctx: &mut HC::ThreadBuidler,
     hash_chip: &HC,
+    range: &impl RangeInstructions<F>,
     msg: Vec<AssignedValue<F>>,
     len_in_bytes: usize,
     dst: impl AsRef<[u8]>,
 ) -> Result<Vec<AssignedValue<F>>, Error> {
-    let range = hash_chip.range();
     let gate = range.gate();
 
     let zero = ctx.load_zero();
