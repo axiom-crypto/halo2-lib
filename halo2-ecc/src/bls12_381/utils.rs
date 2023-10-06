@@ -26,7 +26,7 @@ pub fn strxor<F: BigPrimeField>(
     gate: &impl GateInstructions<F>,
     ctx: &mut Context<F>,
 ) -> Vec<AssignedValue<F>> {
-    a.into_iter().zip(b.into_iter()).map(|(a, b)| bitwise_xor::<_, 8>(a, b, gate, ctx)).collect()
+    a.into_iter().zip(b).map(|(a, b)| bitwise_xor::<_, 8>(a, b, gate, ctx)).collect()
 }
 
 pub fn bitwise_xor<F: BigPrimeField, const BITS: usize>(
@@ -35,12 +35,11 @@ pub fn bitwise_xor<F: BigPrimeField, const BITS: usize>(
     gate: &impl GateInstructions<F>,
     ctx: &mut Context<F>,
 ) -> AssignedValue<F> {
-    let one = ctx.load_constant(F::ONE);
-    let mut a_bits = gate.num_to_bits(ctx, a, BITS);
-    let mut b_bits = gate.num_to_bits(ctx, b, BITS);
+    let a_bits = gate.num_to_bits(ctx, a, BITS);
+    let b_bits = gate.num_to_bits(ctx, b, BITS);
 
     let xor_bits =
-        a_bits.into_iter().zip(b_bits.into_iter()).map(|(a, b)| gate.xor(ctx, a, b)).collect_vec();
+        a_bits.into_iter().zip(b_bits).map(|(a, b)| gate.xor(ctx, a, b)).collect_vec();
 
     bits_to_num(gate, ctx, xor_bits)
 }
