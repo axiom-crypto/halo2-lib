@@ -283,6 +283,42 @@ pub trait FieldChip<F: BigPrimeField>: Clone + Send + Sync {
     }
 }
 
+pub trait FieldChipExt<F: BigPrimeField>: FieldChip<F> {
+    fn add(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<Self::UnsafeFieldPoint>,
+        b: impl Into<Self::UnsafeFieldPoint>,
+    ) -> Self::FieldPoint {
+        let no_carry = self.add_no_carry(ctx, a, b);
+        self.carry_mod(ctx, no_carry)
+    }
+
+    fn sub(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<Self::UnsafeFieldPoint>,
+        b: impl Into<Self::UnsafeFieldPoint>,
+    ) -> Self::FieldPoint {
+        let no_carry = self.sub_no_carry(ctx, a, b);
+        self.carry_mod(ctx, no_carry)
+    }
+
+    fn conjugate(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<Self::FieldPoint>,
+    ) -> Self::FieldPoint;
+
+    /// This function returns either 0 or 1 indicating the "sign" of x, where sgn0(x) == 1 just when x is "negative".
+    /// (In other words, this function always considers 0 to be positive.)
+    fn sgn0(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<Self::FieldPoint>,
+    ) -> AssignedValue<F>;
+}
+
 pub trait Selectable<F: ScalarField, Pt> {
     fn select(&self, ctx: &mut Context<F>, a: Pt, b: Pt, sel: AssignedValue<F>) -> Pt;
 

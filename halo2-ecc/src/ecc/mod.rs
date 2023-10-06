@@ -586,6 +586,93 @@ where
     */
 }
 
+pub fn scalar_multiply_bits<F: BigPrimeField, FC>(
+    chip: &FC,
+    ctx: &mut Context<F>,
+    P: EcPoint<F, FC::FieldPoint>,
+    bits: Vec<AssignedValue<F>>,
+    max_bits: usize,
+    window_bits: usize,
+    scalar_is_safe: bool,
+) -> EcPoint<F, FC::FieldPoint>
+where
+    FC: FieldChip<F> + Selectable<F, FC::FieldPoint>,
+{
+    assert!(!bits.is_empty());
+    assert!((max_bits as u64) <= modulus::<F>().bits());
+
+    let total_bits = bits.len();
+    let num_windows = (total_bits + window_bits - 1) / window_bits;
+    let rounded_bitlen = num_windows * window_bits;
+
+    let mut rounded_bits = bits;
+    let zero_cell = ctx.load_zero();
+    rounded_bits.resize(rounded_bitlen, zero_cell);
+
+    // is_started[idx] holds whether there is a 1 in bits with index at least (rounded_bitlen - idx)
+    let mut is_started = Vec::with_capacity(rounded_bitlen);
+    is_started.resize(rounded_bitlen - total_bits + 1, zero_cell);
+    for idx in 1..total_bits {
+        let or = chip.gate().or(ctx, *is_started.last().unwrap(), rounded_bits[total_bits - idx]);
+        is_started.push(or);
+    }
+
+    // is_zero_window[idx] is 0/1 depending on whether bits [rounded_bitlen - window_bits * (idx + 1), rounded_bitlen - window_bits * idx) are all 0
+    let mut is_zero_window = Vec::with_capacity(num_windows);
+    for idx in 0..num_windows {
+        let temp_bits = rounded_bits
+            [rounded_bitlen - window_bits * (idx + 1)..rounded_bitlen - window_bits * idx]
+            .iter()
+            .copied();
+        let bit_sum = chip.gate().sum(ctx, temp_bits);
+        let is_zero = chip.gate().is_zero(ctx, bit_sum);
+        is_zero_window.push(is_zero);
+    }
+
+    // cached_points[idx] stores idx * P, with cached_points[0] = P
+    let cache_size = 1usize << window_bits;
+    let mut cached_points = Vec::with_capacity(cache_size);
+    cached_points.push(P.clone());
+    cached_points.push(P.clone());
+    for idx in 2..cache_size {
+        if idx == 2 {
+            let double = ec_double(chip, ctx, &P);
+            cached_points.push(double);
+        } else {
+            let new_point = ec_add_unequal(chip, ctx, &cached_points[idx - 1], &P, !scalar_is_safe);
+            cached_points.push(new_point);
+        }
+    }
+
+    // if all the starting window bits are 0, get start_point = P
+    let mut curr_point = ec_select_from_bits(
+        chip,
+        ctx,
+        &cached_points,
+        &rounded_bits[rounded_bitlen - window_bits..rounded_bitlen],
+    );
+
+    for idx in 1..num_windows {
+        let mut mult_point = curr_point.clone();
+        for _ in 0..window_bits {
+            mult_point = ec_double(chip, ctx, mult_point);
+        }
+        let add_point = ec_select_from_bits(
+            chip,
+            ctx,
+            &cached_points,
+            &rounded_bits
+                [rounded_bitlen - window_bits * (idx + 1)..rounded_bitlen - window_bits * idx],
+        );
+        let mult_and_add = ec_add_unequal(chip, ctx, &mult_point, &add_point, !scalar_is_safe);
+        let is_started_point = ec_select(chip, ctx, mult_point, mult_and_add, is_zero_window[idx]);
+
+        curr_point =
+            ec_select(chip, ctx, is_started_point, add_point, is_started[window_bits * idx]);
+    }
+    curr_point
+}
+
 /// Checks that `P` is indeed a point on the elliptic curve `C`.
 pub fn check_is_on_curve<F, FC, C>(chip: &FC, ctx: &mut Context<F>, P: &EcPoint<F, FC::FieldPoint>)
 where
@@ -1008,6 +1095,21 @@ impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
             acc = into_strict_point(self.field_chip, ctx, _acc);
         }
         self.sub_unequal(ctx, acc, rand_point, true)
+    }
+
+    // See [`scalar_mult_bits`] for more details.
+    pub fn scalar_mult_bits(
+        &self,
+        ctx: &mut Context<F>,
+        P: EcPoint<F, FC::FieldPoint>,
+        bits: Vec<AssignedValue<F>>,
+        window_bits: usize,
+    ) -> EcPoint<F, FC::FieldPoint>
+    where
+        FC: Selectable<F, FC::FieldPoint>,
+    {
+        let max_bits = bits.len();
+        scalar_multiply_bits::<F, FC>(self.field_chip, ctx, P, bits, max_bits, window_bits, true)
     }
 }
 

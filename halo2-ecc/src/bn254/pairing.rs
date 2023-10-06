@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 use super::{Fp12Chip, Fp2Chip, FpChip, FpPoint, Fq, FqPoint};
+use crate::fields::FieldChipExt;
 use crate::fields::vector::FieldVector;
 use crate::halo2_proofs::halo2curves::bn256::{
     Fq12, G1Affine, G2Affine, FROBENIUS_COEFF_FQ12_C1, SIX_U_PLUS_2_NAF,

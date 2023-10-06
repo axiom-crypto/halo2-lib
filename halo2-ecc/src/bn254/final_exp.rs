@@ -1,8 +1,8 @@
 use super::{Fp12Chip, Fp2Chip, FpChip, FqPoint};
-use crate::halo2_proofs::{
+use crate::{halo2_proofs::{
     arithmetic::Field,
     halo2curves::bn256::{Fq, Fq2, BN_X, FROBENIUS_COEFF_FQ12_C1},
-};
+}, fields::FieldChipExt};
 use crate::{
     ecc::get_naf,
     fields::{fp12::mul_no_carry_w6, vector::FieldVector, FieldChip},

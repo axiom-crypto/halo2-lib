@@ -1,13 +1,15 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use crate::ff::PrimeField as _;
 use crate::impl_field_ext_chip_common;
+use crate::{bigint::ProperCrtUint, ff::PrimeField as _};
 
+use super::FieldChipExt;
 use super::{
     vector::{FieldVector, FieldVectorChip},
     BigPrimeField, FieldChip, FieldExtConstructor, PrimeFieldChip,
 };
+use halo2_base::gates::GateInstructions;
 use halo2_base::{utils::modulus, AssignedValue, Context};
 use num_bigint::BigUint;
 
@@ -38,18 +40,6 @@ where
 
     pub fn fp_chip(&self) -> &FpChip {
         self.0.fp_chip
-    }
-
-    pub fn conjugate(
-        &self,
-        ctx: &mut Context<F>,
-        a: FieldVector<FpChip::FieldPoint>,
-    ) -> FieldVector<FpChip::FieldPoint> {
-        let mut a = a.0;
-        assert_eq!(a.len(), 2);
-
-        let neg_a1 = self.fp_chip().negate(ctx, a.pop().unwrap());
-        FieldVector(vec![a.pop().unwrap(), neg_a1])
     }
 
     pub fn neg_conjugate(
@@ -115,6 +105,71 @@ where
 
     // ========= inherited from FieldVectorChip =========
     impl_field_ext_chip_common!();
+}
+
+impl<'a, F, FpChip, Fp2> FieldChipExt<F> for Fp2Chip<'a, F, FpChip, Fp2>
+where
+    F: BigPrimeField,
+    FpChip: FieldChipExt<F>,
+    FpChip::FieldType: BigPrimeField,
+    FpChip: PrimeFieldChip<F>,
+    Fp2: crate::ff::Field + FieldExtConstructor<FpChip::FieldType, 2>,
+    FieldVector<FpChip::UnsafeFieldPoint>: From<FieldVector<FpChip::FieldPoint>>,
+    FieldVector<FpChip::FieldPoint>: From<FieldVector<FpChip::ReducedFieldPoint>>,
+{
+    fn conjugate(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<Self::FieldPoint>
+    ) -> Self::FieldPoint {
+        let a: Self::FieldPoint = a.into();
+        let mut a = a.0;
+        assert_eq!(a.len(), 2);
+
+        let neg_a1 = self.fp_chip().negate(ctx, a.pop().unwrap());
+        FieldVector(vec![a.pop().unwrap(), neg_a1])
+    }
+
+    fn sgn0(&self, ctx: &mut Context<F>, a: impl Into<Self::FieldPoint>) -> AssignedValue<F> {
+        let x: Self::FieldPoint = a.into();
+        let gate = self.gate();
+
+        let c0 = x.0[0].clone();
+        let c1 = x.0[1].clone();
+
+        let c0_zero = self.fp_chip().is_zero(ctx, &c0);
+        let c0_sgn = self.fp_chip().sgn0(ctx, c0);
+        let c1_sgn = self.fp_chip().sgn0(ctx, c1);
+        let sgn = gate.select(ctx, c1_sgn, c0_sgn, c0_zero);
+        gate.assert_bit(ctx, sgn);
+        sgn
+    }
+}
+
+impl<'range, F: BigPrimeField, FC: PrimeFieldChip<F>, Fp>
+    super::Selectable<F, FieldVector<ProperCrtUint<F>>> for Fp2Chip<'range, F, FC, Fp>
+where
+    FC: super::Selectable<F, ProperCrtUint<F>>,
+    <FC as FieldChip<F>>::FieldType: BigPrimeField,
+{
+    fn select(
+        &self,
+        ctx: &mut Context<F>,
+        a: FieldVector<ProperCrtUint<F>>,
+        b: FieldVector<ProperCrtUint<F>>,
+        sel: AssignedValue<F>,
+    ) -> FieldVector<ProperCrtUint<F>> {
+        self.0.select(ctx, a, b, sel)
+    }
+
+    fn select_by_indicator(
+        &self,
+        ctx: &mut Context<F>,
+        a: &impl AsRef<[FieldVector<ProperCrtUint<F>>]>,
+        coeffs: &[AssignedValue<F>],
+    ) -> FieldVector<ProperCrtUint<F>> {
+        self.0.select_by_indicator(ctx, a, coeffs)
+    }
 }
 
 mod bn254 {
