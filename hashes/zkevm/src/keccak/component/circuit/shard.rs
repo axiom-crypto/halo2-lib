@@ -41,6 +41,7 @@ use itertools::Itertools;
 /// Keccak Component Shard Circuit
 #[derive(Getters)]
 pub struct KeccakComponentShardCircuit<F: Field> {
+    #[getset(get = "pub")]
     inputs: Vec<Vec<u8>>,
 
     /// Parameters of this circuit. The same parameters always construct the same circuit.
