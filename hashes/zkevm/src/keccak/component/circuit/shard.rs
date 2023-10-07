@@ -41,16 +41,17 @@ use itertools::Itertools;
 /// Keccak Component Shard Circuit
 #[derive(Getters)]
 pub struct KeccakComponentShardCircuit<F: Field> {
+    /// The multiple inputs to be hashed.
     #[getset(get = "pub")]
     inputs: Vec<Vec<u8>>,
 
     /// Parameters of this circuit. The same parameters always construct the same circuit.
-    #[getset(get = "pub")]
     params: KeccakComponentShardCircuitParams,
-    #[getset(get = "pub")]
     base_circuit_builder: RefCell<BaseCircuitBuilder<F>>,
+    /// Poseidon hasher. Stateless once initialized.
     #[getset(get = "pub")]
     hasher: RefCell<PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE>>,
+    /// Stateless gate chip
     #[getset(get = "pub")]
     gate_chip: GateChip<F>,
 }
