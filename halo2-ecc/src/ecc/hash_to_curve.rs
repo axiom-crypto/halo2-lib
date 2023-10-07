@@ -12,18 +12,12 @@ use crate::fields::{FieldChipExt, Selectable};
 
 use super::EcPoint;
 
-#[derive(Debug, Clone)]
-pub struct AssignedHashResult<F: BigPrimeField> {
-    // pub input_len: AssignedValue<F>,
-    pub input_bytes: Vec<AssignedValue<F>>,
-    pub output_bytes: [AssignedValue<F>; 32],
-}
-
 pub trait HashInstructions<F: BigPrimeField> {
     const BLOCK_SIZE: usize;
     const DIGEST_SIZE: usize;
 
     type ThreadBuidler;
+    type Output: IntoIterator<Item = AssignedValue<F>>;
 
     /// Digests input using hash function and returns finilized output.
     /// `MAX_INPUT_SIZE` is the maximum size of input that can be processed by the hash function.
@@ -33,7 +27,7 @@ pub trait HashInstructions<F: BigPrimeField> {
         ctx: &mut Self::ThreadBuidler,
         input: impl Iterator<Item = QuantumCell<F>>,
         strict: bool,
-    ) -> Result<AssignedHashResult<F>, Error>;
+    ) -> Result<Self::Output, Error>;
 }
 
 pub trait HashCurveExt: CurveExt
@@ -209,30 +203,32 @@ impl ExpandMessageChip for ExpandMsgXmd {
             .chain(dst_prime.clone())
             .map(QuantumCell::Existing);
 
-        let b_0 = hash_chip.digest::<143>(ctx, msg_prime, false)?.output_bytes;
+        let b_0 = hash_chip.digest::<143>(ctx, msg_prime, false)?.into_iter().collect_vec();
 
         b_vals.insert(
             0,
             hash_chip
                 .digest::<77>(
                     ctx,
-                    b_0.into_iter()
+                    b_0.iter()
+                        .copied()
                         .chain(iter::once(one))
                         .chain(dst_prime.clone())
                         .map(QuantumCell::Existing),
                     false,
                 )?
-                .output_bytes,
+                .into_iter()
+                .collect_vec(),
         );
 
         for i in 1..ell {
-            let preimg = strxor(b_0, b_vals[i - 1], gate, ctx)
+            let preimg = strxor(b_0.iter().copied(), b_vals[i - 1].iter().copied(), gate, ctx)
                 .into_iter()
                 .chain(iter::once(ctx.load_constant(F::from(i as u64 + 1))))
                 .chain(dst_prime.clone())
                 .map(QuantumCell::Existing);
 
-            b_vals.insert(i, hash_chip.digest::<77>(ctx, preimg, false)?.output_bytes);
+            b_vals.insert(i, hash_chip.digest::<77>(ctx, preimg, false)?.into_iter().collect_vec());
         }
 
         let uniform_bytes = b_vals.into_iter().flatten().take(len_in_bytes).collect_vec();

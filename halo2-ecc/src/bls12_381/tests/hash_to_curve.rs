@@ -3,10 +3,12 @@ use std::{fs::File, marker::PhantomData};
 use super::*;
 use crate::{
     bls12_381::hash_to_curve::HashToCurveChip,
-    fields::{FieldChip, FpStrategy}, ecc::hash_to_curve::{AssignedHashResult, HashInstructions, ExpandMsgXmd},
+    ecc::hash_to_curve::{ExpandMsgXmd, HashInstructions},
+    fields::{FieldChip, FpStrategy},
 };
 use halo2_base::{
-    gates::RangeChip, halo2_proofs::plonk::Error, utils::BigPrimeField, Context, QuantumCell,
+    gates::RangeChip, halo2_proofs::plonk::Error, utils::BigPrimeField, AssignedValue, Context,
+    QuantumCell,
 };
 extern crate pairing;
 use itertools::Itertools;
@@ -31,13 +33,14 @@ impl<F: BigPrimeField> HashInstructions<F> for Sha256MockChip<F> {
     const DIGEST_SIZE: usize = 32;
 
     type ThreadBuidler = Context<F>;
+    type Output = Vec<AssignedValue<F>>;
 
     fn digest<const MAX_INPUT_SIZE: usize>(
         &self,
         ctx: &mut Self::ThreadBuidler,
         input: impl Iterator<Item = QuantumCell<F>>,
         _strict: bool,
-    ) -> Result<AssignedHashResult<F>, Error> {
+    ) -> Result<Vec<AssignedValue<F>>, Error> {
         use sha2::{Digest, Sha256};
         let input_bytes = input
             .map(|b| match b {
@@ -51,10 +54,8 @@ impl<F: BigPrimeField> HashInstructions<F> for Sha256MockChip<F> {
         let output_bytes = Sha256::digest(input_bytes)
             .into_iter()
             .map(|b| ctx.load_witness(F::from(b as u64)))
-            .collect_vec()
-            .try_into()
-            .unwrap();
-        Ok(AssignedHashResult { input_bytes: vec![], output_bytes })
+            .collect_vec();
+        Ok(output_bytes)
     }
 }
 
