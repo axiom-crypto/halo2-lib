@@ -46,9 +46,11 @@ pub struct KeccakComponentShardCircuit<F: Field> {
     /// Parameters of this circuit. The same parameters always construct the same circuit.
     #[getset(get = "pub")]
     params: KeccakComponentShardCircuitParams,
-
+    #[getset(get = "pub")]
     base_circuit_builder: RefCell<BaseCircuitBuilder<F>>,
+    #[getset(get = "pub")]
     hasher: RefCell<PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE>>,
+    #[getset(get = "pub")]
     gate_chip: GateChip<F>,
 }
 
