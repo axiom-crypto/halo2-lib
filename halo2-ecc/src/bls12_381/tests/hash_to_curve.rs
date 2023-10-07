@@ -2,7 +2,7 @@ use std::{fs::File, marker::PhantomData};
 
 use super::*;
 use crate::{
-    bls12_381::hash_to_curve::{AssignedHashResult, HashInstructions, HashToCurveChip},
+    bls12_381::hash_to_curve::{AssignedHashResult, HashInstructions, HashToCurveChip, ExpandMsgXmd},
     fields::{FpStrategy, FieldChip},
 };
 use halo2_base::{
@@ -72,7 +72,7 @@ fn hash_to_g2_test<F: BigPrimeField>(
     let h2c_chip = HashToCurveChip::new(&sha256, &fp2_chip);
 
     let hp = h2c_chip
-        .hash_to_curve(
+        .hash_to_curve::<ExpandMsgXmd>(
             ctx,
             msg.into_iter().map(|b| QuantumCell::Witness(F::from(b as u64))),
             b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_",

@@ -54,12 +54,12 @@ where
         window_bits: usize,
     ) -> EcPoint<F, FC::FieldPoint>;
 
-    fn hash_to_field<HC: HashInstructions<F, ThreadBuidler = Context<F>>>(
+    fn hash_to_field<HC: HashInstructions<F, ThreadBuidler = Context<F>>, XC: ExpandMessageChip>(
         &self,
         ctx: &mut HC::ThreadBuidler,
         hash_chip: &HC,
         msg: impl Iterator<Item = QuantumCell<F>>,
-        dst: impl AsRef<[u8]>,
+        dst: &[u8],
     ) -> Result<[FC::FieldPoint; 2], Error>;
 
     fn isogeny_map(
@@ -158,13 +158,13 @@ where
         Self { hash_chip, ecc_chip: EccChip::new(field_chip), _curve: PhantomData }
     }
 
-    pub fn hash_to_curve(
+    pub fn hash_to_curve<XC: ExpandMessageChip>(
         &self,
         ctx: &mut HC::ThreadBuidler,
         msg: impl Iterator<Item = QuantumCell<F>>,
-        dst: impl AsRef<[u8]>,
+        dst: &[u8],
     ) -> Result<EcPoint<F, FC::FieldPoint>, Error> {
-        let u = self.ecc_chip.hash_to_field(ctx, self.hash_chip, msg, dst)?;
+        let u = self.ecc_chip.hash_to_field::<_, XC>(ctx, self.hash_chip, msg, dst)?;
         let p = self.map_to_curve(ctx, u)?;
         Ok(p)
     }
@@ -318,12 +318,12 @@ impl<'chip, F: BigPrimeField> HashEccChip<F, Fp2Chip<'chip, F>, G2>
     /// - https://github.com/cfrg/draft-irtf-cfrg-hash-to-curve/blob/6ce20a1/poc/hash_to_field.py#L49
     /// - https://github.com/paulmillr/noble-curves/blob/bf70ba9/src/abstract/hash-to-curve.ts#L128
     /// - https://github.com/succinctlabs/telepathy-circuits/blob/d5c7771/circuits/hash_to_field.circom#L11
-    fn hash_to_field<HC: HashInstructions<F, ThreadBuidler = Context<F>>>(
+    fn hash_to_field<HC: HashInstructions<F, ThreadBuidler = Context<F>>, XC: ExpandMessageChip>(
         &self,
         ctx: &mut HC::ThreadBuidler,
         hash_chip: &HC,
         msg: impl Iterator<Item = QuantumCell<F>>,
-        dst: impl AsRef<[u8]>,
+        dst: &[u8],
     ) -> Result<[Fp2Point<F>; 2], Error> {
         let fp_chip = self.field_chip().fp_chip();
         let range = fp_chip.range();
@@ -332,17 +332,8 @@ impl<'chip, F: BigPrimeField> HashEccChip<F, Fp2Chip<'chip, F>, G2>
         // constants
         let zero = ctx.load_zero();
 
-        let assigned_msg = msg
-            .map(|cell| match cell {
-                QuantumCell::Existing(v) => v,
-                QuantumCell::Witness(v) => ctx.load_witness(v),
-                QuantumCell::Constant(v) => ctx.load_constant(v),
-                _ => unreachable!(),
-            })
-            .collect_vec();
-
-        let len_in_bytes = 2 * G2_EXT_DEGREE * L;
-        let extended_msg = expand_message_xmd(ctx, hash_chip, range, assigned_msg, len_in_bytes, dst)?;
+        let extended_msg =
+            XC::expand_message(ctx, hash_chip, range, msg, dst, 2 * G2_EXT_DEGREE * L)?;
 
         // 2^256
         let two_pow_256 = fp_chip.load_constant_uint(ctx, BigUint::from(2u8).pow(256));
@@ -465,80 +456,104 @@ impl<'chip, F: BigPrimeField> HashEccChip<F, Fp2Chip<'chip, F>, G2>
     }
 }
 
-/// Implements [section 5.3 of `draft-irtf-cfrg-hash-to-curve-16`][expand_message_xmd].
-///
-/// [expand_message_xmd]: https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-5.3
-///
-/// References:
-/// - https://github.com/cfrg/draft-irtf-cfrg-hash-to-curve/blob/6ce20a1/poc/hash_to_field.py#L89
-/// - https://github.com/paulmillr/noble-curves/blob/bf70ba9/src/abstract/hash-to-curve.ts#L63
-/// - https://github.com/succinctlabs/telepathy-circuits/blob/d5c7771/circuits/hash_to_field.circom#L139
-fn expand_message_xmd<F: BigPrimeField, HC: HashInstructions<F, ThreadBuidler = Context<F>>>(
-    ctx: &mut HC::ThreadBuidler,
-    hash_chip: &HC,
-    range: &impl RangeInstructions<F>,
-    msg: Vec<AssignedValue<F>>,
-    len_in_bytes: usize,
-    dst: impl AsRef<[u8]>,
-) -> Result<Vec<AssignedValue<F>>, Error> {
-    let gate = range.gate();
+pub trait ExpandMessageChip {
+    fn expand_message<F: BigPrimeField, HC: HashInstructions<F, ThreadBuidler = Context<F>>>(
+        ctx: &mut HC::ThreadBuidler,
+        hash_chip: &HC,
+        range: &impl RangeInstructions<F>,
+        msg: impl Iterator<Item = QuantumCell<F>>,
+        dst: &[u8],
+        len_in_bytes: usize,
+    ) -> Result<Vec<AssignedValue<F>>, Error>;
+}
 
-    let zero = ctx.load_zero();
-    let one = ctx.load_constant(F::ONE);
+pub struct ExpandMsgXmd;
 
-    // assign DST bytes & cache them
-    let dst_len = ctx.load_constant(F::from(dst.as_ref().len() as u64));
-    let dst_prime = dst
-        .as_ref()
-        .iter()
-        .map(|&b| ctx.load_constant(F::from(b as u64)))
-        .chain(iter::once(dst_len))
-        .collect_vec();
+impl ExpandMessageChip for ExpandMsgXmd {
+    /// Implements [section 5.3 of `draft-irtf-cfrg-hash-to-curve-16`][expand_message_xmd].
+    ///
+    /// [expand_message_xmd]: https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-5.3
+    ///
+    /// References:
+    /// - https://github.com/cfrg/draft-irtf-cfrg-hash-to-curve/blob/6ce20a1/poc/hash_to_field.py#L89
+    /// - https://github.com/paulmillr/noble-curves/blob/bf70ba9/src/abstract/hash-to-curve.ts#L63
+    /// - https://github.com/succinctlabs/telepathy-circuits/blob/d5c7771/circuits/hash_to_field.circom#L139
+    fn expand_message<F: BigPrimeField, HC: HashInstructions<F, ThreadBuidler = Context<F>>>(
+        ctx: &mut HC::ThreadBuidler,
+        hash_chip: &HC,
+        range: &impl RangeInstructions<F>,
+        msg: impl Iterator<Item = QuantumCell<F>>,
+        dst: &[u8],
+        len_in_bytes: usize,
+    ) -> Result<Vec<AssignedValue<F>>, Error> {
+        let gate = range.gate();
 
-    // padding and length strings
-    let z_pad = i2osp(0, HC::BLOCK_SIZE, |_| zero);
-    let l_i_b_str = i2osp(len_in_bytes as u128, 2, |b| ctx.load_constant(b));
+        let zero = ctx.load_zero();
+        let one = ctx.load_constant(F::ONE);
 
-    // compute blocks
-    let ell = (len_in_bytes as f64 / HC::DIGEST_SIZE as f64).ceil() as usize;
-    let mut b_vals = Vec::with_capacity(ell);
-    let msg_prime = z_pad
-        .into_iter()
-        .chain(msg)
-        .chain(l_i_b_str)
-        .chain(iter::once(zero))
-        .chain(dst_prime.clone())
-        .map(QuantumCell::Existing);
+        // assign DST bytes & cache them
+        let dst_len = ctx.load_constant(F::from(dst.as_ref().len() as u64));
+        let dst_prime = dst
+            .as_ref()
+            .iter()
+            .map(|&b| ctx.load_constant(F::from(b as u64)))
+            .chain(iter::once(dst_len))
+            .collect_vec();
 
-    let b_0 = hash_chip.digest::<143>(ctx, msg_prime, false)?.output_bytes;
+        // padding and length strings
+        let z_pad = i2osp(0, HC::BLOCK_SIZE, |_| zero);
+        let l_i_b_str = i2osp(len_in_bytes as u128, 2, |b| ctx.load_constant(b));
 
-    b_vals.insert(
-        0,
-        hash_chip
-            .digest::<77>(
-                ctx,
-                b_0.into_iter()
-                    .chain(iter::once(one))
-                    .chain(dst_prime.clone())
-                    .map(QuantumCell::Existing),
-                false,
-            )?
-            .output_bytes,
-    );
+        let assigned_msg = msg
+            .map(|cell| match cell {
+                QuantumCell::Existing(v) => v,
+                QuantumCell::Witness(v) => ctx.load_witness(v),
+                QuantumCell::Constant(v) => ctx.load_constant(v),
+                _ => unreachable!(),
+            })
+            .collect_vec();
 
-    for i in 1..ell {
-        let preimg = strxor(b_0, b_vals[i - 1], gate, ctx)
+        // compute blocks
+        let ell = (len_in_bytes as f64 / HC::DIGEST_SIZE as f64).ceil() as usize;
+        let mut b_vals = Vec::with_capacity(ell);
+        let msg_prime = z_pad
             .into_iter()
-            .chain(iter::once(ctx.load_constant(F::from(i as u64 + 1))))
+            .chain(assigned_msg)
+            .chain(l_i_b_str)
+            .chain(iter::once(zero))
             .chain(dst_prime.clone())
             .map(QuantumCell::Existing);
 
-        b_vals.insert(i, hash_chip.digest::<77>(ctx, preimg, false)?.output_bytes);
+        let b_0 = hash_chip.digest::<143>(ctx, msg_prime, false)?.output_bytes;
+
+        b_vals.insert(
+            0,
+            hash_chip
+                .digest::<77>(
+                    ctx,
+                    b_0.into_iter()
+                        .chain(iter::once(one))
+                        .chain(dst_prime.clone())
+                        .map(QuantumCell::Existing),
+                    false,
+                )?
+                .output_bytes,
+        );
+
+        for i in 1..ell {
+            let preimg = strxor(b_0, b_vals[i - 1], gate, ctx)
+                .into_iter()
+                .chain(iter::once(ctx.load_constant(F::from(i as u64 + 1))))
+                .chain(dst_prime.clone())
+                .map(QuantumCell::Existing);
+
+            b_vals.insert(i, hash_chip.digest::<77>(ctx, preimg, false)?.output_bytes);
+        }
+
+        let uniform_bytes = b_vals.into_iter().flatten().take(len_in_bytes).collect_vec();
+
+        Ok(uniform_bytes)
     }
-
-    let uniform_bytes = b_vals.into_iter().flatten().take(len_in_bytes).collect_vec();
-
-    Ok(uniform_bytes)
 }
 
 pub trait HashCurveExt: CurveExt
@@ -878,4 +893,3 @@ mod bls12_381 {
         };
     }
 }
-
