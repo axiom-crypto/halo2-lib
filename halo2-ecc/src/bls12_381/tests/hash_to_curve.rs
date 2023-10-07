@@ -2,8 +2,8 @@ use std::{fs::File, marker::PhantomData};
 
 use super::*;
 use crate::{
-    bls12_381::hash_to_curve::{AssignedHashResult, HashInstructions, HashToCurveChip, ExpandMsgXmd},
-    fields::{FpStrategy, FieldChip},
+    bls12_381::hash_to_curve::HashToCurveChip,
+    fields::{FieldChip, FpStrategy}, ecc::hash_to_curve::{AssignedHashResult, HashInstructions, ExpandMsgXmd},
 };
 use halo2_base::{
     gates::RangeChip, halo2_proofs::plonk::Error, utils::BigPrimeField, Context, QuantumCell,

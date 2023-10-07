@@ -595,6 +595,22 @@ pub trait GateInstructions<F: ScalarField> {
         ctx.last().unwrap()
     }
 
+    /// Constrains and returns `a ^ b`.
+    fn bitwise_xor<const BITS: usize>(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+        b: AssignedValue<F>,
+    ) -> AssignedValue<F> {
+        let a_bits = self.num_to_bits(ctx, a, BITS);
+        let b_bits = self.num_to_bits(ctx, b, BITS);
+    
+        let xor_bits =
+            a_bits.into_iter().zip(b_bits).map(|(a, b)| self.xor(ctx, a, b)).collect_vec();
+    
+        self.bits_to_num(ctx, xor_bits)
+    }
+
     /// Constrains and returns `!a` assumeing `a` is boolean.
     ///
     /// Defines a vertical gate of form | 1 - a | a | 1 | 1 |, where 1 - a = out.
@@ -867,6 +883,22 @@ pub trait GateInstructions<F: ScalarField> {
         a: AssignedValue<F>,
         range_bits: usize,
     ) -> Vec<AssignedValue<F>>;
+
+    /// Constrains and returns the number represented by the little-endian bit vector `bits`.
+    fn bits_to_num<I: IntoIterator<Item = AssignedValue<F>>>(
+        &self,
+        ctx: &mut Context<F>,
+        bits: I,
+    ) -> AssignedValue<F>
+    where
+        I::IntoIter: DoubleEndedIterator + ExactSizeIterator,
+    {
+        let bits_iter = bits.into_iter();
+        assert!(bits_iter.len() <= F::NUM_BITS as usize);
+        bits_iter.rev().fold(ctx.load_zero(), |acc, bit| {
+            self.mul_add(ctx, acc, QuantumCell::Constant(F::from(2u64)), bit)
+        })
+    }
 
     /// Constrains and computes `a`<sup>`exp`</sup> where both `a, exp` are witnesses. The exponent is computed in the native field `F`.
     ///

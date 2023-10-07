@@ -8,7 +8,6 @@ pub mod bls_signature;
 pub mod final_exp;
 pub mod hash_to_curve;
 pub mod pairing;
-pub(crate) mod utils;
 
 pub(crate) const XI_0: i64 = 1;
 

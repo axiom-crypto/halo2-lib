@@ -20,6 +20,7 @@ pub mod fixed_base;
 pub mod schnorr_signature;
 // pub mod fixed_base_pippenger;
 pub mod pippenger;
+pub mod hash_to_curve;
 
 // EcPoint and EccChip take in a generic `FieldChip` to implement generic elliptic curve operations on arbitrary field extensions (provided chip exists) for short Weierstrass curves (currently further assuming a4 = 0 for optimization purposes)
 #[derive(Debug)]
