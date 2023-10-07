@@ -7,13 +7,13 @@ use crate::{
     fields::{FieldChip, FpStrategy},
 };
 use halo2_base::{
-    gates::RangeChip,
+    gates::{RangeChip, flex_gate::threads::SinglePhaseCoreManager},
     halo2_proofs::{
         halo2curves::{bls12_381::{hash_to_curve::HashToCurve, G2Affine, G2}, CurveAffine},
         plonk::Error,
     },
     utils::BigPrimeField,
-    AssignedValue, Context, QuantumCell,
+    AssignedValue, QuantumCell,
 };
 extern crate pairing;
 use crate::group::Curve;
@@ -38,12 +38,12 @@ impl<F: BigPrimeField> HashInstructions<F> for Sha256MockChip<F> {
     const BLOCK_SIZE: usize = 64;
     const DIGEST_SIZE: usize = 32;
 
-    type ThreadBuidler = Context<F>;
+    type ThreadManager = SinglePhaseCoreManager<F>;
     type Output = Vec<AssignedValue<F>>;
 
     fn digest<const MAX_INPUT_SIZE: usize>(
         &self,
-        ctx: &mut Self::ThreadBuidler,
+        thread_pool: &mut Self::ThreadManager,
         input: impl Iterator<Item = QuantumCell<F>>,
         _strict: bool,
     ) -> Result<Vec<AssignedValue<F>>, Error> {
@@ -59,14 +59,14 @@ impl<F: BigPrimeField> HashInstructions<F> for Sha256MockChip<F> {
 
         let output_bytes = Sha256::digest(&input_bytes)
             .into_iter()
-            .map(|b| ctx.load_witness(F::from(b as u64)))
+            .map(|b| thread_pool.main().load_witness(F::from(b as u64)))
             .collect_vec();
         Ok(output_bytes)
     }
 }
 
 fn hash_to_g2_test<F: BigPrimeField>(
-    ctx: &mut Context<F>,
+    thread_pool: &mut SinglePhaseCoreManager<F>,
     range: &RangeChip<F>,
     params: HashToCurveCircuitParams,
     msg: Vec<u8>,
@@ -82,7 +82,7 @@ fn hash_to_g2_test<F: BigPrimeField>(
 
     let assigned_msghash = h2c_chip
         .hash_to_curve::<ExpandMsgXmd>(
-            ctx,
+            thread_pool,
             msg.iter().copied().map(|b| QuantumCell::Witness(F::from(b as u64))),
             DST,
         )
@@ -113,8 +113,8 @@ fn test_hash_to_g2() {
 
     let test_input = vec![0u8; 32];
 
-    base_test().k(params.degree).lookup_bits(params.lookup_bits).run(|ctx, range| {
-        hash_to_g2_test(ctx, range, params, test_input);
+    base_test().k(params.degree).lookup_bits(params.lookup_bits).run_builder(|builder, range| {
+        hash_to_g2_test(builder, range, params, test_input);
     })
 }
 
@@ -143,7 +143,7 @@ fn bench_pairing() -> Result<(), Box<dyn std::error::Error>> {
             test_input.clone(),
             test_input,
             |pool, range, test_input| {
-                hash_to_g2_test(pool.main(), range, bench_params, test_input);
+                hash_to_g2_test(pool, range, bench_params, test_input);
             },
         );
 

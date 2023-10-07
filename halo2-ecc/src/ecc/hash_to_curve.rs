@@ -1,7 +1,7 @@
 use std::iter;
 
 use halo2_base::{
-    gates::{GateInstructions, RangeInstructions},
+    gates::{GateInstructions, RangeInstructions, flex_gate::threads::ThreadManager},
     halo2_proofs::{halo2curves::CurveExt, plonk::Error},
     utils::BigPrimeField,
     AssignedValue, Context, QuantumCell,
@@ -16,7 +16,7 @@ pub trait HashInstructions<F: BigPrimeField> {
     const BLOCK_SIZE: usize;
     const DIGEST_SIZE: usize;
 
-    type ThreadBuidler;
+    type ThreadManager: ThreadManager<F>;
     type Output: IntoIterator<Item = AssignedValue<F>>;
 
     /// Digests input using hash function and returns finilized output.
@@ -24,7 +24,7 @@ pub trait HashInstructions<F: BigPrimeField> {
     /// `strict` flag indicates whether to perform range check on input bytes.
     fn digest<const MAX_INPUT_SIZE: usize>(
         &self,
-        ctx: &mut Self::ThreadBuidler,
+        ctx: &mut Self::ThreadManager,
         input: impl Iterator<Item = QuantumCell<F>>,
         strict: bool,
     ) -> Result<Self::Output, Error>;
@@ -53,8 +53,8 @@ where
 }
 
 pub trait ExpandMessageChip {
-    fn expand_message<F: BigPrimeField, HC: HashInstructions<F, ThreadBuidler = Context<F>>>(
-        ctx: &mut HC::ThreadBuidler,
+    fn expand_message<F: BigPrimeField, HC: HashInstructions<F>>(
+        ctx: &mut HC::ThreadManager,
         hash_chip: &HC,
         range: &impl RangeInstructions<F>,
         msg: impl Iterator<Item = QuantumCell<F>>,
@@ -84,9 +84,9 @@ pub trait HashToCurveInstructions<
         scalar_multiply_bits(self.field_chip(), ctx, p, bits, max_bits, window_bits, true)
     }
 
-    fn hash_to_field<HC: HashInstructions<F, ThreadBuidler = Context<F>>, XC: ExpandMessageChip>(
+    fn hash_to_field<HC: HashInstructions<F>, XC: ExpandMessageChip>(
         &self,
-        ctx: &mut HC::ThreadBuidler,
+        thread_pool: &mut HC::ThreadManager,
         hash_chip: &HC,
         msg: impl Iterator<Item = QuantumCell<F>>,
         dst: &[u8],
@@ -163,8 +163,8 @@ impl ExpandMessageChip for ExpandMsgXmd {
     /// - https://github.com/cfrg/draft-irtf-cfrg-hash-to-curve/blob/6ce20a1/poc/hash_to_field.py#L89
     /// - https://github.com/paulmillr/noble-curves/blob/bf70ba9/src/abstract/hash-to-curve.ts#L63
     /// - https://github.com/succinctlabs/telepathy-circuits/blob/d5c7771/circuits/hash_to_field.circom#L139
-    fn expand_message<F: BigPrimeField, HC: HashInstructions<F, ThreadBuidler = Context<F>>>(
-        ctx: &mut HC::ThreadBuidler,
+    fn expand_message<F: BigPrimeField, HC: HashInstructions<F>>(
+        thread_pool: &mut HC::ThreadManager,
         hash_chip: &HC,
         range: &impl RangeInstructions<F>,
         msg: impl Iterator<Item = QuantumCell<F>>,
@@ -173,27 +173,27 @@ impl ExpandMessageChip for ExpandMsgXmd {
     ) -> Result<Vec<AssignedValue<F>>, Error> {
         let gate = range.gate();
 
-        let zero = ctx.load_zero();
-        let one = ctx.load_constant(F::ONE);
+        let zero = thread_pool.main().load_zero();
+        let one = thread_pool.main().load_constant(F::ONE);
 
         // assign DST bytes & cache them
-        let dst_len = ctx.load_constant(F::from(dst.as_ref().len() as u64));
+        let dst_len = thread_pool.main().load_constant(F::from(dst.as_ref().len() as u64));
         let dst_prime = dst
             .as_ref()
             .iter()
-            .map(|&b| ctx.load_constant(F::from(b as u64)))
+            .map(|&b| thread_pool.main().load_constant(F::from(b as u64)))
             .chain(iter::once(dst_len))
             .collect_vec();
 
         // padding and length strings
         let z_pad = i2osp(0, HC::BLOCK_SIZE, |_| zero);
-        let l_i_b_str = i2osp(len_in_bytes as u128, 2, |b| ctx.load_constant(b));
+        let l_i_b_str = i2osp(len_in_bytes as u128, 2, |b| thread_pool.main().load_constant(b));
 
         let assigned_msg = msg
             .map(|cell| match cell {
                 QuantumCell::Existing(v) => v,
-                QuantumCell::Witness(v) => ctx.load_witness(v),
-                QuantumCell::Constant(v) => ctx.load_constant(v),
+                QuantumCell::Witness(v) => thread_pool.main().load_witness(v),
+                QuantumCell::Constant(v) => thread_pool.main().load_constant(v),
                 _ => unreachable!(),
             })
             .collect_vec();
@@ -209,13 +209,13 @@ impl ExpandMessageChip for ExpandMsgXmd {
             .chain(dst_prime.clone())
             .map(QuantumCell::Existing);
 
-        let b_0 = hash_chip.digest::<143>(ctx, msg_prime, false)?.into_iter().collect_vec();
+        let b_0 = hash_chip.digest::<143>(thread_pool, msg_prime, false)?.into_iter().collect_vec();
 
         b_vals.insert(
             0,
             hash_chip
                 .digest::<77>(
-                    ctx,
+                    thread_pool,
                     b_0.iter()
                         .copied()
                         .chain(iter::once(one))
@@ -228,13 +228,13 @@ impl ExpandMessageChip for ExpandMsgXmd {
         );
 
         for i in 1..ell {
-            let preimg = strxor(b_0.iter().copied(), b_vals[i - 1].iter().copied(), gate, ctx)
+            let preimg = strxor(b_0.iter().copied(), b_vals[i - 1].iter().copied(), gate, thread_pool.main())
                 .into_iter()
-                .chain(iter::once(ctx.load_constant(F::from(i as u64 + 1))))
+                .chain(iter::once(thread_pool.main().load_constant(F::from(i as u64 + 1))))
                 .chain(dst_prime.clone())
                 .map(QuantumCell::Existing);
 
-            b_vals.insert(i, hash_chip.digest::<77>(ctx, preimg, false)?.into_iter().collect_vec());
+            b_vals.insert(i, hash_chip.digest::<77>(thread_pool, preimg, false)?.into_iter().collect_vec());
         }
 
         let uniform_bytes = b_vals.into_iter().flatten().take(len_in_bytes).collect_vec();

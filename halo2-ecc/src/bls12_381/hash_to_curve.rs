@@ -4,7 +4,9 @@
 use std::marker::PhantomData;
 
 use crate::bigint::utils::decode_into_bn;
-use crate::ecc::hash_to_curve::{ExpandMessageChip, HashCurveExt, HashToCurveInstructions, HashInstructions};
+use crate::ecc::hash_to_curve::{
+    ExpandMessageChip, HashCurveExt, HashInstructions, HashToCurveInstructions,
+};
 use crate::ecc::EcPoint;
 use crate::ff::Field;
 use crate::fields::FieldChipExt;
@@ -14,6 +16,7 @@ use crate::{
     ecc::EccChip,
     fields::{vector::FieldVector, FieldChip, Selectable},
 };
+use halo2_base::gates::flex_gate::threads::ThreadManager;
 use halo2_base::gates::{GateInstructions, RangeInstructions};
 use halo2_base::halo2_proofs::halo2curves::bls12_381::{Fq2, G2};
 use halo2_base::utils::BigPrimeField;
@@ -40,7 +43,7 @@ impl<
         F: BigPrimeField,
         C: HashCurveExt<Base = FC::FieldType>,
         FC: FieldChipExt<F>,
-        HC: HashInstructions<F, ThreadBuidler = Context<F>> + 'chip,
+        HC: HashInstructions<F> + 'chip,
     > HashToCurveChip<'chip, F, FC, HC, C>
 where
     FC::FieldType: crate::ff::PrimeField,
@@ -53,12 +56,12 @@ where
 
     pub fn hash_to_curve<XC: ExpandMessageChip>(
         &self,
-        ctx: &mut HC::ThreadBuidler,
+        thread_pool: &mut HC::ThreadManager,
         msg: impl Iterator<Item = QuantumCell<F>>,
         dst: &[u8],
     ) -> Result<EcPoint<F, FC::FieldPoint>, Error> {
-        let u = self.ecc_chip.hash_to_field::<_, XC>(ctx, self.hash_chip, msg, dst)?;
-        let p = self.map_to_curve(ctx, u)?;
+        let u = self.ecc_chip.hash_to_field::<_, XC>(thread_pool, self.hash_chip, msg, dst)?;
+        let p = self.map_to_curve(thread_pool.main(), u)?;
         Ok(p)
     }
 
@@ -181,7 +184,6 @@ where
     }
 }
 
-
 const G2_EXT_DEGREE: usize = 2;
 // L = ceil((ceil(log2(p)) + k) / 8) (see section 5 of ietf draft link above)
 const L: usize = 64;
@@ -192,7 +194,7 @@ impl<'chip, F: BigPrimeField> HashToCurveInstructions<F, Fp2Chip<'chip, F>, G2>
     fn field_chip(&self) -> &Fp2Chip<'chip, F> {
         self.field_chip
     }
-    
+
     /// Implements [section 5.2 of `draft-irtf-cfrg-hash-to-curve-16`][hash_to_field].
     ///
     /// [hash_to_field]: https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-5.2
@@ -201,9 +203,9 @@ impl<'chip, F: BigPrimeField> HashToCurveInstructions<F, Fp2Chip<'chip, F>, G2>
     /// - https://github.com/cfrg/draft-irtf-cfrg-hash-to-curve/blob/6ce20a1/poc/hash_to_field.py#L49
     /// - https://github.com/paulmillr/noble-curves/blob/bf70ba9/src/abstract/hash-to-curve.ts#L128
     /// - https://github.com/succinctlabs/telepathy-circuits/blob/d5c7771/circuits/hash_to_field.circom#L11
-    fn hash_to_field<HC: HashInstructions<F, ThreadBuidler = Context<F>>, XC: ExpandMessageChip>(
+    fn hash_to_field<HC: HashInstructions<F>, XC: ExpandMessageChip>(
         &self,
-        ctx: &mut HC::ThreadBuidler,
+        thread_pool: &mut HC::ThreadManager,
         hash_chip: &HC,
         msg: impl Iterator<Item = QuantumCell<F>>,
         dst: &[u8],
@@ -213,10 +215,12 @@ impl<'chip, F: BigPrimeField> HashToCurveInstructions<F, Fp2Chip<'chip, F>, G2>
         let gate = range.gate();
 
         // constants
-        let zero = ctx.load_zero();
+        let zero = thread_pool.main().load_zero();
 
         let extended_msg =
-            XC::expand_message(ctx, hash_chip, range, msg, dst, 2 * G2_EXT_DEGREE * L)?;
+            XC::expand_message(thread_pool, hash_chip, range, msg, dst, 2 * G2_EXT_DEGREE * L)?;
+
+        let ctx = thread_pool.main();
 
         // 2^256
         let two_pow_256 = fp_chip.load_constant_uint(ctx, BigUint::from(2u8).pow(256));
