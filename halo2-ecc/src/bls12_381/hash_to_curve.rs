@@ -4,7 +4,7 @@
 use std::marker::PhantomData;
 
 use crate::bigint::utils::decode_into_bn;
-use crate::ecc::hash_to_curve::{ExpandMessageChip, HashCurveExt, HashEccChip, HashInstructions};
+use crate::ecc::hash_to_curve::{ExpandMessageChip, HashCurveExt, HashToCurveInstructions, HashInstructions};
 use crate::ecc::EcPoint;
 use crate::ff::Field;
 use crate::fields::FieldChipExt;
@@ -45,7 +45,7 @@ impl<
 where
     FC::FieldType: crate::ff::PrimeField,
     FC: Selectable<F, FC::FieldPoint>,
-    EccChip<'chip, F, FC>: HashEccChip<F, FC, C>,
+    EccChip<'chip, F, FC>: HashToCurveInstructions<F, FC, C>,
 {
     pub fn new(hash_chip: &'chip HC, field_chip: &'chip FC) -> Self {
         Self { hash_chip, ecc_chip: EccChip::new(field_chip), _curve: PhantomData }
@@ -186,23 +186,13 @@ const G2_EXT_DEGREE: usize = 2;
 // L = ceil((ceil(log2(p)) + k) / 8) (see section 5 of ietf draft link above)
 const L: usize = 64;
 
-impl<'chip, F: BigPrimeField> HashEccChip<F, Fp2Chip<'chip, F>, G2>
+impl<'chip, F: BigPrimeField> HashToCurveInstructions<F, Fp2Chip<'chip, F>, G2>
     for EccChip<'chip, F, Fp2Chip<'chip, F>>
 {
     fn field_chip(&self) -> &Fp2Chip<'chip, F> {
         self.field_chip
     }
-
-    fn scalar_mult_bits(
-        &self,
-        ctx: &mut Context<F>,
-        p: G2Point<F>,
-        bits: Vec<AssignedValue<F>>,
-        window_bits: usize,
-    ) -> G2Point<F> {
-        self.scalar_mult_bits(ctx, p, bits, window_bits)
-    }
-
+    
     /// Implements [section 5.2 of `draft-irtf-cfrg-hash-to-curve-16`][hash_to_field].
     ///
     /// [hash_to_field]: https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-5.2

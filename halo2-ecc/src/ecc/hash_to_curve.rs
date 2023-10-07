@@ -10,7 +10,7 @@ use itertools::Itertools;
 
 use crate::fields::{FieldChipExt, Selectable};
 
-use super::EcPoint;
+use super::{scalar_multiply_bits, EcPoint};
 
 pub trait HashInstructions<F: BigPrimeField> {
     const BLOCK_SIZE: usize;
@@ -63,8 +63,11 @@ pub trait ExpandMessageChip {
     ) -> Result<Vec<AssignedValue<F>>, Error>;
 }
 
-pub trait HashEccChip<F: BigPrimeField, FC: FieldChipExt<F>, C: HashCurveExt<Base = FC::FieldType>>
-where
+pub trait HashToCurveInstructions<
+    F: BigPrimeField,
+    FC: FieldChipExt<F>,
+    C: HashCurveExt<Base = FC::FieldType>,
+> where
     FC::FieldType: crate::ff::PrimeField,
     FC: Selectable<F, FC::FieldPoint>,
 {
@@ -76,7 +79,10 @@ where
         p: EcPoint<F, FC::FieldPoint>,
         bits: Vec<AssignedValue<F>>,
         window_bits: usize,
-    ) -> EcPoint<F, FC::FieldPoint>;
+    ) -> EcPoint<F, FC::FieldPoint> {
+        let max_bits = bits.len();
+        scalar_multiply_bits(self.field_chip(), ctx, p, bits, max_bits, window_bits, true)
+    }
 
     fn hash_to_field<HC: HashInstructions<F, ThreadBuidler = Context<F>>, XC: ExpandMessageChip>(
         &self,

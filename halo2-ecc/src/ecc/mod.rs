@@ -1097,21 +1097,6 @@ impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         }
         self.sub_unequal(ctx, acc, rand_point, true)
     }
-
-    // See [`scalar_mult_bits`] for more details.
-    pub fn scalar_mult_bits(
-        &self,
-        ctx: &mut Context<F>,
-        P: EcPoint<F, FC::FieldPoint>,
-        bits: Vec<AssignedValue<F>>,
-        window_bits: usize,
-    ) -> EcPoint<F, FC::FieldPoint>
-    where
-        FC: Selectable<F, FC::FieldPoint>,
-    {
-        let max_bits = bits.len();
-        scalar_multiply_bits::<F, FC>(self.field_chip, ctx, P, bits, max_bits, window_bits, true)
-    }
 }
 
 impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC>
