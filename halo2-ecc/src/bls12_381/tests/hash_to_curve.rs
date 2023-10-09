@@ -2,7 +2,7 @@ use std::{fs::{File, self}, marker::PhantomData, io::{BufReader, BufRead}};
 
 use super::*;
 use crate::{
-    bls12_381::hash_to_curve::HashToCurveChip,
+    ecc::hash_to_curve::HashToCurveChip,
     ecc::hash_to_curve::{ExpandMsgXmd, HashInstructions},
     fields::{FieldChip, FpStrategy},
 };
