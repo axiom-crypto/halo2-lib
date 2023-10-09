@@ -361,14 +361,8 @@ where
         let v = v.as_ref().to_vec();
         let len = v[0].0.len();
         let mut iters = v.into_iter().map(|n| n.into_iter()).collect_vec();
-        let v_transpoed = (0..len)
-            .map(|_| {
-                iters
-                    .iter_mut()
-                    .map(|n| n.next().unwrap())
-                    .collect_vec()
-            });
-
+        let v_transpoed =
+            (0..len).map(|_| iters.iter_mut().map(|n| n.next().unwrap()).collect_vec());
 
         FieldVector(
             v_transpoed.map(|x| self.fp_chip.select_by_indicator(ctx, &x, coeffs)).collect(),

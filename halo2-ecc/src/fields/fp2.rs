@@ -117,11 +117,7 @@ where
     FieldVector<FpChip::UnsafeFieldPoint>: From<FieldVector<FpChip::FieldPoint>>,
     FieldVector<FpChip::FieldPoint>: From<FieldVector<FpChip::ReducedFieldPoint>>,
 {
-    fn conjugate(
-        &self,
-        ctx: &mut Context<F>,
-        a: impl Into<Self::FieldPoint>
-    ) -> Self::FieldPoint {
+    fn conjugate(&self, ctx: &mut Context<F>, a: impl Into<Self::FieldPoint>) -> Self::FieldPoint {
         let a: Self::FieldPoint = a.into();
         let mut a = a.0;
         assert_eq!(a.len(), 2);

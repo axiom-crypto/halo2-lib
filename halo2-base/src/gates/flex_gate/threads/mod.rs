@@ -17,7 +17,7 @@ pub use multi_phase::{GateStatistics, MultiPhaseCoreManager};
 pub use parallelize::parallelize_core;
 pub use single_phase::SinglePhaseCoreManager;
 
-use crate::{Context, utils::BigPrimeField};
+use crate::{utils::BigPrimeField, Context};
 
 /// Abstracts basic context management for custom gate builders.
 pub trait ThreadManager<F: BigPrimeField> {

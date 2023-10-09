@@ -604,10 +604,10 @@ pub trait GateInstructions<F: ScalarField> {
     ) -> AssignedValue<F> {
         let a_bits = self.num_to_bits(ctx, a, BITS);
         let b_bits = self.num_to_bits(ctx, b, BITS);
-    
+
         let xor_bits =
             a_bits.into_iter().zip(b_bits).map(|(a, b)| self.xor(ctx, a, b)).collect_vec();
-    
+
         self.bits_to_num(ctx, xor_bits)
     }
 

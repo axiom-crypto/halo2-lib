@@ -486,7 +486,7 @@ impl<'range, F: BigPrimeField, Fp: BigPrimeField> FieldChipExt<F> for FpChip<'ra
     fn sgn0(&self, ctx: &mut Context<F>, a: impl Into<Self::FieldPoint>) -> AssignedValue<F> {
         let a: Self::FieldPoint = a.into();
         let range = self.range();
-        let gate = range.gate();
+        let _gate = range.gate();
 
         let msl = a.limbs()[0]; // most significant limb
 
@@ -494,11 +494,7 @@ impl<'range, F: BigPrimeField, Fp: BigPrimeField> FieldChipExt<F> for FpChip<'ra
         range.div_mod(ctx, lsb, BigUint::from(2u64), 8).1 // sgn0 = lsb % 2
     }
 
-    fn conjugate(
-        &self,
-        ctx: &mut Context<F>,
-        a: impl Into<Self::FieldPoint>
-    ) -> Self::FieldPoint {
+    fn conjugate(&self, ctx: &mut Context<F>, a: impl Into<Self::FieldPoint>) -> Self::FieldPoint {
         self.negate(ctx, a.into())
     }
 }

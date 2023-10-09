@@ -15,5 +15,5 @@ use std::io::Write;
 
 pub mod bls_signature;
 pub mod ec_add;
-pub mod pairing;
 pub mod hash_to_curve;
+pub mod pairing;

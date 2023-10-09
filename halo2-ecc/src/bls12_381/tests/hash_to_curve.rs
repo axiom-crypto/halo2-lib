@@ -1,4 +1,8 @@
-use std::{fs::{File, self}, marker::PhantomData, io::{BufReader, BufRead}};
+use std::{
+    fs::{self, File},
+    io::{BufRead, BufReader},
+    marker::PhantomData,
+};
 
 use super::*;
 use crate::{
@@ -7,9 +11,12 @@ use crate::{
     fields::{FieldChip, FpStrategy},
 };
 use halo2_base::{
-    gates::{RangeChip, flex_gate::threads::SinglePhaseCoreManager},
+    gates::{flex_gate::threads::SinglePhaseCoreManager, RangeChip},
     halo2_proofs::{
-        halo2curves::{bls12_381::{hash_to_curve::HashToCurve, G2Affine, G2}, CurveAffine},
+        halo2curves::{
+            bls12_381::{hash_to_curve::HashToCurve, G2Affine, G2},
+            CurveAffine,
+        },
         plonk::Error,
     },
     utils::BigPrimeField,
@@ -91,7 +98,8 @@ fn hash_to_g2_test<F: BigPrimeField>(
     let msghash = G2Affine::from_xy(
         fp2_chip.get_assigned_value(&assigned_msghash.x.into()),
         fp2_chip.get_assigned_value(&assigned_msghash.y.into()),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Verify off-circuit
     let msghash_control =
@@ -117,7 +125,6 @@ fn test_hash_to_g2() {
         hash_to_g2_test(builder, range, params, test_input);
     })
 }
-
 
 #[test]
 fn bench_pairing() -> Result<(), Box<dyn std::error::Error>> {
@@ -164,4 +171,3 @@ fn bench_pairing() -> Result<(), Box<dyn std::error::Error>> {
     }
     Ok(())
 }
-
