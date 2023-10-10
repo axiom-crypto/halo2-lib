@@ -24,6 +24,27 @@ use super::param::*;
 
 /// Encode a native input bytes into its corresponding lookup key. This function can be considered as the spec of the encoding.
 pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {
+    let witnesses_per_keccak_f = pack_native_input(bytes);
+    // Absorb witnesses keccak_f by keccak_f.
+    let mut native_poseidon_sponge =
+        snark_verifier::util::hash::Poseidon::<F, F, POSEIDON_T, POSEIDON_RATE>::new::<
+            POSEIDON_R_F,
+            POSEIDON_R_P,
+            POSEIDON_SECURE_MDS,
+        >(&NativeLoader);
+    for witnesses in witnesses_per_keccak_f {
+        for absorbing in witnesses.chunks(POSEIDON_RATE) {
+            // To avoid absorbing witnesses crossing keccak_fs together, pad 0s to make sure absorb.len() == RATE.
+            let mut padded_absorb = [F::ZERO; POSEIDON_RATE];
+            padded_absorb[..absorbing.len()].copy_from_slice(absorbing);
+            native_poseidon_sponge.update(&padded_absorb);
+        }
+    }
+    native_poseidon_sponge.squeeze()
+}
+
+/// Pack native input bytes into num_word_per_witness field elements which are more poseidon friendly.
+pub fn pack_native_input<F: Field>(bytes: &[u8]) -> Vec<Vec<F>> {
     assert!(NUM_BITS_PER_WORD <= u128::BITS as usize);
     let multipliers: Vec<F> = get_words_to_witness_multipliers::<F>();
     let num_word_per_witness = num_word_per_witness::<F>();
@@ -68,22 +89,7 @@ pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {
                 .collect_vec()
         })
         .collect_vec();
-    // Absorb witnesses keccak_f by keccak_f.
-    let mut native_poseidon_sponge =
-        snark_verifier::util::hash::Poseidon::<F, F, POSEIDON_T, POSEIDON_RATE>::new::<
-            POSEIDON_R_F,
-            POSEIDON_R_P,
-            POSEIDON_SECURE_MDS,
-        >(&NativeLoader);
-    for witnesses in witnesses_per_keccak_f {
-        for absorbing in witnesses.chunks(POSEIDON_RATE) {
-            // To avoid absorbing witnesses crossing keccak_fs together, pad 0s to make sure absorb.len() == RATE.
-            let mut padded_absorb = [F::ZERO; POSEIDON_RATE];
-            padded_absorb[..absorbing.len()].copy_from_slice(absorbing);
-            native_poseidon_sponge.update(&padded_absorb);
-        }
-    }
-    native_poseidon_sponge.squeeze()
+    witnesses_per_keccak_f
 }
 
 /// Encode a VarLenBytesVec into its corresponding lookup key.
