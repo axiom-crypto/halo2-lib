@@ -203,7 +203,7 @@ pub(crate) fn get_bytes_to_words_multipliers<F: Field>() -> Vec<F> {
     multipliers
 }
 
-fn format_input<F: Field>(
+pub fn format_input<F: Field>(
     ctx: &mut Context<F>,
     gate: &impl GateInstructions<F>,
     bytes: &[SafeByte<F>],
