@@ -1,11 +1,14 @@
 use crate::{
     halo2_proofs::{
-        circuit::{Layouter, Region},
+        circuit::{Layouter, Region, Value},
         halo2curves::ff::Field,
         plonk::{Advice, Column, ConstraintSystem, Phase},
         poly::Rotation,
     },
-    utils::ScalarField,
+    utils::{
+        halo2::{raw_assign_advice, Halo2AssignedCell},
+        ScalarField,
+    },
     virtual_region::{
         copy_constraints::SharedCopyConstraintManager, lookups::LookupAnyManager,
         manager::VirtualRegionManager,
@@ -23,7 +26,9 @@ use crate::{
 /// when calling `new`, but typically we just need 1 set.
 #[derive(Clone, Debug)]
 pub struct BasicDynLookupConfig<const KEY_COL: usize> {
+    /// Columns for cells to be looked up.
     pub to_lookup: Vec<[Column<Advice>; KEY_COL]>,
+    /// Table to look up against.
     pub table: [Column<Advice>; KEY_COL],
 }
 
@@ -57,6 +62,7 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
         Self { table, to_lookup }
     }
 
+    /// Assign managed lookups
     pub fn assign_managed_lookups<F: ScalarField>(
         &self,
         mut layouter: impl Layouter<F>,
@@ -73,6 +79,7 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
             .unwrap();
     }
 
+    /// Assign virtual table to raw
     pub fn assign_virtual_table_to_raw<F: ScalarField>(
         &self,
         mut layouter: impl Layouter<F>,
