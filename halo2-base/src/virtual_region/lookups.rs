@@ -14,6 +14,9 @@ use crate::{AssignedValue, ContextTag};
 use super::copy_constraints::SharedCopyConstraintManager;
 use super::manager::VirtualRegionManager;
 
+/// Basic dynamic lookup table gadget.
+pub mod basic;
+
 /// A manager that can be used for any lookup argument. This manager automates
 /// the process of copying cells to designed advice columns with lookup enabled.
 /// It also manages how many such advice columns are necessary.
