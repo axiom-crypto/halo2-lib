@@ -1,13 +1,13 @@
 #![allow(non_snake_case)]
 use super::{Fp12Chip, Fp2Chip, FpChip, FpPoint, Fq, FqPoint, XI_0};
+use super::{Fq12, G1Affine, G2Affine, BLS_X, BLS_X_IS_NEGATIVE};
 use crate::fields::vector::FieldVector;
-use crate::halo2_proofs::halo2curves::bls12_381::{Fq12, G1Affine, G2Affine, BLS_X};
 use crate::{
     ecc::{EcPoint, EccChip},
     fields::fp12::mul_no_carry_w6,
     fields::FieldChip,
 };
-use halo2_base::halo2_proofs::halo2curves::bls12_381::BLS_X_IS_NEGATIVE;
+
 use halo2_base::utils::BigPrimeField;
 use halo2_base::Context;
 

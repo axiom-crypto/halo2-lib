@@ -5,16 +5,8 @@ use std::{
 };
 
 use super::*;
-use crate::{
-    bls12_381::bls_signature::BlsSignatureChip, fields::FpStrategy,
-    halo2_proofs::halo2curves::bls12_381::G2Affine,
-};
-use halo2_base::{
-    gates::RangeChip,
-    halo2_proofs::halo2curves::bls12_381::{multi_miller_loop, Gt},
-    utils::BigPrimeField,
-    Context,
-};
+use crate::{bls12_381::bls_signature::BlsSignatureChip, fields::FpStrategy};
+use halo2_base::{gates::RangeChip, utils::BigPrimeField, Context};
 extern crate pairing;
 use pairing::group::ff::Field;
 use rand_core::OsRng;

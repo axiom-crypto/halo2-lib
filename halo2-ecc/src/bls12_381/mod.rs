@@ -1,11 +1,19 @@
 use crate::bigint::ProperCrtUint;
 use crate::fields::vector::FieldVector;
 use crate::fields::{fp, fp12, fp2};
-use crate::halo2_proofs::halo2curves::bls12_381::{Fq, Fq12, Fq2};
 
 pub mod bls_signature;
 pub mod final_exp;
 pub mod pairing;
+
+#[cfg(feature = "halo2-axiom")]
+pub(crate) use crate::halo2_proofs::halo2curves::bls12_381::{
+    Fq, Fq12, Fq2, G1Affine, G2Affine, BLS_X, BLS_X_IS_NEGATIVE, FROBENIUS_COEFF_FQ12_C1,
+};
+#[cfg(feature = "halo2-pse")]
+pub(crate) use halo2curves::bls12_381::{
+    Fq, Fq12, Fq2, G1Affine, G2Affine, BLS_X, BLS_X_IS_NEGATIVE, FROBENIUS_COEFF_FQ12_C1,
+};
 
 pub(crate) const XI_0: i64 = 1;
 
