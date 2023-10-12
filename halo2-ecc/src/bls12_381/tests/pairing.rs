@@ -7,10 +7,7 @@ use crate::fields::FieldChip;
 
 use super::*;
 use halo2_base::{
-    gates::RangeChip,
-    halo2_proofs::{arithmetic::Field, halo2curves::bls12_381::G2Affine},
-    utils::BigPrimeField,
-    Context,
+    gates::RangeChip, halo2_proofs::arithmetic::Field, utils::BigPrimeField, Context,
 };
 use serde::{Deserialize, Serialize};
 

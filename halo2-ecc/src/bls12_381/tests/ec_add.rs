@@ -4,7 +4,6 @@ use std::io::{BufRead, BufReader};
 
 use super::*;
 use crate::fields::{FieldChip, FpStrategy};
-use crate::halo2_proofs::halo2curves::bls12_381::G2Affine;
 use halo2_base::gates::RangeChip;
 use halo2_base::utils::testing::base_test;
 use halo2_base::utils::BigPrimeField;

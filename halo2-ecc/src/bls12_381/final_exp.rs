@@ -1,6 +1,6 @@
 use super::XI_0;
 use super::{Fp12Chip, Fp2Chip, FpChip, FqPoint};
-use crate::halo2_proofs::halo2curves::bls12_381::{Fq, Fq12, Fq2, BLS_X, FROBENIUS_COEFF_FQ12_C1};
+use super::{Fq, Fq12, Fq2, BLS_X, FROBENIUS_COEFF_FQ12_C1};
 use crate::{
     ecc::get_naf,
     fields::{fp12::mul_no_carry_w6, vector::FieldVector, FieldChip},
