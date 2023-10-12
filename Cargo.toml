@@ -40,9 +40,5 @@ debug = true
 halo2-base = { path = "../halo2-lib/halo2-base" }
 halo2-ecc = { path = "../halo2-lib/halo2-ecc" }
 
-[patch."https://github.com/privacy-scaling-explorations/halo2curves"]
-halo2curves = { git = "https://github.com/timoftime/halo2curves", branch = "bls12-381/hash_to_curve" }
-
-
 [patch."https://github.com/axiom-crypto/halo2curves"]
 halo2curves = { git = "https://github.com/timoftime/halo2curves", branch = "bls12-381/hash_to_curve" }

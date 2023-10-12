@@ -15,7 +15,11 @@ use halo2_base::{
     Context,
 };
 extern crate pairing;
-use pairing::{group::ff::Field, MillerLoopResult};
+use crate::group::ff::Field;
+#[cfg(feature = "halo2-pse")]
+use halo2_base::halo2_proofs::halo2curves::pairing::MillerLoopResult;
+#[cfg(feature = "halo2-axiom")]
+use pairing::MillerLoopResult;
 use rand_core::OsRng;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]

@@ -1,6 +1,7 @@
 //! The chip that implements `draft-irtf-cfrg-hash-to-curve-16` for BLS12-381 (G2).
 //! https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16
 
+use super::{Fq2, G2};
 use crate::bigint::utils::decode_into_bn;
 use crate::ecc::hash_to_curve::{
     ExpandMessageChip, HashCurveExt, HashInstructions, HashToCurveInstructions,
@@ -14,7 +15,6 @@ use crate::{
 };
 use halo2_base::gates::flex_gate::threads::ThreadManager;
 use halo2_base::gates::RangeInstructions;
-use halo2_base::halo2_proofs::halo2curves::bls12_381::{Fq2, G2};
 use halo2_base::utils::BigPrimeField;
 use itertools::Itertools;
 use num_bigint::BigUint;
@@ -181,7 +181,10 @@ impl<'chip, F: BigPrimeField> HashToCurveInstructions<F, Fp2Chip<'chip, F>, G2>
 }
 
 mod bls12_381 {
+    #[cfg(feature = "halo2-axiom")]
     use halo2_base::halo2_proofs::halo2curves::bls12_381::{Fq, G2};
+    #[cfg(feature = "halo2-pse")]
+    use halo2curves::bls12_381::{Fq, G2};
 
     use super::HashCurveExt;
 

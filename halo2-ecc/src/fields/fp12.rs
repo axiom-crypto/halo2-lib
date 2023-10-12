@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+#[cfg(feature = "halo2-axiom")]
 use crate::ff::PrimeField as _;
 use crate::impl_field_ext_chip_common;
 
@@ -252,7 +253,10 @@ mod bn254 {
 
 mod bls12_381 {
     use crate::fields::FieldExtConstructor;
+    #[cfg(feature = "halo2-axiom")]
     use crate::halo2_proofs::halo2curves::bls12_381::{Fq, Fq12, Fq2, Fq6};
+    #[cfg(feature = "halo2-pse")]
+    use halo2curves::bls12_381::{Fq, Fq12, Fq2, Fq6};
     // This means we store an Fp12 point as `\sum_{i = 0}^6 (a_{i0} + a_{i1} * u) * w^i`
     // This is encoded in an FqPoint of degree 12 as `(a_{00}, ..., a_{50}, a_{01}, ..., a_{51})`
     impl FieldExtConstructor<Fq, 12> for Fq12 {

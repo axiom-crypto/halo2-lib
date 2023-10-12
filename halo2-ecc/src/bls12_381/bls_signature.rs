@@ -2,12 +2,11 @@ use std::ops::Neg;
 
 use super::pairing::PairingChip;
 use super::{Fp12Chip, FpChip};
+use super::{Fq12, G1Affine, G2Affine};
 use crate::bigint::ProperCrtUint;
 use crate::ecc::{EcPoint, EccChip};
 use crate::fields::vector::FieldVector;
 use crate::fields::FieldChip;
-use crate::halo2_proofs::halo2curves::bls12_381::{G1Affine, G2Affine};
-use halo2_base::halo2_proofs::halo2curves::bls12_381::Fq12;
 use halo2_base::utils::BigPrimeField;
 use halo2_base::{AssignedValue, Context};
 

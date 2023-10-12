@@ -12,13 +12,7 @@ use crate::{
 };
 use halo2_base::{
     gates::{flex_gate::threads::SinglePhaseCoreManager, RangeChip},
-    halo2_proofs::{
-        halo2curves::{
-            bls12_381::{hash_to_curve::HashToCurve, G2Affine, G2},
-            CurveAffine,
-        },
-        plonk::Error,
-    },
+    halo2_proofs::{halo2curves::CurveAffine, plonk::Error},
     utils::BigPrimeField,
     AssignedValue, QuantumCell,
 };
@@ -78,7 +72,11 @@ fn hash_to_g2_test<F: BigPrimeField>(
     params: HashToCurveCircuitParams,
     msg: Vec<u8>,
 ) {
+    #[cfg(feature = "halo2-axiom")]
     use crate::halo2_base::halo2_proofs::halo2curves::bls12_381::hash_to_curve::ExpandMsgXmd as ExpandMsgXmdNative;
+    #[cfg(feature = "halo2-pse")]
+    use halo2curves::bls12_381::hash_to_curve::ExpandMsgXmd as ExpandMsgXmdNative;
+    
     const DST: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
     let fp_chip = FpChip::<F>::new(range, params.limb_bits, params.num_limbs);
     let fp2_chip = Fp2Chip::new(&fp_chip);
