@@ -23,8 +23,10 @@ pub mod spec;
 pub mod state;
 
 /// Stateless Poseidon hasher.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Getters)]
 pub struct PoseidonHasher<F: ScalarField, const T: usize, const RATE: usize> {
+    /// Spec, contains round constants and optimized matrices.
+    #[getset(get = "pub")]
     spec: OptimizedPoseidonSpec<F, T, RATE>,
     consts: OnceCell<PoseidonHasherConsts<F, T, RATE>>,
 }
