@@ -68,7 +68,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
         let mut new_e_ext = vec![0u64.expr(); NUM_BITS_PER_WORD_EXT];
         meta.create_gate("Query state bits", |meta| {
             for k in 0..NUM_BITS_PER_WORD_W {
-                w_ext[k] = meta.query_advice(word_w[k], Rotation(-0));
+                w_ext[k] = meta.query_advice(word_w[k], Rotation::cur());
             }
             for i in 0..NUM_BITS_PER_WORD {
                 let k = i + NUM_BITS_PER_WORD_W - NUM_BITS_PER_WORD;
