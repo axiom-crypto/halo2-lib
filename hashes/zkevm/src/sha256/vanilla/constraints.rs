@@ -267,10 +267,10 @@ impl<F: Field> Sha256CircuitConfig<F> {
             let is_final_padding_row =
                 meta.query_advice(*is_paddings.last().unwrap(), Rotation(-2));
             // All padding selectors need to be boolean
-            for is_padding in is_paddings.iter() {
-                let is_padding = meta.query_advice(*is_padding, Rotation::cur());
+            let is_paddings_expr = is_paddings.iter().map(|is_padding| meta.query_advice(*is_padding, Rotation::cur())).collect::<Vec<_>>();
+            for is_padding in is_paddings_expr.iter() {
                 cb.condition(meta.query_fixed(q_enable, Rotation::cur()), |cb| {
-                    cb.require_boolean("is_padding boolean", is_padding);
+                    cb.require_boolean("is_padding boolean", is_padding.clone());
                 });
             }
             // Now for each padding selector
@@ -279,9 +279,9 @@ impl<F: Field> Sha256CircuitConfig<F> {
                 let is_padding_prev = if idx == 0 {
                     prev_is_padding.expr()
                 } else {
-                    meta.query_advice(is_paddings[idx - 1], Rotation::cur())
+                    is_paddings_expr[idx-1].clone()
                 };
-                let is_padding = meta.query_advice(is_paddings[idx], Rotation::cur());
+                let is_padding = is_paddings_expr[idx].clone();
                 let is_first_padding = is_padding.clone() - is_padding_prev.clone();
                 // Check padding transition 0 -> 1 done only once
                 cb.condition(q_input.expr(), |cb| {
