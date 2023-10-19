@@ -293,7 +293,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
                     |cb| {
                         // Input bytes need to be zero, or 128 if this is the first padding byte
                         cb.require_equal(
-                            "padding start/intermediate byte",
+                            "padding start/intermediate byte, all padding rows except the last one",
                             input_bytes[idx].clone(),
                             is_first_padding.expr() * 128.expr(),
                         );
@@ -309,7 +309,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
                     |cb| {
                         // Input bytes need to be zero, or 128 if this is the first padding byte
                         cb.require_equal(
-                            "padding start/intermediate byte",
+                            "padding start/intermediate byte, last padding row but not in the final block",
                             input_bytes[idx].clone(),
                             is_first_padding.expr() * 128.expr(),
                         );
