@@ -42,6 +42,7 @@ such that the bits in the message are: <original message of length L> 1 <K zeros
   - `output` (2): the hash digest the SHA-256 algorithm on the input bytes (32 bytes). We represent this as two field elements in hi-lo form - we split 32 bytes into two 16 byte chunks, and convert them to `u128` as _big endian_.
     - Only constrained when the last row of a block. Should only be considered meaningful when `is_enabled` is true.
 - We convenient store the relevant cells for the above data, per input block, in the struct `AssignedSha256Block`.
+- This circuit has a hard constraint that the input array has length up to `2^32 - 1` bytes, whereas the official SHA-256 spec supports up to `2^64 - 1`. (In practice it is likely impossible to create a circuit that can handle `2^32 - 1` byte inputs.)
 - Details are provided in inline comments.
 
 ### Example
