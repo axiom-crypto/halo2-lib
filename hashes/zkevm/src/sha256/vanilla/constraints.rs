@@ -279,7 +279,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
                 let is_padding_prev = if idx == 0 {
                     prev_is_padding.expr()
                 } else {
-                    is_paddings_expr[idx-1].clone()
+                    is_paddings_expr[idx - 1].clone()
                 };
                 let is_padding = is_paddings_expr[idx].clone();
                 let is_first_padding = is_padding.clone() - is_padding_prev.clone();
