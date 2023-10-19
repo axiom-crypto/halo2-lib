@@ -331,7 +331,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
             cb.gate(1.expr())
         });
 
-        // Each round gets access to up to 32 bytes of input data.
+        // Each round gets access to up to 32 bits of input data.
         // We store that as a little-endian word.
         meta.create_gate("word_value", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
