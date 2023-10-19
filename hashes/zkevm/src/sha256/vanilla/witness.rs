@@ -172,8 +172,8 @@ impl<F: Field> Sha256CircuitConfig<F> {
                     0
                 }),
             ),
-            ("Ha", self.h_a, F::from(if round < 4 { H[3 - round] as u64 } else { 0 })),
-            ("He", self.h_e, F::from(if round < 4 { H[7 - round] as u64 } else { 0 })),
+            ("Ha", self.h_a, F::from(if round < NUM_START_ROWS { H[3 - round] as u64 } else { 0 })),
+            ("He", self.h_e, F::from(if round < NUM_START_ROWS { H[7 - round] as u64 } else { 0 })),
         ] {
             raw_assign_fixed(region, *column, offset, *value);
         }
