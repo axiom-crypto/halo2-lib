@@ -62,8 +62,8 @@ impl<F: Field> Sha256CircuitConfig<F> {
         let mut f = vec![0u64.expr(); NUM_BITS_PER_WORD];
         let mut g = vec![0u64.expr(); NUM_BITS_PER_WORD];
         let mut h = vec![0u64.expr(); NUM_BITS_PER_WORD];
-        let mut d_64 = vec![0u64.expr(); NUM_BITS_PER_WORD];
-        let mut h_64 = vec![0u64.expr(); NUM_BITS_PER_WORD];
+        let mut d_68 = vec![0u64.expr(); NUM_BITS_PER_WORD];
+        let mut h_68 = vec![0u64.expr(); NUM_BITS_PER_WORD];
         let mut new_a_ext = vec![0u64.expr(); NUM_BITS_PER_WORD_EXT];
         let mut new_e_ext = vec![0u64.expr(); NUM_BITS_PER_WORD_EXT];
         meta.create_gate("Query state bits", |meta| {
@@ -85,8 +85,8 @@ impl<F: Field> Sha256CircuitConfig<F> {
                 f[i] = meta.query_advice(word_e[k], Rotation(-2));
                 g[i] = meta.query_advice(word_e[k], Rotation(-3));
                 h[i] = meta.query_advice(word_e[k], Rotation(-4));
-                d_64[i] = meta.query_advice(word_a[k], Rotation(-((NUM_ROUNDS + 4) as i32)));
-                h_64[i] = meta.query_advice(word_e[k], Rotation(-((NUM_ROUNDS + 4) as i32)));
+                d_68[i] = meta.query_advice(word_a[k], Rotation(-((NUM_ROUNDS + 4) as i32)));
+                h_68[i] = meta.query_advice(word_e[k], Rotation(-((NUM_ROUNDS + 4) as i32)));
             }
             for k in 0..NUM_BITS_PER_WORD_EXT {
                 new_a_ext[k] = meta.query_advice(word_a[k], Rotation(0));
@@ -189,12 +189,12 @@ impl<F: Field> Sha256CircuitConfig<F> {
             cb.require_equal(
                 "end a",
                 decode::expr(&new_a_ext),
-                decode::expr(&d) + decode::expr(&d_64),
+                decode::expr(&d) + decode::expr(&d_68),
             );
             cb.require_equal(
                 "end e",
                 decode::expr(&new_e_ext),
-                decode::expr(&h) + decode::expr(&h_64),
+                decode::expr(&h) + decode::expr(&h_68),
             );
             cb.gate(meta.query_fixed(q_end, Rotation::cur()))
         });
