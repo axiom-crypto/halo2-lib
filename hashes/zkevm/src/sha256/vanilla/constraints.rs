@@ -424,6 +424,84 @@ impl<F: Field> Sha256CircuitConfig<F> {
             cb.gate(meta.query_fixed(q_squeeze, Rotation::cur()))
         });
 
+        // Constrain all unused cells to be 0 for safety.
+        #[allow(clippy::needless_range_loop)]
+        meta.create_gate("unused is zero", |meta| {
+            let to_const =
+                |value: &String| -> &'static str { Box::leak(value.clone().into_boxed_str()) };
+            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+
+            let q_start = meta.query_fixed(q_start, Rotation::cur());
+            let q_compression = meta.query_fixed(q_compression, Rotation::cur());
+            let q_input = meta.query_fixed(q_input, Rotation::cur());
+            let q_extend = meta.query_fixed(q_extend, Rotation::cur());
+            let q_end = meta.query_fixed(q_end, Rotation::cur());
+            let q_squeeze = meta.query_fixed(q_squeeze, Rotation::cur());
+
+            let is_final = meta.query_advice(is_final, Rotation::cur());
+            let is_paddings = is_paddings.map(|c| meta.query_advice(c, Rotation::cur()));
+            let word_value = meta.query_advice(hash_table.word_value, Rotation::cur());
+            let length = meta.query_advice(hash_table.length, Rotation::cur());
+            let output_lo = meta.query_advice(hash_table.output.lo(), Rotation::cur());
+            let output_hi = meta.query_advice(hash_table.output.hi(), Rotation::cur());
+
+            // column w.b0-w.b1 at offsets [0-19, 68-91, 140-255]
+            cb.condition(not::expr(q_extend.clone()), |cb| {
+                cb.require_zero("if not(q_extend) w.b0 = 0", w_ext[0].clone());
+                cb.require_zero("if not(q_extend) w.b1 = 0", w_ext[1].clone());
+            });
+            // column w.b2-w.b33 at offsets [0-3, 68-75, 140-255]
+            cb.condition(q_start.clone() + q_end.clone(), |cb| {
+                for k in 2..=33 {
+                    cb.require_zero(
+                        to_const(&format!("if q_start and q_end w.b{k} = 0")),
+                        w_ext[k].clone(),
+                    );
+                }
+            });
+            // column is_final at offsets [4, 20-70, 92-142, 144-255]
+            cb.condition(q_compression.clone() + q_end.clone() - q_squeeze.clone(), |cb| {
+                cb.require_zero(
+                    "if q_compression or (q_end and not(q_squeeze)) is_final = 0",
+                    is_final,
+                );
+            });
+            // column pad0-pad2 at offsets [0-3, 20-75, 92-255]
+            cb.condition(not::expr(q_input.clone()), |cb| {
+                for k in 0..=2 {
+                    cb.require_zero(
+                        to_const(&format!("if not(q_input) is_paddings[{k}] = 0")),
+                        is_paddings[k].clone(),
+                    );
+                }
+            });
+            // column pad3 at offsets [20-70, 92-142, 144-255]
+            cb.condition(q_extend.clone() + q_end.clone() - q_squeeze.clone(), |cb| {
+                cb.require_zero(
+                    "if q_extend or (q_end and not(q_squeeze)) is_paddings[3] = 0",
+                    is_paddings[3].clone(),
+                );
+            });
+            // column value at offsets [0-3, 20-75, 92-255]
+            cb.condition(not::expr(q_input.clone()), |cb| {
+                cb.require_zero("if not(q_input) hash_table.word_value = 0", word_value.clone());
+            });
+            // column len at offsets [20-70, 92-142, 144-255]
+            cb.condition(q_extend.clone() + q_end.clone() - q_squeeze.clone(), |cb| {
+                cb.require_zero(
+                    "if q_extend or (q_end and not(q_squeeze)) hash_table.lenght = 0",
+                    length.clone(),
+                );
+            });
+            // column out_lo, out_hi at offsets [0-70, 72-142, 144-255]
+            cb.condition(not::expr(q_squeeze.clone()), |cb| {
+                cb.require_zero("if not(q_squeeze) output_lo = 0", output_lo.clone());
+                cb.require_zero("if not(q_squeeze) output_hi = 0", output_hi.clone());
+            });
+
+            cb.gate(meta.query_fixed(q_enable, Rotation::cur()))
+        });
+
         info!("degree: {}", meta.degree());
 
         Sha256CircuitConfig {

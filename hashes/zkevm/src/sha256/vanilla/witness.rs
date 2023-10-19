@@ -247,18 +247,23 @@ pub fn generate_witnesses_sha256(rows: &mut Vec<VirtualShaRow>, input_bytes: &[u
                            is_final,
                            length,
                            is_paddings,
-                           hash_bytes: [u8; NUM_BYTES_TO_SQUEEZE]| {
+                           hash_bytes: [u8; NUM_BYTES_TO_SQUEEZE],
+                           is_input: bool| {
             let word_to_bits = |value: u64, num_bits: usize| {
                 into_be_bits(&value.to_be_bytes())[64 - num_bits..64]
                     .iter()
                     .map(|b| *b != 0)
                     .collect::<Vec<_>>()
             };
-            let mut word_bytes_be = (w as u32).to_be_bytes();
-            for (byte, is_padding) in word_bytes_be.iter_mut().zip(is_paddings) {
-                *byte = if is_padding { 0 } else { *byte };
-            }
-            let word_value = u32::from_le_bytes(word_bytes_be);
+            let word_value = if is_input {
+                let mut word_bytes_be = (w as u32).to_be_bytes();
+                for (byte, is_padding) in word_bytes_be.iter_mut().zip(is_paddings) {
+                    *byte = if is_padding { 0 } else { *byte };
+                }
+                u32::from_le_bytes(word_bytes_be)
+            } else {
+                0
+            };
             let hash_lo = u128::from_be_bytes(hash_bytes[16..].try_into().unwrap());
             let hash_hi = u128::from_be_bytes(hash_bytes[..16].try_into().unwrap());
             rows.push(VirtualShaRow {
@@ -282,7 +287,7 @@ pub fn generate_witnesses_sha256(rows: &mut Vec<VirtualShaRow>, input_bytes: &[u
 
         // Add start rows
         let mut add_row_start = |a: u64, e: u64, is_final| {
-            add_row(0, a, e, is_final, length, [false, false, false, in_padding], zero_hash)
+            add_row(0, a, e, is_final, length, [false, false, false, in_padding], zero_hash, false)
         };
         add_row_start(d, h, idx == 0);
         add_row_start(c, g, idx == 0);
@@ -348,6 +353,7 @@ pub fn generate_witnesses_sha256(rows: &mut Vec<VirtualShaRow>, input_bytes: &[u
                 if round < NUM_WORDS_TO_ABSORB { length } else { 0 },
                 is_paddings,
                 zero_hash,
+                round < NUM_WORDS_TO_ABSORB,
             );
 
             // Truncate the newly calculated values
@@ -378,7 +384,7 @@ pub fn generate_witnesses_sha256(rows: &mut Vec<VirtualShaRow>, input_bytes: &[u
 
         // Add end rows
         let mut add_row_end = |a: u64, e: u64| {
-            add_row(0, a, e, false, 0, [false; ABSORB_WIDTH_PER_ROW_BYTES], zero_hash)
+            add_row(0, a, e, false, 0, [false; ABSORB_WIDTH_PER_ROW_BYTES], zero_hash, false)
         };
         add_row_end(hs[3], hs[7]);
         add_row_end(hs[2], hs[6]);
@@ -391,6 +397,7 @@ pub fn generate_witnesses_sha256(rows: &mut Vec<VirtualShaRow>, input_bytes: &[u
             length,
             [false, false, false, in_padding],
             hash_bytes,
+            false,
         );
 
         // Now truncate the results
