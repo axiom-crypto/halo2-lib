@@ -26,10 +26,10 @@ pub struct VirtualShaRow {
     pub is_final: bool,
     pub length: usize,
     /// A SHA-256 word (32 bytes) of the input, in little endian, when `q_input` is true.
-    /// Unconstrained when `q_input` is false.
+    /// Ignored when `q_input` is false. Assigned to `hash_table.io` column.
     pub word_value: u32,
-    /// Hash digest (32 bytes) in hi-lo form.
-    pub hash: Word<u128>,
+    /// A u128 limb of the hash digest (32 bytes). Will be assigned to `hash_table.io` column, only in the last two rows of a block.
+    pub hash_limb: u128,
 }
 
 /// The assigned cells of [VirtualShaRow] that belong in [ShaTable]. We only keep the [ShaTable] parts since
@@ -38,15 +38,17 @@ pub struct VirtualShaRow {
 struct AssignedShaTableRow<'v, F: Field> {
     /// Only set is_enabled to true when is_final is true and it's a squeeze row
     /// is_enabled := q_squeeze && is_final
-    /// Only constrained when `q_enable` true
+    /// Is 0 unless `q_enable` true.
     is_enabled: Halo2AssignedCell<'v, F>,
-    /// Hash digest (32 bytes) in hi-lo form.
-    output: Word<Halo2AssignedCell<'v, F>>,
-    /// u32 input word, little-endian
-    /// Only constrained on rows with `q_input` true.
-    word_value: Halo2AssignedCell<'v, F>,
+    /// This cell contains different IO data depending on the `offset` of the row within
+    /// a SHA256 input block ([SHA256_NUM_ROWS] = 72 rows):
+    /// - When `q_input` is true (offset in [NUM_START_ROWS]..[NUM_START_ROWS] + [NUM_WORDS_TO_ABSORB]): Raw SHA256 word([NUM_BYTES_PER_WORD] bytes) of inputs. u32 input word, little-endian.
+    /// SHA256 hash of input in hi-lo format:
+    /// - When offset is [SHA256_NUM_ROWS] - 2: output.hi()
+    /// - When `q_squeeze` (offset equals [SHA256_NUM_ROWS] - 1): output.lo()
+    io: Halo2AssignedCell<'v, F>,
     /// Length in bytes of the input processed so far. Does not include padding.
-    /// Only constrained on rows with `q_input` true.
+    /// Is 0 unless `q_input` is true.
     length: Halo2AssignedCell<'v, F>,
     _marker: PhantomData<&'v F>,
 }
@@ -108,16 +110,23 @@ impl<F: Field> Sha256CircuitConfig<F> {
             .map(|rows| {
                 let last_row = rows.last();
                 let is_final = last_row.unwrap().is_enabled.clone();
-                let output = last_row.unwrap().output.clone();
+                let output_lo = last_row.unwrap().io.clone();
+                let output_hi = rows[SHA256_NUM_ROWS - 2].io.clone();
                 let input_rows = &rows[NUM_START_ROWS..NUM_START_ROWS + NUM_WORDS_TO_ABSORB];
                 let word_values: [_; NUM_WORDS_TO_ABSORB] = input_rows
                     .iter()
-                    .map(|row| row.word_value.clone())
+                    .map(|row| row.io.clone())
                     .collect::<Vec<_>>()
                     .try_into()
                     .unwrap();
                 let length = input_rows.last().unwrap().length.clone();
-                AssignedSha256Block { is_final, output, word_values, length, _marker: PhantomData }
+                AssignedSha256Block {
+                    is_final,
+                    output: Word::new([output_lo, output_hi]),
+                    word_values,
+                    length,
+                    _marker: PhantomData,
+                }
             })
             .collect()
     }
@@ -132,6 +141,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
     ) -> AssignedShaTableRow<'v, F> {
         let round = offset % SHA256_NUM_ROWS;
         let q_squeeze = round == SHA256_NUM_ROWS - 1;
+        let q_input = (NUM_START_ROWS..NUM_START_ROWS + NUM_WORDS_TO_ABSORB).contains(&round);
 
         // Fixed values
         for (_name, column, value) in &[
@@ -152,11 +162,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
                 F::from((NUM_START_ROWS..NUM_ROUNDS + NUM_START_ROWS).contains(&round)),
             ),
             ("q_end", self.q_end, F::from(round >= NUM_ROUNDS + NUM_START_ROWS)),
-            (
-                "q_input",
-                self.q_input,
-                F::from((NUM_START_ROWS..NUM_START_ROWS + NUM_WORDS_TO_ABSORB).contains(&round)),
-            ),
+            ("q_input", self.q_input, F::from(q_input)),
             (
                 "q_input_last",
                 self.q_input_last,
@@ -191,23 +197,22 @@ impl<F: Field> Sha256CircuitConfig<F> {
             }
         }
 
+        let io_value = if q_input {
+            F::from(row.word_value as u64)
+        } else if round >= SHA256_NUM_ROWS - 2 {
+            F::from_u128(row.hash_limb)
+        } else {
+            F::ZERO
+        };
         let is_enabled = row.is_final && q_squeeze;
-        let [is_enabled, hash_lo, hash_hi, word_value, length] = [
+        let [is_enabled, io, length] = [
             (self.hash_table.is_enabled, F::from(is_enabled)),
-            (self.hash_table.output.lo(), F::from_u128(row.hash.lo())),
-            (self.hash_table.output.hi(), F::from_u128(row.hash.hi())),
-            (self.hash_table.word_value, F::from(row.word_value as u64)),
+            (self.hash_table.io, io_value),
             (self.hash_table.length, F::from(row.length as u64)),
         ]
         .map(|(column, value)| raw_assign_advice(region, column, offset, Value::known(value)));
 
-        AssignedShaTableRow {
-            is_enabled,
-            output: Word::new([hash_lo, hash_hi]),
-            word_value,
-            length,
-            _marker: PhantomData,
-        }
+        AssignedShaTableRow { is_enabled, io, length, _marker: PhantomData }
     }
 }
 
@@ -247,7 +252,7 @@ pub fn generate_witnesses_sha256(rows: &mut Vec<VirtualShaRow>, input_bytes: &[u
                            is_final,
                            length,
                            is_paddings,
-                           hash_bytes: [u8; NUM_BYTES_TO_SQUEEZE],
+                           hash_limb: u128,
                            is_input: bool| {
             let word_to_bits = |value: u64, num_bits: usize| {
                 into_be_bits(&value.to_be_bytes())[64 - num_bits..64]
@@ -264,8 +269,6 @@ pub fn generate_witnesses_sha256(rows: &mut Vec<VirtualShaRow>, input_bytes: &[u
             } else {
                 0
             };
-            let hash_lo = u128::from_be_bytes(hash_bytes[16..].try_into().unwrap());
-            let hash_hi = u128::from_be_bytes(hash_bytes[..16].try_into().unwrap());
             rows.push(VirtualShaRow {
                 w: word_to_bits(w, NUM_BITS_PER_WORD_W).try_into().unwrap(),
                 a: word_to_bits(a, NUM_BITS_PER_WORD_EXT).try_into().unwrap(),
@@ -274,7 +277,7 @@ pub fn generate_witnesses_sha256(rows: &mut Vec<VirtualShaRow>, input_bytes: &[u
                 length,
                 is_paddings,
                 word_value,
-                hash: Word::new([hash_lo, hash_hi]),
+                hash_limb,
             });
         };
 
@@ -287,7 +290,7 @@ pub fn generate_witnesses_sha256(rows: &mut Vec<VirtualShaRow>, input_bytes: &[u
 
         // Add start rows
         let mut add_row_start = |a: u64, e: u64, is_final| {
-            add_row(0, a, e, is_final, length, [false, false, false, in_padding], zero_hash, false)
+            add_row(0, a, e, is_final, length, [false, false, false, in_padding], 0u128, false)
         };
         add_row_start(d, h, idx == 0);
         add_row_start(c, g, idx == 0);
@@ -352,7 +355,7 @@ pub fn generate_witnesses_sha256(rows: &mut Vec<VirtualShaRow>, input_bytes: &[u
                 false,
                 if round < NUM_WORDS_TO_ABSORB { length } else { 0 },
                 is_paddings,
-                zero_hash,
+                0u128,
                 round < NUM_WORDS_TO_ABSORB,
             );
 
@@ -381,14 +384,16 @@ pub fn generate_witnesses_sha256(rows: &mut Vec<VirtualShaRow>, input_bytes: &[u
         } else {
             zero_hash
         };
+        let hash_lo = u128::from_be_bytes(hash_bytes[16..].try_into().unwrap());
+        let hash_hi = u128::from_be_bytes(hash_bytes[..16].try_into().unwrap());
 
         // Add end rows
-        let mut add_row_end = |a: u64, e: u64| {
-            add_row(0, a, e, false, 0, [false; ABSORB_WIDTH_PER_ROW_BYTES], zero_hash, false)
+        let mut add_row_end = |a: u64, e: u64, hash_limb: u128| {
+            add_row(0, a, e, false, 0, [false; ABSORB_WIDTH_PER_ROW_BYTES], hash_limb, false)
         };
-        add_row_end(hs[3], hs[7]);
-        add_row_end(hs[2], hs[6]);
-        add_row_end(hs[1], hs[5]);
+        add_row_end(hs[3], hs[7], 0u128);
+        add_row_end(hs[2], hs[6], 0u128);
+        add_row_end(hs[1], hs[5], hash_hi);
         add_row(
             0,
             hs[0],
@@ -396,7 +401,7 @@ pub fn generate_witnesses_sha256(rows: &mut Vec<VirtualShaRow>, input_bytes: &[u
             is_final_block,
             length,
             [false, false, false, in_padding],
-            hash_bytes,
+            hash_lo,
             false,
         );
 

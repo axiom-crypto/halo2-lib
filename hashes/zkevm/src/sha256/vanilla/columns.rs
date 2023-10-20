@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 use halo2_base::halo2_proofs::plonk::{Advice, Column, ConstraintSystem, Fixed};
 
-use crate::util::{eth_types::Field, word::Word};
+use crate::util::eth_types::Field;
 
 use super::param::*;
 
@@ -16,10 +16,14 @@ pub struct ShaTable {
     /// q_squeeze is selector for dedicated row per input block for squeezing
     /// is_final is flag for whether this block actually is the last block of an input
     pub is_enabled: Column<Advice>,
-    /// SHA256 hash of input
-    pub output: Word<Column<Advice>>,
-    /// Raw SHA256 word(NUM_BYTES_PER_WORD bytes) of inputs
-    pub word_value: Column<Advice>,
+    /// Single shared column containing different IO data depending on the `offset` within
+    /// a SHA256 input block ([SHA256_NUM_ROWS] = 72 rows): If offset is in
+    /// Encoded input:
+    /// - [NUM_START_ROWS]..[NUM_START_ROWS] + [NUM_WORDS_TO_ABSORB]: Raw SHA256 word([NUM_BYTES_PER_WORD] bytes) of inputs
+    /// SHA256 hash of input in hi-lo format:
+    /// - [SHA256_NUM_ROWS] - 2: output.hi()
+    /// - [SHA256_NUM_ROWS] - 1: output.lo()
+    pub io: Column<Advice>,
     /// Length in bytes of the input processed so far. Does not include padding.
     pub length: Column<Advice>,
 }
@@ -29,16 +33,16 @@ impl ShaTable {
     pub fn construct<F: Field>(meta: &mut ConstraintSystem<F>) -> Self {
         let q_enable = meta.fixed_column();
         let is_enabled = meta.advice_column();
-        let word_value = meta.advice_column();
+        let io = meta.advice_column();
         let length = meta.advice_column();
         let hash_lo = meta.advice_column();
         let hash_hi = meta.advice_column();
         meta.enable_equality(is_enabled);
-        meta.enable_equality(word_value);
+        meta.enable_equality(io);
         meta.enable_equality(length);
         meta.enable_equality(hash_lo);
         meta.enable_equality(hash_hi);
-        Self { q_enable, is_enabled, output: Word::new([hash_lo, hash_hi]), word_value, length }
+        Self { q_enable, is_enabled, io, length }
     }
 }
 
