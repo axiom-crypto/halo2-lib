@@ -33,6 +33,7 @@ use halo2_base::{
         PoseidonHasher,
     },
     safe_types::{SafeBool, SafeTypeChip},
+    virtual_region::copy_constraints::SharedCopyConstraintManager,
     AssignedValue, Context,
     QuantumCell::Constant,
 };
@@ -295,31 +296,11 @@ impl<F: Field> KeccakComponentShardCircuit<F> {
     ) -> Vec<LoadedKeccakF<F>> {
         let rows_per_round = self.params.keccak_circuit_params.rows_per_round;
         let base_circuit_builder = self.base_circuit_builder.borrow();
-        let mut copy_manager = base_circuit_builder.core().copy_manager.lock().unwrap();
-        assigned_rows
-            .into_iter()
-            .step_by(rows_per_round)
-            // Skip the first round which is dummy.
-            .skip(1)
-            .chunks(NUM_ROUNDS + 1)
-            .into_iter()
-            .map(|rounds| {
-                let mut rounds = rounds.collect_vec();
-                assert_eq!(rounds.len(), NUM_ROUNDS + 1);
-                let bytes_left = copy_manager.load_external_assigned(rounds[0].bytes_left.clone());
-                let output_row = rounds.pop().unwrap();
-                let word_values = core::array::from_fn(|i| {
-                    let assigned_row = &rounds[i];
-                    copy_manager.load_external_assigned(assigned_row.word_value.clone())
-                });
-                let is_final = SafeTypeChip::unsafe_to_bool(
-                    copy_manager.load_external_assigned(output_row.is_final),
-                );
-                let hash_lo = copy_manager.load_external_assigned(output_row.hash_lo);
-                let hash_hi = copy_manager.load_external_assigned(output_row.hash_hi);
-                LoadedKeccakF { bytes_left, word_values, is_final, hash_lo, hash_hi }
-            })
-            .collect()
+        load_keccak_assigned_rows(
+            &base_circuit_builder.core().copy_manager,
+            assigned_rows,
+            rows_per_round,
+        )
     }
 
     /// Generate witnesses of the base circuit.
@@ -480,4 +461,44 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
     }
 
     initialized_hasher.hash_compact_chunk_inputs(ctx, gate, &compact_chunk_inputs)
+}
+
+/// Load needed witnesses into halo2-lib from keccak assigned rows. This function doesn't create any witnesses/constraints.
+///
+/// This function is made public for external libraries to use for compatibility. It is the responsibility of the developer
+/// to ensure that `rows_per_round` **must** match the configuration of the vanilla zkEVM Keccak circuit itself.
+///
+/// ## Assumptions
+/// - `rows_per_round` **must** match the configuration of the vanilla zkEVM Keccak circuit itself.
+/// - `assigned_rows` **must** start from the 0-th row of the keccak circuit. This is because the first `rows_per_round` rows are dummy rows.
+pub fn load_keccak_assigned_rows<F: Field>(
+    copy_manager: &SharedCopyConstraintManager<F>,
+    assigned_rows: Vec<KeccakAssignedRow<'_, F>>,
+    rows_per_round: usize,
+) -> Vec<LoadedKeccakF<F>> {
+    let mut copy_manager = copy_manager.lock().unwrap();
+    assigned_rows
+        .into_iter()
+        .step_by(rows_per_round)
+        // Skip the first round which is dummy.
+        .skip(1)
+        .chunks(NUM_ROUNDS + 1)
+        .into_iter()
+        .map(|rounds| {
+            let mut rounds = rounds.collect_vec();
+            assert_eq!(rounds.len(), NUM_ROUNDS + 1);
+            let bytes_left = copy_manager.load_external_assigned(rounds[0].bytes_left.clone());
+            let output_row = rounds.pop().unwrap();
+            let word_values = core::array::from_fn(|i| {
+                let assigned_row = &rounds[i];
+                copy_manager.load_external_assigned(assigned_row.word_value.clone())
+            });
+            let is_final = SafeTypeChip::unsafe_to_bool(
+                copy_manager.load_external_assigned(output_row.is_final),
+            );
+            let hash_lo = copy_manager.load_external_assigned(output_row.hash_lo);
+            let hash_hi = copy_manager.load_external_assigned(output_row.hash_hi);
+            LoadedKeccakF { bytes_left, word_values, is_final, hash_lo, hash_hi }
+        })
+        .collect()
 }
