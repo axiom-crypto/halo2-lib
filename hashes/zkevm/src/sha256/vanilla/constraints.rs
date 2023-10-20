@@ -44,7 +44,6 @@ impl<F: Field> Sha256CircuitConfig<F> {
         let h_a = meta.fixed_column();
         let h_e = meta.fixed_column();
         let hash_table = ShaTable::construct(meta);
-        let is_enabled = hash_table.is_enabled;
         let length = hash_table.length;
         let q_enable = hash_table.q_enable;
 
@@ -235,20 +234,6 @@ impl<F: Field> Sha256CircuitConfig<F> {
             cb.gate(1.expr())
         });
 
-        meta.create_gate("is enabled", |meta| {
-            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-            let q_squeeze = meta.query_fixed(q_squeeze, Rotation::cur());
-            let is_final = meta.query_advice(is_final, Rotation::cur());
-            let is_enabled = meta.query_advice(is_enabled, Rotation::cur());
-            // Only set is_enabled to true when is_final is true and it's a squeeze row
-            cb.require_equal(
-                "is_enabled := q_squeeze && is_final",
-                is_enabled.expr(),
-                and::expr(&[q_squeeze.expr(), is_final.expr()]),
-            );
-            cb.gate(meta.query_fixed(q_enable, Rotation::cur()))
-        });
-
         let start_new_hash = |meta: &mut VirtualCells<F>| {
             // A new hash is started when the previous hash is done or on the first row
             meta.query_advice(is_final, Rotation::cur())
@@ -344,10 +329,11 @@ impl<F: Field> Sha256CircuitConfig<F> {
                 .collect_vec();
             // Convert to u32 as little-endian bytes. Choice of LE is arbitrary, but consistent with Keccak impl.
             let input_word = from_bytes::expr(&masked_input_bytes);
+            // hash_table.io = word_value when q_input is true
             cb.require_equal(
                 "word value",
                 input_word,
-                meta.query_advice(hash_table.word_value, Rotation::cur()),
+                meta.query_advice(hash_table.io, Rotation::cur()),
             );
             cb.gate(meta.query_fixed(q_input, Rotation::cur()))
         });
@@ -415,10 +401,14 @@ impl<F: Field> Sha256CircuitConfig<F> {
             let hash_bytes_be = hash_parts.iter().flat_map(|part| to_be_bytes::expr(part));
             let hash_bytes_le = hash_bytes_be.rev().collect::<Vec<_>>();
             cb.condition(start_new_hash(meta), |cb| {
+                // hash_table.io is [output_hi, output_lo] at rotations [-1, 0] when q_squeeze is true
                 cb.require_equal_word(
                     "hash check",
                     word::Word32::new(hash_bytes_le.try_into().expect("32 bytes")).to_word(),
-                    hash_table.output.map(|col| meta.query_advice(col, Rotation::cur())),
+                    word::Word::new(
+                        [Rotation::cur(), Rotation::prev()]
+                            .map(|at| meta.query_advice(hash_table.io, at)),
+                    ),
                 );
             });
             cb.gate(meta.query_fixed(q_squeeze, Rotation::cur()))
@@ -436,21 +426,21 @@ impl<F: Field> Sha256CircuitConfig<F> {
             let q_input = meta.query_fixed(q_input, Rotation::cur());
             let q_extend = meta.query_fixed(q_extend, Rotation::cur());
             let q_end = meta.query_fixed(q_end, Rotation::cur());
+            // if second to last row:
+            let q_squeeze_next = meta.query_fixed(q_squeeze, Rotation::next());
             let q_squeeze = meta.query_fixed(q_squeeze, Rotation::cur());
 
             let is_final = meta.query_advice(is_final, Rotation::cur());
             let is_paddings = is_paddings.map(|c| meta.query_advice(c, Rotation::cur()));
-            let word_value = meta.query_advice(hash_table.word_value, Rotation::cur());
+            let io = meta.query_advice(hash_table.io, Rotation::cur());
             let length = meta.query_advice(hash_table.length, Rotation::cur());
-            let output_lo = meta.query_advice(hash_table.output.lo(), Rotation::cur());
-            let output_hi = meta.query_advice(hash_table.output.hi(), Rotation::cur());
 
-            // column w.b0-w.b1 at offsets [0-19, 68-91, 140-255]
+            // column w.b0-w.b1 at offsets [0-19, 68-71]
             cb.condition(not::expr(q_extend.clone()), |cb| {
                 cb.require_zero("if not(q_extend) w.b0 = 0", w_ext[0].clone());
                 cb.require_zero("if not(q_extend) w.b1 = 0", w_ext[1].clone());
             });
-            // column w.b2-w.b33 at offsets [0-3, 68-75, 140-255]
+            // column w.b2-w.b33 at offsets [0-3, 68-71]
             cb.condition(q_start.clone() + q_end.clone(), |cb| {
                 for k in 2..=33 {
                     cb.require_zero(
@@ -459,14 +449,14 @@ impl<F: Field> Sha256CircuitConfig<F> {
                     );
                 }
             });
-            // column is_final at offsets [4, 20-70, 92-142, 144-255]
+            // column is_final at offsets [4, 20-70]
             cb.condition(q_compression.clone() + q_end.clone() - q_squeeze.clone(), |cb| {
                 cb.require_zero(
                     "if q_compression or (q_end and not(q_squeeze)) is_final = 0",
                     is_final,
                 );
             });
-            // column pad0-pad2 at offsets [0-3, 20-75, 92-255]
+            // column pad0-pad2 at offsets [0-3, 20-71]
             cb.condition(not::expr(q_input.clone()), |cb| {
                 for k in 0..=2 {
                     cb.require_zero(
@@ -475,28 +465,29 @@ impl<F: Field> Sha256CircuitConfig<F> {
                     );
                 }
             });
-            // column pad3 at offsets [20-70, 92-142, 144-255]
+            // column pad3 at offsets [20-70]
             cb.condition(q_extend.clone() + q_end.clone() - q_squeeze.clone(), |cb| {
                 cb.require_zero(
                     "if q_extend or (q_end and not(q_squeeze)) is_paddings[3] = 0",
                     is_paddings[3].clone(),
                 );
             });
-            // column value at offsets [0-3, 20-75, 92-255]
-            cb.condition(not::expr(q_input.clone()), |cb| {
-                cb.require_zero("if not(q_input) hash_table.word_value = 0", word_value.clone());
-            });
-            // column len at offsets [20-70, 92-142, 144-255]
+            // column io at offsets [0-3, 20-69]
+            cb.condition(
+                not::expr(q_input.clone() + q_squeeze_next.clone() + q_squeeze.clone()),
+                |cb| {
+                    cb.require_zero(
+                        "if not(q_input or q_squeeze_prev or q_squeeze) hash_table.io = 0",
+                        io.clone(),
+                    );
+                },
+            );
+            // column len at offsets [20-70]
             cb.condition(q_extend.clone() + q_end.clone() - q_squeeze.clone(), |cb| {
                 cb.require_zero(
                     "if q_extend or (q_end and not(q_squeeze)) hash_table.lenght = 0",
                     length.clone(),
                 );
-            });
-            // column out_lo, out_hi at offsets [0-70, 72-142, 144-255]
-            cb.condition(not::expr(q_squeeze.clone()), |cb| {
-                cb.require_zero("if not(q_squeeze) output_lo = 0", output_lo.clone());
-                cb.require_zero("if not(q_squeeze) output_hi = 0", output_hi.clone());
             });
 
             cb.gate(meta.query_fixed(q_enable, Rotation::cur()))
