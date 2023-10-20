@@ -296,7 +296,7 @@ impl<F: Field> KeccakComponentShardCircuit<F> {
     ) -> Vec<LoadedKeccakF<F>> {
         let rows_per_round = self.params.keccak_circuit_params.rows_per_round;
         let base_circuit_builder = self.base_circuit_builder.borrow();
-        load_keccak_assigned_rows(
+        transmute_keccak_assigned_to_virtual(
             &base_circuit_builder.core().copy_manager,
             assigned_rows,
             rows_per_round,
@@ -476,7 +476,8 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
     initialized_hasher.hash_compact_chunk_inputs(ctx, gate, &compact_chunk_inputs)
 }
 
-/// Load needed witnesses into halo2-lib from keccak assigned rows. This function doesn't create any witnesses/constraints.
+/// Converts the pertinent raw assigned cells from a keccak_f permutation into virtual `halo2-lib` cells so they can be used
+/// by [halo2_base]. This function doesn't create any new witnesses/constraints.
 ///
 /// This function is made public for external libraries to use for compatibility. It is the responsibility of the developer
 /// to ensure that `rows_per_round` **must** match the configuration of the vanilla zkEVM Keccak circuit itself.
@@ -484,7 +485,7 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
 /// ## Assumptions
 /// - `rows_per_round` **must** match the configuration of the vanilla zkEVM Keccak circuit itself.
 /// - `assigned_rows` **must** start from the 0-th row of the keccak circuit. This is because the first `rows_per_round` rows are dummy rows.
-pub fn load_keccak_assigned_rows<F: Field>(
+pub fn transmute_keccak_assigned_to_virtual<F: Field>(
     copy_manager: &SharedCopyConstraintManager<F>,
     assigned_rows: Vec<KeccakAssignedRow<'_, F>>,
     rows_per_round: usize,
