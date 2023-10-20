@@ -33,6 +33,7 @@ use halo2_base::{
         PoseidonHasher,
     },
     safe_types::{SafeBool, SafeTypeChip},
+    virtual_region::copy_constraints::SharedCopyConstraintManager,
     AssignedValue, Context,
     QuantumCell::Constant,
 };
@@ -295,31 +296,11 @@ impl<F: Field> KeccakComponentShardCircuit<F> {
     ) -> Vec<LoadedKeccakF<F>> {
         let rows_per_round = self.params.keccak_circuit_params.rows_per_round;
         let base_circuit_builder = self.base_circuit_builder.borrow();
-        let mut copy_manager = base_circuit_builder.core().copy_manager.lock().unwrap();
-        assigned_rows
-            .into_iter()
-            .step_by(rows_per_round)
-            // Skip the first round which is dummy.
-            .skip(1)
-            .chunks(NUM_ROUNDS + 1)
-            .into_iter()
-            .map(|rounds| {
-                let mut rounds = rounds.collect_vec();
-                assert_eq!(rounds.len(), NUM_ROUNDS + 1);
-                let bytes_left = copy_manager.load_external_assigned(rounds[0].bytes_left.clone());
-                let output_row = rounds.pop().unwrap();
-                let word_values = core::array::from_fn(|i| {
-                    let assigned_row = &rounds[i];
-                    copy_manager.load_external_assigned(assigned_row.word_value.clone())
-                });
-                let is_final = SafeTypeChip::unsafe_to_bool(
-                    copy_manager.load_external_assigned(output_row.is_final),
-                );
-                let hash_lo = copy_manager.load_external_assigned(output_row.hash_lo);
-                let hash_hi = copy_manager.load_external_assigned(output_row.hash_hi);
-                LoadedKeccakF { bytes_left, word_values, is_final, hash_lo, hash_hi }
-            })
-            .collect()
+        transmute_keccak_assigned_to_virtual(
+            &base_circuit_builder.core().copy_manager,
+            assigned_rows,
+            rows_per_round,
+        )
     }
 
     /// Generate witnesses of the base circuit.
@@ -425,15 +406,15 @@ pub(crate) fn create_hasher<F: Field>() -> PoseidonHasher<F, POSEIDON_T, POSEIDO
     PoseidonHasher::<F, POSEIDON_T, POSEIDON_RATE>::new(spec)
 }
 
-/// Encode raw inputs from Keccak circuit witnesses into lookup keys.
+/// Packs raw inputs from Keccak circuit witnesses into fewer field elements for the purpose of creating lookup keys.
+/// The packed field elements can be either random linearly combined (RLC'd) or Poseidon-hashed into lookup keys.
 ///
 /// Each element in the return value corrresponds to a Keccak chunk. If is_final = true, this element is the lookup key of the corresponding logical input.
-pub fn encode_inputs_from_keccak_fs<F: Field>(
+pub fn pack_inputs_from_keccak_fs<F: Field>(
     ctx: &mut Context<F>,
     gate: &impl GateInstructions<F>,
-    initialized_hasher: &PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE>,
     loaded_keccak_fs: &[LoadedKeccakF<F>],
-) -> Vec<PoseidonCompactOutput<F>> {
+) -> Vec<PoseidonCompactChunkInput<F, POSEIDON_RATE>> {
     // Circuit parameters
     let num_poseidon_absorb_per_keccak_f = num_poseidon_absorb_per_keccak_f::<F>();
     let num_word_per_witness = num_word_per_witness::<F>();
@@ -449,6 +430,7 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
 
     let mut compact_chunk_inputs = Vec::with_capacity(loaded_keccak_fs.len());
     let mut last_is_final = one_const;
+    // TODO: this could be parallelized
     for loaded_keccak_f in loaded_keccak_fs {
         // If this keccak_f is the last of a logical input.
         let is_final = loaded_keccak_f.is_final;
@@ -478,6 +460,59 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
         compact_chunk_inputs.push(PoseidonCompactChunkInput::new(compact_inputs, is_final));
         last_is_final = is_final.into();
     }
+    compact_chunk_inputs
+}
 
+/// Encode raw inputs from Keccak circuit witnesses into lookup keys.
+///
+/// Each element in the return value corrresponds to a Keccak chunk. If is_final = true, this element is the lookup key of the corresponding logical input.
+pub fn encode_inputs_from_keccak_fs<F: Field>(
+    ctx: &mut Context<F>,
+    gate: &impl GateInstructions<F>,
+    initialized_hasher: &PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE>,
+    loaded_keccak_fs: &[LoadedKeccakF<F>],
+) -> Vec<PoseidonCompactOutput<F>> {
+    let compact_chunk_inputs = pack_inputs_from_keccak_fs(ctx, gate, loaded_keccak_fs);
     initialized_hasher.hash_compact_chunk_inputs(ctx, gate, &compact_chunk_inputs)
+}
+
+/// Converts the pertinent raw assigned cells from a keccak_f permutation into virtual `halo2-lib` cells so they can be used
+/// by [halo2_base]. This function doesn't create any new witnesses/constraints.
+///
+/// This function is made public for external libraries to use for compatibility. It is the responsibility of the developer
+/// to ensure that `rows_per_round` **must** match the configuration of the vanilla zkEVM Keccak circuit itself.
+///
+/// ## Assumptions
+/// - `rows_per_round` **must** match the configuration of the vanilla zkEVM Keccak circuit itself.
+/// - `assigned_rows` **must** start from the 0-th row of the keccak circuit. This is because the first `rows_per_round` rows are dummy rows.
+pub fn transmute_keccak_assigned_to_virtual<F: Field>(
+    copy_manager: &SharedCopyConstraintManager<F>,
+    assigned_rows: Vec<KeccakAssignedRow<'_, F>>,
+    rows_per_round: usize,
+) -> Vec<LoadedKeccakF<F>> {
+    let mut copy_manager = copy_manager.lock().unwrap();
+    assigned_rows
+        .into_iter()
+        .step_by(rows_per_round)
+        // Skip the first round which is dummy.
+        .skip(1)
+        .chunks(NUM_ROUNDS + 1)
+        .into_iter()
+        .map(|rounds| {
+            let mut rounds = rounds.collect_vec();
+            assert_eq!(rounds.len(), NUM_ROUNDS + 1);
+            let bytes_left = copy_manager.load_external_assigned(rounds[0].bytes_left.clone());
+            let output_row = rounds.pop().unwrap();
+            let word_values = core::array::from_fn(|i| {
+                let assigned_row = &rounds[i];
+                copy_manager.load_external_assigned(assigned_row.word_value.clone())
+            });
+            let is_final = SafeTypeChip::unsafe_to_bool(
+                copy_manager.load_external_assigned(output_row.is_final),
+            );
+            let hash_lo = copy_manager.load_external_assigned(output_row.hash_lo);
+            let hash_hi = copy_manager.load_external_assigned(output_row.hash_hi);
+            LoadedKeccakF { bytes_left, word_values, is_final, hash_lo, hash_hi }
+        })
+        .collect()
 }
