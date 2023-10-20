@@ -44,7 +44,6 @@ impl<F: Field> Sha256CircuitConfig<F> {
         let h_a = meta.fixed_column();
         let h_e = meta.fixed_column();
         let hash_table = ShaTable::construct(meta);
-        let is_enabled = hash_table.is_enabled;
         let length = hash_table.length;
         let q_enable = hash_table.q_enable;
 
@@ -233,20 +232,6 @@ impl<F: Field> Sha256CircuitConfig<F> {
                 },
             );
             cb.gate(1.expr())
-        });
-
-        meta.create_gate("is enabled", |meta| {
-            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-            let q_squeeze = meta.query_fixed(q_squeeze, Rotation::cur());
-            let is_final = meta.query_advice(is_final, Rotation::cur());
-            let is_enabled = meta.query_advice(is_enabled, Rotation::cur());
-            // Only set is_enabled to true when is_final is true and it's a squeeze row
-            cb.require_equal(
-                "is_enabled := q_squeeze && is_final",
-                is_enabled.expr(),
-                and::expr(&[q_squeeze.expr(), is_final.expr()]),
-            );
-            cb.gate(meta.query_fixed(q_enable, Rotation::cur()))
         });
 
         let start_new_hash = |meta: &mut VirtualCells<F>| {

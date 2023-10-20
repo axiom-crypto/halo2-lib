@@ -36,10 +36,10 @@ pub struct VirtualShaRow {
 /// those may be used externally.
 #[derive(Clone, Debug)]
 struct AssignedShaTableRow<'v, F: Field> {
-    /// Only set is_enabled to true when is_final is true and it's a squeeze row
-    /// is_enabled := q_squeeze && is_final
+    /// Should only be used to represent whether this is the final block of an input
+    /// if this row has q_squeeze = true.
     /// Is 0 unless `q_enable` true.
-    is_enabled: Halo2AssignedCell<'v, F>,
+    is_final: Halo2AssignedCell<'v, F>,
     /// This cell contains different IO data depending on the `offset` of the row within
     /// a SHA256 input block ([SHA256_NUM_ROWS] = 72 rows):
     /// - When `q_input` is true (offset in [NUM_START_ROWS]..[NUM_START_ROWS] + [NUM_WORDS_TO_ABSORB]): Raw SHA256 word([NUM_BYTES_PER_WORD] bytes) of inputs. u32 input word, little-endian.
@@ -109,7 +109,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
             .chunks_exact(SHA256_NUM_ROWS)
             .map(|rows| {
                 let last_row = rows.last();
-                let is_final = last_row.unwrap().is_enabled.clone();
+                let is_final = last_row.unwrap().is_final.clone();
                 let output_lo = last_row.unwrap().io.clone();
                 let output_hi = rows[SHA256_NUM_ROWS - 2].io.clone();
                 let input_rows = &rows[NUM_START_ROWS..NUM_START_ROWS + NUM_WORDS_TO_ABSORB];
@@ -190,7 +190,6 @@ impl<F: Field> Sha256CircuitConfig<F> {
             ("a bits", self.word_a.as_slice(), row.a.as_slice()),
             ("e bits", self.word_e.as_slice(), row.e.as_slice()),
             ("padding selectors", self.is_paddings.as_slice(), row.is_paddings.as_slice()),
-            ("is_final", [self.is_final].as_slice(), [row.is_final].as_slice()),
         ] {
             for (value, column) in values.iter().zip_eq(columns.iter()) {
                 raw_assign_advice(region, *column, offset, Value::known(F::from(*value)));
@@ -204,15 +203,14 @@ impl<F: Field> Sha256CircuitConfig<F> {
         } else {
             F::ZERO
         };
-        let is_enabled = row.is_final && q_squeeze;
-        let [is_enabled, io, length] = [
-            (self.hash_table.is_enabled, F::from(is_enabled)),
+        let [is_final, io, length] = [
+            (self.is_final, F::from(row.is_final)),
             (self.hash_table.io, io_value),
             (self.hash_table.length, F::from(row.length as u64)),
         ]
         .map(|(column, value)| raw_assign_advice(region, column, offset, Value::known(value)));
 
-        AssignedShaTableRow { is_enabled, io, length, _marker: PhantomData }
+        AssignedShaTableRow { is_final, io, length, _marker: PhantomData }
     }
 }
 

@@ -12,10 +12,6 @@ use super::param::*;
 pub struct ShaTable {
     /// Selector always turned on except in blinding rows.
     pub(super) q_enable: Column<Fixed>,
-    /// is_enabled := q_squeeze && is_final
-    /// q_squeeze is selector for dedicated row per input block for squeezing
-    /// is_final is flag for whether this block actually is the last block of an input
-    pub is_enabled: Column<Advice>,
     /// Single shared column containing different IO data depending on the `offset` within
     /// a SHA256 input block ([SHA256_NUM_ROWS] = 72 rows): If offset is in
     /// Encoded input:
@@ -32,17 +28,15 @@ impl ShaTable {
     /// Construct a new ShaTable
     pub fn construct<F: Field>(meta: &mut ConstraintSystem<F>) -> Self {
         let q_enable = meta.fixed_column();
-        let is_enabled = meta.advice_column();
         let io = meta.advice_column();
         let length = meta.advice_column();
         let hash_lo = meta.advice_column();
         let hash_hi = meta.advice_column();
-        meta.enable_equality(is_enabled);
         meta.enable_equality(io);
         meta.enable_equality(length);
         meta.enable_equality(hash_lo);
         meta.enable_equality(hash_hi);
-        Self { q_enable, is_enabled, io, length }
+        Self { q_enable, io, length }
     }
 }
 
