@@ -406,15 +406,15 @@ pub(crate) fn create_hasher<F: Field>() -> PoseidonHasher<F, POSEIDON_T, POSEIDO
     PoseidonHasher::<F, POSEIDON_T, POSEIDON_RATE>::new(spec)
 }
 
-/// Encode raw inputs from Keccak circuit witnesses into lookup keys.
+/// Packs raw inputs from Keccak circuit witnesses into fewer field elements for the purpose of creating lookup keys.
+/// The packed field elements can be either random linearly combined (RLC'd) or Poseidon-hashed into lookup keys.
 ///
 /// Each element in the return value corrresponds to a Keccak chunk. If is_final = true, this element is the lookup key of the corresponding logical input.
-pub fn encode_inputs_from_keccak_fs<F: Field>(
+pub fn pack_inputs_from_keccak_fs<F: Field>(
     ctx: &mut Context<F>,
     gate: &impl GateInstructions<F>,
-    initialized_hasher: &PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE>,
     loaded_keccak_fs: &[LoadedKeccakF<F>],
-) -> Vec<PoseidonCompactOutput<F>> {
+) -> Vec<PoseidonCompactChunkInput<F, POSEIDON_RATE>> {
     // Circuit parameters
     let num_poseidon_absorb_per_keccak_f = num_poseidon_absorb_per_keccak_f::<F>();
     let num_word_per_witness = num_word_per_witness::<F>();
@@ -430,6 +430,7 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
 
     let mut compact_chunk_inputs = Vec::with_capacity(loaded_keccak_fs.len());
     let mut last_is_final = one_const;
+    // TODO: this could be parallelized
     for loaded_keccak_f in loaded_keccak_fs {
         // If this keccak_f is the last of a logical input.
         let is_final = loaded_keccak_f.is_final;
@@ -459,7 +460,19 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
         compact_chunk_inputs.push(PoseidonCompactChunkInput::new(compact_inputs, is_final));
         last_is_final = is_final.into();
     }
+    compact_chunk_inputs
+}
 
+/// Encode raw inputs from Keccak circuit witnesses into lookup keys.
+///
+/// Each element in the return value corrresponds to a Keccak chunk. If is_final = true, this element is the lookup key of the corresponding logical input.
+pub fn encode_inputs_from_keccak_fs<F: Field>(
+    ctx: &mut Context<F>,
+    gate: &impl GateInstructions<F>,
+    initialized_hasher: &PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE>,
+    loaded_keccak_fs: &[LoadedKeccakF<F>],
+) -> Vec<PoseidonCompactOutput<F>> {
+    let compact_chunk_inputs = pack_inputs_from_keccak_fs(ctx, gate, loaded_keccak_fs);
     initialized_hasher.hash_compact_chunk_inputs(ctx, gate, &compact_chunk_inputs)
 }
 
