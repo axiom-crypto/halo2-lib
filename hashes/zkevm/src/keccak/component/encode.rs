@@ -123,7 +123,7 @@ pub fn encode_var_len_bytes_vec<F: Field>(
         initialized_hasher.hash_compact_chunk_inputs(ctx, range_chip.gate(), &chunk_inputs);
     range_chip.gate().select_by_indicator(
         ctx,
-        compact_outputs.into_iter().map(|o| *o.hash()),
+        compact_outputs.into_iter().map(|o| o.hash()),
         f_indicator,
     )
 }
