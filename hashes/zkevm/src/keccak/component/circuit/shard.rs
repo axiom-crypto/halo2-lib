@@ -347,7 +347,7 @@ impl<F: Field> KeccakComponentShardCircuit<F> {
             lookup_key_per_keccak_f.iter().zip_eq(loaded_keccak_fs)
         {
             let is_final = AssignedValue::from(loaded_keccak_f.is_final);
-            let key = gate.select(ctx, *compact_output.hash(), dummy_key_witness, is_final);
+            let key = gate.select(ctx, compact_output.hash(), dummy_key_witness, is_final);
             let hash_lo =
                 gate.select(ctx, loaded_keccak_f.hash_lo, dummy_keccak_lo_witness, is_final);
             let hash_hi =
