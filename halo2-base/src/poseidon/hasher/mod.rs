@@ -55,13 +55,13 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasherConsts<F, 
 /// 1 logical row of compact input for Poseidon hasher.
 #[derive(Copy, Clone, Debug, Getters, CopyGetters)]
 pub struct PoseidonCompactInput<F: ScalarField, const RATE: usize> {
-    // Right padded inputs. No constrains on paddings.
+    /// Right padded inputs. No constrains on paddings.
     #[getset(get = "pub")]
     inputs: [AssignedValue<F>; RATE],
-    // is_final = 1 triggers squeeze.
+    /// is_final = 1 triggers squeeze.
     #[getset(get_copy = "pub")]
     is_final: SafeBool<F>,
-    // Length of `inputs`.
+    /// Length of `inputs`.
     #[getset(get_copy = "pub")]
     len: AssignedValue<F>,
 }
@@ -94,10 +94,10 @@ impl<F: ScalarField, const RATE: usize> PoseidonCompactInput<F, RATE> {
 /// A compact chunk input for Poseidon hasher. The end of a logical input could only be at the boundary of a chunk.
 #[derive(Clone, Debug, Getters, CopyGetters)]
 pub struct PoseidonCompactChunkInput<F: ScalarField, const RATE: usize> {
-    // Inputs of a chunk. All witnesses will be absorbed.
+    /// Inputs of a chunk. All witnesses will be absorbed.
     #[getset(get = "pub")]
     inputs: Vec<[AssignedValue<F>; RATE]>,
-    // is_final = 1 triggers squeeze.
+    /// is_final = 1 triggers squeeze.
     #[getset(get_copy = "pub")]
     is_final: SafeBool<F>,
 }
