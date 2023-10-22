@@ -41,6 +41,7 @@ use halo2_base::{
     QuantumCell::Constant,
 };
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use snark_verifier_sdk::CircuitExt;
 
 /// Keccak Component Shard Circuit
@@ -62,7 +63,7 @@ pub struct KeccakComponentShardCircuit<F: Field> {
 }
 
 /// Parameters of KeccakComponentCircuit.
-#[derive(Default, Clone, CopyGetters)]
+#[derive(Default, Clone, CopyGetters, Serialize, Deserialize)]
 pub struct KeccakComponentShardCircuitParams {
     /// This circuit has 2^k rows.
     #[getset(get_copy = "pub")]

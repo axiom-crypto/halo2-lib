@@ -15,6 +15,7 @@ num-bigint = { version = "0.4" }
 halo2-base = { path = "../../halo2-base", default-features = false, features = [
     "test-utils",
 ] }
+serde = { version = "1.0", features = ["derive"] }
 rayon = "1.8"
 sha3 = "0.10.8"
 # always included but without features to use Native poseidon and get CircuitExt trait
