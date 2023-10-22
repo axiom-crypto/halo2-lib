@@ -7,7 +7,10 @@ use crate::{
                 get_words_to_witness_multipliers, num_poseidon_absorb_per_keccak_f,
                 num_word_per_witness,
             },
-            output::{dummy_circuit_output, KeccakCircuitOutput},
+            output::{
+                calculate_circuit_outputs_commit, dummy_circuit_output,
+                multi_inputs_to_circuit_outputs, KeccakCircuitOutput,
+            },
             param::*,
         },
         vanilla::{
@@ -38,6 +41,8 @@ use halo2_base::{
     QuantumCell::Constant,
 };
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
+use snark_verifier_sdk::CircuitExt;
 
 /// Keccak Component Shard Circuit
 #[derive(Getters)]
@@ -58,7 +63,7 @@ pub struct KeccakComponentShardCircuit<F: Field> {
 }
 
 /// Parameters of KeccakComponentCircuit.
-#[derive(Default, Clone, CopyGetters)]
+#[derive(Default, Clone, CopyGetters, Serialize, Deserialize)]
 pub struct KeccakComponentShardCircuitParams {
     /// This circuit has 2^k rows.
     #[getset(get_copy = "pub")]
@@ -89,7 +94,7 @@ impl KeccakComponentShardCircuitParams {
     ) -> Self {
         assert!(1 << k > num_unusable_row, "Number of unusable rows must be less than 2^k");
         let max_rows = (1 << k) - num_unusable_row;
-        // Derived from [crate::keccak::native_circuit::keccak_packed_multi::get_keccak_capacity].
+        // Derived from [crate::keccak::vanilla::keccak_packed_multi::get_keccak_capacity].
         let rows_per_round = max_rows / (capacity * (NUM_ROUNDS + 1) + 1 + NUM_WORDS_TO_ABSORB);
         assert!(rows_per_round > 0, "No enough rows for the speficied capacity");
         let keccak_circuit_params = KeccakConfigParams { k: k as u32, rows_per_round };
@@ -515,4 +520,40 @@ pub fn transmute_keccak_assigned_to_virtual<F: Field>(
             LoadedKeccakF { bytes_left, word_values, is_final, hash_lo, hash_hi }
         })
         .collect()
+}
+
+impl<F: Field> CircuitExt<F> for KeccakComponentShardCircuit<F> {
+    fn instances(&self) -> Vec<Vec<F>> {
+        let circuit_outputs = multi_inputs_to_circuit_outputs(&self.inputs, self.params.capacity);
+        if self.params.publish_raw_outputs {
+            vec![
+                circuit_outputs.iter().map(|o| o.key).collect(),
+                circuit_outputs.iter().map(|o| o.hash_lo).collect(),
+                circuit_outputs.iter().map(|o| o.hash_hi).collect(),
+            ]
+        } else {
+            vec![vec![calculate_circuit_outputs_commit(&circuit_outputs)]]
+        }
+    }
+
+    fn num_instance(&self) -> Vec<usize> {
+        if self.params.publish_raw_outputs {
+            vec![self.params.capacity; OUTPUT_NUM_COL_RAW]
+        } else {
+            vec![1; OUTPUT_NUM_COL_COMMIT]
+        }
+    }
+
+    fn accumulator_indices() -> Option<Vec<(usize, usize)>> {
+        None
+    }
+
+    fn selectors(config: &Self::Config) -> Vec<halo2_base::halo2_proofs::plonk::Selector> {
+        // the vanilla keccak circuit does not use selectors
+        // this is from the BaseCircuitBuilder
+        config.base_circuit_config.gate().basic_gates[0]
+            .iter()
+            .map(|basic| basic.q_enable)
+            .collect()
+    }
 }
