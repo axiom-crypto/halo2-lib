@@ -204,7 +204,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
             F::ZERO
         };
         let [is_final, io, length] = [
-            (self.is_final, F::from(row.is_final)),
+            (self.hash_table.is_final, F::from(row.is_final)),
             (self.hash_table.io, io_value),
             (self.hash_table.length, F::from(row.length as u64)),
         ]

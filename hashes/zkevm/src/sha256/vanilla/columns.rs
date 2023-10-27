@@ -22,6 +22,9 @@ pub struct ShaTable {
     pub io: Column<Advice>,
     /// Length in bytes of the input processed so far. Does not include padding.
     pub length: Column<Advice>,
+    /// Advice to represent if this input block is the last one for a variable length input.
+    /// The advice value should only be used in the last row of each [SHA256_NUM_ROWS] block.
+    pub(super) is_final: Column<Advice>,
 }
 
 impl ShaTable {
@@ -36,7 +39,8 @@ impl ShaTable {
         meta.enable_equality(length);
         meta.enable_equality(hash_lo);
         meta.enable_equality(hash_hi);
-        Self { q_enable, io, length }
+        let is_final = meta.advice_column();
+        Self { q_enable, io, length, is_final }
     }
 }
 
@@ -59,7 +63,6 @@ pub struct Sha256CircuitConfig<F> {
     pub(super) word_w: [Column<Advice>; NUM_BITS_PER_WORD_W],
     pub(super) word_a: [Column<Advice>; NUM_BITS_PER_WORD_EXT],
     pub(super) word_e: [Column<Advice>; NUM_BITS_PER_WORD_EXT],
-    pub(super) is_final: Column<Advice>,
     pub(super) is_paddings: [Column<Advice>; ABSORB_WIDTH_PER_ROW_BYTES],
     pub(super) round_cst: Column<Fixed>,
     pub(super) h_a: Column<Fixed>,

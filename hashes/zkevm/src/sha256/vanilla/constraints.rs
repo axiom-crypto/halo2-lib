@@ -38,7 +38,6 @@ impl<F: Field> Sha256CircuitConfig<F> {
         let word_w = array_init::array_init(|_| meta.advice_column());
         let word_a = array_init::array_init(|_| meta.advice_column());
         let word_e = array_init::array_init(|_| meta.advice_column());
-        let is_final = meta.advice_column();
         let is_paddings = array_init::array_init(|_| meta.advice_column());
         let round_cst = meta.fixed_column();
         let h_a = meta.fixed_column();
@@ -46,6 +45,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
         let hash_table = ShaTable::construct(meta);
         let length = hash_table.length;
         let q_enable = hash_table.q_enable;
+        let is_final = hash_table.is_final;
 
         // State bits
         let mut w_ext = vec![0u64.expr(); NUM_BITS_PER_WORD_W];
@@ -508,7 +508,6 @@ impl<F: Field> Sha256CircuitConfig<F> {
             word_w,
             word_a,
             word_e,
-            is_final,
             is_paddings,
             round_cst,
             h_a,
