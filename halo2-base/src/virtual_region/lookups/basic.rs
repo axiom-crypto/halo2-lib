@@ -2,11 +2,11 @@ use crate::{
     halo2_proofs::{
         circuit::{Layouter, Region, Value},
         halo2curves::ff::Field,
-        plonk::{Advice, Column, ConstraintSystem, Phase},
+        plonk::{Advice, Column, ConstraintSystem, Fixed, Phase},
         poly::Rotation,
     },
     utils::{
-        halo2::{raw_assign_advice, Halo2AssignedCell},
+        halo2::{raw_assign_advice, raw_assign_fixed, Halo2AssignedCell},
         ScalarField,
     },
     virtual_region::{
@@ -24,12 +24,22 @@ use crate::{
 ///
 /// We can have multiple sets of dedicated columns to be looked up: these can be specified
 /// when calling `new`, but typically we just need 1 set.
+///
+/// The `table` consists of advice columns. Since this table may have poisoned rows (blinding factors),
+/// we use a fixed column `table_selector` which is default 0 and only 1 on enabled rows of the table.
+/// The dynamic lookup will check that a `key` in `to_lookup` matches one of the rows in `table` if
+/// that row is enabled, or `[F::ZERO; KEY_COL]` if the row is not enabled.
+/// **Therefore `[F::ZERO, KEY_COL]` should never be used as a valid key in `to_lookup`**. This must
+/// be checked on a per-implementation basis.
 #[derive(Clone, Debug)]
 pub struct BasicDynLookupConfig<const KEY_COL: usize> {
     /// Columns for cells to be looked up.
     pub to_lookup: Vec<[Column<Advice>; KEY_COL]>,
     /// Table to look up against.
     pub table: [Column<Advice>; KEY_COL],
+    /// Selector to enable a row in `table` to actually be part of the lookup table. This is to prevent
+    /// blinding factors in `table` advice columns from being used in the lookup.
+    pub table_selector: Column<Fixed>,
 }
 
 impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
@@ -50,16 +60,22 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
         };
         let table = make_columns();
         let to_lookup: Vec<_> = (0..num_lu_sets).map(|_| make_columns()).collect();
+        let table_selector = meta.fixed_column();
 
         for to_lookup in &to_lookup {
             meta.lookup_any("dynamic lookup table", |meta| {
+                let table_selector = meta.query_fixed(table_selector, Rotation::cur());
                 let table = table.map(|c| meta.query_advice(c, Rotation::cur()));
                 let to_lu = to_lookup.map(|c| meta.query_advice(c, Rotation::cur()));
-                to_lu.into_iter().zip(table).collect()
+                to_lu
+                    .into_iter()
+                    .zip(table)
+                    .map(|(to_lu, table)| (to_lu, table_selector.clone() * table))
+                    .collect()
             });
         }
 
-        Self { table, to_lookup }
+        Self { table_selector, table, to_lookup }
     }
 
     /// Assign managed lookups
@@ -117,8 +133,11 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
         copy_manager: Option<&SharedCopyConstraintManager<F>>,
     ) {
         for (i, row) in rows.into_iter().enumerate() {
+            let row_offset = offset + i;
+            // Enable this row in the table
+            raw_assign_fixed(region, self.table_selector, row_offset, F::ONE);
             for (col, virtual_cell) in self.table.into_iter().zip(row) {
-                assign_virtual_to_raw(region, col, offset + i, virtual_cell, copy_manager);
+                assign_virtual_to_raw(region, col, row_offset, virtual_cell, copy_manager);
             }
         }
     }
