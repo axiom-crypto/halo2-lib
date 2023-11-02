@@ -251,7 +251,7 @@ where
         a: impl IntoIterator<Item = A>,
         max_bits: usize,
     ) where
-        A: Into<FpChip::UnsafeFieldPoint>,
+        A: Into<FpChip::FieldPoint>,
     {
         for coeff in a {
             self.fp_chip.range_check(ctx, coeff, max_bits);
@@ -435,7 +435,7 @@ macro_rules! impl_field_ext_chip_common {
         fn range_check(
             &self,
             ctx: &mut Context<F>,
-            a: impl Into<Self::UnsafeFieldPoint>,
+            a: impl Into<Self::FieldPoint>,
             max_bits: usize,
         ) {
             self.0.range_check(ctx, a.into(), max_bits)
