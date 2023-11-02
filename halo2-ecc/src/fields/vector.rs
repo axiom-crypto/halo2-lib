@@ -245,6 +245,9 @@ where
         FieldVector(a.into_iter().map(|coeff| self.fp_chip.carry_mod(ctx, coeff)).collect())
     }
 
+    /// # Assumptions
+    /// * `max_bits <= n * k` where `n = self.fp_chip.limb_bits` and `k = self.fp_chip.num_limbs`
+    /// * `a[i].truncation.limbs.len() = self.fp_chip.num_limbs` for all `i = 0..a.len()`
     pub fn range_check<A>(
         &self,
         ctx: &mut Context<F>,
@@ -432,6 +435,9 @@ macro_rules! impl_field_ext_chip_common {
             self.0.carry_mod(ctx, a)
         }
 
+        /// # Assumptions
+        /// * `max_bits <= n * k` where `n = self.fp_chip.limb_bits` and `k = self.fp_chip.num_limbs`
+        /// * `a[i].truncation.limbs.len() = self.fp_chip.num_limbs` for all `i = 0..a.len()`
         fn range_check(
             &self,
             ctx: &mut Context<F>,

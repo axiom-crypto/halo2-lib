@@ -194,10 +194,13 @@ pub trait RangeInstructions<F: ScalarField> {
         num_bits: usize,
     );
 
-    /// Performs a range check that `a` has at most `bit_length(b)` bits and then constrains that `a` is less than `b`.
+    /// Performs a range check that `a` has at most `ceil(b.bits() / lookup_bits) * lookup_bits` bits and then constrains that `a` is less than `b`.
     ///
     /// * a: [AssignedValue] value to check
     /// * b: upper bound expressed as a [u64] value
+    ///
+    /// ## Assumptions
+    /// * `ceil(b.bits() / lookup_bits) * lookup_bits <= F::CAPACITY`
     fn check_less_than_safe(&self, ctx: &mut Context<F>, a: AssignedValue<F>, b: u64) {
         let range_bits =
             (bit_length(b) + self.lookup_bits() - 1) / self.lookup_bits() * self.lookup_bits();
@@ -206,10 +209,13 @@ pub trait RangeInstructions<F: ScalarField> {
         self.check_less_than(ctx, a, Constant(F::from(b)), range_bits)
     }
 
-    /// Performs a range check that `a` has at most `bit_length(b)` bits and then constrains that `a` is less than `b`.
+    /// Performs a range check that `a` has at most `ceil(b.bits() / lookup_bits) * lookup_bits` bits and then constrains that `a` is less than `b`.
     ///
     /// * a: [AssignedValue] value to check
     /// * b: upper bound expressed as a [BigUint] value
+    ///
+    /// ## Assumptions
+    /// * `ceil(b.bits() / lookup_bits) * lookup_bits <= F::CAPACITY`
     fn check_big_less_than_safe(&self, ctx: &mut Context<F>, a: AssignedValue<F>, b: BigUint)
     where
         F: BigPrimeField,
@@ -280,10 +286,14 @@ pub trait RangeInstructions<F: ScalarField> {
 
     /// Constrains and returns `(c, r)` such that `a = b * c + r`.
     ///
-    /// Assumes that `b != 0` and that `a` has <= `a_num_bits` bits.
     /// * a: [QuantumCell] value to divide
     /// * b: [BigUint] value to divide by
     /// * a_num_bits: number of bits needed to represent the value of `a`
+    ///
+    /// ## Assumptions
+    /// * `b != 0` and that `a` has <= `a_num_bits` bits.
+    /// * `a_num_bits <= F::CAPACITY = F::NUM_BITS - 1`
+    ///   * Unsafe behavior if `a_num_bits >= F::NUM_BITS`
     fn div_mod(
         &self,
         ctx: &mut Context<F>,
@@ -330,6 +340,10 @@ pub trait RangeInstructions<F: ScalarField> {
     /// * a_num_bits: number of bits needed to represent the value of `a`
     /// * b_num_bits: number of bits needed to represent the value of `b`
     ///
+    /// ## Assumptions
+    /// * `a_num_bits <= F::CAPACITY = F::NUM_BITS - 1`
+    /// * `b_num_bits <= F::CAPACITY = F::NUM_BITS - 1`
+    /// * Unsafe behavior if `a_num_bits >= F::NUM_BITS` or `b_num_bits >= F::NUM_BITS`
     fn div_mod_var(
         &self,
         ctx: &mut Context<F>,
