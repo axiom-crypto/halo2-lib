@@ -63,3 +63,6 @@ jobs:
 
       - name: Run clippy
         run: cargo clippy --all -- -D warnings
+
+      - name: Run cargo audit
+        uses: actions-rs/audit-check@v1

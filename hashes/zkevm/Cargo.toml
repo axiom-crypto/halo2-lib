@@ -22,8 +22,6 @@ snark-verifier = { git = "https://github.com/axiom-crypto/snark-verifier.git", b
 getset = "0.1.2"
 
 [dev-dependencies]
-criterion = "0.3"
-ctor = "0.1.22"
 ethers-signers = "2.0.8"
 hex = "0.4.3"
 itertools = "0.11"
