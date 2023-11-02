@@ -25,7 +25,7 @@ use crate::{
         testing::{check_proof, gen_proof},
         ScalarField,
     },
-    virtual_region::{lookups::LookupAnyManager, manager::VirtualRegionManager},
+    virtual_region::manager::VirtualRegionManager,
 };
 
 #[derive(Clone, Debug)]
@@ -47,7 +47,7 @@ struct RAMCircuit<F: ScalarField, const CYCLES: usize> {
     ptrs: [usize; CYCLES],
 
     cpu: SinglePhaseCoreManager<F>,
-    ram: LookupAnyManager<F, 2>,
+    mem_access: Vec<[AssignedValue<F>; 2]>,
 
     params: RAMConfigParams,
 }
@@ -60,8 +60,8 @@ impl<F: ScalarField, const CYCLES: usize> RAMCircuit<F, CYCLES> {
         witness_gen_only: bool,
     ) -> Self {
         let cpu = SinglePhaseCoreManager::new(witness_gen_only, Default::default());
-        let ram = LookupAnyManager::new(witness_gen_only, cpu.copy_manager.clone());
-        Self { memory, ptrs, cpu, ram, params }
+        let mem_access = vec![];
+        Self { memory, ptrs, cpu, mem_access, params }
     }
 
     fn compute(&mut self) {
@@ -70,9 +70,9 @@ impl<F: ScalarField, const CYCLES: usize> RAMCircuit<F, CYCLES> {
         let mut sum = ctx.load_constant(F::ZERO);
         for &ptr in &self.ptrs {
             let value = self.memory[ptr];
-            let ptr = ctx.load_witness(F::from(ptr as u64 + 1));
+            let ptr = ctx.load_witness(F::from(ptr as u64));
             let value = ctx.load_witness(value);
-            self.ram.add_lookup((ctx.type_id(), ctx.id()), [ptr, value]);
+            self.mem_access.push([ptr, value]);
             sum = gate.add(ctx, sum, value);
         }
     }
@@ -111,7 +111,7 @@ impl<F: ScalarField, const CYCLES: usize> Circuit<F> for RAMCircuit<F, CYCLES> {
     ) -> Result<(), Error> {
         // Make purely virtual cells so we can raw assign them
         let memory = self.memory.iter().enumerate().map(|(i, value)| {
-            let idx = Assigned::Trivial(F::from(i as u64 + 1));
+            let idx = Assigned::Trivial(F::from(i as u64));
             let idx = AssignedValue {
                 value: idx,
                 cell: Some(ContextCell::new(TypeId::of::<RAMConfig<F>>(), 0, i)),
@@ -123,10 +123,13 @@ impl<F: ScalarField, const CYCLES: usize> Circuit<F> for RAMCircuit<F, CYCLES> {
             };
             [idx, value]
         });
+
+        let copy_manager = (!self.cpu.witness_gen_only()).then_some(&self.cpu.copy_manager);
+
         config.memory.assign_virtual_table_to_raw(
             layouter.namespace(|| "memory"),
             memory,
-            (!self.cpu.witness_gen_only()).then_some(&self.cpu.copy_manager),
+            copy_manager,
         );
 
         layouter.assign_region(
@@ -139,7 +142,11 @@ impl<F: ScalarField, const CYCLES: usize> Circuit<F> for RAMCircuit<F, CYCLES> {
                 Ok(())
             },
         )?;
-        config.memory.assign_managed_lookups(layouter.namespace(|| "memory accesses"), &self.ram);
+        config.memory.assign_virtual_to_lookup_to_raw(
+            layouter.namespace(|| "memory accesses"),
+            self.mem_access.clone(),
+            copy_manager,
+        );
         // copy constraints at the very end for safety:
         layouter.assign_region(
             || "copy constraints",
@@ -172,6 +179,39 @@ fn test_ram_mock() {
     };
     circuit.params.num_lu_sets = CYCLES / usable_rows + 1;
     MockProver::run(k, &circuit, vec![]).unwrap().assert_satisfied();
+}
+
+#[test]
+#[should_panic = "called `Result::unwrap()` on an `Err` value: [Lookup dynamic lookup table(index: 2) is not satisfied in Region 2 ('[BasicDynLookupConfig] Advice cells to lookup') at offset 16]"]
+fn test_ram_mock_failed_access() {
+    let k = 5u32;
+    const CYCLES: usize = 50;
+    let mut rng = StdRng::seed_from_u64(0);
+    let mem_len = 16usize;
+    let memory: Vec<_> = (0..mem_len).map(|_| Fr::random(&mut rng)).collect();
+    let ptrs = [(); CYCLES].map(|_| rng.gen_range(0..memory.len()));
+    let usable_rows = 2usize.pow(k) - 11; // guess
+    let params = RAMConfigParams::default();
+    let mut circuit = RAMCircuit::new(memory, ptrs, params, false);
+    circuit.compute();
+
+    // === PRANK ===
+    // Try to claim memory[0] = 0
+    let ctx = circuit.cpu.main();
+    let ptr = ctx.load_witness(Fr::ZERO);
+    let value = ctx.load_witness(Fr::ZERO);
+    circuit.mem_access.push([ptr, value]);
+    // === end prank ===
+
+    // auto-configuration stuff
+    let num_advice = circuit.cpu.total_advice() / usable_rows + 1;
+    circuit.params.cpu = FlexGateConfigParams {
+        k: k as usize,
+        num_advice_per_phase: vec![num_advice],
+        num_fixed: 1,
+    };
+    circuit.params.num_lu_sets = CYCLES / usable_rows + 1;
+    MockProver::run(k, &circuit, vec![]).unwrap().verify().unwrap();
 }
 
 #[test]
