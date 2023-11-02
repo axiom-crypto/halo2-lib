@@ -64,5 +64,10 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all -- -D warnings
 
+      - name: Generate Cargo.lock
+        run: cargo generate-lockfile
+
       - name: Run cargo audit
         uses: actions-rs/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
