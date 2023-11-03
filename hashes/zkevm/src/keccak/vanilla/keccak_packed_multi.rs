@@ -132,7 +132,7 @@ impl<F: PrimeField> KeccakRegion<F> {
     }
 }
 
-/// Keccak Table, used to verify keccak hashing from RLC'ed input.
+/// Keccak Table, used to verify keccak hash digests from input spread out across multiple rows.
 #[derive(Clone, Debug)]
 pub struct KeccakTable {
     /// True when the row is enabled
