@@ -52,28 +52,26 @@ fn test_multithread_gates() {
     );
 }
 
-/*
 #[cfg(feature = "dev-graph")]
 #[test]
 fn plot_gates() {
     let k = 5;
     use plotters::prelude::*;
 
+    use crate::gates::circuit::builder::BaseCircuitBuilder;
+
     let root = BitMapBackend::new("layout.png", (1024, 1024)).into_drawing_area();
     root.fill(&WHITE).unwrap();
     let root = root.titled("Gates Layout", ("sans-serif", 60)).unwrap();
 
     let inputs = [Fr::zero(); 3];
-    let builder = GateThreadBuilder::new(false);
+    let mut builder = BaseCircuitBuilder::new(false).use_k(k);
     gate_tests(builder.main(0), inputs);
 
     // auto-tune circuit
-    builder.config(k, Some(9));
-    // create circuit
-    let circuit = RangeCircuitBuilder::keygen(builder);
-    halo2_proofs::dev::CircuitLayout::default().render(k, &circuit, &root).unwrap();
+    builder.calculate_params(Some(9));
+    halo2_proofs::dev::CircuitLayout::default().render(k as u32, &builder, &root).unwrap();
 }
-*/
 
 fn range_tests<F: BigPrimeField>(
     ctx: &mut Context<F>,
