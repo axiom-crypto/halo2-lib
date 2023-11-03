@@ -238,7 +238,7 @@ pub trait RangeInstructions<F: ScalarField> {
         num_bits: usize,
     ) -> AssignedValue<F>;
 
-    /// Performs a range check that `a` has at most `ceil(bit_length(b) / lookup_bits) * lookup_bits` and then constrains that `a` is in `[0,b)`.
+    /// Performs a range check that `a` has at most `ceil(bit_length(b) / lookup_bits) * lookup_bits` and then returns whether `a` is in `[0,b)`.
     ///
     /// Returns 1 if `a` < `b`, otherwise 0.
     ///
@@ -257,7 +257,7 @@ pub trait RangeInstructions<F: ScalarField> {
         self.is_less_than(ctx, a, Constant(F::from(b)), range_bits)
     }
 
-    /// Performs a range check that `a` has at most `ceil(b.bits() / lookup_bits) * lookup_bits` bits and then constrains that `a` is in `[0,b)`.
+    /// Performs a range check that `a` has at most `ceil(b.bits() / lookup_bits) * lookup_bits` bits and then returns whether `a` is in `[0,b)`.
     ///
     /// Returns 1 if `a` < `b`, otherwise 0.
     ///
