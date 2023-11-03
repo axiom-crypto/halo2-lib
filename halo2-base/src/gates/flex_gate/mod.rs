@@ -57,7 +57,6 @@ impl<F: ScalarField> BasicGateConfig<F> {
     ///
     /// Assumes `phase` is in the range [0, MAX_PHASE).
     /// * `meta`: [ConstraintSystem] used for the gate
-    /// * `strategy`: The [GateStrategy] to use for the gate
     /// * `phase`: The phase to add the gate to
     pub fn configure(meta: &mut ConstraintSystem<F>, phase: u8) -> Self {
         let value = match phase {
@@ -118,10 +117,7 @@ impl<F: ScalarField> FlexGateConfig<F> {
     ///
     /// Assumes `num_advice` is a [Vec] of length [MAX_PHASE]
     /// * `meta`: [ConstraintSystem] of the circuit
-    /// * `strategy`: [GateStrategy] of the flex gate
-    /// * `num_advice`: Number of [Advice] [Column]s in each phase
-    /// * `num_fixed`: Number of [Fixed] [Column]s in each phase
-    /// * `circuit_degree`: Degree that expresses the size of circuit (i.e., 2^<sup>circuit_degree</sup> is the number of rows in the circuit)
+    /// * `params`: see [FlexGateConfigParams]
     pub fn configure(meta: &mut ConstraintSystem<F>, params: FlexGateConfigParams) -> Self {
         // create fixed (constant) columns and enable equality constraints
         let mut constants = Vec::with_capacity(params.num_fixed);
@@ -918,7 +914,7 @@ impl<F: ScalarField> Default for GateChip<F> {
 }
 
 impl<F: ScalarField> GateChip<F> {
-    /// Returns a new [GateChip] with the given [GateStrategy].
+    /// Returns a new [GateChip] with some precomputed values. This can be called out of circuit and has no extra dependencies.
     pub fn new() -> Self {
         let mut pow_of_two = Vec::with_capacity(F::NUM_BITS as usize);
         let two = F::from(2);

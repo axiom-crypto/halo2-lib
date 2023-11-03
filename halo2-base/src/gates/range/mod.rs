@@ -52,12 +52,9 @@ impl<F: ScalarField> RangeConfig<F> {
     ///
     /// Panics if `lookup_bits` > 28.
     /// * `meta`: [ConstraintSystem] of the circuit
-    /// * `range_strategy`: [GateStrategy] of the range chip
-    /// * `num_advice`: Number of [Advice] [Column]s without lookup enabled in each phase
+    /// * `gate_params`: see [FlexGateConfigParams]
     /// * `num_lookup_advice`: Number of `lookup_advice` [Column]s in each phase
-    /// * `num_fixed`: Number of fixed [Column]s in each phase
     /// * `lookup_bits`: Number of bits represented in the LookUp table [0,2^lookup_bits)
-    /// * `circuit_degree`: Degree that expresses the size of circuit (i.e., 2^<sup>circuit_degree</sup> is the number of rows in the circuit)
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         gate_params: FlexGateConfigParams,
@@ -440,8 +437,13 @@ pub struct RangeChip<F: ScalarField> {
 
 impl<F: ScalarField> RangeChip<F> {
     /// Creates a new [RangeChip] with the given strategy and lookup_bits.
-    /// * strategy: [GateStrategy] for advice values in this chip
-    /// * lookup_bits: number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>)
+    /// * `lookup_bits`: number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>)
+    /// * `lookup_manager`: a [LookupAnyManager] for each phase.
+    ///
+    /// **IMPORTANT:** It is **critical** that all `LookupAnyManager`s use the same [`SharedCopyConstraintManager`](crate::virtual_region::copy_constraints::SharedCopyConstraintManager)
+    /// as in your primary circuit builder.
+    ///
+    /// It is not advised to call this function directly. Instead you should call `BaseCircuitBuilder::range_chip`.
     pub fn new(lookup_bits: usize, lookup_manager: [LookupAnyManager<F, 1>; MAX_PHASE]) -> Self {
         let limb_base = F::from(1u64 << lookup_bits);
         let mut running_base = limb_base;
