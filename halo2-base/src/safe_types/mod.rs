@@ -324,6 +324,7 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
         )
     }
 
+    /// Assumes that `bits <= inputs.len() * 8`.
     fn add_bytes_constraints(
         &self,
         ctx: &mut Context<F>,
