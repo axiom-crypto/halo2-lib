@@ -41,7 +41,15 @@ impl<F: ScalarField, const MAX_LEN: usize> VarLenBytes<F, MAX_LEN> {
         MAX_LEN
     }
 
-    /// Left pads the variable length byte array with 0s to the MAX_LEN
+    /// Left pads the variable length byte array with 0s to the `MAX_LEN`.
+    /// Takes a fixed length array `self.bytes` and returns a length `MAX_LEN` array equal to
+    /// `[[0; MAX_LEN - len], self.bytes[..len]].concat()`, i.e., we take `self.bytes[..len]` and
+    /// zero pad it on the left, where `len = self.len`
+    ///
+    /// Assumes `0 < self.len <= MAX_LEN`.
+    ///
+    /// ## Panics
+    /// If `self.len` is not in the range `(0, MAX_LEN]`.
     pub fn left_pad_to_fixed(
         &self,
         ctx: &mut Context<F>,

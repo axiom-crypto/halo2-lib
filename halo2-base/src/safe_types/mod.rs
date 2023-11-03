@@ -259,6 +259,10 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
     /// * inputs: Slice representing the byte array.
     /// * len: [AssignedValue]<F> witness representing the variable length of the byte array. Constrained to be `<= MAX_LEN`.
     /// * MAX_LEN: [usize] representing the maximum length of the byte array and the number of elements it must contain.
+    ///
+    /// ## Assumptions
+    /// * `MAX_LEN < u64::MAX` to prevent overflow (but you should never make an array this large)
+    /// * `ceil((MAX_LEN + 1).bits() / lookup_bits) * lookup_bits <= F::CAPACITY` where `lookup_bits = self.range_chip.lookup_bits`
     pub fn raw_to_var_len_bytes<const MAX_LEN: usize>(
         &self,
         ctx: &mut Context<F>,
@@ -275,6 +279,10 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
     /// * inputs: Vector representing the byte array, right padded to `max_len`. See [VarLenBytesVec] for details about padding.
     /// * len: [AssignedValue]<F> witness representing the variable length of the byte array. Constrained to be `<= max_len`.
     /// * max_len: [usize] representing the maximum length of the byte array and the number of elements it must contain. We enforce this to be provided explictly to make sure length of `inputs` is determinstic.
+    ///
+    /// ## Assumptions
+    /// * `max_len < u64::MAX` to prevent overflow (but you should never make an array this large)
+    /// * `ceil((max_len + 1).bits() / lookup_bits) * lookup_bits <= F::CAPACITY` where `lookup_bits = self.range_chip.lookup_bits`
     pub fn raw_to_var_len_bytes_vec(
         &self,
         ctx: &mut Context<F>,
