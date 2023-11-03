@@ -30,9 +30,9 @@ pub(super) const MAX_PHASE: usize = 3;
 /// # Vertical Gate Strategy:
 /// `q_0 * (a + b * c - d) = 0`
 /// where
-/// * a = value[0], b = value[1], c = value[2], d = value[3]
-/// * q = q_enable[0]
-/// * q is either 0 or 1 so this is just a simple selector
+/// * `a = value[0], b = value[1], c = value[2], d = value[3]`
+/// * `q = q_enable[0]`
+/// * `q` is either 0 or 1 so this is just a simple selector
 /// We chose `a + b * c` instead of `a * b + c` to allow "chaining" of gates, i.e., the output of one gate because `a` in the next gate.
 ///
 /// A configuration for a basic gate chip describing the selector, and advice column values.
@@ -115,7 +115,6 @@ pub struct FlexGateConfig<F: ScalarField> {
 impl<F: ScalarField> FlexGateConfig<F> {
     /// Generates a new [FlexGateConfig]
     ///
-    /// Assumes `num_advice` is a [Vec] of length [MAX_PHASE]
     /// * `meta`: [ConstraintSystem] of the circuit
     /// * `params`: see [FlexGateConfigParams]
     pub fn configure(meta: &mut ConstraintSystem<F>, params: FlexGateConfigParams) -> Self {
@@ -705,7 +704,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// and that `indicator` has at most one `1` bit.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: Iterator of [QuantumCell]'s that contains field elements
-    /// * `indicator`: Iterator of [AssignedValue]'s where indicator[i] == 1 if i == `idx`, otherwise 0
+    /// * `indicator`: Iterator of [AssignedValue]'s where `indicator[i] == 1` if `i == idx`, otherwise `0`
     fn select_by_indicator<Q>(
         &self,
         ctx: &mut Context<F>,
