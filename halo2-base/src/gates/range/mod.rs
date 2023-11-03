@@ -402,6 +402,32 @@ pub trait RangeInstructions<F: ScalarField> {
         self.gate().assert_bit(ctx, bit);
         bit
     }
+
+    /// Bitwise right rotate a by BIT bits. BIT and NUM_BITS must be determined at compile time.
+    ///
+    /// Assumes 'a' is a NUM_BITS bit integer and 0 < NUM_BITS <= 128.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: a [AssignedValue] value.
+    fn const_right_rotate<const BIT: usize, const NUM_BITS: usize>(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+    ) -> AssignedValue<F>
+    where
+        F: BigPrimeField;
+
+    /// Bitwise left rotate a by BIT bits. BIT and NUM_BITS must be determined at compile time.
+    ///
+    /// Assumes 'a' is a NUM_BITS bit integer and 0 < NUM_BITS <= 128.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: a [AssignedValue] value.
+    fn const_left_rotate<const BIT: usize, const NUM_BITS: usize>(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+    ) -> AssignedValue<F>
+    where
+        F: BigPrimeField;
 }
 
 /// # RangeChip
@@ -516,6 +542,41 @@ impl<F: ScalarField> RangeChip<F> {
             _ => {}
         }
         last_limb
+    }
+
+    /// Bitwise right rotate a by <bit> bits. This function should never be called directly
+    /// because const bitwise rotation must be determined at compile time.
+    ///
+    /// Assumes 'a' is a `num_bits` bit integer and `0 < num_bits <= F::CAPACITY`.
+    fn const_right_rotate_internal(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+        bit: usize,
+        num_bits: usize,
+    ) -> AssignedValue<F>
+    where
+        F: BigPrimeField,
+    {
+        assert!(0 < num_bits && num_bits <= F::CAPACITY as usize);
+        // Add a constrain a = l_witness << bit | r_wintess
+        let val = fe_to_biguint(a.value());
+        assert!(val.bits() <= num_bits as u64);
+        let (val_r, val_l) = val.div_mod_floor(&(BigUint::one() << bit));
+        let l_witness = ctx.load_witness(biguint_to_fe(&val_l));
+        let r_witness = ctx.load_witness(biguint_to_fe(&val_r));
+        let val_witness =
+            self.gate.mul_add(ctx, l_witness, Constant(self.gate.pow_of_two()[bit]), r_witness);
+        self.range_check(ctx, l_witness, num_bits - bit);
+        self.range_check(ctx, r_witness, bit);
+        ctx.constrain_equal(&a, &val_witness);
+        // Return (r_witness << (num_bits - bit)) | l_witness
+        self.gate.mul_add(
+            ctx,
+            r_witness,
+            Constant(self.gate.pow_of_two()[num_bits - bit]),
+            l_witness,
+        )
     }
 }
 
@@ -635,5 +696,36 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         let last_limb = self._range_check(ctx, shifted_cell, padded_bits + self.lookup_bits);
         // last_limb will have the (k + 1)-th limb of `a - b + 2^{k * limb_bits}`, which is zero iff `a < b`
         self.gate.is_zero(ctx, last_limb)
+    }
+
+    fn const_right_rotate<const BIT: usize, const NUM_BITS: usize>(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+    ) -> AssignedValue<F>
+    where
+        F: BigPrimeField,
+    {
+        let bit_to_shift = BIT % NUM_BITS;
+        if bit_to_shift == 0 {
+            return a;
+        };
+        self.const_right_rotate_internal(ctx, a, bit_to_shift, NUM_BITS)
+    }
+
+    fn const_left_rotate<const BIT: usize, const NUM_BITS: usize>(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+    ) -> AssignedValue<F>
+    where
+        F: BigPrimeField,
+    {
+        let bit_to_shift = BIT % NUM_BITS;
+        if bit_to_shift == 0 {
+            return a;
+        };
+        // left rotate by bit_to_shift == right rotate by (NUM_BITS - bit_to_shift)
+        self.const_right_rotate_internal(ctx, a, NUM_BITS - bit_to_shift, NUM_BITS)
     }
 }
