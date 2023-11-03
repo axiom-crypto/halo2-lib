@@ -381,7 +381,7 @@ impl<F: Field> KeccakComponentShardCircuit<F> {
             let mut base_circuit_builder_mut = self.base_circuit_builder.borrow_mut();
             let ctx = base_circuit_builder_mut.main(0);
 
-            // TODO: wrap this into a function which should be shared wiht App circuits.
+            // TODO: wrap this into a function which should be shared with App circuits.
             let output_commitment = self.hasher.borrow().hash_fix_len_array(
                 ctx,
                 gate,
