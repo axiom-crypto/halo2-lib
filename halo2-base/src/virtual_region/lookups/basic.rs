@@ -8,7 +8,10 @@ use crate::{
         poly::Rotation,
     },
     utils::{
-        halo2::{raw_assign_advice, raw_assign_fixed, Halo2AssignedCell},
+        halo2::{
+            assign_virtual_to_raw, constrain_virtual_equals_external, raw_assign_advice,
+            raw_assign_fixed,
+        },
         ScalarField,
     },
     virtual_region::copy_constraints::SharedCopyConstraintManager,
@@ -117,7 +120,7 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
         mut offset: usize,
         copy_manager: Option<&SharedCopyConstraintManager<F>>,
     ) {
-        let mut copy_manager = copy_manager.map(|c| c.lock().unwrap());
+        let copy_manager = copy_manager.map(|c| c.lock().unwrap());
         // Copied from `LookupAnyManager::assign_raw` but modified to set `key_is_enabled` to 1.
         // Copy the cells to the config columns, going left to right, then top to bottom.
         // Will panic if out of rows
@@ -132,8 +135,8 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
             raw_assign_fixed(region, key_is_enabled_col, offset, F::ONE);
             for (advice, column) in zip(key, key_col) {
                 let bcell = raw_assign_advice(region, column, offset, Value::known(advice.value));
-                if let Some(copy_manager) = copy_manager.as_mut() {
-                    copy_manager.constrain_virtual_equals_external(region, advice, bcell.cell());
+                if let Some(copy_manager) = copy_manager.as_ref() {
+                    constrain_virtual_equals_external(region, advice, bcell.cell(), copy_manager);
                 }
             }
 
@@ -195,24 +198,4 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
             raw_assign_advice(region, col, offset, Value::known(F::ZERO));
         }
     }
-}
-
-/// Assign virtual cell to raw halo2 cell.
-/// `copy_manager` **must** be provided unless you are only doing witness generation
-/// without constraints.
-pub fn assign_virtual_to_raw<'v, F: ScalarField>(
-    region: &mut Region<F>,
-    column: Column<Advice>,
-    offset: usize,
-    virtual_cell: AssignedValue<F>,
-    copy_manager: Option<&SharedCopyConstraintManager<F>>,
-) -> Halo2AssignedCell<'v, F> {
-    let raw = raw_assign_advice(region, column, offset, Value::known(virtual_cell.value));
-    if let Some(copy_manager) = copy_manager {
-        let mut copy_manager = copy_manager.lock().unwrap();
-        let cell = virtual_cell.cell.unwrap();
-        copy_manager.assigned_advices.insert(cell, raw.cell());
-        drop(copy_manager);
-    }
-    raw
 }

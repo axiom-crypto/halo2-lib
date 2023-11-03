@@ -104,22 +104,6 @@ impl<F: Field + Ord> CopyConstraintManager<F> {
         self.external_cell_count = 0;
         self.assigned.take();
     }
-
-    /// Constrains that `virtual` is equal to `external`. The `virtual` cell must have
-    /// already been raw assigned. This should only be called when `witness_gen_only` is false, otherwise it will panic.
-    ///
-    /// ## Panics
-    /// If witness generation only mode is true.
-    pub fn constrain_virtual_equals_external(
-        &mut self,
-        region: &mut Region<F>,
-        virtual_cell: AssignedValue<F>,
-        external_cell: Cell,
-    ) {
-        let ctx_cell = virtual_cell.cell.unwrap();
-        let acell = self.assigned_advices.get(&ctx_cell).expect("cell not assigned");
-        region.constrain_equal(*acell, external_cell);
-    }
 }
 
 impl<F: Field + Ord> Drop for CopyConstraintManager<F> {
