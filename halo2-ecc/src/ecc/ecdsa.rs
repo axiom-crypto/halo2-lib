@@ -1,7 +1,8 @@
+use halo2_base::utils::BigPrimeField;
 use halo2_base::{gates::GateInstructions, utils::CurveAffineExt, AssignedValue, Context};
 
 use crate::bigint::{big_is_equal, big_less_than, FixedOverflowInteger, ProperCrtUint};
-use crate::fields::{fp::FpChip, FieldChip, PrimeField};
+use crate::fields::{fp::FpChip, FieldChip};
 
 use super::{fixed_base, scalar_multiply, EcPoint, EccChip};
 // CF is the coordinate field of GA
@@ -12,7 +13,7 @@ use super::{fixed_base, scalar_multiply, EcPoint, EccChip};
 // Assumes `r, s` are proper CRT integers
 /// **WARNING**: Only use this function if `1 / (p - n)` is very small (e.g., < 2<sup>-100</sup>)
 /// `pubkey` should not be the identity point
-pub fn ecdsa_verify_no_pubkey_check<F: PrimeField, CF: PrimeField, SF: PrimeField, GA>(
+pub fn ecdsa_verify_no_pubkey_check<F: BigPrimeField, CF: BigPrimeField, SF: BigPrimeField, GA>(
     chip: &EccChip<F, FpChip<F, CF>>,
     ctx: &mut Context<F>,
     pubkey: EcPoint<F, <FpChip<F, CF> as FieldChip<F>>::FieldPoint>,

@@ -1,12 +1,12 @@
-use super::{FieldChip, PrimeField, PrimeFieldChip, Selectable};
+use super::{FieldChip, PrimeFieldChip, Selectable};
 use crate::bigint::{
-    add_no_carry, big_is_equal, big_is_zero, carry_mod, check_carry_mod_to_zero, mul_no_carry,
-    scalar_mul_and_add_no_carry, scalar_mul_no_carry, select, select_by_indicator, sub,
-    sub_no_carry, CRTInteger, FixedCRTInteger, OverflowInteger, ProperCrtUint, ProperUint,
+    add_no_carry, big_is_equal, big_is_even, big_is_zero, carry_mod, check_carry_mod_to_zero,
+    mul_no_carry, scalar_mul_and_add_no_carry, scalar_mul_no_carry, select, select_by_indicator,
+    sub, sub_no_carry, CRTInteger, FixedCRTInteger, OverflowInteger, ProperCrtUint, ProperUint,
 };
 use crate::halo2_proofs::halo2curves::CurveAffine;
 use halo2_base::gates::RangeChip;
-use halo2_base::utils::ScalarField;
+use halo2_base::utils::{BigPrimeField, ScalarField};
 use halo2_base::{
     gates::{range::RangeConfig, GateInstructions, RangeInstructions},
     utils::{bigint_to_fe, biguint_to_fe, bit_length, decompose_biguint, fe_to_biguint, modulus},
@@ -48,7 +48,7 @@ impl<F: ScalarField, Fp> From<Reduced<ProperCrtUint<F>, Fp>> for ProperCrtUint<F
 // `Fp` always needs to be `BigPrimeField`, we may later want support for `F` being just `ScalarField` but for optimization reasons we'll assume it's also `BigPrimeField` for now
 
 #[derive(Clone, Debug)]
-pub struct FpChip<'range, F: PrimeField, Fp: PrimeField> {
+pub struct FpChip<'range, F: BigPrimeField, Fp: BigPrimeField> {
     pub range: &'range RangeChip<F>,
 
     pub limb_bits: usize,
@@ -68,7 +68,7 @@ pub struct FpChip<'range, F: PrimeField, Fp: PrimeField> {
     _marker: PhantomData<Fp>,
 }
 
-impl<'range, F: PrimeField, Fp: PrimeField> FpChip<'range, F, Fp> {
+impl<'range, F: BigPrimeField, Fp: BigPrimeField> FpChip<'range, F, Fp> {
     pub fn new(range: &'range RangeChip<F>, limb_bits: usize, num_limbs: usize) -> Self {
         assert!(limb_bits > 0);
         assert!(num_limbs > 0);
@@ -81,7 +81,7 @@ impl<'range, F: PrimeField, Fp: PrimeField> FpChip<'range, F, Fp> {
 
         let limb_base = biguint_to_fe::<F>(&(BigUint::one() << limb_bits));
         let mut limb_bases = Vec::with_capacity(num_limbs);
-        limb_bases.push(F::one());
+        limb_bases.push(F::ONE);
         while limb_bases.len() != num_limbs {
             limb_bases.push(limb_base * limb_bases.last().unwrap());
         }
@@ -121,7 +121,27 @@ impl<'range, F: PrimeField, Fp: PrimeField> FpChip<'range, F, Fp> {
             };
             borrow = Some(lt);
         }
-        self.gate().assert_is_const(ctx, &borrow.unwrap(), &F::one());
+        self.gate().assert_is_const(ctx, &borrow.unwrap(), &F::ONE);
+    }
+
+    /// Given proper CRT integer `a`, returns 1 iff `a < modulus::<F>()`
+    /// # Assumptions
+    /// * `a` is proper representation of BigUint
+    pub fn is_less_than_p(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<ProperCrtUint<F>>,
+    ) -> AssignedValue<F> {
+        let a = a.into();
+
+        // underflow != 0 iff carry < p
+        let p = self.load_constant_uint(ctx, self.p.to_biguint().unwrap());
+        let (_, underflow) =
+            sub::crt::<F>(self.range(), ctx, a, p, self.limb_bits, self.limb_bases[1]);
+        let is_underflow_zero = self.gate().is_zero(ctx, underflow);
+        let no_underflow = self.gate().not(ctx, is_underflow_zero);
+
+        no_underflow
     }
 
     pub fn load_constant_uint(&self, ctx: &mut Context<F>, a: BigUint) -> ProperCrtUint<F> {
@@ -131,9 +151,22 @@ impl<'range, F: PrimeField, Fp: PrimeField> FpChip<'range, F, Fp> {
             self.native_modulus(),
         )
     }
+
+    // assuming `a` has been range checked to be a proper BigInt
+    // constrain the witness `a` to be `< p`
+    // then check if `a[0]` is even
+    pub fn is_even(
+        &self,
+        ctx: &mut Context<F>,
+        a: impl Into<ProperCrtUint<F>>,
+    ) -> AssignedValue<F> {
+        let a = a.into();
+        self.enforce_less_than_p(ctx, a.clone());
+        big_is_even::positive(self.range(), ctx, a.0.truncation, self.limb_bits)
+    }
 }
 
-impl<'range, F: PrimeField, Fp: PrimeField> PrimeFieldChip<F> for FpChip<'range, F, Fp> {
+impl<'range, F: BigPrimeField, Fp: BigPrimeField> PrimeFieldChip<F> for FpChip<'range, F, Fp> {
     fn num_limbs(&self) -> usize {
         self.num_limbs
     }
@@ -145,7 +178,7 @@ impl<'range, F: PrimeField, Fp: PrimeField> PrimeFieldChip<F> for FpChip<'range,
     }
 }
 
-impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, Fp> {
+impl<'range, F: BigPrimeField, Fp: BigPrimeField> FieldChip<F> for FpChip<'range, F, Fp> {
     const PRIME_FIELD_NUM_BITS: u32 = Fp::NUM_BITS;
     type UnsafeFieldPoint = CRTInteger<F>;
     type FieldPoint = ProperCrtUint<F>;
@@ -234,7 +267,7 @@ impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, F
         let (out_or_p, underflow) =
             sub::crt(self.range(), ctx, p, a.clone(), self.limb_bits, self.limb_bases[1]);
         // constrain underflow to equal 0
-        self.gate().assert_is_const(ctx, &underflow, &F::zero());
+        self.gate().assert_is_const(ctx, &underflow, &F::ZERO);
 
         let a_is_zero = big_is_zero::positive(self.gate(), ctx, a.0.truncation.clone());
         ProperCrtUint(select::crt(self.gate(), ctx, a.0, out_or_p, a_is_zero))
@@ -402,7 +435,9 @@ impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, F
     }
 }
 
-impl<'range, F: PrimeField, Fp: PrimeField> Selectable<F, CRTInteger<F>> for FpChip<'range, F, Fp> {
+impl<'range, F: BigPrimeField, Fp: BigPrimeField> Selectable<F, CRTInteger<F>>
+    for FpChip<'range, F, Fp>
+{
     fn select(
         &self,
         ctx: &mut Context<F>,
@@ -423,7 +458,7 @@ impl<'range, F: PrimeField, Fp: PrimeField> Selectable<F, CRTInteger<F>> for FpC
     }
 }
 
-impl<'range, F: PrimeField, Fp: PrimeField> Selectable<F, ProperCrtUint<F>>
+impl<'range, F: BigPrimeField, Fp: BigPrimeField> Selectable<F, ProperCrtUint<F>>
     for FpChip<'range, F, Fp>
 {
     fn select(
@@ -447,7 +482,7 @@ impl<'range, F: PrimeField, Fp: PrimeField> Selectable<F, ProperCrtUint<F>>
     }
 }
 
-impl<F: PrimeField, Fp, Pt: Clone, FC> Selectable<F, Reduced<Pt, Fp>> for FC
+impl<F: BigPrimeField, Fp, Pt: Clone, FC> Selectable<F, Reduced<Pt, Fp>> for FC
 where
     FC: Selectable<F, Pt>,
 {

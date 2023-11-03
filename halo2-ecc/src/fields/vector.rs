@@ -1,4 +1,8 @@
-use halo2_base::{gates::GateInstructions, utils::ScalarField, AssignedValue, Context};
+use halo2_base::{
+    gates::GateInstructions,
+    utils::{BigPrimeField, ScalarField},
+    AssignedValue, Context,
+};
 use itertools::Itertools;
 use std::{
     marker::PhantomData,
@@ -7,7 +11,7 @@ use std::{
 
 use crate::bigint::{CRTInteger, ProperCrtUint};
 
-use super::{fp::Reduced, FieldChip, FieldExtConstructor, PrimeField, PrimeFieldChip, Selectable};
+use super::{fp::Reduced, FieldChip, FieldExtConstructor, PrimeFieldChip, Selectable};
 
 /// A fixed length vector of `FieldPoint`s
 #[repr(transparent)]
@@ -63,16 +67,16 @@ impl<T> IntoIterator for FieldVector<T> {
 
 /// Contains common functionality for vector operations that can be derived from those of the underlying `FpChip`
 #[derive(Clone, Copy, Debug)]
-pub struct FieldVectorChip<'fp, F: PrimeField, FpChip: FieldChip<F>> {
+pub struct FieldVectorChip<'fp, F: BigPrimeField, FpChip: FieldChip<F>> {
     pub fp_chip: &'fp FpChip,
     _f: PhantomData<F>,
 }
 
 impl<'fp, F, FpChip> FieldVectorChip<'fp, F, FpChip>
 where
-    F: PrimeField,
+    F: BigPrimeField,
     FpChip: PrimeFieldChip<F>,
-    FpChip::FieldType: PrimeField,
+    FpChip::FieldType: BigPrimeField,
 {
     pub fn new(fp_chip: &'fp FpChip) -> Self {
         Self { fp_chip, _f: PhantomData }

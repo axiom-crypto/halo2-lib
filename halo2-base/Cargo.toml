@@ -1,62 +1,74 @@
 [package]
-name = "halo2-base"
-version = "0.3.0"
-edition = "2021"
+name="halo2-base"
+version="0.4.0"
+edition="2021"
 
 [dependencies]
-itertools = "0.10"
-num-bigint = { version = "0.4", features = ["rand"] }
-num-integer = "0.1"
-num-traits = "0.2"
-rand_chacha = "0.3"
-rustc-hash = "1.1"
-ff = "0.12"
-rayon = "1.6.1"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-log = "0.4"
+itertools="0.11"
+num-bigint={ version="0.4", features=["rand"] }
+num-integer="0.1"
+num-traits="0.2"
+rand_chacha="0.3"
+rustc-hash="1.1"
+rayon="1.7"
+serde={ version="1.0", features=["derive"] }
+serde_json="1.0"
+log="0.4"
+getset="0.1.2"
+ark-std={ version="0.3.0", features=["print-trace"], optional=true }
 
 # Use Axiom's custom halo2 monorepo for faster proving when feature = "halo2-axiom" is on
-halo2_proofs_axiom = { git = "https://github.com/axiom-crypto/halo2.git", branch = "axiom/dev", package = "halo2_proofs", optional = true }
+halo2_proofs_axiom={ git="https://github.com/axiom-crypto/halo2.git", package="halo2_proofs", optional=true }
 # Use PSE halo2 and halo2curves for compatibility when feature = "halo2-pse" is on
-halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2023_02_02", optional = true }
+halo2_proofs={ git="https://github.com/privacy-scaling-explorations/halo2.git", rev="7a21656", optional=true }
 
+# This is Scroll's audited poseidon circuit. We only use it for the Native Poseidon spec. We do not use the halo2 circuit at all (and it wouldn't even work because the halo2_proofs tag is not compatbile).
+# We forked it to upgrade to ff v0.13 and removed the circuit module
+poseidon-rs={ git="https://github.com/axiom-crypto/poseidon-circuit.git", rev="1aee4a1" }
 # plotting circuit layout
-plotters = { version = "0.3.0", optional = true }
-tabbycat = { version = "0.1", features = ["attributes"], optional = true }
+plotters={ version="0.3.0", optional=true }
+tabbycat={ version="0.1", features=["attributes"], optional=true }
 
 # test-utils
-rand = { version = "0.8", optional = true }
+rand={ version="0.8", optional=true }
 
 [dev-dependencies]
-ark-std = { version = "0.3.0", features = ["print-trace"] }
-rand = "0.8"
-pprof = { version = "0.11", features = ["criterion", "flamegraph"] }
-criterion = "0.4"
-criterion-macro = "0.4"
-rayon = "1.6.1"
-test-case = "3.1.0"
-proptest = "1.1.0"
+ark-std={ version="0.3.0", features=["print-trace"] }
+rand="0.8"
+pprof={ version="0.11", features=["criterion", "flamegraph"] }
+criterion="0.4"
+criterion-macro="0.4"
+test-case="3.1.0"
+test-log="0.2.12"
+env_logger="0.10.0"
+proptest="1.1.0"
+# native poseidon for testing
+pse-poseidon={ git="https://github.com/axiom-crypto/pse-poseidon.git" }
 
 # memory allocation
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemallocator = { version = "0.5", optional = true }
+jemallocator={ version="=0.5", optional=true }
 
-mimalloc = { version = "0.1", default-features = false, optional = true }
+mimalloc={ version="=0.1", default-features=false, optional=true }
 
 [features]
-default = ["halo2-axiom", "display"]
-dev-graph = ["halo2_proofs?/dev-graph", "halo2_proofs_axiom?/dev-graph", "plotters"]
-halo2-pse = ["halo2_proofs"]
-halo2-axiom = ["halo2_proofs_axiom"]
-display = []
-profile = ["halo2_proofs_axiom?/profile"]
-test-utils = ["dep:rand"]
+default=["halo2-axiom", "display", "test-utils"]
+asm=["halo2_proofs_axiom?/asm"]
+dev-graph=["halo2_proofs?/dev-graph", "halo2_proofs_axiom?/dev-graph", "plotters"]
+halo2-pse=["halo2_proofs/circuit-params"]
+halo2-axiom=["halo2_proofs_axiom"]
+display=[]
+profile=["halo2_proofs_axiom?/profile"]
+test-utils=["dep:rand", "ark-std"]
 
 [[bench]]
-name = "mul"
-harness = false
+name="mul"
+harness=false
 
 [[bench]]
-name = "inner_product"
-harness = false
+name="inner_product"
+harness=false
+
+[[example]]
+name="inner_product"
+required-features=["test-utils"]

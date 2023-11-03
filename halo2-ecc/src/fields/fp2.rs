@@ -1,29 +1,30 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use halo2_base::{utils::modulus, AssignedValue, Context};
-use num_bigint::BigUint;
-
+use crate::ff::PrimeField as _;
 use crate::impl_field_ext_chip_common;
 
 use super::{
     vector::{FieldVector, FieldVectorChip},
-    FieldChip, FieldExtConstructor, PrimeField, PrimeFieldChip,
+    BigPrimeField, FieldChip, FieldExtConstructor, PrimeFieldChip,
 };
+use halo2_base::{utils::modulus, AssignedValue, Context};
+use num_bigint::BigUint;
 
 /// Represent Fp2 point as `FieldVector` with degree = 2
 /// `Fp2 = Fp[u] / (u^2 + 1)`
 /// This implementation assumes p = 3 (mod 4) in order for the polynomial u^2 + 1 to be irreducible over Fp; i.e., in order for -1 to not be a square (quadratic residue) in Fp
 /// This means we store an Fp2 point as `a_0 + a_1 * u` where `a_0, a_1 in Fp`
 #[derive(Clone, Copy, Debug)]
-pub struct Fp2Chip<'a, F: PrimeField, FpChip: FieldChip<F>, Fp2>(
+pub struct Fp2Chip<'a, F: BigPrimeField, FpChip: FieldChip<F>, Fp2>(
     pub FieldVectorChip<'a, F, FpChip>,
     PhantomData<Fp2>,
 );
 
-impl<'a, F: PrimeField, FpChip: PrimeFieldChip<F>, Fp2: ff::Field> Fp2Chip<'a, F, FpChip, Fp2>
+impl<'a, F: BigPrimeField, FpChip: PrimeFieldChip<F>, Fp2: crate::ff::Field>
+    Fp2Chip<'a, F, FpChip, Fp2>
 where
-    FpChip::FieldType: PrimeField,
+    FpChip::FieldType: BigPrimeField,
 {
     /// User must construct an `FpChip` first using a config. This is intended so everything shares a single `FlexGateChip`, which is needed for the column allocation to work.
     pub fn new(fp_chip: &'a FpChip) -> Self {
@@ -66,10 +67,10 @@ where
 
 impl<'a, F, FpChip, Fp2> FieldChip<F> for Fp2Chip<'a, F, FpChip, Fp2>
 where
-    F: PrimeField,
-    FpChip::FieldType: PrimeField,
+    F: BigPrimeField,
+    FpChip::FieldType: BigPrimeField,
     FpChip: PrimeFieldChip<F>,
-    Fp2: ff::Field + FieldExtConstructor<FpChip::FieldType, 2>,
+    Fp2: crate::ff::Field + FieldExtConstructor<FpChip::FieldType, 2>,
     FieldVector<FpChip::UnsafeFieldPoint>: From<FieldVector<FpChip::FieldPoint>>,
     FieldVector<FpChip::FieldPoint>: From<FieldVector<FpChip::ReducedFieldPoint>>,
 {
