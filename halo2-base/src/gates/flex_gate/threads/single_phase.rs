@@ -20,7 +20,7 @@ use crate::{
     virtual_region::manager::VirtualRegionManager,
 };
 
-/// Virtual region manager for [Vec<BasicGateConfig>] in a single challenge phase.
+/// Virtual region manager for [`Vec<BasicGateConfig>`] in a single challenge phase.
 /// This is the core manager for [Context]s.
 #[derive(Clone, Debug, Default, CopyGetters)]
 pub struct SinglePhaseCoreManager<F: ScalarField> {
@@ -43,8 +43,8 @@ pub struct SinglePhaseCoreManager<F: ScalarField> {
 }
 
 impl<F: ScalarField> SinglePhaseCoreManager<F> {
-    /// Creates a new [GateThreadBuilder] and spawns a main thread.
-    /// * `witness_gen_only`: If true, the [GateThreadBuilder] is used for witness generation only.
+    /// Creates a new [SinglePhaseCoreManager] and spawns a main thread.
+    /// * `witness_gen_only`: If true, the [SinglePhaseCoreManager] is used for witness generation only.
     ///     * If true, the gate thread builder only does witness asignments and does not store constraint information -- this should only be used for the real prover.
     ///     * If false, the gate thread builder is used for keygen and mock prover (it can also be used for real prover) and the builder stores circuit information (e.g. copy constraints, fixed columns, enabled selectors).
     ///         * These values are fixed for the circuit at key generation time, and they do not need to be re-computed by the prover in the actual proving phase.
@@ -64,7 +64,7 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
         Self { phase, ..self }
     }
 
-    /// Creates a new [GateThreadBuilder] depending on the stage of circuit building. If the stage is [CircuitBuilderStage::Prover], the [GateThreadBuilder] is used for witness generation only.
+    /// Creates a new [SinglePhaseCoreManager] depending on the stage of circuit building. If the stage is [CircuitBuilderStage::Prover], the [SinglePhaseCoreManager] is used for witness generation only.
     pub fn from_stage(
         stage: CircuitBuilderStage,
         copy_manager: SharedCopyConstraintManager<F>,
@@ -73,7 +73,7 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
             .unknown(stage == CircuitBuilderStage::Keygen)
     }
 
-    /// Creates a new [GateThreadBuilder] with `use_unknown` flag set.
+    /// Creates a new [SinglePhaseCoreManager] with `use_unknown` flag set.
     /// * `use_unknown`: If true, during key generation witness [Value]s are replaced with Value::unknown() for safety.
     pub fn unknown(self, use_unknown: bool) -> Self {
         Self { use_unknown, ..self }

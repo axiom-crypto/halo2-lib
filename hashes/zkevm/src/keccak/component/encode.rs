@@ -154,7 +154,7 @@ pub const fn num_word_per_witness<F: Field>() -> usize {
 
 /// Number of witnesses to represent inputs in a keccak_f.
 ///
-/// Assume the representation of <length of raw input> is not longer than a Keccak word.
+/// Assume the representation of \<length of raw input\> is not longer than a Keccak word.
 ///
 /// When `F` is `bn254::Fr`, this is 6.
 pub const fn num_witness_per_keccak_f<F: Field>() -> usize {

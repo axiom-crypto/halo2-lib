@@ -80,7 +80,7 @@ impl<F: Field + Ord> CopyConstraintManager<F> {
         self.load_external_cell_impl(Some(cell))
     }
 
-    /// Mock to load an external cell for base circuit simulation. If any mock external cell is loaded, calling [assign_raw] will panic.
+    /// Mock to load an external cell for base circuit simulation. If any mock external cell is loaded, calling `assign_raw` will panic.
     pub fn mock_external_assigned(&mut self, v: F) -> AssignedValue<F> {
         let context_cell = self.load_external_cell_impl(None);
         AssignedValue { value: Assigned::Trivial(v), cell: Some(context_cell) }

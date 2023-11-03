@@ -55,7 +55,7 @@ pub(crate) struct SqueezeData<F: PrimeField> {
     packed: F,
 }
 
-/// KeccakRow. Field definitions could be found in [KeccakCircuitConfig].
+/// KeccakRow. Field definitions could be found in [super::KeccakCircuitConfig].
 #[derive(Clone, Debug)]
 pub struct KeccakRow<F: PrimeField> {
     pub(crate) q_enable: bool,

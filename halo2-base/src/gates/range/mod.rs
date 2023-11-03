@@ -264,7 +264,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// * a: [AssignedValue] value to check
     /// * b: upper bound as [BigUint] value
     ///
-    /// For the current implementation using [`is_less_than`], we require `ceil(b.bits() / lookup_bits) + 1 < F::NUM_BITS / lookup_bits`
+    /// For the current implementation using `is_less_than`, we require `ceil(b.bits() / lookup_bits) + 1 < F::NUM_BITS / lookup_bits`
     fn is_big_less_than_safe(
         &self,
         ctx: &mut Context<F>,
@@ -422,7 +422,7 @@ pub trait RangeInstructions<F: ScalarField> {
 pub struct RangeChip<F: ScalarField> {
     /// Underlying [GateChip] for this chip.
     pub gate: GateChip<F>,
-    /// Lookup manager for each phase, lazily initiated using the [SharedCopyConstraintManager] from the [Context]
+    /// Lookup manager for each phase, lazily initiated using the [`SharedCopyConstraintManager`](crate::virtual_region::copy_constraints::SharedCopyConstraintManager) from the [Context]
     /// that first calls it.
     ///
     /// The lookup manager is used to store the cells that need to be looked up in the range check lookup table.
