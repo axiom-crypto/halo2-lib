@@ -4,7 +4,7 @@
 use std::{iter, marker::PhantomData};
 
 use halo2_base::{
-    gates::{flex_gate::threads::ThreadManager, GateInstructions, RangeInstructions},
+    gates::{flex_gate::threads::CommonCircuitBuilder, GateInstructions, RangeInstructions},
     halo2_proofs::{halo2curves::CurveExt, plonk::Error},
     utils::BigPrimeField,
     AssignedValue, Context, QuantumCell,
@@ -24,7 +24,7 @@ pub trait HashInstructions<F: BigPrimeField> {
     const DIGEST_SIZE: usize;
 
     // Type of region manager used by the hash function.
-    type ThreadManager: ThreadManager<F>;
+    type CircuitBuilder: CommonCircuitBuilder<F>;
     // Type of output produced by the hash function.
     type Output: IntoIterator<Item = AssignedValue<F>>;
 
@@ -33,8 +33,8 @@ pub trait HashInstructions<F: BigPrimeField> {
     /// `strict` flag indicates whether to perform range check on input bytes.
     fn digest<const MAX_INPUT_SIZE: usize>(
         &self,
-        ctx: &mut Self::ThreadManager,
-        input: impl Iterator<Item = QuantumCell<F>>,
+        ctx: &mut Self::CircuitBuilder,
+        input: impl IntoIterator<Item = QuantumCell<F>>,
         strict: bool,
     ) -> Result<Self::Output, Error>;
 }
@@ -63,7 +63,7 @@ where
 /// A trait for message expansion methods supported by [`HashToCurveChip`].
 pub trait ExpandMessageChip {
     fn expand_message<F: BigPrimeField, HC: HashInstructions<F>>(
-        thread_pool: &mut HC::ThreadManager,
+        thread_pool: &mut HC::CircuitBuilder,
         hash_chip: &HC,
         range: &impl RangeInstructions<F>,
         msg: impl Iterator<Item = QuantumCell<F>>,
@@ -103,7 +103,7 @@ pub trait HashToCurveInstructions<
     /// [hash_to_field]: https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-5.2
     fn hash_to_field<HC: HashInstructions<F>, XC: ExpandMessageChip>(
         &self,
-        thread_pool: &mut HC::ThreadManager,
+        thread_pool: &mut HC::CircuitBuilder,
         hash_chip: &HC,
         msg: impl Iterator<Item = QuantumCell<F>>,
         dst: &[u8],
@@ -211,7 +211,7 @@ where
     /// Implements a uniform encoding from byte strings to elements of [`EcPoint<F, FC::FieldPoint>`].
     pub fn hash_to_curve<XC: ExpandMessageChip>(
         &self,
-        thread_pool: &mut HC::ThreadManager,
+        thread_pool: &mut HC::CircuitBuilder,
         msg: impl Iterator<Item = QuantumCell<F>>,
         dst: &[u8],
     ) -> Result<EcPoint<F, FC::FieldPoint>, Error> {
@@ -358,7 +358,7 @@ impl ExpandMessageChip for ExpandMsgXmd {
     /// - https://github.com/paulmillr/noble-curves/blob/bf70ba9/src/abstract/hash-to-curve.ts#L63
     /// - https://github.com/succinctlabs/telepathy-circuits/blob/d5c7771/circuits/hash_to_field.circom#L139
     fn expand_message<F: BigPrimeField, HC: HashInstructions<F>>(
-        thread_pool: &mut HC::ThreadManager,
+        thread_pool: &mut HC::CircuitBuilder,
         hash_chip: &HC,
         range: &impl RangeInstructions<F>,
         msg: impl Iterator<Item = QuantumCell<F>>,

@@ -39,17 +39,18 @@ impl<F: BigPrimeField> HashInstructions<F> for Sha256MockChip<F> {
     const BLOCK_SIZE: usize = 64;
     const DIGEST_SIZE: usize = 32;
 
-    type ThreadManager = SinglePhaseCoreManager<F>;
+    type CircuitBuilder = SinglePhaseCoreManager<F>;
     type Output = Vec<AssignedValue<F>>;
 
     fn digest<const MAX_INPUT_SIZE: usize>(
         &self,
-        thread_pool: &mut Self::ThreadManager,
-        input: impl Iterator<Item = QuantumCell<F>>,
+        thread_pool: &mut Self::CircuitBuilder,
+        input: impl IntoIterator<Item = QuantumCell<F>>,
         _strict: bool,
     ) -> Result<Vec<AssignedValue<F>>, Error> {
         use sha2::{Digest, Sha256};
         let input_bytes = input
+            .into_iter()
             .map(|b| match b {
                 QuantumCell::Witness(b) => b.get_lower_32() as u8,
                 QuantumCell::Constant(b) => b.get_lower_32() as u8,
@@ -76,7 +77,7 @@ fn hash_to_g2_test<F: BigPrimeField>(
     use crate::halo2_base::halo2_proofs::halo2curves::bls12_381::hash_to_curve::ExpandMsgXmd as ExpandMsgXmdNative;
     #[cfg(feature = "halo2-pse")]
     use halo2curves::bls12_381::hash_to_curve::ExpandMsgXmd as ExpandMsgXmdNative;
-    
+
     const DST: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
     let fp_chip = FpChip::<F>::new(range, params.limb_bits, params.num_limbs);
     let fp2_chip = Fp2Chip::new(&fp_chip);

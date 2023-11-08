@@ -19,8 +19,8 @@ pub use single_phase::SinglePhaseCoreManager;
 
 use crate::{utils::BigPrimeField, Context};
 
-/// Abstracts basic context management for custom gate builders.
-pub trait ThreadManager<F: BigPrimeField> {
+/// Abstracts basic context management for custom circuit builders.
+pub trait CommonCircuitBuilder<F: BigPrimeField> {
     /// Returns a mutable reference to the [Context] of a gate thread. Spawns a new thread for the given phase, if none exists.
     fn main(&mut self) -> &mut Context<F>;
 
@@ -35,7 +35,7 @@ pub trait ThreadManager<F: BigPrimeField> {
     fn new_thread(&mut self) -> &mut Context<F>;
 }
 
-impl<F: BigPrimeField> ThreadManager<F> for SinglePhaseCoreManager<F> {
+impl<F: BigPrimeField> CommonCircuitBuilder<F> for SinglePhaseCoreManager<F> {
     fn main(&mut self) -> &mut Context<F> {
         self.main()
     }

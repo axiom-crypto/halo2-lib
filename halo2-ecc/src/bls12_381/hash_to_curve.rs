@@ -13,7 +13,7 @@ use crate::{
     ecc::EccChip,
     fields::{vector::FieldVector, FieldChip},
 };
-use halo2_base::gates::flex_gate::threads::ThreadManager;
+use halo2_base::gates::flex_gate::threads::CommonCircuitBuilder;
 use halo2_base::gates::RangeInstructions;
 use halo2_base::utils::BigPrimeField;
 use itertools::Itertools;
@@ -42,7 +42,7 @@ impl<'chip, F: BigPrimeField> HashToCurveInstructions<F, Fp2Chip<'chip, F>, G2>
     /// - https://github.com/succinctlabs/telepathy-circuits/blob/d5c7771/circuits/hash_to_field.circom#L11
     fn hash_to_field<HC: HashInstructions<F>, XC: ExpandMessageChip>(
         &self,
-        thread_pool: &mut HC::ThreadManager,
+        thread_pool: &mut HC::CircuitBuilder,
         hash_chip: &HC,
         msg: impl Iterator<Item = QuantumCell<F>>,
         dst: &[u8],
