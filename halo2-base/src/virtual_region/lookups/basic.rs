@@ -101,7 +101,10 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
                 |mut region| {
                     self.assign_virtual_to_lookup_to_raw_from_offset(
                         &mut region,
+                        #[cfg(feature = "halo2-axiom")]
                         keys,
+                        #[cfg(not(feature = "halo2-axiom"))]
+                        keys.clone(),
                         0,
                         copy_manager,
                     );
