@@ -119,7 +119,7 @@ pub struct ContextCell {
 }
 
 impl ContextCell {
-    /// Creates a new [ContextCell] with the given `type_name`, `context_id`, and `offset`.
+    /// Creates a new [ContextCell] with the given `type_id`, `context_id`, and `offset`.
     pub fn new(type_id: &'static str, context_id: usize, offset: usize) -> Self {
         Self { type_id, context_id, offset }
     }
