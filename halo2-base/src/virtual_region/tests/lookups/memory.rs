@@ -112,15 +112,10 @@ impl<F: ScalarField, const CYCLES: usize> Circuit<F> for RAMCircuit<F, CYCLES> {
         // Make purely virtual cells so we can raw assign them
         let memory = self.memory.iter().enumerate().map(|(i, value)| {
             let idx = Assigned::Trivial(F::from(i as u64));
-            let idx = AssignedValue {
-                value: idx,
-                cell: Some(ContextCell::new(TypeId::of::<RAMConfig<F>>(), 0, i)),
-            };
+            let idx =
+                AssignedValue { value: idx, cell: Some(ContextCell::new("RAM Config", 0, i)) };
             let value = Assigned::Trivial(*value);
-            let value = AssignedValue {
-                value,
-                cell: Some(ContextCell::new(TypeId::of::<RAMConfig<F>>(), 1, i)),
-            };
+            let value = AssignedValue { value, cell: Some(ContextCell::new("RAM Config", 1, i)) };
             [idx, value]
         });
 

@@ -114,11 +114,11 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
     }
 
     /// A distinct tag for this particular type of virtual manager, which is different for each phase.
-    pub fn type_of(&self) -> TypeId {
+    pub fn type_of(&self) -> &'static str {
         match self.phase {
-            0 => TypeId::of::<(Self, FirstPhase)>(),
-            1 => TypeId::of::<(Self, SecondPhase)>(),
-            2 => TypeId::of::<(Self, ThirdPhase)>(),
+            0 => "First phase",
+            1 => "Second phase",
+            2 => "Third phase",
             _ => panic!("Unsupported phase"),
         }
     }

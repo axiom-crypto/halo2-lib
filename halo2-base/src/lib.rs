@@ -105,13 +105,13 @@ impl<F: ScalarField> QuantumCell<F> {
 }
 
 /// Unique tag for a context across all virtual regions
-pub type ContextTag = (TypeId, usize);
+pub type ContextTag = (&'static str, usize);
 
 /// Pointer to the position of a cell at `offset` in an advice column within a [Context] of `context_id`.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ContextCell {
     /// The [TypeId] of the virtual region that this cell belongs to.
-    pub type_id: TypeId,
+    pub type_id: &'static str,
     /// Identifier of the [Context] that this cell belongs to.
     pub context_id: usize,
     /// Relative offset of the cell within this [Context] advice column.
@@ -120,7 +120,7 @@ pub struct ContextCell {
 
 impl ContextCell {
     /// Creates a new [ContextCell] with the given `type_id`, `context_id`, and `offset`.
-    pub fn new(type_id: TypeId, context_id: usize, offset: usize) -> Self {
+    pub fn new(type_id: &'static str, context_id: usize, offset: usize) -> Self {
         Self { type_id, context_id, offset }
     }
 }
@@ -176,7 +176,7 @@ pub struct Context<F: ScalarField> {
     phase: usize,
     /// Identifier for what virtual region this context is in
     #[getset(get_copy = "pub")]
-    type_id: TypeId,
+    type_id: &'static str,
     /// Identifier to reference cells from this [Context].
     context_id: usize,
 
@@ -204,7 +204,7 @@ impl<F: ScalarField> Context<F> {
     pub fn new(
         witness_gen_only: bool,
         phase: usize,
-        type_id: TypeId,
+        type_id: &'static str,
         context_id: usize,
         copy_manager: SharedCopyConstraintManager<F>,
     ) -> Self {
