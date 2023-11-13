@@ -69,6 +69,8 @@ During `synthesize()`, the advice values of all `Context`s are concatenated into
 
 For parallel witness generation, multiple `Context`s are created for each parallel operation. After parallel witness generation, these `Context`'s are combined to form a single "virtual column" as above. Note that while the witness generation can be multi-threaded, the ordering of the contents in each `Context`, and the order of the `Context`s themselves, must be deterministic.
 
+**Warning:** If you create your own `Context` in a new virtual region not provided by our libraries, you must ensure that the `type_id: &str` of the context is a globally unique identifier for the virtual region, distinct from the other `type_id` strings used to identify other virtual regions. In the future we will introduce a macro to check this uniqueness at compile time.
+
 ### [**AssignedValue**](./src/lib.rs):
 
 Despite the name, an `AssignedValue` is a **virtual cell**. It contains the actual witness value as well as a pointer to the location of the virtual cell within a virtual region. The pointer is given by type `ContextCell`. We only store the pointer when not in witness generation only mode as an optimization.
