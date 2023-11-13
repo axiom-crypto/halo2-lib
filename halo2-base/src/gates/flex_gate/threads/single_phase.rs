@@ -1,4 +1,4 @@
-use std::{any::TypeId, cell::RefCell};
+use std::cell::RefCell;
 
 use getset::CopyGetters;
 
@@ -13,10 +13,7 @@ use crate::{
     Context, ContextCell,
 };
 use crate::{
-    halo2_proofs::{
-        circuit::{Region, Value},
-        plonk::{FirstPhase, SecondPhase, ThirdPhase},
-    },
+    halo2_proofs::circuit::{Region, Value},
     virtual_region::manager::VirtualRegionManager,
 };
 
@@ -114,11 +111,11 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
     }
 
     /// A distinct tag for this particular type of virtual manager, which is different for each phase.
-    pub fn type_of(&self) -> TypeId {
+    pub fn type_of(&self) -> &'static str {
         match self.phase {
-            0 => TypeId::of::<(Self, FirstPhase)>(),
-            1 => TypeId::of::<(Self, SecondPhase)>(),
-            2 => TypeId::of::<(Self, ThirdPhase)>(),
+            0 => "SinglePhaseCoreManager: FirstPhase",
+            1 => "SinglePhaseCoreManager: SecondPhase",
+            2 => "SinglePhaseCoreManager: ThirdPhase",
             _ => panic!("Unsupported phase"),
         }
     }
