@@ -9,8 +9,6 @@
 #![warn(clippy::default_numeric_fallback)]
 #![warn(missing_docs)]
 
-use std::any::TypeId;
-
 use getset::CopyGetters;
 use itertools::Itertools;
 // Different memory allocator options:
@@ -104,14 +102,16 @@ impl<F: ScalarField> QuantumCell<F> {
     }
 }
 
-/// Unique tag for a context across all virtual regions
-pub type ContextTag = (TypeId, usize);
+/// Unique tag for a context across all virtual regions.
+/// In the form `(type_id, context_id)` where `type_id` should be a unique identifier
+/// for the virtual region this context belongs to, and `context_id` is a counter local to that virtual region.
+pub type ContextTag = (&'static str, usize);
 
 /// Pointer to the position of a cell at `offset` in an advice column within a [Context] of `context_id`.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ContextCell {
-    /// The [TypeId] of the virtual region that this cell belongs to.
-    pub type_id: TypeId,
+    /// The unique string identifier of the virtual region that this cell belongs to.
+    pub type_id: &'static str,
     /// Identifier of the [Context] that this cell belongs to.
     pub context_id: usize,
     /// Relative offset of the cell within this [Context] advice column.
@@ -119,8 +119,8 @@ pub struct ContextCell {
 }
 
 impl ContextCell {
-    /// Creates a new [ContextCell] with the given `type_id`, `context_id`, and `offset`.
-    pub fn new(type_id: TypeId, context_id: usize, offset: usize) -> Self {
+    /// Creates a new [ContextCell] with the given `type_name`, `context_id`, and `offset`.
+    pub fn new(type_id: &'static str, context_id: usize, offset: usize) -> Self {
         Self { type_id, context_id, offset }
     }
 }
@@ -174,9 +174,11 @@ pub struct Context<F: ScalarField> {
     /// The challenge phase that this [Context] will map to.
     #[getset(get_copy = "pub")]
     phase: usize,
-    /// Identifier for what virtual region this context is in
+    /// Identifier for what virtual region this context is in.
+    /// Warning: the circuit writer must ensure that distinct virtual regions have distinct names as strings to prevent possible errors.
+    /// We do not use [std::any::TypeId] because it is not stable across rust builds or dependencies.
     #[getset(get_copy = "pub")]
-    type_id: TypeId,
+    type_id: &'static str,
     /// Identifier to reference cells from this [Context].
     context_id: usize,
 
@@ -204,7 +206,7 @@ impl<F: ScalarField> Context<F> {
     pub fn new(
         witness_gen_only: bool,
         phase: usize,
-        type_id: TypeId,
+        type_id: &'static str,
         context_id: usize,
         copy_manager: SharedCopyConstraintManager<F>,
     ) -> Self {
