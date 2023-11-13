@@ -146,12 +146,12 @@ impl<F: ScalarField> Circuit<F> for BaseCircuitBuilder<F> {
         self.config_params.clone()
     }
 
-    /// Creates a new instance of the [RangeCircuitBuilder] without witnesses by setting the witness_gen_only flag to false
+    /// Creates a new instance of the [BaseCircuitBuilder] without witnesses by setting the witness_gen_only flag to false
     fn without_witnesses(&self) -> Self {
         unimplemented!()
     }
 
-    /// Configures a new circuit using [`BaseConfigParams`]
+    /// Configures a new circuit using [`BaseCircuitParams`]
     fn configure_with_params(meta: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config {
         BaseConfig::configure(meta, params)
     }

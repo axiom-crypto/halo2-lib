@@ -9,8 +9,6 @@
 #![warn(clippy::default_numeric_fallback)]
 #![warn(missing_docs)]
 
-use std::any::TypeId;
-
 use getset::CopyGetters;
 use itertools::Itertools;
 // Different memory allocator options:
@@ -82,16 +80,16 @@ pub enum QuantumCell<F: ScalarField> {
 }
 
 impl<F: ScalarField> From<AssignedValue<F>> for QuantumCell<F> {
-    /// Converts an [AssignedValue<F>] into a [QuantumCell<F>] of [type Existing(AssignedValue<F>)]
+    /// Converts an [`AssignedValue<F>`] into a [`QuantumCell<F>`] of enum variant `Existing`.
     fn from(a: AssignedValue<F>) -> Self {
         Self::Existing(a)
     }
 }
 
 impl<F: ScalarField> QuantumCell<F> {
-    /// Returns an immutable reference to the underlying [ScalarField] value of a QuantumCell<F>.
+    /// Returns an immutable reference to the underlying [ScalarField] value of a [`QuantumCell<F>`].
     ///
-    /// Panics if the QuantumCell<F> is of type WitnessFraction.
+    /// Panics if the [`QuantumCell<F>`] is of type `WitnessFraction`.
     pub fn value(&self) -> &F {
         match self {
             Self::Existing(a) => a.value(),
@@ -104,14 +102,16 @@ impl<F: ScalarField> QuantumCell<F> {
     }
 }
 
-/// Unique tag for a context across all virtual regions
-pub type ContextTag = (TypeId, usize);
+/// Unique tag for a context across all virtual regions.
+/// In the form `(type_id, context_id)` where `type_id` should be a unique identifier
+/// for the virtual region this context belongs to, and `context_id` is a counter local to that virtual region.
+pub type ContextTag = (&'static str, usize);
 
 /// Pointer to the position of a cell at `offset` in an advice column within a [Context] of `context_id`.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ContextCell {
-    /// The [TypeId] of the virtual region that this cell belongs to.
-    pub type_id: TypeId,
+    /// The unique string identifier of the virtual region that this cell belongs to.
+    pub type_id: &'static str,
     /// Identifier of the [Context] that this cell belongs to.
     pub context_id: usize,
     /// Relative offset of the cell within this [Context] advice column.
@@ -120,7 +120,7 @@ pub struct ContextCell {
 
 impl ContextCell {
     /// Creates a new [ContextCell] with the given `type_id`, `context_id`, and `offset`.
-    pub fn new(type_id: TypeId, context_id: usize, offset: usize) -> Self {
+    pub fn new(type_id: &'static str, context_id: usize, offset: usize) -> Self {
         Self { type_id, context_id, offset }
     }
 }
@@ -138,9 +138,9 @@ pub struct AssignedValue<F: crate::ff::Field> {
 }
 
 impl<F: ScalarField> AssignedValue<F> {
-    /// Returns an immutable reference to the underlying value of an AssignedValue<F>.
+    /// Returns an immutable reference to the underlying value of an [`AssignedValue<F>`].
     ///
-    /// Panics if the AssignedValue<F> is of type WitnessFraction.
+    /// Panics if the witness value is of type [Assigned::Rational] or [Assigned::Zero].
     pub fn value(&self) -> &F {
         match &self.value {
             Assigned::Trivial(a) => a,
@@ -174,9 +174,11 @@ pub struct Context<F: ScalarField> {
     /// The challenge phase that this [Context] will map to.
     #[getset(get_copy = "pub")]
     phase: usize,
-    /// Identifier for what virtual region this context is in
+    /// Identifier for what virtual region this context is in.
+    /// Warning: the circuit writer must ensure that distinct virtual regions have distinct names as strings to prevent possible errors.
+    /// We do not use [std::any::TypeId] because it is not stable across rust builds or dependencies.
     #[getset(get_copy = "pub")]
-    type_id: TypeId,
+    type_id: &'static str,
     /// Identifier to reference cells from this [Context].
     context_id: usize,
 
@@ -204,7 +206,7 @@ impl<F: ScalarField> Context<F> {
     pub fn new(
         witness_gen_only: bool,
         phase: usize,
-        type_id: TypeId,
+        type_id: &'static str,
         context_id: usize,
         copy_manager: SharedCopyConstraintManager<F>,
     ) -> Self {
@@ -234,8 +236,7 @@ impl<F: ScalarField> Context<F> {
         ContextCell::new(self.type_id, self.context_id, self.advice.len() - 1)
     }
 
-    /// Pushes a [QuantumCell<F>] to the end of the `advice` column ([Vec] of advice cells) in this [Context].
-    /// * `input`: the cell to be assigned.
+    /// Virtually assigns the `input` within the current [Context], with different handling depending on the [QuantumCell] variant.
     pub fn assign_cell(&mut self, input: impl Into<QuantumCell<F>>) {
         // Determine the type of the cell and push it to the relevant vector
         match input.into() {
@@ -313,7 +314,7 @@ impl<F: ScalarField> Context<F> {
     /// Pushes multiple advice cells to the `advice` column of [Context] and enables them by enabling the corresponding selector specified in `gate_offset`.
     ///
     /// * `inputs`: Iterator that specifies the cells to be assigned
-    /// * `gate_offsets`: specifies relative offset from current position to enable selector for the gate (e.g., `0` is inputs[0]).
+    /// * `gate_offsets`: specifies relative offset from current position to enable selector for the gate (e.g., `0` is `inputs[0]`).
     ///     * `offset` may be negative indexing from the end of the column (e.g., `-1` is the last previously assigned cell)
     pub fn assign_region<Q>(
         &mut self,

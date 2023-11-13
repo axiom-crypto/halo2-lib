@@ -71,8 +71,8 @@ pub struct KeccakComponentShardCircuitParams {
     // Number of unusable rows withhold by Halo2.
     #[getset(get_copy = "pub")]
     num_unusable_row: usize,
-    /// Max keccak_f this circuits can aceept. The circuit can at most process <capacity> of inputs
-    /// with < NUM_BYTES_TO_ABSORB bytes or an input with <capacity> * NUM_BYTES_TO_ABSORB - 1 bytes.
+    /// Max keccak_f this circuits can aceept. The circuit can at most process `capacity` of inputs
+    /// with < NUM_BYTES_TO_ABSORB bytes or an input with `capacity * NUM_BYTES_TO_ABSORB - 1` bytes.
     #[getset(get_copy = "pub")]
     capacity: usize,
     // If true, publish raw outputs. Otherwise, publish Poseidon commitment of raw outputs.
@@ -135,12 +135,12 @@ impl<F: Field> Circuit<F> for KeccakComponentShardCircuit<F> {
         self.params.clone()
     }
 
-    /// Creates a new instance of the [KeccakCoprocessorLeafCircuit] without witnesses by setting the witness_gen_only flag to false
+    /// Creates a new instance of the [KeccakComponentShardCircuit] without witnesses by setting the witness_gen_only flag to false
     fn without_witnesses(&self) -> Self {
         unimplemented!()
     }
 
-    /// Configures a new circuit using [`BaseConfigParams`]
+    /// Configures a new circuit using [`BaseCircuitParams`]
     fn configure_with_params(meta: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config {
         let keccak_circuit_config = KeccakCircuitConfig::new(meta, params.keccak_circuit_params);
         let base_circuit_params = params.base_circuit_params;

@@ -32,12 +32,12 @@ pub mod basic;
 ///
 /// We want this manager to be CPU thread safe, while ensuring that the resulting circuit is
 /// deterministic -- the order in which the cells to lookup are added matters.
-/// The current solution is to tag the cells to lookup with the context id from the [Context] in which
+/// The current solution is to tag the cells to lookup with the context id from the [`Context`](crate::Context) in which
 /// it was called, and add virtual cells sequentially to buckets labelled by id.
 /// The virtual cells will be assigned to physical cells sequentially by id.
 /// We use a `BTreeMap` for the buckets instead of sorting to cells, to ensure that the order of the cells
 /// within a bucket is deterministic.
-/// The assumption is that the [Context] is thread-local.
+/// The assumption is that the [`Context`](crate::Context) is thread-local.
 ///
 /// Cheap to clone across threads because everything is in [Arc].
 #[derive(Clone, Debug, Getters, CopyGetters, Setters)]
