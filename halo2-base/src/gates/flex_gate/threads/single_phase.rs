@@ -113,9 +113,9 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
     /// A distinct tag for this particular type of virtual manager, which is different for each phase.
     pub fn type_of(&self) -> &'static str {
         match self.phase {
-            0 => "SinglePhaseCoreManager: FirstPhase",
-            1 => "SinglePhaseCoreManager: SecondPhase",
-            2 => "SinglePhaseCoreManager: ThirdPhase",
+            0 => "halo2-base:SinglePhaseCoreManager:FirstPhase",
+            1 => "halo2-base:SinglePhaseCoreManager:SecondPhase",
+            2 => "halo2-base:SinglePhaseCoreManager:ThirdPhase",
             _ => panic!("Unsupported phase"),
         }
     }
