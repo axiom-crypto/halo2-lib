@@ -120,6 +120,9 @@ pub struct ContextCell {
 
 impl ContextCell {
     /// Creates a new [ContextCell] with the given `type_id`, `context_id`, and `offset`.
+    ///
+    /// **Warning:** If you create your own `Context` in a new virtual region not provided by our libraries, you must ensure that the `type_id: &str` of the context is a globally unique identifier for the virtual region, distinct from the other `type_id` strings used to identify other virtual regions. We suggest that you either include your crate name as a prefix in the `type_id` or use [`module_path!`](https://doc.rust-lang.org/std/macro.module_path.html) to generate a prefix.
+    /// In the future we will introduce a macro to check this uniqueness at compile time.
     pub fn new(type_id: &'static str, context_id: usize, offset: usize) -> Self {
         Self { type_id, context_id, offset }
     }
@@ -203,6 +206,9 @@ impl<F: ScalarField> Context<F> {
     /// Creates a new [Context] with the given `context_id` and witness generation enabled/disabled by the `witness_gen_only` flag.
     /// * `witness_gen_only`: flag to determine whether public key generation or only witness generation is being performed.
     /// * `context_id`: identifier to reference advice cells from this [Context] later.
+    ///
+    /// **Warning:** If you create your own `Context` in a new virtual region not provided by our libraries, you must ensure that the `type_id: &str` of the context is a globally unique identifier for the virtual region, distinct from the other `type_id` strings used to identify other virtual regions. We suggest that you either include your crate name as a prefix in the `type_id` or use [`module_path!`](https://doc.rust-lang.org/std/macro.module_path.html) to generate a prefix.
+    /// In the future we will introduce a macro to check this uniqueness at compile time.
     pub fn new(
         witness_gen_only: bool,
         phase: usize,
