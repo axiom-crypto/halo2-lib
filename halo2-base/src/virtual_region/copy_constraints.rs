@@ -86,7 +86,8 @@ impl<F: Field + Ord> CopyConstraintManager<F> {
     }
 
     fn load_external_cell_impl(&mut self, cell: Option<Cell>) -> ContextCell {
-        let context_cell = ContextCell::new("External Raw Halo2 Cell", 0, self.external_cell_count);
+        let context_cell =
+            ContextCell::new("halo2-base:External Raw Halo2 Cell", 0, self.external_cell_count);
         self.external_cell_count += 1;
         if let Some(cell) = cell {
             self.assigned_advices.insert(context_cell, cell);
