@@ -18,7 +18,7 @@ getset = "0.1.2"
 ark-std = { version = "0.3.0", features = ["print-trace"], optional = true }
 
 # Use Axiom's custom halo2 monorepo for faster proving when feature = "halo2-axiom" is on
-halo2_proofs_axiom = { git = "https://github.com/axiom-crypto/halo2.git", package = "halo2_proofs", optional = true }
+halo2_proofs_axiom = { version = "0.3", package = "halo2-axiom", optional = true }
 # Use PSE halo2 and halo2curves for compatibility when feature = "halo2-pse" is on
 halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", rev = "7a21656", optional = true }
 
