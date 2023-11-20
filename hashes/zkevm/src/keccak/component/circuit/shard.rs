@@ -20,7 +20,7 @@ use crate::{
     },
     util::eth_types::Field,
 };
-use getset::{CopyGetters, Getters};
+use getset::{CopyGetters, Getters, MutGetters};
 use halo2_base::{
     gates::{
         circuit::{builder::BaseCircuitBuilder, BaseCircuitParams, BaseConfig},
@@ -45,13 +45,14 @@ use serde::{Deserialize, Serialize};
 use snark_verifier_sdk::CircuitExt;
 
 /// Keccak Component Shard Circuit
-#[derive(Getters)]
+#[derive(Getters, MutGetters)]
 pub struct KeccakComponentShardCircuit<F: Field> {
     /// The multiple inputs to be hashed.
     #[getset(get = "pub")]
     inputs: Vec<Vec<u8>>,
 
     /// Parameters of this circuit. The same parameters always construct the same circuit.
+    #[getset(get_mut = "pub")]
     params: KeccakComponentShardCircuitParams,
     base_circuit_builder: RefCell<BaseCircuitBuilder<F>>,
     /// Poseidon hasher. Stateless once initialized.
