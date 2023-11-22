@@ -34,12 +34,12 @@ pub type RangeCircuitBuilder<F> = BaseCircuitBuilder<F>;
 /// A circuit builder is a collection of virtual region managers that together assign virtual
 /// regions into a single physical circuit.
 ///
-/// [BaseCircuitBuilder] is a circuit builder to create a circuit where the columns correspond to [PublicBaseConfig].
-/// This builder can hold multiple threads, but the [Circuit] implementation only evaluates the first phase.
-/// The user will have to implement a separate [Circuit] with multi-phase witness generation logic.
+/// [BaseCircuitBuilder] is a circuit builder to create a circuit where the columns correspond to [super::BaseConfig].
+/// This builder can hold multiple threads, but the `Circuit` implementation only evaluates the first phase.
+/// The user will have to implement a separate `Circuit` with multi-phase witness generation logic.
 ///
-/// This is used to manage the virtual region corresponding to [FlexGateConfig] and (optionally) [RangeConfig].
-/// This can be used even if only using [GateChip] without [RangeChip].
+/// This is used to manage the virtual region corresponding to [super::FlexGateConfig] and (optionally) [RangeConfig].
+/// This can be used even if only using [`GateChip`](crate::gates::flex_gate::GateChip) without [RangeChip].
 ///
 /// The circuit will have `NI` public instance (aka public inputs+outputs) columns.
 #[derive(Clone, Debug, Getters, MutGetters, Setters)]
@@ -71,12 +71,12 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
     ///     * If false, the builder also imposes constraints (selectors, fixed columns, copy constraints). Primarily used for keygen and mock prover (but can also be used for real prover).
     ///
     /// By default, **no** circuit configuration parameters have been set.
-    /// These should be set separately using [use_params], or [use_k], [use_lookup_bits], and [config].
+    /// These should be set separately using `use_params`, or `use_k`, `use_lookup_bits`, and `calculate_params`.
     ///
     /// Upon construction, there are no public instances (aka all witnesses are private).
     /// The intended usage is that _before_ calling `synthesize`, witness generation can be done to populate
     /// assigned instances, which are supplied as `assigned_instances` to this struct.
-    /// The [`Circuit`] implementation for this struct will then expose these instances and constrain
+    /// The `Circuit` implementation for this struct will then expose these instances and constrain
     /// them using the Halo2 API.
     pub fn new(witness_gen_only: bool) -> Self {
         let core = MultiPhaseCoreManager::new(witness_gen_only);
@@ -209,7 +209,7 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
     }
 
     /// Creates a new [MultiPhaseCoreManager] with `use_unknown` flag set.
-    /// * `use_unknown`: If true, during key generation witness [Value]s are replaced with Value::unknown() for safety.
+    /// * `use_unknown`: If true, during key generation witness `Value`s are replaced with `Value::unknown()` for safety.
     pub fn unknown(mut self, use_unknown: bool) -> Self {
         self.core = self.core.unknown(use_unknown);
         self
@@ -321,7 +321,7 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
     ///
     /// ## Special case
     /// Just for [RangeConfig], we have special handling for the case where there is a single (physical)
-    /// advice column in [FlexGateConfig]. In this case, `RangeConfig` does not create extra lookup advice columns,
+    /// advice column in [super::FlexGateConfig]. In this case, `RangeConfig` does not create extra lookup advice columns,
     /// the single advice column has lookup enabled, and there is a selector to toggle when lookup should
     /// be turned on.
     pub fn assign_lookups_in_phase(
@@ -371,4 +371,16 @@ pub struct RangeStatistics {
     pub gate: GateStatistics,
     /// Total special advice cells that need to be looked up, per phase
     pub total_lookup_advice_per_phase: Vec<usize>,
+}
+
+impl<F: ScalarField> AsRef<BaseCircuitBuilder<F>> for BaseCircuitBuilder<F> {
+    fn as_ref(&self) -> &BaseCircuitBuilder<F> {
+        self
+    }
+}
+
+impl<F: ScalarField> AsMut<BaseCircuitBuilder<F>> for BaseCircuitBuilder<F> {
+    fn as_mut(&mut self) -> &mut BaseCircuitBuilder<F> {
+        self
+    }
 }

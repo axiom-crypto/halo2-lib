@@ -10,7 +10,7 @@ use crate::{
 
 use super::SinglePhaseCoreManager;
 
-/// Virtual region manager for [FlexGateConfig] in multiple phases.
+/// Virtual region manager for [`FlexGateConfig`](super::super::FlexGateConfig) in multiple phases.
 #[derive(Clone, Debug, Default, CopyGetters)]
 pub struct MultiPhaseCoreManager<F: ScalarField> {
     /// Virtual region for each challenge phase. These cannot be shared across threads while keeping circuit deterministic.
@@ -20,7 +20,7 @@ pub struct MultiPhaseCoreManager<F: ScalarField> {
     /// Flag for witness generation. If true, the gate thread builder is used for witness generation only.
     #[getset(get_copy = "pub")]
     witness_gen_only: bool,
-    /// The `unknown` flag is used during key generation. If true, during key generation witness [Value]s are replaced with Value::unknown() for safety.
+    /// The `unknown` flag is used during key generation. If true, during key generation witness `Value`s are replaced with `Value::unknown()` for safety.
     #[getset(get_copy = "pub")]
     use_unknown: bool,
 }
@@ -59,7 +59,7 @@ impl<F: ScalarField> MultiPhaseCoreManager<F> {
     }
 
     /// Creates a new [MultiPhaseCoreManager] with `use_unknown` flag set.
-    /// * `use_unknown`: If true, during key generation witness [Value]s are replaced with Value::unknown() for safety.
+    /// * `use_unknown`: If true, during key generation witness values are replaced with `Value::unknown()` for safety.
     pub fn unknown(mut self, use_unknown: bool) -> Self {
         self.use_unknown = use_unknown;
         for pm in &mut self.phase_manager {

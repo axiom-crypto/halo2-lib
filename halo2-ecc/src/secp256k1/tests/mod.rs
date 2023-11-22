@@ -22,11 +22,9 @@ use crate::{
 
 pub mod ecdsa;
 pub mod ecdsa_tests;
-pub mod schnorr_signature;
-pub mod schnorr_signature_tests;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub struct CircuitParams {
+struct CircuitParams {
     strategy: FpStrategy,
     degree: u32,
     num_advice: usize,
