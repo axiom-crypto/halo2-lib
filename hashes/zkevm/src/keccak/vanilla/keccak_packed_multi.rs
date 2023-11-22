@@ -55,7 +55,7 @@ pub(crate) struct SqueezeData<F: PrimeField> {
     packed: F,
 }
 
-/// KeccakRow. Field definitions could be found in [KeccakCircuitConfig].
+/// KeccakRow. Field definitions could be found in [super::KeccakCircuitConfig].
 #[derive(Clone, Debug)]
 pub struct KeccakRow<F: PrimeField> {
     pub(crate) q_enable: bool,
@@ -132,7 +132,7 @@ impl<F: PrimeField> KeccakRegion<F> {
     }
 }
 
-/// Keccak Table, used to verify keccak hashing from RLC'ed input.
+/// Keccak Table, used to verify keccak hash digests from input spread out across multiple rows.
 #[derive(Clone, Debug)]
 pub struct KeccakTable {
     /// True when the row is enabled
@@ -489,7 +489,7 @@ pub(crate) mod transform {
     }
 }
 
-// Transforms values to cells
+// Transfroms values to cells
 pub(crate) mod transform_to {
     use crate::{
         halo2_proofs::plonk::{ConstraintSystem, TableColumn},

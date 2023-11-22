@@ -17,6 +17,7 @@ use halo2_base::utils::halo2::{raw_assign_advice, raw_assign_fixed};
 use itertools::Itertools;
 use log::{debug, info};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
 pub mod cell_manager;
@@ -30,7 +31,7 @@ pub mod util;
 pub mod witness;
 
 /// Configuration parameters to define [`KeccakCircuitConfig`]
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
 pub struct KeccakConfigParams {
     /// The circuit degree, i.e., circuit has 2<sup>k</sup> rows
     pub k: u32,
@@ -277,7 +278,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
         // multiple rows with lookups in a way that doesn't require any
         // extra additional cells or selectors we have to put all `s[i]`'s on the same
         // row. This isn't that strong of a requirement actually because we the
-        // words are split into multiple parts, and so only the parts at the same
+        // words are split into multipe parts, and so only the parts at the same
         // position of those words need to be on the same row.
         let target_word_sizes = target_part_sizes(part_size);
         let num_word_parts = target_word_sizes.len();
@@ -635,7 +636,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
             });
             // Logically here we want !q_input[cur] && !start_new_hash(cur) ==> bytes_left[cur + num_rows_per_round] == bytes_left[cur]
             // In practice, in order to save a degree we use !(q_input[cur] ^ start_new_hash(cur)) ==> bytes_left[cur + num_rows_per_round] == bytes_left[cur]
-            // When q_input[cur] is true, the above constraint q_input[cur] ==> bytes_left[cur + num_rows_per_round] + word_len == bytes_left[cur] has 
+            // When q_input[cur] is true, the above constraint q_input[cur] ==> bytes_left[cur + num_rows_per_round] + word_len == bytes_left[cur] has
             // already been enabled. Even is_final in start_new_hash(cur) is true, it's just over-constrainted.
             // Note: At the first row of any round except the last round, is_final could be either true or false.
             cb.condition(not::expr(q(q_input, meta) + start_new_hash(meta, Rotation::cur())), |cb| {

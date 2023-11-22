@@ -4,6 +4,7 @@ use std::{
 };
 
 use super::*;
+use crate::halo2curves::pairing::{group::ff::Field, MillerLoopResult};
 use crate::{
     bn254::bls_signature::BlsSignatureChip, fields::FpStrategy,
     halo2_proofs::halo2curves::bn256::G2Affine,
@@ -14,8 +15,6 @@ use halo2_base::{
     utils::BigPrimeField,
     Context,
 };
-extern crate pairing;
-use pairing::{group::ff::Field, MillerLoopResult};
 use rand_core::OsRng;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]

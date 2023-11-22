@@ -19,7 +19,7 @@ pub mod builder;
 
 /// A struct defining the configuration parameters for a halo2-base circuit
 /// - this is used to configure [BaseConfig].
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Hash, Serialize, Deserialize)]
 pub struct BaseCircuitParams {
     // Keeping FlexGateConfigParams expanded for backwards compatibility
     /// Specifies the number of rows in the circuit to be 2<sup>k</sup>
@@ -146,12 +146,12 @@ impl<F: ScalarField> Circuit<F> for BaseCircuitBuilder<F> {
         self.config_params.clone()
     }
 
-    /// Creates a new instance of the [RangeCircuitBuilder] without witnesses by setting the witness_gen_only flag to false
+    /// Creates a new instance of the [BaseCircuitBuilder] without witnesses by setting the witness_gen_only flag to false
     fn without_witnesses(&self) -> Self {
         unimplemented!()
     }
 
-    /// Configures a new circuit using [`BaseConfigParams`]
+    /// Configures a new circuit using [`BaseCircuitParams`]
     fn configure_with_params(meta: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config {
         BaseConfig::configure(meta, params)
     }
@@ -213,5 +213,17 @@ impl CircuitBuilderStage {
     /// Returns true if the circuit is used for witness generation only.
     pub fn witness_gen_only(&self) -> bool {
         matches!(self, CircuitBuilderStage::Prover)
+    }
+}
+
+impl<F: ScalarField> AsRef<BaseConfig<F>> for BaseConfig<F> {
+    fn as_ref(&self) -> &BaseConfig<F> {
+        self
+    }
+}
+
+impl<F: ScalarField> AsMut<BaseConfig<F>> for BaseConfig<F> {
+    fn as_mut(&mut self) -> &mut BaseConfig<F> {
+        self
     }
 }

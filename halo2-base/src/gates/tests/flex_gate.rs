@@ -100,7 +100,7 @@ pub fn test_inner_product_left_last(
 }
 
 #[test_case([4,5,6].map(Fr::from).to_vec(), [1,2,3].map(|x| Constant(Fr::from(x))).to_vec() => (Fr::from(32), [4,5,6].map(Fr::from).to_vec());
-"inner_product_left(): <[1,2,3],[4,5,6]> Constant b starts with 1")]
+"inner_product_left(): <[4,5,6],[1,2,3]> Constant b starts with 1")]
 #[test_case([1,2,3].map(Fr::from).to_vec(), [4,5,6].map(|x| Witness(Fr::from(x))).to_vec() => (Fr::from(32), [1,2,3].map(Fr::from).to_vec());
 "inner_product_left(): <[1,2,3],[4,5,6]> Witness")]
 pub fn test_inner_product_left(a: Vec<Fr>, b: Vec<QuantumCell<Fr>>) -> (Fr, Vec<Fr>) {

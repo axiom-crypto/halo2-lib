@@ -4,7 +4,7 @@ on:
   push:
     branches: ["main"]
   pull_request:
-    branches: ["main", "develop", "community-edition"]
+    branches: ["main", "develop", "community-edition", "release-*"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -40,6 +40,7 @@ jobs:
         working-directory: "hashes/zkevm"
         run: |
           cargo test packed_multi_keccak_prover::k_14
+          cargo t test_vanilla_keccak_kat_vectors
 
   lint:
     name: Lint
@@ -62,4 +63,12 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run clippy
-        run: cargo clippy --all -- -D warnings
+        run: cargo clippy --all --all-targets -- -D warnings
+
+      - name: Generate Cargo.lock
+        run: cargo generate-lockfile
+
+      - name: Run cargo audit
+        uses: actions-rs/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

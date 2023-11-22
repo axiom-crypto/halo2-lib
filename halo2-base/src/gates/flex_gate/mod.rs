@@ -30,9 +30,9 @@ pub(super) const MAX_PHASE: usize = 3;
 /// # Vertical Gate Strategy:
 /// `q_0 * (a + b * c - d) = 0`
 /// where
-/// * a = value[0], b = value[1], c = value[2], d = value[3]
-/// * q = q_enable[0]
-/// * q is either 0 or 1 so this is just a simple selector
+/// * `a = value[0], b = value[1], c = value[2], d = value[3]`
+/// * `q = q_enable[0]`
+/// * `q` is either 0 or 1 so this is just a simple selector
 /// We chose `a + b * c` instead of `a * b + c` to allow "chaining" of gates, i.e., the output of one gate because `a` in the next gate.
 ///
 /// A configuration for a basic gate chip describing the selector, and advice column values.
@@ -57,7 +57,6 @@ impl<F: ScalarField> BasicGateConfig<F> {
     ///
     /// Assumes `phase` is in the range [0, MAX_PHASE).
     /// * `meta`: [ConstraintSystem] used for the gate
-    /// * `strategy`: The [GateStrategy] to use for the gate
     /// * `phase`: The phase to add the gate to
     pub fn configure(meta: &mut ConstraintSystem<F>, phase: u8) -> Self {
         let value = match phase {
@@ -116,12 +115,8 @@ pub struct FlexGateConfig<F: ScalarField> {
 impl<F: ScalarField> FlexGateConfig<F> {
     /// Generates a new [FlexGateConfig]
     ///
-    /// Assumes `num_advice` is a [Vec] of length [MAX_PHASE]
     /// * `meta`: [ConstraintSystem] of the circuit
-    /// * `strategy`: [GateStrategy] of the flex gate
-    /// * `num_advice`: Number of [Advice] [Column]s in each phase
-    /// * `num_fixed`: Number of [Fixed] [Column]s in each phase
-    /// * `circuit_degree`: Degree that expresses the size of circuit (i.e., 2^<sup>circuit_degree</sup> is the number of rows in the circuit)
+    /// * `params`: see [FlexGateConfigParams]
     pub fn configure(meta: &mut ConstraintSystem<F>, params: FlexGateConfigParams) -> Self {
         // create fixed (constant) columns and enable equality constraints
         let mut constants = Vec::with_capacity(params.num_fixed);
@@ -739,7 +734,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// and that `indicator` has at most one `1` bit.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: Iterator of [QuantumCell]'s that contains field elements
-    /// * `indicator`: Iterator of [AssignedValue]'s where indicator[i] == 1 if i == `idx`, otherwise 0
+    /// * `indicator`: Iterator of [AssignedValue]'s where `indicator[i] == 1` if `i == idx`, otherwise `0`
     fn select_by_indicator<Q>(
         &self,
         ctx: &mut Context<F>,
@@ -858,7 +853,7 @@ pub trait GateInstructions<F: ScalarField> {
 
     /// Constrains and returns little-endian bit vector representation of `a`.
     ///
-    /// Assumes `range_bits <= number of bits in a`.
+    /// Assumes `range_bits >= bit_length(a)`.
     /// * `a`: [QuantumCell] of the value to convert
     /// * `range_bits`: range of bits needed to represent `a`
     fn num_to_bits(
@@ -948,7 +943,7 @@ impl<F: ScalarField> Default for GateChip<F> {
 }
 
 impl<F: ScalarField> GateChip<F> {
-    /// Returns a new [GateChip] with the given [GateStrategy].
+    /// Returns a new [GateChip] with some precomputed values. This can be called out of circuit and has no extra dependencies.
     pub fn new() -> Self {
         let mut pow_of_two = Vec::with_capacity(F::NUM_BITS as usize);
         let two = F::from(2);

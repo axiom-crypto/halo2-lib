@@ -409,7 +409,6 @@ fn keccak<F: Field>(
                     .into_iter()
                     .take(8)
                     .collect::<Vec<_>>()
-                    .to_vec()
             })
             .collect::<Vec<_>>();
         debug!("hash: {:x?}", &(hash_bytes[0..4].concat()));
