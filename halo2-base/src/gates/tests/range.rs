@@ -106,3 +106,11 @@ pub fn test_div_mod_var(
         (*a.0.value(), *a.1.value())
     })
 }
+
+#[test_case(Fr::from(0x1234), 4, 4 => [0x4, 0x3, 0x2, 0x1].map(Fr::from).to_vec(); "decompose_le(0x1234, 4, 4)")]
+pub fn test_decompose_le(num: Fr, limb_bits: usize, num_limbs: usize) -> Vec<Fr> {
+    base_test().run(|ctx, chip| {
+        let num = ctx.load_witness(num);
+        chip.decompose_le(ctx, num, limb_bits, num_limbs).iter().map(|x| *x.value()).collect()
+    })
+}
