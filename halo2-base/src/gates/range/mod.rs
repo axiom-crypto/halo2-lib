@@ -8,8 +8,8 @@ use crate::{
         poly::Rotation,
     },
     utils::{
-        biguint_to_fe, bit_length, decompose_fe_to_u64_limbs, fe_to_biguint, BigPrimeField,
-        ScalarField,
+        biguint_to_fe, bit_length, decompose, decompose_fe_to_u64_limbs, fe_to_biguint,
+        BigPrimeField, ScalarField,
     },
     virtual_region::lookups::LookupAnyManager,
     AssignedValue, Context,
@@ -412,6 +412,42 @@ pub trait RangeInstructions<F: ScalarField> {
         self.range_check(ctx, half, limb_bits - 1);
         self.gate().assert_bit(ctx, bit);
         bit
+    }
+
+    /// Decomposes `num` into `num_limbs` limbs in **little** endian with each `limb` having `limb_bits` bits
+    /// and constrains the decomposition holds. Returns the limbs. More precisely, checks that:
+    /// ```ignore
+    /// num = sum_{i=0}^{num_limbs-1} limb[i] * 2^{i * limb_bits}
+    /// ```
+    ///
+    /// ## Panics
+    /// Circuit constraints will fail if `num` cannot be decomposed into `num_limbs` limbs of `limb_bits` bits.
+    fn decompose_le(
+        &self,
+        ctx: &mut Context<F>,
+        num: AssignedValue<F>,
+        limb_bits: usize,
+        num_limbs: usize,
+    ) -> Vec<AssignedValue<F>>
+    where
+        F: BigPrimeField,
+    {
+        // mostly copied from RangeChip::range_check
+        let pows = self
+            .gate()
+            .pow_of_two()
+            .iter()
+            .step_by(limb_bits)
+            .take(num_limbs)
+            .map(|x| Constant(*x));
+        let limb_vals = decompose(num.value(), num_limbs, limb_bits).into_iter().map(Witness);
+        let (acc, limbs_le) = self.gate().inner_product_left(ctx, limb_vals, pows);
+        ctx.constrain_equal(&acc, &num);
+
+        for limb in &limbs_le {
+            self.range_check(ctx, *limb, limb_bits);
+        }
+        limbs_le
     }
 
     /// Bitwise right rotate a by BIT bits. BIT and NUM_BITS must be determined at compile time.
