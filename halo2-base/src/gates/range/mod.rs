@@ -450,6 +450,37 @@ pub trait RangeInstructions<F: ScalarField> {
         limbs_le
     }
 
+    /// Reconstructs a field element from `limbs` in **little** endian with each `limb` having
+    /// `limb_bits` bits and constrains the reconstruction holds. Returns the number.
+    /// More precisely, checks that:
+    /// ```ignore
+    /// num = sum_{i=0}^{num_limbs-1} limbs[i] * 2^{i * limb_bits}
+    /// ```
+    ///
+    /// Assumes 'limbs' contains valid limbs of at most limb_bits size.
+    /// NOTE: There might be multiple `limbs` that represent the same number. eg. x and x + p.
+    ///       Better to range check `limbs` before calling this function.
+    fn limbs_to_num(
+        &self,
+        ctx: &mut Context<F>,
+        limbs: &[AssignedValue<F>],
+        limb_bits: usize,
+    ) -> AssignedValue<F>
+    where
+        F: BigPrimeField,
+    {
+        self.gate().inner_product(
+            ctx,
+            limbs.iter().map(|x| *x),
+            self.gate()
+                .pow_of_two()
+                .iter()
+                .step_by(limb_bits)
+                .take(limbs.len())
+                .map(|x| Constant(*x)),
+        )
+    }
+
     /// Bitwise right rotate a by BIT bits. BIT and NUM_BITS must be determined at compile time.
     ///
     /// Assumes 'a' is a NUM_BITS bit integer and 0 < NUM_BITS <= 128.
