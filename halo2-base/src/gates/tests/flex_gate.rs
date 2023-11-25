@@ -214,6 +214,14 @@ pub fn test_num_to_bits(num: usize, bits: usize) -> Vec<Fr> {
     })
 }
 
+#[test_case([0,1,1].map(Fr::from).to_vec() => Fr::from(6); "bits_to_num(): [0,1,1]")]
+pub fn test_bits_to_num(bits: Vec<Fr>) -> Fr {
+    base_test().run_gate(|ctx, chip| {
+        let bits = ctx.assign_witnesses(bits);
+        *chip.bits_to_num(ctx, bits.as_slice()).value()
+    })
+}
+
 #[test_case(Fr::from(3), BigUint::from(3u32), 4 => Fr::from(27); "pow_var(): 3^3 = 27")]
 pub fn test_pow_var(a: Fr, exp: BigUint, max_bits: usize) -> Fr {
     assert!(exp.bits() <= max_bits as u64);

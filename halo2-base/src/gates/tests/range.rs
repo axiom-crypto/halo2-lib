@@ -114,3 +114,11 @@ pub fn test_decompose_le(num: Fr, limb_bits: usize, num_limbs: usize) -> Vec<Fr>
         chip.decompose_le(ctx, num, limb_bits, num_limbs).iter().map(|x| *x.value()).collect()
     })
 }
+
+#[test_case([0x4, 0x3, 0x2, 0x1].map(Fr::from).to_vec(), 4 => Fr::from(0x1234); "limbs_to_num([0x4, 0x3, 0x2, 0x1], 4)")]
+pub fn test_limbs_to_num(limbs: Vec<Fr>, limb_bits: usize) -> Fr {
+    base_test().run(|ctx, chip| {
+        let limbs = ctx.assign_witnesses(limbs);
+        *chip.limbs_to_num(ctx, limbs.as_slice(), limb_bits).value()
+    })
+}
