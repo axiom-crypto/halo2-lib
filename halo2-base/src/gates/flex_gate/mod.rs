@@ -863,6 +863,12 @@ pub trait GateInstructions<F: ScalarField> {
         range_bits: usize,
     ) -> Vec<AssignedValue<F>>;
 
+    /// Constrains and returns field representation of little-endian bit vector `bits`.
+    ///
+    /// Assumes values of `bits` are boolean.
+    /// * `bits`: slice of [QuantumCell]'s that contains bit representation in little-endian form
+    fn bits_to_num(&self, ctx: &mut Context<F>, bits: &[AssignedValue<F>]) -> AssignedValue<F>;
+
     /// Constrains and computes `a`<sup>`exp`</sup> where both `a, exp` are witnesses. The exponent is computed in the native field `F`.
     ///
     /// Constrains that `exp` has at most `max_bits` bits.
@@ -1267,6 +1273,20 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
             self.assert_bit(ctx, *bit_cell);
         }
         bit_cells
+    }
+
+    /// Constrains and returns field representation of little-endian bit vector `bits`.
+    ///
+    /// Assumes values of `bits` are boolean.
+    /// * `bits`: slice of [QuantumCell]'s that contains bit representation in little-endian form
+    fn bits_to_num(&self, ctx: &mut Context<F>, bits: &[AssignedValue<F>]) -> AssignedValue<F> {
+        assert!((bits.len() as u32) < F::CAPACITY);
+
+        self.inner_product(
+            ctx,
+            bits.iter().map(|x| *x),
+            self.pow_of_two[..bits.len()].iter().map(|c| Constant(*c)),
+        )
     }
 
     /// Constrains and computes `a^exp` where both `a, exp` are witnesses. The exponent is computed in the native field `F`.
