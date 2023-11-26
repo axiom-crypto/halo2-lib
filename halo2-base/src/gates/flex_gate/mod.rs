@@ -1284,7 +1284,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
 
         self.inner_product(
             ctx,
-            bits.iter().map(|x| *x),
+            bits.iter().copied(),
             self.pow_of_two[..bits.len()].iter().map(|c| Constant(*c)),
         )
     }

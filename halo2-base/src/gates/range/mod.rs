@@ -471,7 +471,7 @@ pub trait RangeInstructions<F: ScalarField> {
     {
         self.gate().inner_product(
             ctx,
-            limbs.iter().map(|x| *x),
+            limbs.iter().copied(),
             self.gate()
                 .pow_of_two()
                 .iter()
