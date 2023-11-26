@@ -1280,7 +1280,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     /// Assumes values of `bits` are boolean.
     /// * `bits`: slice of [QuantumCell]'s that contains bit representation in little-endian form
     fn bits_to_num(&self, ctx: &mut Context<F>, bits: &[AssignedValue<F>]) -> AssignedValue<F> {
-        assert!((bits.len() as u32) < F::CAPACITY);
+        assert!((bits.len() as u32) <= F::CAPACITY);
 
         self.inner_product(
             ctx,
