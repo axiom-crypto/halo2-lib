@@ -118,6 +118,6 @@ pub fn constrain_virtual_equals_external<F: Field + Ord>(
 
 /// Circuit with default values.
 pub trait CircuitWithDefault<F: Field>: Circuit<F> {
-    /// Return Circuit with default inputs for the given params.
-    fn default(witness_gen_only: bool, params: Self::Params) -> Self;
+    /// Return Circuit with default inputs for the given params. Return struct could be used for pkey generation.
+    fn default(params: Self::Params) -> Self;
 }
