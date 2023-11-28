@@ -1,3 +1,5 @@
+use halo2_proofs_axiom::plonk::Circuit;
+
 use crate::ff::Field;
 use crate::halo2_proofs::{
     circuit::{AssignedCell, Cell, Region, Value},
@@ -112,4 +114,10 @@ pub fn constrain_virtual_equals_external<F: Field + Ord>(
     let ctx_cell = virtual_cell.cell.unwrap();
     let acell = copy_manager.assigned_advices.get(&ctx_cell).expect("cell not assigned");
     region.constrain_equal(*acell, external_cell);
+}
+
+/// Circuit with default values.
+pub trait CircuitWithDefault<F: Field>: Circuit<F> {
+    /// Return Circuit with default inputs for the given params.
+    fn default(witness_gen_only: bool, params: Self::Params) -> Self;
 }
