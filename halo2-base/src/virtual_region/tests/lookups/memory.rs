@@ -1,5 +1,3 @@
-use std::any::TypeId;
-
 use crate::{
     halo2_proofs::{
         arithmetic::Field,
