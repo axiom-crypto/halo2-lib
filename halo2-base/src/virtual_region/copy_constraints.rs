@@ -92,7 +92,12 @@ impl<F: Field + Ord> CopyConstraintManager<F> {
         let context_cell = ContextCell::new(EXTERNAL_CELL_TYPE_ID, 0, self.external_cell_count);
         self.external_cell_count += 1;
         if let Some(cell) = cell {
-            self.assigned_advices.insert(context_cell, cell);
+            if let Some(old_cell) = self.assigned_advices.insert(context_cell, cell) {
+                assert!(
+                    old_cell.row_offset == cell.row_offset && old_cell.column == cell.column,
+                    "External cell already assigned"
+                )
+            }
         }
         context_cell
     }
