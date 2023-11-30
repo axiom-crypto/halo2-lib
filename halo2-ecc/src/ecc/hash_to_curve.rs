@@ -28,14 +28,20 @@ pub trait HashInstructions<F: BigPrimeField> {
     // Type of output produced by the hash function.
     type Output: IntoIterator<Item = AssignedValue<F>>;
 
-    /// Digests input using hash function and returns finilized output.
-    /// `MAX_INPUT_SIZE` is the maximum size of input that can be processed by the hash function.
-    /// `strict` flag indicates whether to perform range check on input bytes.
-    fn digest<const MAX_INPUT_SIZE: usize>(
+     /// Hashes the input of fixed size and returns finilized output.
+    fn digest(
         &self,
         ctx: &mut Self::CircuitBuilder,
         input: impl IntoIterator<Item = QuantumCell<F>>,
-        strict: bool,
+    ) -> Result<Self::Output, Error>;
+
+    /// Hashes the input of dynamic (but capped) size and and returns finilized output.
+    /// `max_input_len` is the maximum size of input that can be processed by the hash function.
+    fn digest_varlen(
+        &self,
+        ctx: &mut Self::CircuitBuilder,
+        input: impl IntoIterator<Item = QuantumCell<F>>,
+        max_input_len: usize,
     ) -> Result<Self::Output, Error>;
 }
 
@@ -403,19 +409,18 @@ impl ExpandMessageChip for ExpandMsgXmd {
             .chain(dst_prime.clone())
             .map(QuantumCell::Existing);
 
-        let b_0 = hash_chip.digest::<143>(thread_pool, msg_prime, false)?.into_iter().collect_vec();
+        let b_0 = hash_chip.digest(thread_pool, msg_prime)?.into_iter().collect_vec();
 
         b_vals.insert(
             0,
             hash_chip
-                .digest::<77>(
+                .digest(
                     thread_pool,
                     b_0.iter()
                         .copied()
                         .chain(iter::once(one))
                         .chain(dst_prime.clone())
                         .map(QuantumCell::Existing),
-                    false,
                 )?
                 .into_iter()
                 .collect_vec(),
@@ -435,7 +440,7 @@ impl ExpandMessageChip for ExpandMsgXmd {
 
             b_vals.insert(
                 i,
-                hash_chip.digest::<77>(thread_pool, preimg, false)?.into_iter().collect_vec(),
+                hash_chip.digest(thread_pool, preimg)?.into_iter().collect_vec(),
             );
         }
 

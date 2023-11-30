@@ -19,7 +19,7 @@ test-case="3.1.0"
 halo2-base={ path="../halo2-base", default-features=false }
 # Use additiona axiom-crypto halo2curves for BLS12-381 chips when feature = "halo2-pse" is on,
 # because the PSE halo2curves does not support BLS12-381 chips and Halo2 depnds on lower major version so patchign it is not possible
-halo2curves = { git = "https://github.com/axiom-crypto/halo2curves", optional=true }
+halo2curves = { package = "halo2curves-axiom", version = "=0.4.2", optional=true }
 
 [dev-dependencies]
 ark-std={ version="0.3.0", features=["print-trace"] }
