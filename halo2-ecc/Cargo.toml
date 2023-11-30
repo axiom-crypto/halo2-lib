@@ -1,6 +1,6 @@
 [package]
 name = "halo2-ecc"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 
 [dependencies]
@@ -16,23 +16,25 @@ serde_json = "1.0"
 rayon = "1.6.1"
 test-case = "3.1.0"
 
-# arithmetic
-ff = "0.12"
-group = "0.12"
-
 halo2-base = { path = "../halo2-base", default-features = false }
+
+# plotting circuit layout
+plotters = { version = "0.3.0", optional = true }
 
 [dev-dependencies]
 ark-std = { version = "0.3.0", features = ["print-trace"] }
-pprof = { version = "0.11", features = ["criterion", "flamegraph"] }
-criterion = "0.4"
+pprof = { version = "0.13", features = ["criterion", "flamegraph"] }
+criterion = "0.5.1"
 criterion-macro = "0.4"
 halo2-base = { path = "../halo2-base", default-features = false, features = ["test-utils"] }
+test-log = "0.2.12"
+env_logger = "0.10.0"
 
 [features]
 default = ["jemallocator", "halo2-axiom", "display"]
-dev-graph = ["halo2-base/dev-graph"]
+dev-graph = ["halo2-base/dev-graph", "plotters"]
 display = ["halo2-base/display"]
+asm = ["halo2-base/asm"]
 halo2-pse = ["halo2-base/halo2-pse"]
 halo2-axiom = ["halo2-base/halo2-axiom"]
 jemallocator = ["halo2-base/jemallocator"]

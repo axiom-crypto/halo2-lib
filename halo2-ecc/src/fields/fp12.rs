@@ -1,14 +1,18 @@
 use std::marker::PhantomData;
 
-use halo2_base::{utils::modulus, AssignedValue, Context};
-use num_bigint::BigUint;
-
+use crate::ff::PrimeField as _;
 use crate::impl_field_ext_chip_common;
 
 use super::{
     vector::{FieldVector, FieldVectorChip},
-    FieldChip, FieldExtConstructor, PrimeField, PrimeFieldChip,
+    FieldChip, FieldExtConstructor, PrimeFieldChip,
 };
+
+use halo2_base::{
+    utils::{modulus, BigPrimeField},
+    AssignedValue, Context,
+};
+use num_bigint::BigUint;
 
 /// Represent Fp12 point as FqPoint with degree = 12
 /// `Fp12 = Fp2[w] / (w^6 - u - xi)`
@@ -17,17 +21,17 @@ use super::{
 /// This means we store an Fp12 point as `\sum_{i = 0}^6 (a_{i0} + a_{i1} * u) * w^i`
 /// This is encoded in an FqPoint of degree 12 as `(a_{00}, ..., a_{50}, a_{01}, ..., a_{51})`
 #[derive(Clone, Copy, Debug)]
-pub struct Fp12Chip<'a, F: PrimeField, FpChip: FieldChip<F>, Fp12, const XI_0: i64>(
+pub struct Fp12Chip<'a, F: BigPrimeField, FpChip: FieldChip<F>, Fp12, const XI_0: i64>(
     pub FieldVectorChip<'a, F, FpChip>,
     PhantomData<Fp12>,
 );
 
 impl<'a, F, FpChip, Fp12, const XI_0: i64> Fp12Chip<'a, F, FpChip, Fp12, XI_0>
 where
-    F: PrimeField,
+    F: BigPrimeField,
     FpChip: PrimeFieldChip<F>,
-    FpChip::FieldType: PrimeField,
-    Fp12: ff::Field,
+    FpChip::FieldType: BigPrimeField,
+    Fp12: crate::ff::Field,
 {
     /// User must construct an `FpChip` first using a config. This is intended so everything shares a single `FlexGateChip`, which is needed for the column allocation to work.
     pub fn new(fp_chip: &'a FpChip) -> Self {
@@ -93,7 +97,7 @@ where
 ///
 /// # Assumptions
 /// * `a` is `Fp2` point represented as `FieldVector` with degree = 2
-pub fn mul_no_carry_w6<F: PrimeField, FC: FieldChip<F>, const XI_0: i64>(
+pub fn mul_no_carry_w6<F: BigPrimeField, FC: FieldChip<F>, const XI_0: i64>(
     fp_chip: &FC,
     ctx: &mut Context<F>,
     a: FieldVector<FC::UnsafeFieldPoint>,
@@ -112,10 +116,10 @@ pub fn mul_no_carry_w6<F: PrimeField, FC: FieldChip<F>, const XI_0: i64>(
 
 impl<'a, F, FpChip, Fp12, const XI_0: i64> FieldChip<F> for Fp12Chip<'a, F, FpChip, Fp12, XI_0>
 where
-    F: PrimeField,
+    F: BigPrimeField,
     FpChip: PrimeFieldChip<F>,
-    FpChip::FieldType: PrimeField,
-    Fp12: ff::Field + FieldExtConstructor<FpChip::FieldType, 12>,
+    FpChip::FieldType: BigPrimeField,
+    Fp12: crate::ff::Field + FieldExtConstructor<FpChip::FieldType, 12>,
     FieldVector<FpChip::UnsafeFieldPoint>: From<FieldVector<FpChip::FieldPoint>>,
     FieldVector<FpChip::FieldPoint>: From<FieldVector<FpChip::ReducedFieldPoint>>,
 {

@@ -1,28 +1,17 @@
 #![allow(non_snake_case)]
 use std::fs::File;
 
-use ff::Field;
-use group::Curve;
+use crate::ff::Field;
+use crate::group::Curve;
 use halo2_base::{
-    gates::{
-        builder::{
-            CircuitBuilderStage, GateThreadBuilder, MultiPhaseThreadBreakPoints,
-            RangeCircuitBuilder,
-        },
-        RangeChip,
-    },
-    halo2_proofs::{
-        dev::MockProver,
-        halo2curves::{
-            bn256::Fr,
-            secp256k1::{Fq, Secp256k1Affine},
-        },
-    },
-    utils::{biguint_to_fe, fe_to_biguint, BigPrimeField},
+    gates::RangeChip,
+    halo2_proofs::halo2curves::secp256k1::{Fq, Secp256k1Affine},
+    utils::{biguint_to_fe, fe_to_biguint, testing::base_test, BigPrimeField},
     Context,
 };
 use num_bigint::BigUint;
-use rand_core::OsRng;
+use rand::rngs::StdRng;
+use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -48,15 +37,14 @@ struct CircuitParams {
 
 fn sm_test<F: BigPrimeField>(
     ctx: &mut Context<F>,
+    range: &RangeChip<F>,
     params: CircuitParams,
     base: Secp256k1Affine,
     scalar: Fq,
     window_bits: usize,
 ) {
-    std::env::set_var("LOOKUP_BITS", params.lookup_bits.to_string());
-    let range = RangeChip::<F>::default(params.lookup_bits);
-    let fp_chip = FpChip::<F>::new(&range, params.limb_bits, params.num_limbs);
-    let fq_chip = FqChip::<F>::new(&range, params.limb_bits, params.num_limbs);
+    let fp_chip = FpChip::<F>::new(range, params.limb_bits, params.num_limbs);
+    let fq_chip = FqChip::<F>::new(range, params.limb_bits, params.num_limbs);
     let ecc_chip = EccChip::<F, FpChip<F>>::new(&fp_chip);
 
     let s = fq_chip.load_private(ctx, scalar);
@@ -78,63 +66,32 @@ fn sm_test<F: BigPrimeField>(
     assert_eq!(sm_y, fe_to_biguint(&sm_answer.y));
 }
 
-fn sm_circuit(
-    params: CircuitParams,
-    stage: CircuitBuilderStage,
-    break_points: Option<MultiPhaseThreadBreakPoints>,
-    base: Secp256k1Affine,
-    scalar: Fq,
-) -> RangeCircuitBuilder<Fr> {
-    let k = params.degree as usize;
-    let mut builder = GateThreadBuilder::new(stage == CircuitBuilderStage::Prover);
+fn run_test(base: Secp256k1Affine, scalar: Fq) {
+    let path = "configs/secp256k1/ecdsa_circuit.config";
+    let params: CircuitParams = serde_json::from_reader(
+        File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
+    )
+    .unwrap();
 
-    sm_test(builder.main(0), params, base, scalar, 4);
-
-    match stage {
-        CircuitBuilderStage::Mock => {
-            builder.config(k, Some(20));
-            RangeCircuitBuilder::mock(builder)
-        }
-        CircuitBuilderStage::Keygen => {
-            builder.config(k, Some(20));
-            RangeCircuitBuilder::keygen(builder)
-        }
-        CircuitBuilderStage::Prover => RangeCircuitBuilder::prover(builder, break_points.unwrap()),
-    }
+    base_test().k(params.degree).lookup_bits(params.lookup_bits).run(|ctx, range| {
+        sm_test(ctx, range, params, base, scalar, 4);
+    });
 }
 
 #[test]
 fn test_secp_sm_random() {
-    let path = "configs/secp256k1/ecdsa_circuit.config";
-    let params: CircuitParams = serde_json::from_reader(
-        File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
-    )
-    .unwrap();
-
-    let circuit = sm_circuit(
-        params,
-        CircuitBuilderStage::Mock,
-        None,
-        Secp256k1Affine::random(OsRng),
-        Fq::random(OsRng),
-    );
-    MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
+    let mut rng = StdRng::seed_from_u64(0);
+    run_test(Secp256k1Affine::random(&mut rng), Fq::random(&mut rng));
 }
 
 #[test]
 fn test_secp_sm_minus_1() {
-    let path = "configs/secp256k1/ecdsa_circuit.config";
-    let params: CircuitParams = serde_json::from_reader(
-        File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
-    )
-    .unwrap();
-
-    let base = Secp256k1Affine::random(OsRng);
+    let rng = StdRng::seed_from_u64(0);
+    let base = Secp256k1Affine::random(rng);
     let mut s = -Fq::one();
     let mut n = fe_to_biguint(&s);
     loop {
-        let circuit = sm_circuit(params, CircuitBuilderStage::Mock, None, base, s);
-        MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
+        run_test(base, s);
         if &n % BigUint::from(2usize) == BigUint::from(0usize) {
             break;
         }
@@ -145,18 +102,8 @@ fn test_secp_sm_minus_1() {
 
 #[test]
 fn test_secp_sm_0_1() {
-    let path = "configs/secp256k1/ecdsa_circuit.config";
-    let params: CircuitParams = serde_json::from_reader(
-        File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
-    )
-    .unwrap();
-
-    let base = Secp256k1Affine::random(OsRng);
-    let s = Fq::zero();
-    let circuit = sm_circuit(params, CircuitBuilderStage::Mock, None, base, s);
-    MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
-
-    let s = Fq::one();
-    let circuit = sm_circuit(params, CircuitBuilderStage::Mock, None, base, s);
-    MockProver::run(params.degree, &circuit, vec![]).unwrap().assert_satisfied();
+    let rng = StdRng::seed_from_u64(0);
+    let base = Secp256k1Affine::random(rng);
+    run_test(base, Fq::ZERO);
+    run_test(base, Fq::ONE);
 }

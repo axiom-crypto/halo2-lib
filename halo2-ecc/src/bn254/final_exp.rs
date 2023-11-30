@@ -5,14 +5,19 @@ use crate::halo2_proofs::{
 };
 use crate::{
     ecc::get_naf,
-    fields::{fp12::mul_no_carry_w6, vector::FieldVector, FieldChip, PrimeField},
+    fields::{fp12::mul_no_carry_w6, vector::FieldVector, FieldChip},
 };
-use halo2_base::{gates::GateInstructions, utils::modulus, Context, QuantumCell::Constant};
+use halo2_base::{
+    gates::GateInstructions,
+    utils::{modulus, BigPrimeField},
+    Context,
+    QuantumCell::Constant,
+};
 use num_bigint::BigUint;
 
 const XI_0: i64 = 9;
 
-impl<'chip, F: PrimeField> Fp12Chip<'chip, F> {
+impl<'chip, F: BigPrimeField> Fp12Chip<'chip, F> {
     // computes a ** (p ** power)
     // only works for p = 3 (mod 4) and p = 1 (mod 6)
     pub fn frobenius_map(
@@ -172,8 +177,8 @@ impl<'chip, F: PrimeField> Fp12Chip<'chip, F> {
 
         // compute `g0 + 1`
         g0[0].truncation.limbs[0] =
-            fp2_chip.gate().add(ctx, g0[0].truncation.limbs[0], Constant(F::one()));
-        g0[0].native = fp2_chip.gate().add(ctx, g0[0].native, Constant(F::one()));
+            fp2_chip.gate().add(ctx, g0[0].truncation.limbs[0], Constant(F::ONE));
+        g0[0].native = fp2_chip.gate().add(ctx, g0[0].native, Constant(F::ONE));
         g0[0].truncation.max_limb_bits += 1;
         g0[0].value += 1usize;
 

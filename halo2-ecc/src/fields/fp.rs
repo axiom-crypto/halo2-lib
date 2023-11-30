@@ -1,4 +1,4 @@
-use super::{FieldChip, PrimeField, PrimeFieldChip, Selectable};
+use super::{FieldChip, PrimeFieldChip, Selectable};
 use crate::bigint::{
     add_no_carry, big_is_equal, big_is_zero, carry_mod, check_carry_mod_to_zero, mul_no_carry,
     scalar_mul_and_add_no_carry, scalar_mul_no_carry, select, select_by_indicator, sub,
@@ -6,7 +6,7 @@ use crate::bigint::{
 };
 use crate::halo2_proofs::halo2curves::CurveAffine;
 use halo2_base::gates::RangeChip;
-use halo2_base::utils::ScalarField;
+use halo2_base::utils::{BigPrimeField, ScalarField};
 use halo2_base::{
     gates::{range::RangeConfig, GateInstructions, RangeInstructions},
     utils::{bigint_to_fe, biguint_to_fe, bit_length, decompose_biguint, fe_to_biguint, modulus},
@@ -15,6 +15,7 @@ use halo2_base::{
 };
 use num_bigint::{BigInt, BigUint};
 use num_traits::One;
+use std::cmp;
 use std::{cmp::max, marker::PhantomData};
 
 pub type BaseFieldChip<'range, C> =
@@ -47,7 +48,7 @@ impl<F: ScalarField, Fp> From<Reduced<ProperCrtUint<F>, Fp>> for ProperCrtUint<F
 // `Fp` always needs to be `BigPrimeField`, we may later want support for `F` being just `ScalarField` but for optimization reasons we'll assume it's also `BigPrimeField` for now
 
 #[derive(Clone, Debug)]
-pub struct FpChip<'range, F: PrimeField, Fp: PrimeField> {
+pub struct FpChip<'range, F: BigPrimeField, Fp: BigPrimeField> {
     pub range: &'range RangeChip<F>,
 
     pub limb_bits: usize,
@@ -67,7 +68,7 @@ pub struct FpChip<'range, F: PrimeField, Fp: PrimeField> {
     _marker: PhantomData<Fp>,
 }
 
-impl<'range, F: PrimeField, Fp: PrimeField> FpChip<'range, F, Fp> {
+impl<'range, F: BigPrimeField, Fp: BigPrimeField> FpChip<'range, F, Fp> {
     pub fn new(range: &'range RangeChip<F>, limb_bits: usize, num_limbs: usize) -> Self {
         assert!(limb_bits > 0);
         assert!(num_limbs > 0);
@@ -80,7 +81,7 @@ impl<'range, F: PrimeField, Fp: PrimeField> FpChip<'range, F, Fp> {
 
         let limb_base = biguint_to_fe::<F>(&(BigUint::one() << limb_bits));
         let mut limb_bases = Vec::with_capacity(num_limbs);
-        limb_bases.push(F::one());
+        limb_bases.push(F::ONE);
         while limb_bases.len() != num_limbs {
             limb_bases.push(limb_base * limb_bases.last().unwrap());
         }
@@ -120,7 +121,7 @@ impl<'range, F: PrimeField, Fp: PrimeField> FpChip<'range, F, Fp> {
             };
             borrow = Some(lt);
         }
-        self.gate().assert_is_const(ctx, &borrow.unwrap(), &F::one());
+        self.gate().assert_is_const(ctx, &borrow.unwrap(), &F::ONE);
     }
 
     pub fn load_constant_uint(&self, ctx: &mut Context<F>, a: BigUint) -> ProperCrtUint<F> {
@@ -132,7 +133,7 @@ impl<'range, F: PrimeField, Fp: PrimeField> FpChip<'range, F, Fp> {
     }
 }
 
-impl<'range, F: PrimeField, Fp: PrimeField> PrimeFieldChip<F> for FpChip<'range, F, Fp> {
+impl<'range, F: BigPrimeField, Fp: BigPrimeField> PrimeFieldChip<F> for FpChip<'range, F, Fp> {
     fn num_limbs(&self) -> usize {
         self.num_limbs
     }
@@ -144,7 +145,7 @@ impl<'range, F: PrimeField, Fp: PrimeField> PrimeFieldChip<F> for FpChip<'range,
     }
 }
 
-impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, Fp> {
+impl<'range, F: BigPrimeField, Fp: BigPrimeField> FieldChip<F> for FpChip<'range, F, Fp> {
     const PRIME_FIELD_NUM_BITS: u32 = Fp::NUM_BITS;
     type UnsafeFieldPoint = CRTInteger<F>;
     type FieldPoint = ProperCrtUint<F>;
@@ -233,7 +234,7 @@ impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, F
         let (out_or_p, underflow) =
             sub::crt(self.range(), ctx, p, a.clone(), self.limb_bits, self.limb_bases[1]);
         // constrain underflow to equal 0
-        self.gate().assert_is_const(ctx, &underflow, &F::zero());
+        self.gate().assert_is_const(ctx, &underflow, &F::ZERO);
 
         let a_is_zero = big_is_zero::positive(self.gate(), ctx, a.0.truncation.clone());
         ProperCrtUint(select::crt(self.gate(), ctx, a.0, out_or_p, a_is_zero))
@@ -298,24 +299,24 @@ impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, F
     }
 
     /// # Assumptions
-    /// * `max_bits` in `(n * (k - 1), n * k]`
+    /// * `max_bits <= n * k` where `n = self.limb_bits` and `k = self.num_limbs`
+    /// * `a.truncation.limbs.len() = self.num_limbs`
     fn range_check(
         &self,
         ctx: &mut Context<F>,
-        a: impl Into<CRTInteger<F>>,
+        a: impl Into<ProperCrtUint<F>>,
         max_bits: usize, // the maximum bits that a.value could take
     ) {
         let n = self.limb_bits;
         let a = a.into();
-        let k = a.truncation.limbs.len();
-        debug_assert!(max_bits > n * (k - 1) && max_bits <= n * k);
-        let last_limb_bits = max_bits - n * (k - 1);
+        let mut remaining_bits = max_bits;
 
-        debug_assert!(a.value.bits() as usize <= max_bits);
+        debug_assert!(a.0.value.bits() as usize <= max_bits);
 
         // range check limbs of `a` are in [0, 2^n) except last limb should be in [0, 2^last_limb_bits)
-        for (i, cell) in a.truncation.limbs.into_iter().enumerate() {
-            let limb_bits = if i == k - 1 { last_limb_bits } else { n };
+        for cell in a.0.truncation.limbs {
+            let limb_bits = cmp::min(n, remaining_bits);
+            remaining_bits -= limb_bits;
             self.range.range_check(ctx, cell, limb_bits);
         }
     }
@@ -401,7 +402,9 @@ impl<'range, F: PrimeField, Fp: PrimeField> FieldChip<F> for FpChip<'range, F, F
     }
 }
 
-impl<'range, F: PrimeField, Fp: PrimeField> Selectable<F, CRTInteger<F>> for FpChip<'range, F, Fp> {
+impl<'range, F: BigPrimeField, Fp: BigPrimeField> Selectable<F, CRTInteger<F>>
+    for FpChip<'range, F, Fp>
+{
     fn select(
         &self,
         ctx: &mut Context<F>,
@@ -422,7 +425,7 @@ impl<'range, F: PrimeField, Fp: PrimeField> Selectable<F, CRTInteger<F>> for FpC
     }
 }
 
-impl<'range, F: PrimeField, Fp: PrimeField> Selectable<F, ProperCrtUint<F>>
+impl<'range, F: BigPrimeField, Fp: BigPrimeField> Selectable<F, ProperCrtUint<F>>
     for FpChip<'range, F, Fp>
 {
     fn select(
@@ -446,7 +449,7 @@ impl<'range, F: PrimeField, Fp: PrimeField> Selectable<F, ProperCrtUint<F>>
     }
 }
 
-impl<F: PrimeField, Fp, Pt: Clone, FC> Selectable<F, Reduced<Pt, Fp>> for FC
+impl<F: BigPrimeField, Fp, Pt: Clone, FC> Selectable<F, Reduced<Pt, Fp>> for FC
 where
     FC: Selectable<F, Pt>,
 {

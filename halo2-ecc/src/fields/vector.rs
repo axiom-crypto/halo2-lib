@@ -1,4 +1,8 @@
-use halo2_base::{gates::GateInstructions, utils::ScalarField, AssignedValue, Context};
+use halo2_base::{
+    gates::GateInstructions,
+    utils::{BigPrimeField, ScalarField},
+    AssignedValue, Context,
+};
 use itertools::Itertools;
 use std::{
     marker::PhantomData,
@@ -7,7 +11,7 @@ use std::{
 
 use crate::bigint::{CRTInteger, ProperCrtUint};
 
-use super::{fp::Reduced, FieldChip, FieldExtConstructor, PrimeField, PrimeFieldChip, Selectable};
+use super::{fp::Reduced, FieldChip, FieldExtConstructor, PrimeFieldChip, Selectable};
 
 /// A fixed length vector of `FieldPoint`s
 #[repr(transparent)]
@@ -63,16 +67,16 @@ impl<T> IntoIterator for FieldVector<T> {
 
 /// Contains common functionality for vector operations that can be derived from those of the underlying `FpChip`
 #[derive(Clone, Copy, Debug)]
-pub struct FieldVectorChip<'fp, F: PrimeField, FpChip: FieldChip<F>> {
+pub struct FieldVectorChip<'fp, F: BigPrimeField, FpChip: FieldChip<F>> {
     pub fp_chip: &'fp FpChip,
     _f: PhantomData<F>,
 }
 
 impl<'fp, F, FpChip> FieldVectorChip<'fp, F, FpChip>
 where
-    F: PrimeField,
+    F: BigPrimeField,
     FpChip: PrimeFieldChip<F>,
-    FpChip::FieldType: PrimeField,
+    FpChip::FieldType: BigPrimeField,
 {
     pub fn new(fp_chip: &'fp FpChip) -> Self {
         Self { fp_chip, _f: PhantomData }
@@ -241,13 +245,16 @@ where
         FieldVector(a.into_iter().map(|coeff| self.fp_chip.carry_mod(ctx, coeff)).collect())
     }
 
+    /// # Assumptions
+    /// * `max_bits <= n * k` where `n = self.fp_chip.limb_bits` and `k = self.fp_chip.num_limbs`
+    /// * `a[i].truncation.limbs.len() = self.fp_chip.num_limbs` for all `i = 0..a.len()`
     pub fn range_check<A>(
         &self,
         ctx: &mut Context<F>,
         a: impl IntoIterator<Item = A>,
         max_bits: usize,
     ) where
-        A: Into<FpChip::UnsafeFieldPoint>,
+        A: Into<FpChip::FieldPoint>,
     {
         for coeff in a {
             self.fp_chip.range_check(ctx, coeff, max_bits);
@@ -428,10 +435,13 @@ macro_rules! impl_field_ext_chip_common {
             self.0.carry_mod(ctx, a)
         }
 
+        /// # Assumptions
+        /// * `max_bits <= n * k` where `n = self.fp_chip.limb_bits` and `k = self.fp_chip.num_limbs`
+        /// * `a[i].truncation.limbs.len() = self.fp_chip.num_limbs` for all `i = 0..a.len()`
         fn range_check(
             &self,
             ctx: &mut Context<F>,
-            a: impl Into<Self::UnsafeFieldPoint>,
+            a: impl Into<Self::FieldPoint>,
             max_bits: usize,
         ) {
             self.0.range_check(ctx, a.into(), max_bits)
