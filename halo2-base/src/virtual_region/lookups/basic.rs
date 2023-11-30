@@ -8,10 +8,7 @@ use crate::{
         poly::Rotation,
     },
     utils::{
-        halo2::{
-            assign_virtual_to_raw, constrain_virtual_equals_external, raw_assign_advice,
-            raw_assign_fixed,
-        },
+        halo2::{constrain_virtual_equals_external, raw_assign_advice, raw_assign_fixed},
         ScalarField,
     },
     virtual_region::copy_constraints::SharedCopyConstraintManager,
@@ -83,7 +80,7 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
         Self { table_is_enabled, table, to_lookup }
     }
 
-    /// Assign managed lookups
+    /// Assign managed lookups. The `keys` must have already been raw assigned beforehand.
     ///
     /// `copy_manager` **must** be provided unless you are only doing witness generation
     /// without constraints.
@@ -114,6 +111,8 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
             .unwrap();
     }
 
+    /// Assign managed lookups. The `keys` must have already been raw assigned beforehand.
+    ///
     /// `copy_manager` **must** be provided unless you are only doing witness generation
     /// without constraints.
     pub fn assign_virtual_to_lookup_to_raw_from_offset<F: ScalarField>(
@@ -123,7 +122,7 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
         mut offset: usize,
         copy_manager: Option<&SharedCopyConstraintManager<F>>,
     ) {
-        let copy_manager = copy_manager.map(|c| c.lock().unwrap());
+        let mut copy_manager = copy_manager.map(|c| c.lock().unwrap());
         // Copied from `LookupAnyManager::assign_raw` but modified to set `key_is_enabled` to 1.
         // Copy the cells to the config columns, going left to right, then top to bottom.
         // Will panic if out of rows
@@ -138,7 +137,7 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
             raw_assign_fixed(region, key_is_enabled_col, offset, F::ONE);
             for (advice, column) in zip(key, key_col) {
                 let bcell = raw_assign_advice(region, column, offset, Value::known(advice.value));
-                if let Some(copy_manager) = copy_manager.as_ref() {
+                if let Some(copy_manager) = copy_manager.as_mut() {
                     constrain_virtual_equals_external(region, advice, bcell.cell(), copy_manager);
                 }
             }
@@ -147,7 +146,7 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
         }
     }
 
-    /// Assign virtual table to raw.
+    /// Assign virtual table to raw. The `rows` must have already been raw assigned beforehand.
     ///
     /// `copy_manager` **must** be provided unless you are only doing witness generation
     /// without constraints.
@@ -178,6 +177,8 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
             .unwrap();
     }
 
+    /// Assign virtual table to raw. The `rows` must have already been raw assigned beforehand.
+    ///
     /// `copy_manager` **must** be provided unless you are only doing witness generation
     /// without constraints.
     pub fn assign_virtual_table_to_raw_from_offset<F: ScalarField>(
@@ -187,11 +188,15 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
         mut offset: usize,
         copy_manager: Option<&SharedCopyConstraintManager<F>>,
     ) {
+        let mut copy_manager = copy_manager.map(|c| c.lock().unwrap());
         for row in rows {
             // Enable this row in the table
             raw_assign_fixed(region, self.table_is_enabled, offset, F::ONE);
-            for (col, virtual_cell) in self.table.into_iter().zip(row) {
-                assign_virtual_to_raw(region, col, offset, virtual_cell, copy_manager);
+            for (advice, column) in zip(row, self.table) {
+                let bcell = raw_assign_advice(region, column, offset, Value::known(advice.value));
+                if let Some(copy_manager) = copy_manager.as_mut() {
+                    constrain_virtual_equals_external(region, advice, bcell.cell(), copy_manager);
+                }
             }
             offset += 1;
         }

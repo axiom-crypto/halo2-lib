@@ -125,7 +125,8 @@ impl<F: Field + Ord, const ADVICE_COLS: usize> VirtualRegionManager<F>
     type Config = Vec<[Column<Advice>; ADVICE_COLS]>;
 
     fn assign_raw(&self, config: &Self::Config, region: &mut Region<F>) {
-        let copy_manager = (!self.witness_gen_only).then(|| self.copy_manager().lock().unwrap());
+        let mut copy_manager =
+            (!self.witness_gen_only).then(|| self.copy_manager().lock().unwrap());
         let cells_to_lookup = self.cells_to_lookup.lock().unwrap();
         // Copy the cells to the config columns, going left to right, then top to bottom.
         // Will panic if out of rows
@@ -139,7 +140,7 @@ impl<F: Field + Ord, const ADVICE_COLS: usize> VirtualRegionManager<F>
             for (advice, &column) in advices.iter().zip(config[lookup_col].iter()) {
                 let bcell =
                     raw_assign_advice(region, column, lookup_offset, Value::known(advice.value));
-                if let Some(copy_manager) = copy_manager.as_ref() {
+                if let Some(copy_manager) = copy_manager.as_mut() {
                     constrain_virtual_equals_external(region, *advice, bcell.cell(), copy_manager);
                 }
             }
