@@ -261,7 +261,7 @@ where
     let mut any_points = Vec::with_capacity(num_rounds);
     any_points.push(any_base);
     for _ in 1..num_rounds {
-        any_points.push(ec_double(chip, ctx, any_points.last().unwrap()));
+        any_points.push(ec_double::<F, FC, C>(chip, ctx, any_points.last().unwrap()));
     }
 
     // now begins multi-threading
@@ -318,7 +318,7 @@ where
     // we have agg[j] = G'[j] + (2^num_rounds - 1) * any_base
     // let any_point = (2^num_rounds - 1) * any_base
     // TODO: can we remove all these random point operations somehow?
-    let mut any_point = ec_double(chip, ctx, any_points.last().unwrap());
+    let mut any_point = ec_double::<F, FC, C>(chip, ctx, any_points.last().unwrap());
     any_point = ec_sub_unequal(chip, ctx, any_point, &any_points[0], true);
 
     // compute sum_{k=0..scalar_bits} agg[k] * 2^k - (sum_{k=0..scalar_bits} 2^k) * rand_point
@@ -326,13 +326,13 @@ where
     let mut sum = agg.pop().unwrap().into();
     let mut any_sum = any_point.clone();
     for g in agg.iter().rev() {
-        any_sum = ec_double(chip, ctx, any_sum);
+        any_sum = ec_double::<F, FC, C>(chip, ctx, any_sum);
         // cannot use ec_double_and_add_unequal because you cannot guarantee that `sum != g`
-        sum = ec_double(chip, ctx, sum);
+        sum = ec_double::<F, FC, C>(chip, ctx, sum);
         sum = ec_add_unequal(chip, ctx, sum, g, true);
     }
 
-    any_sum = ec_double(chip, ctx, any_sum);
+    any_sum = ec_double::<F, FC, C>(chip, ctx, any_sum);
     any_sum = ec_sub_unequal(chip, ctx, any_sum, any_point, true);
 
     ec_sub_strict(chip, ctx, sum, any_sum)
