@@ -1,7 +1,13 @@
 [package]
 name = "halo2-base"
 version = "0.4.0"
+authors = ["Intrinsic Technologies"]
+license = "MIT"
 edition = "2021"
+repository = "https://github.com/axiom-crypto/halo2-lib"
+readme = "README.md"
+description = "Embedded domain specific language (eDSL) for writing circuits with the [`halo2`](https://github.com/axiom-crypto/halo2) API. It simplifies circuit programming to declaring constraints over a single advice and selector column and provides built-in circuit tuning and support for multi-threaded witness generation."
+rust-version = "1.73.0"
 
 [dependencies]
 itertools = "0.11"

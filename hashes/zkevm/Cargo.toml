@@ -1,8 +1,13 @@
 [package]
 name = "zkevm-hashes"
 version = "0.1.4"
+authors = ["Privacy Scaling Explorations Team", "Taiko Labs", "Intrinsic Technologies"]
+license = "MIT"
 edition = "2021"
-license = "MIT OR Apache-2.0"
+repository = "https://github.com/axiom-crypto/halo2-lib"
+readme = "README.md"
+description = "Library of ZK gadgets for hash functions in halo2. This is Axiom's modification of the circuits in the zkEVM project."
+rust-version = "1.73.0"
 
 [dependencies]
 array-init = "2.0.0"

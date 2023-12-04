@@ -1,7 +1,13 @@
 [package]
 name = "halo2-ecc"
 version = "0.4.0"
+authors = ["Intrinsic Technologies"]
+license = "MIT"
 edition = "2021"
+repository = "https://github.com/axiom-crypto/halo2-lib"
+readme = "README.md"
+description = "In-circuit elliptic curve library for halo2."
+rust-version = "1.73.0"
 
 [dependencies]
 itertools = "0.10"
