@@ -1,8 +1,8 @@
 [package]
 name = "zkevm-hashes"
-version = "0.1.4"
+version = "0.2.0"
 authors = ["Privacy Scaling Explorations Team", "Taiko Labs", "Intrinsic Technologies"]
-license = "MIT"
+license = "MIT OR Apache-2.0"
 edition = "2021"
 repository = "https://github.com/axiom-crypto/halo2-lib"
 readme = "README.md"
@@ -34,6 +34,7 @@ rand_core = "0.6.4"
 rand_xorshift = "0.3"
 env_logger = "0.10"
 test-case = "3.1.0"
+sha2 = "0.10.7"
 
 [features]
 default = ["halo2-axiom", "display"]
