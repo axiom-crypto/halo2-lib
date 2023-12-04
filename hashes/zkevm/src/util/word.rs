@@ -20,7 +20,7 @@ const N_BYTES_HALF_WORD: usize = 16;
 /// The EVM word for witness
 #[derive(Clone, Debug, Copy)]
 pub struct WordLimbs<T, const N: usize> {
-    /// The limbs of this word.
+    /// The limbs of this word. Little-endian.
     pub limbs: [T; N],
 }
 
@@ -85,7 +85,7 @@ pub trait WordExpr<F> {
 pub struct Word<T>(Word2<T>);
 
 impl<T: Clone> Word<T> {
-    /// Construct the word from 2 limbs
+    /// Construct the word from 2 limbs [lo, hi]
     pub fn new(limbs: [T; 2]) -> Self {
         Self(WordLimbs::<T, 2>::new(limbs))
     }

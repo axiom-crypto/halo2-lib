@@ -36,6 +36,7 @@ rand_core = "0.6.4"
 rand_xorshift = "0.3"
 env_logger = "0.10"
 test-case = "3.1.0"
+sha2 = "0.10.7"
 
 [features]
 default = ["halo2-axiom", "display"]
