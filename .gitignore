@@ -20,3 +20,5 @@ Cargo.lock
 **/params/*
 **/params/
 **/proptest-regressions/
+**/results/
+**/*.DS_Store

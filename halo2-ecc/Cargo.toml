@@ -5,7 +5,7 @@ authors = ["Intrinsic Technologies"]
 license = "MIT"
 edition = "2021"
 repository = "https://github.com/axiom-crypto/halo2-lib"
-readme = "README.md"
+readme = "../README.md"
 description = "In-circuit elliptic curve library for halo2."
 rust-version = "1.73.0"
 
