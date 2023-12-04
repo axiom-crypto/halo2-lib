@@ -32,10 +32,10 @@ env_logger = "0.10.0"
 
 [features]
 default = ["jemallocator", "halo2-axiom", "display"]
-dev-graph = ["halo2-base/dev-graph", "plotters"]
+#dev-graph = ["halo2-base/dev-graph", "plotters"]
 display = ["halo2-base/display"]
 asm = ["halo2-base/asm"]
-halo2-pse = ["halo2-base/halo2-pse"]
+#halo2-pse = ["halo2-base/halo2-pse"]
 halo2-axiom = ["halo2-base/halo2-axiom"]
 jemallocator = ["halo2-base/jemallocator"]
 mimalloc = ["halo2-base/mimalloc"]
