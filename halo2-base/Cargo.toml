@@ -1,7 +1,13 @@
 [package]
 name = "halo2-base"
 version = "0.4.0"
+authors = ["Intrinsic Technologies"]
+license = "MIT"
 edition = "2021"
+repository = "https://github.com/axiom-crypto/halo2-lib"
+readme = "README.md"
+description = "Embedded domain specific language (eDSL) for writing circuits with the [`halo2`](https://github.com/axiom-crypto/halo2) API. It simplifies circuit programming to declaring constraints over a single advice and selector column and provides built-in circuit tuning and support for multi-threaded witness generation."
+rust-version = "1.73.0"
 
 [dependencies]
 itertools = "0.11"
@@ -18,16 +24,15 @@ getset = "0.1.2"
 ark-std = { version = "0.3.0", features = ["print-trace"], optional = true }
 
 # Use Axiom's custom halo2 monorepo for faster proving when feature = "halo2-axiom" is on
-halo2_proofs_axiom = { git = "https://github.com/axiom-crypto/halo2.git", package = "halo2_proofs", optional = true }
+halo2_proofs_axiom = { version = "0.3", package = "halo2-axiom", optional = true }
 # Use PSE halo2 and halo2curves for compatibility when feature = "halo2-pse" is on
-halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", rev = "7a21656", optional = true }
+# halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", rev = "7a21656", optional = true }
 
 # This is Scroll's audited poseidon circuit. We only use it for the Native Poseidon spec. We do not use the halo2 circuit at all (and it wouldn't even work because the halo2_proofs tag is not compatbile).
 # We forked it to upgrade to ff v0.13 and removed the circuit module
-poseidon-rs = { git = "https://github.com/axiom-crypto/poseidon-circuit.git", rev = "1aee4a1" }
+poseidon-rs = { package = "poseidon-primitives", version = "=0.1.1" }
 # plotting circuit layout
 plotters = { version = "0.3.0", optional = true }
-tabbycat = { version = "0.1", features = ["attributes"], optional = true }
 
 # test-utils
 rand = { version = "0.8", optional = true }
@@ -35,8 +40,8 @@ rand = { version = "0.8", optional = true }
 [dev-dependencies]
 ark-std = { version = "0.3.0", features = ["print-trace"] }
 rand = "0.8"
-pprof = { version = "0.11", features = ["criterion", "flamegraph"] }
-criterion = "0.4"
+pprof = { version = "0.13", features = ["criterion", "flamegraph"] }
+criterion = "0.5.1"
 criterion-macro = "0.4"
 test-case = "3.1.0"
 test-log = "0.2.12"
@@ -54,12 +59,8 @@ mimalloc = { version = "0.1", default-features = false, optional = true }
 [features]
 default = ["halo2-axiom", "display", "test-utils"]
 asm = ["halo2_proofs_axiom?/asm"]
-dev-graph = [
-    "halo2_proofs?/dev-graph",
-    "halo2_proofs_axiom?/dev-graph",
-    "plotters",
-]
-halo2-pse = ["halo2_proofs/circuit-params"]
+#dev-graph = ["halo2_proofs/dev-graph", "plotters"] # only works with halo2-pse for now
+#halo2-pse = ["halo2_proofs/circuit-params"]
 halo2-axiom = ["halo2_proofs_axiom"]
 display = []
 profile = ["halo2_proofs_axiom?/profile"]

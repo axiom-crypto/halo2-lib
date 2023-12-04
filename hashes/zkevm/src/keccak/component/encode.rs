@@ -17,10 +17,10 @@ use crate::{
 
 use super::param::*;
 
-// TODO: Abstract this module into a trait for all coprocessor circuits.
+// TODO: Abstract this module into a trait for all component circuits.
 
 /// Module to encode raw inputs into lookup keys for looking up keccak results. The encoding is
-/// designed to be efficient in coprocessor circuits.
+/// designed to be efficient in component circuits.
 
 /// Encode a native input bytes into its corresponding lookup key. This function can be considered as the spec of the encoding.
 pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {
@@ -154,7 +154,7 @@ pub const fn num_word_per_witness<F: Field>() -> usize {
 
 /// Number of witnesses to represent inputs in a keccak_f.
 ///
-/// Assume the representation of <length of raw input> is not longer than a Keccak word.
+/// Assume the representation of \<length of raw input\> is not longer than a Keccak word.
 ///
 /// When `F` is `bn254::Fr`, this is 6.
 pub const fn num_witness_per_keccak_f<F: Field>() -> usize {

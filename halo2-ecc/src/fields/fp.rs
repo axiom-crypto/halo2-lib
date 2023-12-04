@@ -304,17 +304,17 @@ impl<'range, F: BigPrimeField, Fp: BigPrimeField> FieldChip<F> for FpChip<'range
     fn range_check(
         &self,
         ctx: &mut Context<F>,
-        a: impl Into<CRTInteger<F>>,
+        a: impl Into<ProperCrtUint<F>>,
         max_bits: usize, // the maximum bits that a.value could take
     ) {
         let n = self.limb_bits;
         let a = a.into();
         let mut remaining_bits = max_bits;
 
-        debug_assert!(a.value.bits() as usize <= max_bits);
+        debug_assert!(a.0.value.bits() as usize <= max_bits);
 
         // range check limbs of `a` are in [0, 2^n) except last limb should be in [0, 2^last_limb_bits)
-        for cell in a.truncation.limbs {
+        for cell in a.0.truncation.limbs {
             let limb_bits = cmp::min(n, remaining_bits);
             remaining_bits -= limb_bits;
             self.range.range_check(ctx, cell, limb_bits);

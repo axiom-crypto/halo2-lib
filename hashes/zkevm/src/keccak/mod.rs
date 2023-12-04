@@ -5,7 +5,7 @@
 //! The circuits can be configured to use different numbers of columns, by specifying the number of rows per internal
 //! round of the keccak_f permutation.
 
-/// Module for coprocessor circuits.
-pub mod coprocessor;
+/// Module for component circuits.
+pub mod component;
 /// Module for Keccak circuits in vanilla halo2.
 pub mod vanilla;

@@ -5,8 +5,8 @@ use crate::{
         halo2curves::bn256::Fr,
         plonk::{keygen_pk, keygen_vk},
     },
-    keccak::coprocessor::{
-        circuit::leaf::{KeccakCoprocessorLeafCircuit, KeccakCoprocessorLeafCircuitParams},
+    keccak::component::{
+        circuit::shard::{KeccakComponentShardCircuit, KeccakComponentShardCircuitParams},
         output::{calculate_circuit_outputs_commit, multi_inputs_to_circuit_outputs},
     },
 };
@@ -19,10 +19,9 @@ use itertools::Itertools;
 use rand_core::OsRng;
 
 #[test]
-fn test_mock_leaf_circuit_raw_outputs() {
+fn test_mock_shard_circuit_raw_outputs() {
     let k: usize = 18;
     let num_unusable_row: usize = 109;
-    let lookup_bits: usize = 4;
     let capacity: usize = 10;
     let publish_raw_outputs: bool = true;
 
@@ -35,17 +34,12 @@ fn test_mock_leaf_circuit_raw_outputs() {
         (0u8..200).collect::<Vec<_>>(),
     ];
 
-    let mut params = KeccakCoprocessorLeafCircuitParams::new(
-        k,
-        num_unusable_row,
-        lookup_bits,
-        capacity,
-        publish_raw_outputs,
-    );
+    let mut params =
+        KeccakComponentShardCircuitParams::new(k, num_unusable_row, capacity, publish_raw_outputs);
     let base_circuit_params =
-        KeccakCoprocessorLeafCircuit::<Fr>::calculate_base_circuit_params(&params);
+        KeccakComponentShardCircuit::<Fr>::calculate_base_circuit_params(&params);
     params.base_circuit_params = base_circuit_params;
-    let circuit = KeccakCoprocessorLeafCircuit::<Fr>::new(inputs.clone(), params.clone(), false);
+    let circuit = KeccakComponentShardCircuit::<Fr>::new(inputs.clone(), params.clone(), false);
     let circuit_outputs = multi_inputs_to_circuit_outputs::<Fr>(&inputs, params.capacity());
 
     let instances = vec![
@@ -59,27 +53,21 @@ fn test_mock_leaf_circuit_raw_outputs() {
 }
 
 #[test]
-fn test_prove_leaf_circuit_raw_outputs() {
+fn test_prove_shard_circuit_raw_outputs() {
     let _ = env_logger::builder().is_test(true).try_init();
 
     let k: usize = 18;
     let num_unusable_row: usize = 109;
-    let lookup_bits: usize = 4;
     let capacity: usize = 10;
     let publish_raw_outputs: bool = true;
 
     let inputs = vec![];
-    let mut circuit_params = KeccakCoprocessorLeafCircuitParams::new(
-        k,
-        num_unusable_row,
-        lookup_bits,
-        capacity,
-        publish_raw_outputs,
-    );
+    let mut circuit_params =
+        KeccakComponentShardCircuitParams::new(k, num_unusable_row, capacity, publish_raw_outputs);
     let base_circuit_params =
-        KeccakCoprocessorLeafCircuit::<Fr>::calculate_base_circuit_params(&circuit_params);
+        KeccakComponentShardCircuit::<Fr>::calculate_base_circuit_params(&circuit_params);
     circuit_params.base_circuit_params = base_circuit_params;
-    let circuit = KeccakCoprocessorLeafCircuit::<Fr>::new(inputs, circuit_params.clone(), false);
+    let circuit = KeccakComponentShardCircuit::<Fr>::new(inputs, circuit_params.clone(), false);
 
     let params = ParamsKZG::<Bn256>::setup(k as u32, OsRng);
 
@@ -102,7 +90,7 @@ fn test_prove_leaf_circuit_raw_outputs() {
     ];
 
     let break_points = circuit.base_circuit_break_points();
-    let circuit = KeccakCoprocessorLeafCircuit::<Fr>::new(inputs, circuit_params, true);
+    let circuit = KeccakComponentShardCircuit::<Fr>::new(inputs, circuit_params, true);
     circuit.set_base_circuit_break_points(break_points);
 
     let proof = gen_proof_with_instances(
@@ -121,10 +109,9 @@ fn test_prove_leaf_circuit_raw_outputs() {
 }
 
 #[test]
-fn test_mock_leaf_circuit_commit() {
+fn test_mock_shard_circuit_commit() {
     let k: usize = 18;
     let num_unusable_row: usize = 109;
-    let lookup_bits: usize = 4;
     let capacity: usize = 10;
     let publish_raw_outputs: bool = false;
 
@@ -137,17 +124,12 @@ fn test_mock_leaf_circuit_commit() {
         (0u8..200).collect::<Vec<_>>(),
     ];
 
-    let mut params = KeccakCoprocessorLeafCircuitParams::new(
-        k,
-        num_unusable_row,
-        lookup_bits,
-        capacity,
-        publish_raw_outputs,
-    );
+    let mut params =
+        KeccakComponentShardCircuitParams::new(k, num_unusable_row, capacity, publish_raw_outputs);
     let base_circuit_params =
-        KeccakCoprocessorLeafCircuit::<Fr>::calculate_base_circuit_params(&params);
+        KeccakComponentShardCircuit::<Fr>::calculate_base_circuit_params(&params);
     params.base_circuit_params = base_circuit_params;
-    let circuit = KeccakCoprocessorLeafCircuit::<Fr>::new(inputs.clone(), params.clone(), false);
+    let circuit = KeccakComponentShardCircuit::<Fr>::new(inputs.clone(), params.clone(), false);
     let circuit_outputs = multi_inputs_to_circuit_outputs::<Fr>(&inputs, params.capacity());
 
     let instances = vec![vec![calculate_circuit_outputs_commit(&circuit_outputs)]];
@@ -157,27 +139,21 @@ fn test_mock_leaf_circuit_commit() {
 }
 
 #[test]
-fn test_prove_leaf_circuit_commit() {
+fn test_prove_shard_circuit_commit() {
     let _ = env_logger::builder().is_test(true).try_init();
 
     let k: usize = 18;
     let num_unusable_row: usize = 109;
-    let lookup_bits: usize = 4;
     let capacity: usize = 10;
     let publish_raw_outputs: bool = false;
 
     let inputs = vec![];
-    let mut circuit_params = KeccakCoprocessorLeafCircuitParams::new(
-        k,
-        num_unusable_row,
-        lookup_bits,
-        capacity,
-        publish_raw_outputs,
-    );
+    let mut circuit_params =
+        KeccakComponentShardCircuitParams::new(k, num_unusable_row, capacity, publish_raw_outputs);
     let base_circuit_params =
-        KeccakCoprocessorLeafCircuit::<Fr>::calculate_base_circuit_params(&circuit_params);
+        KeccakComponentShardCircuit::<Fr>::calculate_base_circuit_params(&circuit_params);
     circuit_params.base_circuit_params = base_circuit_params;
-    let circuit = KeccakCoprocessorLeafCircuit::<Fr>::new(inputs, circuit_params.clone(), false);
+    let circuit = KeccakComponentShardCircuit::<Fr>::new(inputs, circuit_params.clone(), false);
 
     let params = ParamsKZG::<Bn256>::setup(k as u32, OsRng);
 
@@ -195,7 +171,7 @@ fn test_prove_leaf_circuit_commit() {
 
     let break_points = circuit.base_circuit_break_points();
     let circuit =
-        KeccakCoprocessorLeafCircuit::<Fr>::new(inputs.clone(), circuit_params.clone(), true);
+        KeccakComponentShardCircuit::<Fr>::new(inputs.clone(), circuit_params.clone(), true);
     circuit.set_base_circuit_break_points(break_points);
 
     let circuit_outputs = multi_inputs_to_circuit_outputs::<Fr>(&inputs, circuit_params.capacity());

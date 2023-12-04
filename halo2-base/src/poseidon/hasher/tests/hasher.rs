@@ -1,6 +1,6 @@
 use crate::{
     gates::{range::RangeInstructions, RangeChip},
-    halo2_proofs::halo2curves::bn256::Fr,
+    halo2_proofs::{arithmetic::Field, halo2curves::bn256::Fr},
     poseidon::hasher::{
         spec::OptimizedPoseidonSpec, PoseidonCompactChunkInput, PoseidonCompactInput,
         PoseidonHasher,
@@ -9,7 +9,6 @@ use crate::{
     utils::{testing::base_test, ScalarField},
     Context,
 };
-use halo2_proofs_axiom::arithmetic::Field;
 use itertools::Itertools;
 use pse_poseidon::Poseidon;
 use rand::Rng;
