@@ -1,8 +1,9 @@
 //! The chip that implements `draft-irtf-cfrg-hash-to-curve-16` for BLS12-381 (G2).
 //! https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16
 
-use super::{Fq2, G2};
+use super::{Fp2Chip, Fp2Point, Fq2, G2Point, G2};
 use crate::bigint::utils::decode_into_bn;
+use crate::bigint::CRTInteger;
 use crate::ecc::hash_to_curve::{
     ExpandMessageChip, HashCurveExt, HashInstructions, HashToCurveInstructions,
 };
@@ -17,9 +18,6 @@ use halo2_base::gates::flex_gate::threads::CommonCircuitBuilder;
 use halo2_base::gates::RangeInstructions;
 use halo2_base::utils::BigPrimeField;
 use itertools::Itertools;
-use num_bigint::BigUint;
-
-use super::{Fp2Chip, Fp2Point, G2Point};
 
 const G2_EXT_DEGREE: usize = 2;
 // L = ceil((ceil(log2(p)) + k) / 8) (see section 5 of ietf draft link above)
@@ -51,17 +49,14 @@ impl<'chip, F: BigPrimeField> HashToCurveInstructions<F, Fp2Chip<'chip, F>, G2>
         let range = fp_chip.range();
         let gate = range.gate();
 
-        // constants
-        let zero = thread_pool.main().load_zero();
-
         let extended_msg =
             XC::expand_message(thread_pool, hash_chip, range, msg, dst, 2 * G2_EXT_DEGREE * L)?;
 
         let ctx = thread_pool.main();
 
-        // 2^256
-        let two_pow_256 = fp_chip.load_constant_uint(ctx, BigUint::from(2u8).pow(256));
-        let fq_bytes = 48; //((Fq::NUM_BITS as f64) / 8f64).ceil() as usize;
+        // Extend limb_bases to work with 64 bytes
+        let mut limb_bases = fp_chip.limb_bases.clone();
+        limb_bases.push(limb_bases[1] * limb_bases.last().unwrap());
 
         let u = extended_msg
             .chunks(L)
@@ -71,29 +66,18 @@ impl<'chip, F: BigPrimeField> HashToCurveInstructions<F, Fp2Chip<'chip, F>, G2>
                 FieldVector(
                     elm_chunk
                         .map(|tv| {
-                            let mut buf = vec![zero; fq_bytes];
-                            let rem = fq_bytes - 32;
-                            buf[rem..].copy_from_slice(&tv[..32]);
-                            let lo = decode_into_bn::<F>(
+                            let y = decode_into_bn::<F>(
                                 ctx,
                                 gate,
-                                buf.iter().copied().rev().collect_vec(),
-                                &fp_chip.limb_bases,
+                                tv.iter().copied().rev().take(64).collect_vec(),
+                                &limb_bases,
                                 fp_chip.limb_bits(),
                             );
 
-                            buf[rem..].copy_from_slice(&tv[32..]);
-                            let hi = decode_into_bn::<F>(
-                                ctx,
-                                gate,
-                                buf.into_iter().rev().collect_vec(),
-                                &fp_chip.limb_bases,
-                                fp_chip.limb_bits(),
-                            );
+                            let mut y: CRTInteger<F> = y.into();
+                            y.truncation.limbs.pop();
 
-                            let lo_2_256 = fp_chip.mul_no_carry(ctx, lo, two_pow_256.clone());
-                            let lo_2_356_hi = fp_chip.add_no_carry(ctx, lo_2_256, hi);
-                            fp_chip.carry_mod(ctx, lo_2_356_hi)
+                            fp_chip.carry_mod(ctx, y)
                         })
                         .collect_vec(),
                 )
@@ -177,6 +161,33 @@ impl<'chip, F: BigPrimeField> HashToCurveInstructions<F, Fp2Chip<'chip, F>, G2>
 
         // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P) + [x]P - 1P => [x²-x-1]P + [x-1]Ψ(P) + Ψ²(2P)
         self.sub_unequal(ctx, t3, p, false)
+    }
+
+    // Optimized implementation from https://eprint.iacr.org/2017/419.pdf, 4.1
+    // Reference: https://github.com/celer-network/brevis-circuits/blob/3a7adf8/gadgets/pairing_bls12381/g2.go#L227
+    fn mul_by_bls_x(
+        &self,
+        ctx: &mut Context<F>,
+        p: G2Point<F>,
+    ) -> G2Point<F> {
+        let mut res = p.clone();
+        let p2 = self.double(ctx, &p);
+        res = self.add_unequal(ctx, &p2, &p, false);
+
+        for i in 1..32 {
+            res = self.double(ctx, res);
+            res = self.double(ctx, res);
+
+            if i == 1 {
+                res = self.add_unequal(ctx, res, &p, false);
+            } else if i == 3 {
+                res = self.add_unequal(ctx, res, &p2, false);
+            } else if i == 7 || i == 23 {
+                res = self.add_unequal(ctx, res, &p, false);
+            }
+        }
+
+        res
     }
 }
 
