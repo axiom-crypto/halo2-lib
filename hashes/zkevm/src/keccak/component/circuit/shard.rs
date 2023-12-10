@@ -232,7 +232,7 @@ impl<F: Field> KeccakComponentShardCircuit<F> {
         witness_gen_only: bool,
     ) -> Self {
         let input_size = inputs.iter().map(|input| get_num_keccak_f(input.len())).sum::<usize>();
-        assert!(input_size < params.capacity, "Input size exceeds capacity");
+        assert!(input_size <= params.capacity, "Input size exceeds capacity");
         let mut base_circuit_builder = BaseCircuitBuilder::new(witness_gen_only);
         base_circuit_builder.set_params(params.base_circuit_params.clone());
         Self {
