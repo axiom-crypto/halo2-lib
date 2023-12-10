@@ -243,6 +243,13 @@ impl<F: Field> KeccakComponentShardCircuit<F> {
         }
     }
 
+    /// Set inputs of [KeccakComponentShardCircuit], **overwriting** any old inputs.
+    pub fn feed_input(&mut self, inputs: Vec<Vec<u8>>) {
+        let input_size = inputs.iter().map(|input| get_num_keccak_f(input.len())).sum::<usize>();
+        assert!(input_size < self.params.capacity, "Input size exceeds capacity");
+        self.inputs = inputs;
+    }
+
     /// Get break points of BaseCircuitBuilder.
     pub fn base_circuit_break_points(&self) -> MultiPhaseThreadBreakPoints {
         self.base_circuit_builder.borrow().break_points()
