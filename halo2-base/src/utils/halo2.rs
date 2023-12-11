@@ -129,9 +129,14 @@ pub trait KeygenCircuitIntent<F: Field> {
     fn build_keygen_circuit(self) -> Self::ConcreteCircuit;
 
     /// Pinning is only fully computed after `synthesize` has been run during keygen
-    fn get_pinning_after_keygen(circuit: &Self::ConcreteCircuit) -> Self::Pinning;
+    fn get_pinning_after_keygen(
+        kzg_params: &ParamsKZG<Bn256>,
+        circuit: &Self::ConcreteCircuit,
+    ) -> Self::Pinning;
 }
 
+use halo2_proofs_axiom::halo2curves::bn256::Bn256;
+use halo2_proofs_axiom::poly::kzg::commitment::ParamsKZG;
 pub use keygen::ProvingKeyGenerator;
 
 mod keygen {
@@ -168,7 +173,7 @@ mod keygen {
                 let vk = plonk::keygen_vk_custom(kzg_params, &circuit, false).unwrap();
                 plonk::keygen_pk(kzg_params, vk, &circuit).unwrap()
             };
-            let pinning = CI::get_pinning_after_keygen(&circuit);
+            let pinning = CI::get_pinning_after_keygen(kzg_params, &circuit);
             (pk, serde_json::to_value(pinning).unwrap())
         }
     }
