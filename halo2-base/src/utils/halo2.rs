@@ -140,6 +140,8 @@ use halo2_proofs_axiom::poly::kzg::commitment::ParamsKZG;
 pub use keygen::ProvingKeyGenerator;
 
 mod keygen {
+    use halo2_proofs_axiom::poly::commitment::Params;
+
     use crate::halo2_proofs::{
         halo2curves::bn256::{Bn256, Fr, G1Affine},
         plonk::{self, ProvingKey},
@@ -165,6 +167,7 @@ mod keygen {
             self,
             kzg_params: &ParamsKZG<Bn256>,
         ) -> (ProvingKey<G1Affine>, serde_json::Value) {
+            assert_eq!(kzg_params.k(), self.get_k());
             let circuit = self.build_keygen_circuit();
             #[cfg(feature = "halo2-axiom")]
             let pk = plonk::keygen_pk2(kzg_params, &circuit, false).unwrap();
