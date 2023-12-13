@@ -37,6 +37,8 @@ display = ["halo2-base/display"]
 asm = ["halo2-base/asm"]
 halo2-pse = ["halo2-base/halo2-pse"]
 halo2-axiom = ["halo2-base/halo2-axiom"]
+halo2-icicle = ["halo2-base/halo2-icicle"]
+halo2-axiom-icicle = ["halo2-base/halo2-axiom-icicle"]
 jemallocator = ["halo2-base/jemallocator"]
 mimalloc = ["halo2-base/mimalloc"]
 

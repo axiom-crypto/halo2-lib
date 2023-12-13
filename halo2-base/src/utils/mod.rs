@@ -1,10 +1,10 @@
 use core::hash::Hash;
 
 use crate::ff::{FromUniformBytes, PrimeField};
-#[cfg(not(feature = "halo2-axiom"))]
+#[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
 use crate::halo2_proofs::arithmetic::CurveAffine;
 use crate::halo2_proofs::circuit::Value;
-#[cfg(feature = "halo2-axiom")]
+#[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
 pub use crate::halo2_proofs::halo2curves::CurveAffineExt;
 
 use num_bigint::BigInt;
@@ -19,7 +19,7 @@ pub mod halo2;
 pub mod testing;
 
 /// Helper trait to convert to and from a [BigPrimeField] by converting a list of [u64] digits
-#[cfg(feature = "halo2-axiom")]
+#[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
 pub trait BigPrimeField: ScalarField {
     /// Converts a slice of [u64] to [BigPrimeField]
     /// * `val`: the slice of u64
@@ -29,7 +29,7 @@ pub trait BigPrimeField: ScalarField {
     /// * The integer value of `val` is already less than the modulus of `Self`
     fn from_u64_digits(val: &[u64]) -> Self;
 }
-#[cfg(feature = "halo2-axiom")]
+#[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
 impl<F> BigPrimeField for F
 where
     F: ScalarField + From<[u64; 4]>, // Assume [u64; 4] is little-endian. We only implement ScalarField when this is true.
@@ -92,7 +92,7 @@ pub trait ScalarField: PrimeField + FromUniformBytes<64> + From<bool> + Hash + O
 // Later: will need to separate BigPrimeField from ScalarField when Goldilocks is introduced
 
 /// [ScalarField] that is ~256 bits long
-#[cfg(feature = "halo2-pse")]
+#[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
 pub trait BigPrimeField = PrimeField<Repr = [u8; 32]> + ScalarField;
 
 /// Converts an [Iterator] of u64 digits into `number_of_limbs` limbs of `bit_len` bits returned as a [Vec].
@@ -177,12 +177,12 @@ pub fn power_of_two<F: BigPrimeField>(n: usize) -> F {
 /// # Assumptions:
 /// * `e` is less than the modulus of `F`
 pub fn biguint_to_fe<F: BigPrimeField>(e: &BigUint) -> F {
-    #[cfg(feature = "halo2-axiom")]
+    #[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
     {
         F::from_u64_digits(&e.to_u64_digits())
     }
 
-    #[cfg(feature = "halo2-pse")]
+    #[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
     {
         let bytes = e.to_bytes_le();
         F::from_bytes_le(&bytes)
@@ -195,7 +195,7 @@ pub fn biguint_to_fe<F: BigPrimeField>(e: &BigUint) -> F {
 /// # Assumptions:
 /// * The absolute value of `e` is less than the modulus of `F`
 pub fn bigint_to_fe<F: BigPrimeField>(e: &BigInt) -> F {
-    #[cfg(feature = "halo2-axiom")]
+    #[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
     {
         let (sign, digits) = e.to_u64_digits();
         if sign == Sign::Minus {
@@ -204,7 +204,7 @@ pub fn bigint_to_fe<F: BigPrimeField>(e: &BigInt) -> F {
             F::from_u64_digits(&digits)
         }
     }
-    #[cfg(feature = "halo2-pse")]
+    #[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
     {
         let (sign, bytes) = e.to_bytes_le();
         let f_abs = F::from_bytes_le(&bytes);
@@ -263,12 +263,12 @@ pub fn decompose_fe_to_u64_limbs<F: ScalarField>(
     number_of_limbs: usize,
     bit_len: usize,
 ) -> Vec<u64> {
-    #[cfg(feature = "halo2-axiom")]
+    #[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
     {
         e.to_u64_limbs(number_of_limbs, bit_len)
     }
 
-    #[cfg(feature = "halo2-pse")]
+    #[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
     {
         decompose_u64_digits_to_limbs(fe_to_biguint(e).iter_u64_digits(), number_of_limbs, bit_len)
     }
@@ -369,7 +369,7 @@ pub fn compose(input: Vec<BigUint>, bit_len: usize) -> BigUint {
 }
 
 /// Helper trait
-#[cfg(feature = "halo2-pse")]
+#[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
 pub trait CurveAffineExt: CurveAffine {
     /// Returns the raw affine (X, Y) coordinantes
     fn into_coordinates(self) -> (Self::Base, Self::Base) {
@@ -377,12 +377,12 @@ pub trait CurveAffineExt: CurveAffine {
         (*coordinates.x(), *coordinates.y())
     }
 }
-#[cfg(feature = "halo2-pse")]
+#[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
 impl<C: CurveAffine> CurveAffineExt for C {}
 
 mod scalar_field_impls {
     use super::{decompose_u64_digits_to_limbs, ScalarField};
-    #[cfg(feature = "halo2-pse")]
+    #[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
     use crate::ff::PrimeField;
     use crate::halo2_proofs::halo2curves::{
         bn256::{Fq as bn254Fq, Fr as bn254Fr},
@@ -391,7 +391,7 @@ mod scalar_field_impls {
 
     /// To ensure `ScalarField` is only implemented for `ff:Field` where `Repr` is little endian, we use the following macro
     /// to implement the trait for each field.
-    #[cfg(feature = "halo2-axiom")]
+    #[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
     #[macro_export]
     macro_rules! impl_scalar_field {
         ($field:ident) => {
@@ -426,7 +426,7 @@ mod scalar_field_impls {
 
     /// To ensure `ScalarField` is only implemented for `ff:Field` where `Repr` is little endian, we use the following macro
     /// to implement the trait for each field.
-    #[cfg(feature = "halo2-pse")]
+    #[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
     #[macro_export]
     macro_rules! impl_scalar_field {
         ($field:ident) => {

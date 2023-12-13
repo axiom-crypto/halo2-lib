@@ -3,16 +3,16 @@ use std::collections::hash_map::Entry;
 use crate::ff::Field;
 use crate::halo2_proofs::{
     circuit::{AssignedCell, Cell, Region, Value},
-    plonk::{Advice, Assigned, Column, Fixed},
+    plonk::{Advice, Assigned, Column, Fixed, Circuit},
 };
 use crate::virtual_region::copy_constraints::{CopyConstraintManager, EXTERNAL_CELL_TYPE_ID};
 use crate::AssignedValue;
 
 /// Raw (physical) assigned cell in Plonkish arithmetization.
-#[cfg(feature = "halo2-axiom")]
+#[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
 pub type Halo2AssignedCell<'v, F> = AssignedCell<&'v Assigned<F>, F>;
 /// Raw (physical) assigned cell in Plonkish arithmetization.
-#[cfg(not(feature = "halo2-axiom"))]
+#[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
 pub type Halo2AssignedCell<'v, F> = AssignedCell<Assigned<F>, F>;
 
 /// Assign advice to physical region.
@@ -23,11 +23,11 @@ pub fn raw_assign_advice<'v, F: Field>(
     offset: usize,
     value: Value<impl Into<Assigned<F>>>,
 ) -> Halo2AssignedCell<'v, F> {
-    #[cfg(feature = "halo2-axiom")]
+    #[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
     {
         region.assign_advice(column, offset, value)
     }
-    #[cfg(feature = "halo2-pse")]
+    #[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
     {
         let value = value.map(|a| Into::<Assigned<F>>::into(a));
         region
@@ -49,11 +49,11 @@ pub fn raw_assign_fixed<F: Field>(
     offset: usize,
     value: F,
 ) -> Cell {
-    #[cfg(feature = "halo2-axiom")]
+    #[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
     {
         region.assign_fixed(column, offset, value)
     }
-    #[cfg(feature = "halo2-pse")]
+    #[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
     {
         region
             .assign_fixed(
@@ -70,9 +70,9 @@ pub fn raw_assign_fixed<F: Field>(
 /// Constrain two physical cells to be equal.
 #[inline(always)]
 pub fn raw_constrain_equal<F: Field>(region: &mut Region<F>, left: Cell, right: Cell) {
-    #[cfg(feature = "halo2-axiom")]
+    #[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
     region.constrain_equal(left, right);
-    #[cfg(not(feature = "halo2-axiom"))]
+    #[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
     region.constrain_equal(left, right).unwrap();
 }
 

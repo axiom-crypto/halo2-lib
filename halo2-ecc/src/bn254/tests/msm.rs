@@ -72,8 +72,23 @@ fn bench_msm() -> Result<(), Box<dyn std::error::Error>> {
     fs::create_dir_all("data").unwrap();
 
     let results_path = "results/bn254/msm_bench.csv";
-    let mut fs_results = File::create(results_path).unwrap();
-    writeln!(fs_results, "degree,num_advice,num_lookup,num_fixed,lookup_bits,limb_bits,num_limbs,batch_size,window_bits,proof_time,proof_size,verify_time")?;
+    let mut fs_results = match File::options().append(true).open(results_path) {
+        Ok(file) => file,
+        Err(_) => {
+            let mut file = File::create(results_path).unwrap();
+            writeln!(file, "halo2_feature,degree,num_advice,num_lookup,num_fixed,lookup_bits,limb_bits,num_limbs,batch_size,window_bits,proof_time,proof_size,verify_time")?;
+            file
+        }
+    };
+
+    #[cfg(feature = "halo2-icicle")]
+    let halo2_feature = "pse-icicle";
+    #[cfg(feature = "halo2-axiom-icicle")]
+    let halo2_feature = "axiom-icicle";
+    #[cfg(feature = "halo2-axiom")]
+    let halo2_feature = "axiom";
+    #[cfg(feature = "halo2-pse")]
+    let halo2_feature = "pse";
 
     let bench_params_reader = BufReader::new(bench_params_file);
     for line in bench_params_reader.lines() {
@@ -93,7 +108,8 @@ fn bench_msm() -> Result<(), Box<dyn std::error::Error>> {
 
         writeln!(
             fs_results,
-            "{},{},{},{},{},{},{},{},{},{:?},{},{:?}",
+            "{},{},{},{},{},{},{},{},{},{},{:?},{},{:?}",
+            halo2_feature,
             bench_params.degree,
             bench_params.num_advice,
             bench_params.num_lookup_advice,

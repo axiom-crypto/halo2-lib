@@ -194,9 +194,9 @@ fn verify<F: Field + Ord + FromUniformBytes<64>>(
 }
 
 fn extract_value<F: Field>(assigned_value: KeccakAssignedValue<F>) -> F {
-    #[cfg(feature = "halo2-axiom")]
+    #[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
     let assigned = **value_to_option(assigned_value.value()).unwrap();
-    #[cfg(not(feature = "halo2-axiom"))]
+    #[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
     let assigned = *value_to_option(assigned_value.value()).unwrap();
     match assigned {
         halo2_base::halo2_proofs::plonk::Assigned::Zero => F::ZERO,
