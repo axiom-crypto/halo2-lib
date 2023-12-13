@@ -93,7 +93,7 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
         keys: impl IntoIterator<Item = [AssignedValue<F>; KEY_COL]>,
         copy_manager: Option<&SharedCopyConstraintManager<F>>,
     ) {
-        #[cfg(not(feature = "halo2-axiom"))]
+        #[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
         let keys = keys.into_iter().collect::<Vec<_>>();
         layouter
             .assign_region(
@@ -101,9 +101,9 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
                 |mut region| {
                     self.assign_virtual_to_lookup_to_raw_from_offset(
                         &mut region,
-                        #[cfg(feature = "halo2-axiom")]
+                        #[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
                         keys,
-                        #[cfg(not(feature = "halo2-axiom"))]
+                        #[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
                         keys.clone(),
                         0,
                         copy_manager,
@@ -157,7 +157,7 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
         rows: impl IntoIterator<Item = [AssignedValue<F>; KEY_COL]>,
         copy_manager: Option<&SharedCopyConstraintManager<F>>,
     ) {
-        #[cfg(not(feature = "halo2-axiom"))]
+        #[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
         let rows = rows.into_iter().collect::<Vec<_>>();
         layouter
             .assign_region(
@@ -165,9 +165,9 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
                 |mut region| {
                     self.assign_virtual_table_to_raw_from_offset(
                         &mut region,
-                        #[cfg(feature = "halo2-axiom")]
+                        #[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
                         rows,
-                        #[cfg(not(feature = "halo2-axiom"))]
+                        #[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
                         rows.clone(),
                         0,
                         copy_manager,
