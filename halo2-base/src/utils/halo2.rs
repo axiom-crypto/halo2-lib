@@ -3,7 +3,7 @@ use std::collections::hash_map::Entry;
 use crate::ff::Field;
 use crate::halo2_proofs::{
     circuit::{AssignedCell, Cell, Region, Value},
-    plonk::{Advice, Assigned, Column, Fixed},
+    plonk::{Advice, Assigned, Circuit, Column, Fixed},
 };
 use crate::virtual_region::copy_constraints::{CopyConstraintManager, EXTERNAL_CELL_TYPE_ID};
 use crate::AssignedValue;
@@ -103,6 +103,81 @@ pub fn constrain_virtual_equals_external<F: Field + Ord>(
             assert_eq!(ctx_cell.type_id, EXTERNAL_CELL_TYPE_ID);
             // We map the virtual cell to point to the raw external cell in `copy_manager`
             assigned.insert(external_cell);
+        }
+    }
+}
+
+/// This trait should be implemented on the minimal circuit configuration data necessary to
+/// completely determine a circuit (independent of circuit inputs).
+/// This is used to generate a _dummy_ instantiation of a concrete `Circuit` type for the purposes of key generation.
+/// This dummy instantiation just needs to have the correct arithmetization format, but the witnesses do not need to
+/// satisfy constraints.
+pub trait KeygenCircuitIntent<F: Field> {
+    /// Concrete circuit type
+    type ConcreteCircuit: Circuit<F>;
+    /// Additional data that "pins" down the circuit. These can always to deterministically rederived from `Self`, but
+    /// storing the `Pinning` saves recomputations in future proof generations.
+    type Pinning;
+
+    /// The intent must include the log_2 domain size of the circuit.
+    /// This is used to get the correct trusted setup file.
+    fn get_k(&self) -> u32;
+
+    /// Builds a _dummy_ instantiation of `Self::ConcreteCircuit` for the purposes of key generation.
+    /// This dummy instantiation just needs to have the correct arithmetization format, but the witnesses do not need to
+    /// satisfy constraints.
+    fn build_keygen_circuit(self) -> Self::ConcreteCircuit;
+
+    /// Pinning is only fully computed after `synthesize` has been run during keygen
+    fn get_pinning_after_keygen(
+        kzg_params: &ParamsKZG<Bn256>,
+        circuit: &Self::ConcreteCircuit,
+    ) -> Self::Pinning;
+}
+
+use halo2_proofs_axiom::halo2curves::bn256::Bn256;
+use halo2_proofs_axiom::poly::kzg::commitment::ParamsKZG;
+pub use keygen::ProvingKeyGenerator;
+
+mod keygen {
+    use halo2_proofs_axiom::poly::commitment::Params;
+
+    use crate::halo2_proofs::{
+        halo2curves::bn256::{Bn256, Fr, G1Affine},
+        plonk::{self, ProvingKey},
+        poly::kzg::commitment::ParamsKZG,
+    };
+
+    use super::KeygenCircuitIntent;
+
+    /// Trait for creating a proving key and a pinning for a circuit from minimal circuit configuration data.
+    pub trait ProvingKeyGenerator {
+        /// Create proving key and pinning.
+        fn create_pk_and_pinning(
+            self,
+            kzg_params: &ParamsKZG<Bn256>,
+        ) -> (ProvingKey<G1Affine>, serde_json::Value);
+    }
+
+    impl<CI: KeygenCircuitIntent<Fr>> ProvingKeyGenerator for CI
+    where
+        CI::Pinning: serde::Serialize,
+    {
+        fn create_pk_and_pinning(
+            self,
+            kzg_params: &ParamsKZG<Bn256>,
+        ) -> (ProvingKey<G1Affine>, serde_json::Value) {
+            assert_eq!(kzg_params.k(), self.get_k());
+            let circuit = self.build_keygen_circuit();
+            #[cfg(feature = "halo2-axiom")]
+            let pk = plonk::keygen_pk2(kzg_params, &circuit, false).unwrap();
+            #[cfg(not(feature = "halo2-axiom"))]
+            let pk = {
+                let vk = plonk::keygen_vk_custom(kzg_params, &circuit, false).unwrap();
+                plonk::keygen_pk(kzg_params, vk, &circuit).unwrap()
+            };
+            let pinning = CI::get_pinning_after_keygen(kzg_params, &circuit);
+            (pk, serde_json::to_value(pinning).unwrap())
         }
     }
 }
