@@ -130,6 +130,7 @@ pub trait KeygenCircuitIntent<F: Field> {
 
     /// Pinning is only fully computed after `synthesize` has been run during keygen
     fn get_pinning_after_keygen(
+        self,
         kzg_params: &ParamsKZG<Bn256>,
         circuit: &Self::ConcreteCircuit,
     ) -> Self::Pinning;
@@ -159,8 +160,9 @@ mod keygen {
         ) -> (ProvingKey<G1Affine>, serde_json::Value);
     }
 
-    impl<CI: KeygenCircuitIntent<Fr>> ProvingKeyGenerator for CI
+    impl<CI> ProvingKeyGenerator for CI
     where
+        CI: KeygenCircuitIntent<Fr> + Clone,
         CI::Pinning: serde::Serialize,
     {
         fn create_pk_and_pinning(
@@ -168,7 +170,7 @@ mod keygen {
             kzg_params: &ParamsKZG<Bn256>,
         ) -> (ProvingKey<G1Affine>, serde_json::Value) {
             assert_eq!(kzg_params.k(), self.get_k());
-            let circuit = self.build_keygen_circuit();
+            let circuit = self.clone().build_keygen_circuit();
             #[cfg(feature = "halo2-axiom")]
             let pk = plonk::keygen_pk2(kzg_params, &circuit, false).unwrap();
             #[cfg(not(feature = "halo2-axiom"))]
@@ -176,7 +178,7 @@ mod keygen {
                 let vk = plonk::keygen_vk_custom(kzg_params, &circuit, false).unwrap();
                 plonk::keygen_pk(kzg_params, vk, &circuit).unwrap()
             };
-            let pinning = CI::get_pinning_after_keygen(kzg_params, &circuit);
+            let pinning = self.get_pinning_after_keygen(kzg_params, &circuit);
             (pk, serde_json::to_value(pinning).unwrap())
         }
     }
