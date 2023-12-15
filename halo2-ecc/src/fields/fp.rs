@@ -91,7 +91,7 @@ impl<'range, F: BigPrimeField, Fp: BigPrimeField> FpChip<'range, F, Fp> {
             limb_bits,
             num_limbs,
             num_limbs_bits: bit_length(num_limbs as u64),
-            num_limbs_log2_ceil: bit_length(num_limbs as u64),
+            num_limbs_log2_ceil: num_limbs_log2_ceil(num_limbs),
             limb_bases,
             limb_base_big: BigInt::one() << limb_bits,
             limb_mask,
