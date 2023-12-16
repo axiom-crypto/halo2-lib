@@ -305,7 +305,7 @@ pub trait GateInstructions<F: ScalarField> {
 
     /// Constrains and returns a / b = out.
     ///
-    /// Defines a vertical gate of form | 0 | b^(-1) * a | b | a |, where b^(-1) * a = out.
+    /// Defines a vertical gate of form | 0 | a / b | b | a |, where a / b = out.
     ///
     /// Assumes `b != 0`.
     /// * `ctx`: [Context] to add the constraints to
