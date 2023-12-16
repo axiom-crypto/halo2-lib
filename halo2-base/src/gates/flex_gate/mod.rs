@@ -303,9 +303,9 @@ pub trait GateInstructions<F: ScalarField> {
         ctx.assign_region([Constant(F::ZERO), Existing(x), Existing(x), Existing(x)], [0]);
     }
 
-    /// Constrains and returns a / b = 0.
+    /// Constrains and returns a / b = out.
     ///
-    /// Defines a vertical gate of form | 0 | b^1 * a | b | a |, where b^1 * a = out.
+    /// Defines a vertical gate of form | 0 | b^(-1) * a | b | a |, where b^(-1) * a = out.
     ///
     /// Assumes `b != 0`.
     /// * `ctx`: [Context] to add the constraints to
