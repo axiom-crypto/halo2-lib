@@ -40,14 +40,10 @@ compile_error!(
 compile_error!("Must enable exactly one of \"halo2-pse\", \"halo2-axiom\", \"halo2-axiom-icicle\", or \"halo2-icicle\" features to choose which halo2_proofs crate to use.");
 
 // use gates::flex_gate::MAX_PHASE;
-#[cfg(feature = "halo2-pse")]
+#[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
 pub use halo2_proofs;
-#[cfg(feature = "halo2-axiom")]
+#[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
 pub use halo2_proofs_axiom as halo2_proofs;
-#[cfg(feature = "halo2-icicle")]
-pub use halo2_proofs_icicle as halo2_proofs;
-#[cfg(feature = "halo2-axiom-icicle")]
-pub use halo2_proofs_axiom_icicle as halo2_proofs;
 
 use halo2_proofs::halo2curves::ff;
 use halo2_proofs::plonk::Assigned;

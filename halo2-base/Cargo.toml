@@ -20,7 +20,7 @@ ark-std = { version = "0.3.0", features = ["print-trace"], optional = true }
 # Use Axiom's custom halo2 monorepo for faster proving when feature = "halo2-axiom" is on
 halo2_proofs_axiom = { version = "0.4", package = "halo2-axiom", optional = true }
 # Use PSE halo2 and halo2curves for compatibility when feature = "halo2-pse" is on
-halo2_proofs = { git = "https://github.com/ingonyama-zk/halo2", branch = "axiom-icicle", package = "halo2_proofs", optional = true }
+halo2_proofs = { git = "https://github.com/ingonyama-zk/halo2.git", branch = "axiom-icicle", package = "halo2_proofs", optional = true }
 
 # This is Scroll's audited poseidon circuit. We only use it for the Native Poseidon spec. We do not use the halo2 circuit at all (and it wouldn't even work because the halo2_proofs tag is not compatbile).
 # We forked it to upgrade to ff v0.13 and removed the circuit module
@@ -56,6 +56,7 @@ asm = ["halo2_proofs_axiom?/asm"]
 dev-graph = ["halo2_proofs/dev-graph", "plotters"] # only works with halo2-pse for now
 halo2-pse = ["halo2_proofs/circuit-params"]
 halo2-icicle = ["halo2_proofs/icicle_gpu", "halo2_proofs/circuit-params"]
+profile-pse = ["halo2_proofs/profile"]
 halo2-axiom = ["halo2_proofs_axiom"]
 halo2-axiom-icicle = ["halo2_proofs_axiom"]
 display = []
