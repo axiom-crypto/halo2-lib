@@ -82,8 +82,8 @@ pub fn pack_native_input<F: Field>(bytes: &[u8]) -> Vec<Vec<F>> {
             chunk
                 .chunks(num_word_per_witness)
                 .map(|c| {
-                    c.iter().zip(multipliers.iter()).fold(F::ZERO, |acc, (word, multiplier)| {
-                        acc + F::from_u128(*word) * multiplier
+                    c.iter().zip(multipliers.iter()).fold(F::ZERO, |acc, (word, multipiler)| {
+                        acc + F::from_u128(*word) * multipiler
                     })
                 })
                 .collect_vec()

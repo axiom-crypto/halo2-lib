@@ -6,7 +6,9 @@ use crate::{
         halo2curves::bn256::Fr,
         plonk::{keygen_pk, keygen_vk, Assigned, Circuit, ConstraintSystem, Error},
     },
-    virtual_region::lookups::basic::BasicDynLookupConfig,
+    virtual_region::{
+        copy_constraints::EXTERNAL_CELL_TYPE_ID, lookups::basic::BasicDynLookupConfig,
+    },
     AssignedValue, ContextCell,
 };
 use halo2_proofs_axiom::plonk::FirstPhase;
@@ -107,24 +109,6 @@ impl<F: ScalarField, const CYCLES: usize> Circuit<F> for RAMCircuit<F, CYCLES> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        // Make purely virtual cells so we can raw assign them
-        let memory = self.memory.iter().enumerate().map(|(i, value)| {
-            let idx = Assigned::Trivial(F::from(i as u64));
-            let idx =
-                AssignedValue { value: idx, cell: Some(ContextCell::new("RAM Config", 0, i)) };
-            let value = Assigned::Trivial(*value);
-            let value = AssignedValue { value, cell: Some(ContextCell::new("RAM Config", 1, i)) };
-            [idx, value]
-        });
-
-        let copy_manager = (!self.cpu.witness_gen_only()).then_some(&self.cpu.copy_manager);
-
-        config.memory.assign_virtual_table_to_raw(
-            layouter.namespace(|| "memory"),
-            memory,
-            copy_manager,
-        );
-
         layouter.assign_region(
             || "cpu",
             |mut region| {
@@ -135,6 +119,28 @@ impl<F: ScalarField, const CYCLES: usize> Circuit<F> for RAMCircuit<F, CYCLES> {
                 Ok(())
             },
         )?;
+
+        let copy_manager = (!self.cpu.witness_gen_only()).then_some(&self.cpu.copy_manager);
+
+        // Make purely virtual cells so we can raw assign them
+        let memory = self.memory.iter().enumerate().map(|(i, value)| {
+            let idx = Assigned::Trivial(F::from(i as u64));
+            let idx = AssignedValue {
+                value: idx,
+                cell: Some(ContextCell::new(EXTERNAL_CELL_TYPE_ID, 0, i)),
+            };
+            let value = Assigned::Trivial(*value);
+            let value =
+                AssignedValue { value, cell: Some(ContextCell::new(EXTERNAL_CELL_TYPE_ID, 1, i)) };
+            [idx, value]
+        });
+
+        config.memory.assign_virtual_table_to_raw(
+            layouter.namespace(|| "memory"),
+            memory,
+            copy_manager,
+        );
+
         config.memory.assign_virtual_to_lookup_to_raw(
             layouter.namespace(|| "memory accesses"),
             self.mem_access.clone(),

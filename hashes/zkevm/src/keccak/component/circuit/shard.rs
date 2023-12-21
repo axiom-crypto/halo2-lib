@@ -49,11 +49,12 @@ use snark_verifier_sdk::CircuitExt;
 pub struct KeccakComponentShardCircuit<F: Field> {
     /// The multiple inputs to be hashed.
     #[getset(get = "pub")]
-    inputs: Vec<Vec<u8>>,
+    inputs: RefCell<Vec<Vec<u8>>>,
 
     /// Parameters of this circuit. The same parameters always construct the same circuit.
     #[getset(get_mut = "pub")]
     params: KeccakComponentShardCircuitParams,
+    #[getset(get = "pub")]
     base_circuit_builder: RefCell<BaseCircuitBuilder<F>>,
     /// Poseidon hasher. Stateless once initialized.
     #[getset(get = "pub")]
@@ -168,7 +169,7 @@ impl<F: Field> Circuit<F> for KeccakComponentShardCircuit<F> {
             || "keccak circuit",
             |mut region| {
                 let (keccak_rows, _) = multi_keccak::<F>(
-                    &self.inputs,
+                    &self.inputs.borrow(),
                     Some(self.params.capacity),
                     self.params.keccak_circuit_params,
                 );
@@ -231,11 +232,11 @@ impl<F: Field> KeccakComponentShardCircuit<F> {
         witness_gen_only: bool,
     ) -> Self {
         let input_size = inputs.iter().map(|input| get_num_keccak_f(input.len())).sum::<usize>();
-        assert!(input_size < params.capacity, "Input size exceeds capacity");
+        assert!(input_size <= params.capacity, "Input size exceeds capacity");
         let mut base_circuit_builder = BaseCircuitBuilder::new(witness_gen_only);
         base_circuit_builder.set_params(params.base_circuit_params.clone());
         Self {
-            inputs,
+            inputs: RefCell::new(inputs),
             params,
             base_circuit_builder: RefCell::new(base_circuit_builder),
             hasher: RefCell::new(create_hasher()),
@@ -525,7 +526,8 @@ pub fn transmute_keccak_assigned_to_virtual<F: Field>(
 
 impl<F: Field> CircuitExt<F> for KeccakComponentShardCircuit<F> {
     fn instances(&self) -> Vec<Vec<F>> {
-        let circuit_outputs = multi_inputs_to_circuit_outputs(&self.inputs, self.params.capacity);
+        let circuit_outputs =
+            multi_inputs_to_circuit_outputs(&self.inputs.borrow(), self.params.capacity);
         if self.params.publish_raw_outputs {
             vec![
                 circuit_outputs.iter().map(|o| o.key).collect(),
