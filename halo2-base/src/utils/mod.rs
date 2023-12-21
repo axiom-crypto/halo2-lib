@@ -368,19 +368,9 @@ mod scalar_field_impls {
     use num_bigint::BigUint;
 
     use super::{decompose_u64_digits_to_limbs, ScalarField};
-<<<<<<< HEAD
-=======
-    #[cfg(feature = "halo2-pse")]
-    use crate::ff::PrimeField;
-    use crate::halo2_proofs::halo2curves::{
-        bn256::{Fq as bn254Fq, Fr as bn254Fr},
-        secp256k1::{Fp as secpFp, Fq as secpFq},
-    };
->>>>>>> release-0.4.1-rc
 
     use crate::ff::{FromUniformBytes, PrimeField};
 
-<<<<<<< HEAD
     /// We do a blanket implementation in 'community-edition' to make it easier to integrate with other crates.
     ///
     /// ASSUMING F::Repr is little-endian
@@ -395,27 +385,6 @@ mod scalar_field_impls {
             let digits = uint.iter_u64_digits();
             decompose_u64_digits_to_limbs(digits, num_limbs, bit_len)
         }
-=======
-                #[inline(always)]
-                fn to_bytes_le(&self) -> Vec<u8> {
-                    let tmp: [u64; 4] = (*self).into();
-                    tmp.iter().flat_map(|x| x.to_le_bytes()).collect()
-                }
-
-                #[inline(always)]
-                fn get_lower_32(&self) -> u32 {
-                    let tmp: [u64; 4] = (*self).into();
-                    tmp[0] as u32
-                }
-
-                #[inline(always)]
-                fn get_lower_64(&self) -> u64 {
-                    let tmp: [u64; 4] = (*self).into();
-                    tmp[0]
-                }
-            }
-        };
->>>>>>> release-0.4.1-rc
     }
 }
 
