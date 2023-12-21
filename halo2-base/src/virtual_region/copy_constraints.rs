@@ -15,6 +15,9 @@ use crate::{ff::Field, ContextCell};
 
 use super::manager::VirtualRegionManager;
 
+/// Type ID to distinguish external raw Halo2 cells. **This Type ID must be unique.**
+pub const EXTERNAL_CELL_TYPE_ID: &str = "halo2-base:External Raw Halo2 Cell";
+
 /// Thread-safe shared global manager for all copy constraints.
 pub type SharedCopyConstraintManager<F> = Arc<Mutex<CopyConstraintManager<F>>>;
 
@@ -86,11 +89,15 @@ impl<F: Field + Ord> CopyConstraintManager<F> {
     }
 
     fn load_external_cell_impl(&mut self, cell: Option<Cell>) -> ContextCell {
-        let context_cell =
-            ContextCell::new("halo2-base:External Raw Halo2 Cell", 0, self.external_cell_count);
+        let context_cell = ContextCell::new(EXTERNAL_CELL_TYPE_ID, 0, self.external_cell_count);
         self.external_cell_count += 1;
         if let Some(cell) = cell {
-            self.assigned_advices.insert(context_cell, cell);
+            if let Some(old_cell) = self.assigned_advices.insert(context_cell, cell) {
+                assert!(
+                    old_cell.row_offset == cell.row_offset && old_cell.column == cell.column,
+                    "External cell already assigned"
+                )
+            }
         }
         context_cell
     }
