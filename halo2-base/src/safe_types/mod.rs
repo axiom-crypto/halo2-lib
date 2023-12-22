@@ -34,7 +34,7 @@ const BITS_PER_BYTE: usize = 8;
 /// where each [`AssignedValue`] represents 1 byte. However, the range of [`AssignedValue<F>`] is much
 /// larger than 1 byte(0~255). If a circuit takes 32 [`AssignedValue<F>`] as inputs and some of them
 /// are actually greater than 255, there could be some undefined behaviors.
-/// [`SafeType`] gurantees the value range of its owned [`AssignedValue<F>`]. So circuits don't need to
+/// [`SafeType`] guarantees the value range of its owned [`AssignedValue<F>`]. So circuits don't need to
 /// do any extra value checking if they take SafeType as inputs.
 /// - `TOTAL_BITS` is the number of total bits of this type.
 /// - `BYTES_PER_ELE` is the number of bytes of each element.
