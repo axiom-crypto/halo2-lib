@@ -2,7 +2,7 @@ use crate::halo2_proofs::{
     arithmetic::CurveAffine,
     halo2curves::secp256k1::{Fq, Secp256k1Affine},
 };
-
+use halo2_base::halo2_proofs::arithmetic::Field;
 use halo2_base::utils::{biguint_to_fe, fe_to_biguint, modulus};
 use rand::random;
 use test_case::test_case;

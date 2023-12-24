@@ -25,17 +25,26 @@ use mimalloc::MiMalloc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-#[cfg(all(feature = "halo2-pse", feature = "halo2-axiom"))]
+#[cfg(any(
+    all(feature = "halo2-pse", feature = "halo2-axiom"),
+    all(feature = "halo2-pse", feature = "halo2-icicle"),
+    all(feature = "halo2-pse", feature = "halo2-axiom-icicle"),
+    all(feature = "halo2-axiom", feature = "halo2-icicle"),
+    all(feature = "halo2-axiom", feature = "halo2-axiom-icicle"),
+    all(feature = "halo2-icicle", feature = "halo2-axiom-icicle")
+))]
 compile_error!(
-    "Cannot have both \"halo2-pse\" and \"halo2-axiom\" features enabled at the same time!"
+    "Cannot have multiple of \"halo2-pse\", \"halo2-axiom\", \"halo2-axiom-icicle\", or \"halo2-icicle\" features enabled at the same time!"
 );
-#[cfg(not(any(feature = "halo2-pse", feature = "halo2-axiom")))]
-compile_error!("Must enable exactly one of \"halo2-pse\" or \"halo2-axiom\" features to choose which halo2_proofs crate to use.");
+#[cfg(not(any(feature = "halo2-pse", feature = "halo2-axiom", feature = "halo2-icicle", feature = "halo2-axiom-icicle")))]
+compile_error!("Must enable exactly one of \"halo2-pse\", \"halo2-axiom\", \"halo2-axiom-icicle\", or \"halo2-icicle\" features to choose which halo2_proofs crate to use.");
 
 // use gates::flex_gate::MAX_PHASE;
 #[cfg(feature = "halo2-pse")]
 pub use halo2_proofs;
-#[cfg(feature = "halo2-axiom")]
+#[cfg(feature = "halo2-icicle")]
+pub use halo2_proofs_icicle as halo2_proofs;
+#[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
 pub use halo2_proofs_axiom as halo2_proofs;
 
 use halo2_proofs::halo2curves::ff;
@@ -55,10 +64,10 @@ pub mod utils;
 pub mod virtual_region;
 
 /// Constant representing whether the Layouter calls `synthesize` once just to get region shape.
-#[cfg(feature = "halo2-axiom")]
+#[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
 pub const SKIP_FIRST_PASS: bool = false;
 /// Constant representing whether the Layouter calls `synthesize` once just to get region shape.
-#[cfg(feature = "halo2-pse")]
+#[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
 pub const SKIP_FIRST_PASS: bool = true;
 
 /// Convenience Enum which abstracts the scenarios under a value is added to an advice column.

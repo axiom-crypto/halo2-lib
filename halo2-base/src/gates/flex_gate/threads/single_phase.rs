@@ -212,9 +212,9 @@ pub fn assign_with_constraints<F: ScalarField, const ROTATIONS: usize>(
         for (i, (advice, &q)) in ctx.advice.iter().zip(ctx.selector.iter()).enumerate() {
             let column = basic_gate.value;
             let value = if use_unknown { Value::unknown() } else { Value::known(advice) };
-            #[cfg(feature = "halo2-axiom")]
+            #[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
             let cell = region.assign_advice(column, row_offset, value).cell();
-            #[cfg(not(feature = "halo2-axiom"))]
+            #[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
             let cell = region
                 .assign_advice(|| "", column, row_offset, || value.map(|v| *v))
                 .unwrap()
@@ -250,9 +250,9 @@ pub fn assign_with_constraints<F: ScalarField, const ROTATIONS: usize>(
                         .get(gate_index)
                         .unwrap_or_else(|| panic!("NOT ENOUGH ADVICE COLUMNS. Perhaps blinding factors were not taken into account. The max non-poisoned rows is {max_rows}"));
                 let column = basic_gate.value;
-                #[cfg(feature = "halo2-axiom")]
+                #[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
                 let ncell = region.assign_advice(column, row_offset, value);
-                #[cfg(not(feature = "halo2-axiom"))]
+                #[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
                 let ncell =
                     region.assign_advice(|| "", column, row_offset, || value.map(|v| *v)).unwrap();
                 raw_constrain_equal(region, ncell.cell(), cell);

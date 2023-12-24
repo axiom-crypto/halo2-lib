@@ -4,14 +4,14 @@ use crate::{
         circuit::{Layouter, SimpleFloorPlanner},
         dev::MockProver,
         halo2curves::bn256::Fr,
-        plonk::{keygen_pk, keygen_vk, Assigned, Circuit, ConstraintSystem, Error},
+        plonk::{keygen_pk, keygen_vk, Assigned, Circuit, ConstraintSystem, Error, FirstPhase},
     },
     virtual_region::{
         copy_constraints::EXTERNAL_CELL_TYPE_ID, lookups::basic::BasicDynLookupConfig,
     },
     AssignedValue, ContextCell,
 };
-use halo2_proofs_axiom::plonk::FirstPhase;
+
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use test_log::test;
 
