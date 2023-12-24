@@ -1,7 +1,7 @@
 use crate::ff::Field;
 use crate::halo2_proofs::{
     circuit::{AssignedCell, Cell, Region, Value},
-    plonk::{Advice, Assigned, Column, Fixed, Circuit},
+    plonk::{Advice, Assigned, Circuit, Column, Fixed},
 };
 use crate::virtual_region::copy_constraints::{CopyConstraintManager, SharedCopyConstraintManager};
 use crate::AssignedValue;
