@@ -4,11 +4,15 @@ use std::{
 };
 
 use super::*;
-use crate::halo2curves::pairing::{group::ff::Field, MillerLoopResult};
+use crate::halo2curves::pairing::MillerLoopResult;
+#[cfg(any(feature = "halo2-axiom", feature = "halo2-axiom-icicle"))]
+use crate::halo2curves::pairing::group::ff::Field;
 use crate::{
     bn254::bls_signature::BlsSignatureChip, fields::FpStrategy,
     halo2_proofs::halo2curves::bn256::G2Affine,
 };
+#[cfg(any(feature = "halo2-pse", feature = "halo2-icicle"))]
+use halo2_base::halo2_proofs::arithmetic::Field;
 use halo2_base::{
     gates::RangeChip,
     halo2_proofs::halo2curves::bn256::{multi_miller_loop, G2Prepared, Gt},
