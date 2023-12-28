@@ -15,7 +15,7 @@ use crate::{
 };
 use halo2_base::utils::halo2::{raw_assign_advice, raw_assign_fixed};
 use itertools::Itertools;
-use log::{debug, info};
+use log::info;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;

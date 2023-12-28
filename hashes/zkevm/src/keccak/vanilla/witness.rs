@@ -411,7 +411,7 @@ fn keccak<F: Field>(
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
-        debug!("hash: {:x?}", &(hash_bytes[0..4].concat()));
+        log::debug!("hash: {:x?}", &(hash_bytes[0..4].concat()));
         assert_eq!(length, bytes.len());
     }
 }
