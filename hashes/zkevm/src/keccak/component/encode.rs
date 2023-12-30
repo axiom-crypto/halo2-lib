@@ -8,14 +8,13 @@ use halo2_base::{
 };
 use itertools::Itertools;
 use num_bigint::BigUint;
-use snark_verifier_sdk::{snark_verifier, NativeLoader};
 
 use crate::{
     keccak::vanilla::{keccak_packed_multi::get_num_keccak_f, param::*},
     util::eth_types::Field,
 };
 
-use super::param::*;
+use super::{create_native_poseidon_sponge, param::*};
 
 // TODO: Abstract this module into a trait for all component circuits.
 
@@ -26,12 +25,7 @@ use super::param::*;
 pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {
     let witnesses_per_keccak_f = pack_native_input(bytes);
     // Absorb witnesses keccak_f by keccak_f.
-    let mut native_poseidon_sponge =
-        snark_verifier::util::hash::Poseidon::<F, F, POSEIDON_T, POSEIDON_RATE>::new::<
-            POSEIDON_R_F,
-            POSEIDON_R_P,
-            POSEIDON_SECURE_MDS,
-        >(&NativeLoader);
+    let mut native_poseidon_sponge = create_native_poseidon_sponge();
     for witnesses in witnesses_per_keccak_f {
         for absorbing in witnesses.chunks(POSEIDON_RATE) {
             // To avoid absorbing witnesses crossing keccak_fs together, pad 0s to make sure absorb.len() == RATE.
