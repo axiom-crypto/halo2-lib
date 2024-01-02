@@ -26,7 +26,7 @@ ark-std = { version = "0.3.0", features = ["print-trace"], optional = true }
 # Use Axiom's custom halo2 monorepo for faster proving when feature = "halo2-axiom" is on
 halo2_proofs_axiom = { version = "0.3", package = "halo2-axiom", optional = true }
 # Use PSE halo2 and halo2curves for compatibility when feature = "halo2-pse" is on
-# halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", rev = "7a21656", optional = true }
+halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", rev = "7a21656", optional = true }
 
 # This is Scroll's audited poseidon circuit. We only use it for the Native Poseidon spec. We do not use the halo2 circuit at all (and it wouldn't even work because the halo2_proofs tag is not compatbile).
 # We forked it to upgrade to ff v0.13 and removed the circuit module
@@ -59,8 +59,8 @@ mimalloc = { version = "0.1", default-features = false, optional = true }
 [features]
 default = ["halo2-axiom", "display", "test-utils"]
 asm = ["halo2_proofs_axiom?/asm"]
-#dev-graph = ["halo2_proofs/dev-graph", "plotters"] # only works with halo2-pse for now
-#halo2-pse = ["halo2_proofs/circuit-params"]
+dev-graph = ["halo2_proofs/dev-graph", "plotters"] # only works with halo2-pse for now
+halo2-pse = ["halo2_proofs/circuit-params"]
 halo2-axiom = ["halo2_proofs_axiom"]
 display = []
 profile = ["halo2_proofs_axiom?/profile"]
