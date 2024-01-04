@@ -48,6 +48,27 @@ fn g2_add_test<F: BigPrimeField>(
     assert_eq!(answer.y, y);
 }
 
+fn g1_sum_safe_test<F: BigPrimeField>(
+    ctx: &mut Context<F>,
+    range: &RangeChip<F>,
+    params: CircuitParams,
+    _points: Vec<G1Affine>,
+) {
+    let fp_chip = FpChip::<F>::new(range, params.limb_bits, params.num_limbs);
+    let g1_chip = EccChip::new(&fp_chip);
+
+    let points =
+        _points.iter().map(|pt| g1_chip.assign_point_unchecked(ctx, *pt)).collect::<Vec<_>>();
+
+    let acc = g1_chip.sum_safe::<G1Affine>(ctx, points);
+
+    let answer = _points.iter().fold(G1Affine::identity(), |a, b| (a + b).to_affine());
+    let x = fp_chip.get_assigned_value(&acc.x.into());
+    let y = fp_chip.get_assigned_value(&acc.y.into());
+    assert_eq!(answer.x, x);
+    assert_eq!(answer.y, y);
+}
+
 #[test]
 fn test_ec_add() {
     let path = "configs/bn254/ec_add_circuit.config";
@@ -63,6 +84,40 @@ fn test_ec_add() {
         .k(k)
         .lookup_bits(params.lookup_bits)
         .run(|ctx, range| g2_add_test(ctx, range, params, points));
+}
+
+#[test]
+fn test_ec_sum_safe() {
+    let path = "configs/bn254/ec_add_circuit.config";
+    let params: CircuitParams = serde_json::from_reader(
+        File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
+    )
+    .unwrap();
+
+    let k = params.degree;
+    let points = (0..params.batch_size).map(|_| G1Affine::random(OsRng)).collect_vec();
+
+    base_test()
+        .k(k)
+        .lookup_bits(params.lookup_bits)
+        .run(|ctx, range| g1_sum_safe_test(ctx, range, params, points));
+}
+
+#[test]
+fn test_ec_zero_sum_safe() {
+    let path = "configs/bn254/ec_add_circuit.config";
+    let params: CircuitParams = serde_json::from_reader(
+        File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
+    )
+    .unwrap();
+
+    let k = params.degree;
+    let points = (0..params.batch_size).map(|_| G1Affine::identity()).collect_vec();
+
+    base_test()
+        .k(k)
+        .lookup_bits(params.lookup_bits)
+        .run(|ctx, range| g1_sum_safe_test(ctx, range, params, points));
 }
 
 #[test]
