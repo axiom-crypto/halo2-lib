@@ -5,6 +5,7 @@ use std::{
 };
 
 use super::*;
+use crate::group::Curve;
 use crate::{
     ecc::hash_to_curve::HashToCurveChip,
     ecc::hash_to_curve::{ExpandMsgXmd, HashInstructions},
@@ -16,8 +17,6 @@ use halo2_base::{
     utils::BigPrimeField,
     AssignedValue, QuantumCell,
 };
-extern crate pairing;
-use crate::group::Curve;
 use itertools::Itertools;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]

@@ -7,8 +7,7 @@ use std::{
 use super::*;
 use crate::{bls12_381::bls_signature::BlsSignatureChip, fields::FpStrategy};
 use halo2_base::{gates::RangeChip, utils::BigPrimeField, Context};
-extern crate pairing;
-use pairing::group::ff::Field;
+use crate::halo2curves::pairing::group::ff::Field;
 use rand_core::OsRng;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]

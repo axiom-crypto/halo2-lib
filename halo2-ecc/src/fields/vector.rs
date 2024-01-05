@@ -245,13 +245,16 @@ where
         FieldVector(a.into_iter().map(|coeff| self.fp_chip.carry_mod(ctx, coeff)).collect())
     }
 
+    /// # Assumptions
+    /// * `max_bits <= n * k` where `n = self.fp_chip.limb_bits` and `k = self.fp_chip.num_limbs`
+    /// * `a[i].truncation.limbs.len() = self.fp_chip.num_limbs` for all `i = 0..a.len()`
     pub fn range_check<A>(
         &self,
         ctx: &mut Context<F>,
         a: impl IntoIterator<Item = A>,
         max_bits: usize,
     ) where
-        A: Into<FpChip::UnsafeFieldPoint>,
+        A: Into<FpChip::FieldPoint>,
     {
         for coeff in a {
             self.fp_chip.range_check(ctx, coeff, max_bits);
@@ -452,10 +455,13 @@ macro_rules! impl_field_ext_chip_common {
             self.0.carry_mod(ctx, a)
         }
 
+        /// # Assumptions
+        /// * `max_bits <= n * k` where `n = self.fp_chip.limb_bits` and `k = self.fp_chip.num_limbs`
+        /// * `a[i].truncation.limbs.len() = self.fp_chip.num_limbs` for all `i = 0..a.len()`
         fn range_check(
             &self,
             ctx: &mut Context<F>,
-            a: impl Into<Self::UnsafeFieldPoint>,
+            a: impl Into<Self::FieldPoint>,
             max_bits: usize,
         ) {
             self.0.range_check(ctx, a.into(), max_bits)

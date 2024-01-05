@@ -4,6 +4,7 @@ use std::{
 };
 
 use super::*;
+use crate::group::ff::Field;
 use crate::{
     bn254::bls_signature::BlsSignatureChip, fields::FpStrategy,
     halo2_proofs::halo2curves::bn256::G2Affine,
@@ -14,13 +15,12 @@ use halo2_base::{
     utils::BigPrimeField,
     Context,
 };
-extern crate pairing;
-use crate::group::ff::Field;
+use rand_core::OsRng;
+
+#[cfg(feature = "halo2-axiom")]
+use crate::halo2curves::pairing::MillerLoopResult;
 #[cfg(feature = "halo2-pse")]
 use halo2_base::halo2_proofs::halo2curves::pairing::MillerLoopResult;
-#[cfg(feature = "halo2-axiom")]
-use pairing::MillerLoopResult;
-use rand_core::OsRng;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 struct BlsSignatureCircuitParams {

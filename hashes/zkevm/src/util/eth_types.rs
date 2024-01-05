@@ -9,7 +9,7 @@ pub use ethers_core::types::{
     Address, Block, Bytes, Signature, H160, H256, H64, U256, U64,
 };
 
-/// Trait used to reduce verbosity with the declaration of the [`FieldExt`]
+/// Trait used to reduce verbosity with the declaration of the [`PrimeField`]
 /// trait and its repr.
 pub trait Field: BigPrimeField + PrimeField<Repr = [u8; 32]> {}
 

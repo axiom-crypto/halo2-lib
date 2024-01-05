@@ -8,11 +8,14 @@ use crate::halo2_proofs::{
     circuit::{Region, Value},
     plonk::{Advice, Column},
 };
-use crate::utils::halo2::raw_assign_advice;
+use crate::utils::halo2::{constrain_virtual_equals_external, raw_assign_advice};
 use crate::{AssignedValue, ContextTag};
 
 use super::copy_constraints::SharedCopyConstraintManager;
 use super::manager::VirtualRegionManager;
+
+/// Basic dynamic lookup table gadget.
+pub mod basic;
 
 /// A manager that can be used for any lookup argument. This manager automates
 /// the process of copying cells to designed advice columns with lookup enabled.
@@ -29,12 +32,12 @@ use super::manager::VirtualRegionManager;
 ///
 /// We want this manager to be CPU thread safe, while ensuring that the resulting circuit is
 /// deterministic -- the order in which the cells to lookup are added matters.
-/// The current solution is to tag the cells to lookup with the context id from the [Context] in which
+/// The current solution is to tag the cells to lookup with the context id from the [`Context`](crate::Context) in which
 /// it was called, and add virtual cells sequentially to buckets labelled by id.
 /// The virtual cells will be assigned to physical cells sequentially by id.
 /// We use a `BTreeMap` for the buckets instead of sorting to cells, to ensure that the order of the cells
 /// within a bucket is deterministic.
-/// The assumption is that the [Context] is thread-local.
+/// The assumption is that the [`Context`](crate::Context) is thread-local.
 ///
 /// Cheap to clone across threads because everything is in [Arc].
 #[derive(Clone, Debug, Getters, CopyGetters, Setters)]
@@ -122,6 +125,8 @@ impl<F: Field + Ord, const ADVICE_COLS: usize> VirtualRegionManager<F>
     type Config = Vec<[Column<Advice>; ADVICE_COLS]>;
 
     fn assign_raw(&self, config: &Self::Config, region: &mut Region<F>) {
+        let mut copy_manager =
+            (!self.witness_gen_only).then(|| self.copy_manager().lock().unwrap());
         let cells_to_lookup = self.cells_to_lookup.lock().unwrap();
         // Copy the cells to the config columns, going left to right, then top to bottom.
         // Will panic if out of rows
@@ -135,12 +140,8 @@ impl<F: Field + Ord, const ADVICE_COLS: usize> VirtualRegionManager<F>
             for (advice, &column) in advices.iter().zip(config[lookup_col].iter()) {
                 let bcell =
                     raw_assign_advice(region, column, lookup_offset, Value::known(advice.value));
-                if !self.witness_gen_only {
-                    let ctx_cell = advice.cell.unwrap();
-                    let copy_manager = self.copy_manager.lock().unwrap();
-                    let acell =
-                        copy_manager.assigned_advices.get(&ctx_cell).expect("cell not assigned");
-                    region.constrain_equal(*acell, bcell.cell());
+                if let Some(copy_manager) = copy_manager.as_mut() {
+                    constrain_virtual_equals_external(region, *advice, bcell.cell(), copy_manager);
                 }
             }
 

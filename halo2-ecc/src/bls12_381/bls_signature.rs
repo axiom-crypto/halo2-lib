@@ -69,10 +69,8 @@ impl<'chip, F: BigPrimeField> BlsSignatureChip<'chip, F> {
         let g1_neg = g1_chip.assign_constant_point(ctx, G1Affine::generator().neg());
 
         let gt = self.compute_pairing(ctx, signature, msghash, pubkey, g1_neg);
-
         let fp12_chip = Fp12Chip::<F>::new(self.fp_chip);
         let fp12_one = fp12_chip.load_constant(ctx, Fq12::one());
-
         fp12_chip.assert_equal(ctx, gt, fp12_one);
     }
 
@@ -84,15 +82,6 @@ impl<'chip, F: BigPrimeField> BlsSignatureChip<'chip, F> {
         pubkey: EcPoint<F, ProperCrtUint<F>>,
         g1_neg: EcPoint<F, ProperCrtUint<F>>,
     ) -> FieldVector<ProperCrtUint<F>> {
-        let mml = self
-            .pairing_chip
-            .multi_miller_loop(ctx, vec![(&g1_neg, &signature), (&pubkey, &msghash)]);
-
-        let fp12_chip = Fp12Chip::<F>::new(self.fp_chip);
-        let fe = fp12_chip.final_exp(ctx, mml);
-
-        assert_eq!(fe.0.len(), 12);
-
-        fe
+        self.pairing_chip.batched_pairing(ctx, &[(&g1_neg, &signature), (&pubkey, &msghash)])
     }
 }

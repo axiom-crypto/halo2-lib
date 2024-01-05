@@ -126,12 +126,7 @@ pub trait FieldChip<F: BigPrimeField>: Clone + Send + Sync {
 
     fn carry_mod(&self, ctx: &mut Context<F>, a: Self::UnsafeFieldPoint) -> Self::FieldPoint;
 
-    fn range_check(
-        &self,
-        ctx: &mut Context<F>,
-        a: impl Into<Self::UnsafeFieldPoint>,
-        max_bits: usize,
-    );
+    fn range_check(&self, ctx: &mut Context<F>, a: impl Into<Self::FieldPoint>, max_bits: usize);
 
     /// Constrains that `a` is a reduced representation and returns the wrapped `a`.
     fn enforce_less_than(

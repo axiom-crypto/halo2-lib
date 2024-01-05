@@ -8,8 +8,8 @@ use crate::{
         poly::Rotation,
     },
     utils::{
-        biguint_to_fe, bit_length, decompose_fe_to_u64_limbs, fe_to_biguint, BigPrimeField,
-        ScalarField,
+        biguint_to_fe, bit_length, decompose, decompose_fe_to_u64_limbs, fe_to_biguint,
+        BigPrimeField, ScalarField,
     },
     virtual_region::lookups::LookupAnyManager,
     AssignedValue, Context,
@@ -52,12 +52,9 @@ impl<F: ScalarField> RangeConfig<F> {
     ///
     /// Panics if `lookup_bits` > 28.
     /// * `meta`: [ConstraintSystem] of the circuit
-    /// * `range_strategy`: [GateStrategy] of the range chip
-    /// * `num_advice`: Number of [Advice] [Column]s without lookup enabled in each phase
+    /// * `gate_params`: see [FlexGateConfigParams]
     /// * `num_lookup_advice`: Number of `lookup_advice` [Column]s in each phase
-    /// * `num_fixed`: Number of fixed [Column]s in each phase
     /// * `lookup_bits`: Number of bits represented in the LookUp table [0,2^lookup_bits)
-    /// * `circuit_degree`: Degree that expresses the size of circuit (i.e., 2^<sup>circuit_degree</sup> is the number of rows in the circuit)
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         gate_params: FlexGateConfigParams,
@@ -194,10 +191,13 @@ pub trait RangeInstructions<F: ScalarField> {
         num_bits: usize,
     );
 
-    /// Performs a range check that `a` has at most `bit_length(b)` bits and then constrains that `a` is less than `b`.
+    /// Performs a range check that `a` has at most `ceil(b.bits() / lookup_bits) * lookup_bits` bits and then constrains that `a` is less than `b`.
     ///
     /// * a: [AssignedValue] value to check
     /// * b: upper bound expressed as a [u64] value
+    ///
+    /// ## Assumptions
+    /// * `ceil(b.bits() / lookup_bits) * lookup_bits <= F::CAPACITY`
     fn check_less_than_safe(&self, ctx: &mut Context<F>, a: AssignedValue<F>, b: u64) {
         let range_bits =
             (bit_length(b) + self.lookup_bits() - 1) / self.lookup_bits() * self.lookup_bits();
@@ -206,10 +206,13 @@ pub trait RangeInstructions<F: ScalarField> {
         self.check_less_than(ctx, a, Constant(F::from(b)), range_bits)
     }
 
-    /// Performs a range check that `a` has at most `bit_length(b)` bits and then constrains that `a` is less than `b`.
+    /// Performs a range check that `a` has at most `ceil(b.bits() / lookup_bits) * lookup_bits` bits and then constrains that `a` is less than `b`.
     ///
     /// * a: [AssignedValue] value to check
     /// * b: upper bound expressed as a [BigUint] value
+    ///
+    /// ## Assumptions
+    /// * `ceil(b.bits() / lookup_bits) * lookup_bits <= F::CAPACITY`
     fn check_big_less_than_safe(&self, ctx: &mut Context<F>, a: AssignedValue<F>, b: BigUint)
     where
         F: BigPrimeField,
@@ -235,7 +238,7 @@ pub trait RangeInstructions<F: ScalarField> {
         num_bits: usize,
     ) -> AssignedValue<F>;
 
-    /// Performs a range check that `a` has at most `ceil(bit_length(b) / lookup_bits) * lookup_bits` and then constrains that `a` is in `[0,b)`.
+    /// Performs a range check that `a` has at most `ceil(bit_length(b) / lookup_bits) * lookup_bits` and then returns whether `a` is in `[0,b)`.
     ///
     /// Returns 1 if `a` < `b`, otherwise 0.
     ///
@@ -254,14 +257,14 @@ pub trait RangeInstructions<F: ScalarField> {
         self.is_less_than(ctx, a, Constant(F::from(b)), range_bits)
     }
 
-    /// Performs a range check that `a` has at most `ceil(b.bits() / lookup_bits) * lookup_bits` bits and then constrains that `a` is in `[0,b)`.
+    /// Performs a range check that `a` has at most `ceil(b.bits() / lookup_bits) * lookup_bits` bits and then returns whether `a` is in `[0,b)`.
     ///
     /// Returns 1 if `a` < `b`, otherwise 0.
     ///
     /// * a: [AssignedValue] value to check
     /// * b: upper bound as [BigUint] value
     ///
-    /// For the current implementation using [`is_less_than`], we require `ceil(b.bits() / lookup_bits) + 1 < F::NUM_BITS / lookup_bits`
+    /// For the current implementation using `is_less_than`, we require `ceil(b.bits() / lookup_bits) + 1 < F::NUM_BITS / lookup_bits`
     fn is_big_less_than_safe(
         &self,
         ctx: &mut Context<F>,
@@ -280,10 +283,14 @@ pub trait RangeInstructions<F: ScalarField> {
 
     /// Constrains and returns `(c, r)` such that `a = b * c + r`.
     ///
-    /// Assumes that `b != 0` and that `a` has <= `a_num_bits` bits.
     /// * a: [QuantumCell] value to divide
     /// * b: [BigUint] value to divide by
     /// * a_num_bits: number of bits needed to represent the value of `a`
+    ///
+    /// ## Assumptions
+    /// * `b != 0` and that `a` has <= `a_num_bits` bits.
+    /// * `a_num_bits <= F::CAPACITY = F::NUM_BITS - 1`
+    ///   * Unsafe behavior if `a_num_bits >= F::NUM_BITS`
     fn div_mod(
         &self,
         ctx: &mut Context<F>,
@@ -330,6 +337,10 @@ pub trait RangeInstructions<F: ScalarField> {
     /// * a_num_bits: number of bits needed to represent the value of `a`
     /// * b_num_bits: number of bits needed to represent the value of `b`
     ///
+    /// ## Assumptions
+    /// * `a_num_bits <= F::CAPACITY = F::NUM_BITS - 1`
+    /// * `b_num_bits <= F::CAPACITY = F::NUM_BITS - 1`
+    /// * Unsafe behavior if `a_num_bits >= F::NUM_BITS` or `b_num_bits >= F::NUM_BITS`
     fn div_mod_var(
         &self,
         ctx: &mut Context<F>,
@@ -402,6 +413,99 @@ pub trait RangeInstructions<F: ScalarField> {
         self.gate().assert_bit(ctx, bit);
         bit
     }
+
+    /// Decomposes `num` into `num_limbs` limbs in **little** endian with each `limb` having `limb_bits` bits
+    /// and constrains the decomposition holds. Returns the limbs. More precisely, checks that:
+    /// ```ignore
+    /// num = sum_{i=0}^{num_limbs-1} limb[i] * 2^{i * limb_bits}
+    /// ```
+    ///
+    /// ## Panics
+    /// Circuit constraints will fail if `num` cannot be decomposed into `num_limbs` limbs of `limb_bits` bits.
+    fn decompose_le(
+        &self,
+        ctx: &mut Context<F>,
+        num: AssignedValue<F>,
+        limb_bits: usize,
+        num_limbs: usize,
+    ) -> Vec<AssignedValue<F>>
+    where
+        F: BigPrimeField,
+    {
+        // mostly copied from RangeChip::range_check
+        let pows = self
+            .gate()
+            .pow_of_two()
+            .iter()
+            .step_by(limb_bits)
+            .take(num_limbs)
+            .map(|x| Constant(*x));
+        let limb_vals = decompose(num.value(), num_limbs, limb_bits).into_iter().map(Witness);
+        let (acc, limbs_le) = self.gate().inner_product_left(ctx, limb_vals, pows);
+        ctx.constrain_equal(&acc, &num);
+
+        for limb in &limbs_le {
+            self.range_check(ctx, *limb, limb_bits);
+        }
+        limbs_le
+    }
+
+    /// Reconstructs a field element from `limbs` in **little** endian with each `limb` having
+    /// `limb_bits` bits and constrains the reconstruction holds. Returns the number.
+    /// More precisely, checks that:
+    /// ```ignore
+    /// num = sum_{i=0}^{num_limbs-1} limbs[i] * 2^{i * limb_bits}
+    /// ```
+    ///
+    /// Assumes 'limbs' contains valid limbs of at most limb_bits size.
+    /// NOTE: There might be multiple `limbs` that represent the same number. eg. x and x + p.
+    ///       Better to range check `limbs` before calling this function.
+    fn limbs_to_num(
+        &self,
+        ctx: &mut Context<F>,
+        limbs: &[AssignedValue<F>],
+        limb_bits: usize,
+    ) -> AssignedValue<F>
+    where
+        F: BigPrimeField,
+    {
+        self.gate().inner_product(
+            ctx,
+            limbs.iter().copied(),
+            self.gate()
+                .pow_of_two()
+                .iter()
+                .step_by(limb_bits)
+                .take(limbs.len())
+                .map(|x| Constant(*x)),
+        )
+    }
+
+    /// Bitwise right rotate a by BIT bits. BIT and NUM_BITS must be determined at compile time.
+    ///
+    /// Assumes 'a' is a NUM_BITS bit integer and 0 < NUM_BITS <= 128.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: a [AssignedValue] value.
+    fn const_right_rotate<const BIT: usize, const NUM_BITS: usize>(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+    ) -> AssignedValue<F>
+    where
+        F: BigPrimeField;
+
+    /// Bitwise left rotate a by BIT bits. BIT and NUM_BITS must be determined at compile time.
+    ///
+    /// Assumes 'a' is a NUM_BITS bit integer and 0 < NUM_BITS <= 128.
+    /// * `ctx`: [Context] to add the constraints to
+    /// * `a`: a [AssignedValue] value.
+    fn const_left_rotate<const BIT: usize, const NUM_BITS: usize>(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+    ) -> AssignedValue<F>
+    where
+        F: BigPrimeField;
 }
 
 /// # RangeChip
@@ -411,7 +515,7 @@ pub trait RangeInstructions<F: ScalarField> {
 pub struct RangeChip<F: ScalarField> {
     /// Underlying [GateChip] for this chip.
     pub gate: GateChip<F>,
-    /// Lookup manager for each phase, lazily initiated using the [SharedCopyConstraintManager] from the [Context]
+    /// Lookup manager for each phase, lazily initiated using the [`SharedCopyConstraintManager`](crate::virtual_region::copy_constraints::SharedCopyConstraintManager) from the [Context]
     /// that first calls it.
     ///
     /// The lookup manager is used to store the cells that need to be looked up in the range check lookup table.
@@ -426,8 +530,13 @@ pub struct RangeChip<F: ScalarField> {
 
 impl<F: ScalarField> RangeChip<F> {
     /// Creates a new [RangeChip] with the given strategy and lookup_bits.
-    /// * strategy: [GateStrategy] for advice values in this chip
-    /// * lookup_bits: number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>)
+    /// * `lookup_bits`: number of bits represented in the lookup table [0,2<sup>lookup_bits</sup>)
+    /// * `lookup_manager`: a [LookupAnyManager] for each phase.
+    ///
+    /// **IMPORTANT:** It is **critical** that all `LookupAnyManager`s use the same [`SharedCopyConstraintManager`](crate::virtual_region::copy_constraints::SharedCopyConstraintManager)
+    /// as in your primary circuit builder.
+    ///
+    /// It is not advised to call this function directly. Instead you should call `BaseCircuitBuilder::range_chip`.
     pub fn new(lookup_bits: usize, lookup_manager: [LookupAnyManager<F, 1>; MAX_PHASE]) -> Self {
         let limb_base = F::from(1u64 << lookup_bits);
         let mut running_base = limb_base;
@@ -516,6 +625,41 @@ impl<F: ScalarField> RangeChip<F> {
             _ => {}
         }
         last_limb
+    }
+
+    /// Bitwise right rotate a by <bit> bits. This function should never be called directly
+    /// because const bitwise rotation must be determined at compile time.
+    ///
+    /// Assumes 'a' is a `num_bits` bit integer and `0 < num_bits <= F::CAPACITY`.
+    fn const_right_rotate_internal(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+        bit: usize,
+        num_bits: usize,
+    ) -> AssignedValue<F>
+    where
+        F: BigPrimeField,
+    {
+        assert!(0 < num_bits && num_bits <= F::CAPACITY as usize);
+        // Add a constrain a = l_witness << bit | r_wintess
+        let val = fe_to_biguint(a.value());
+        assert!(val.bits() <= num_bits as u64);
+        let (val_r, val_l) = val.div_mod_floor(&(BigUint::one() << bit));
+        let l_witness = ctx.load_witness(biguint_to_fe(&val_l));
+        let r_witness = ctx.load_witness(biguint_to_fe(&val_r));
+        let val_witness =
+            self.gate.mul_add(ctx, l_witness, Constant(self.gate.pow_of_two()[bit]), r_witness);
+        self.range_check(ctx, l_witness, num_bits - bit);
+        self.range_check(ctx, r_witness, bit);
+        ctx.constrain_equal(&a, &val_witness);
+        // Return (r_witness << (num_bits - bit)) | l_witness
+        self.gate.mul_add(
+            ctx,
+            r_witness,
+            Constant(self.gate.pow_of_two()[num_bits - bit]),
+            l_witness,
+        )
     }
 }
 
@@ -635,5 +779,36 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         let last_limb = self._range_check(ctx, shifted_cell, padded_bits + self.lookup_bits);
         // last_limb will have the (k + 1)-th limb of `a - b + 2^{k * limb_bits}`, which is zero iff `a < b`
         self.gate.is_zero(ctx, last_limb)
+    }
+
+    fn const_right_rotate<const BIT: usize, const NUM_BITS: usize>(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+    ) -> AssignedValue<F>
+    where
+        F: BigPrimeField,
+    {
+        let bit_to_shift = BIT % NUM_BITS;
+        if bit_to_shift == 0 {
+            return a;
+        };
+        self.const_right_rotate_internal(ctx, a, bit_to_shift, NUM_BITS)
+    }
+
+    fn const_left_rotate<const BIT: usize, const NUM_BITS: usize>(
+        &self,
+        ctx: &mut Context<F>,
+        a: AssignedValue<F>,
+    ) -> AssignedValue<F>
+    where
+        F: BigPrimeField,
+    {
+        let bit_to_shift = BIT % NUM_BITS;
+        if bit_to_shift == 0 {
+            return a;
+        };
+        // left rotate by bit_to_shift == right rotate by (NUM_BITS - bit_to_shift)
+        self.const_right_rotate_internal(ctx, a, NUM_BITS - bit_to_shift, NUM_BITS)
     }
 }
