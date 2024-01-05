@@ -1,4 +1,3 @@
-use std::any::TypeId;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::DerefMut;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -15,6 +14,9 @@ use crate::AssignedValue;
 use crate::{ff::Field, ContextCell};
 
 use super::manager::VirtualRegionManager;
+
+/// Type ID to distinguish external raw Halo2 cells. **This Type ID must be unique.**
+pub const EXTERNAL_CELL_TYPE_ID: &str = "halo2-base:External Raw Halo2 Cell";
 
 /// Thread-safe shared global manager for all copy constraints.
 pub type SharedCopyConstraintManager<F> = Arc<Mutex<CopyConstraintManager<F>>>;
@@ -80,17 +82,22 @@ impl<F: Field + Ord> CopyConstraintManager<F> {
         self.load_external_cell_impl(Some(cell))
     }
 
-    /// Mock to load an external cell for base circuit simulation. If any mock external cell is loaded, calling [assign_raw] will panic.
+    /// Mock to load an external cell for base circuit simulation. If any mock external cell is loaded, calling `assign_raw` will panic.
     pub fn mock_external_assigned(&mut self, v: F) -> AssignedValue<F> {
         let context_cell = self.load_external_cell_impl(None);
         AssignedValue { value: Assigned::Trivial(v), cell: Some(context_cell) }
     }
 
     fn load_external_cell_impl(&mut self, cell: Option<Cell>) -> ContextCell {
-        let context_cell = ContextCell::new(TypeId::of::<Cell>(), 0, self.external_cell_count);
+        let context_cell = ContextCell::new(EXTERNAL_CELL_TYPE_ID, 0, self.external_cell_count);
         self.external_cell_count += 1;
         if let Some(cell) = cell {
-            self.assigned_advices.insert(context_cell, cell);
+            if let Some(old_cell) = self.assigned_advices.insert(context_cell, cell) {
+                assert!(
+                    old_cell.row_offset == cell.row_offset && old_cell.column == cell.column,
+                    "External cell already assigned"
+                )
+            }
         }
         context_cell
     }

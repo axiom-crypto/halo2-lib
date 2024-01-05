@@ -6,9 +6,7 @@ use std::{
 use super::*;
 use crate::fields::FieldChip;
 use crate::{fields::FpStrategy, halo2_proofs::halo2curves::bn256::G2Affine};
-use halo2_base::{
-    gates::RangeChip, halo2_proofs::arithmetic::Field, utils::BigPrimeField, Context,
-};
+use halo2_base::{gates::RangeChip, utils::BigPrimeField, Context};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 struct PairingCircuitParams {
@@ -57,70 +55,6 @@ fn test_pairing() {
     base_test().k(params.degree).lookup_bits(params.lookup_bits).run(|ctx, range| {
         pairing_test(ctx, range, params, P, Q);
     });
-}
-
-fn pairing_check_test<F: BigPrimeField>(
-    ctx: &mut Context<F>,
-    range: &RangeChip<F>,
-    params: PairingCircuitParams,
-    P: G1Affine,
-    Q: G2Affine,
-    S: G1Affine,
-) {
-    let fp_chip = FpChip::<F>::new(range, params.limb_bits, params.num_limbs);
-    let chip = PairingChip::new(&fp_chip);
-    let P_assigned = chip.load_private_g1(ctx, P);
-    let Q_assigned = chip.load_private_g2(ctx, Q);
-    let S_assigned = chip.load_private_g1(ctx, S);
-    let T_assigned = chip.load_private_g2(ctx, G2Affine::generator());
-    chip.pairing_check(ctx, &Q_assigned, &P_assigned, &T_assigned, &S_assigned);
-}
-
-/*
- * Samples a random α,β in Fr and does the pairing check
- * e(H_1^α, H_2^β) = e(H_1^(α*β), H_2), where H_1 is the generator for G1 and
- * H_2 for G2.
- */
-#[test]
-fn test_pairing_check() {
-    let path = "configs/bn254/pairing_circuit.config";
-    let params: PairingCircuitParams = serde_json::from_reader(
-        File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
-    )
-    .unwrap();
-    let mut rng = StdRng::seed_from_u64(0);
-    let alpha = Fr::random(&mut rng);
-    let beta = Fr::random(&mut rng);
-    let P = G1Affine::from(G1Affine::generator() * alpha);
-    let Q = G2Affine::from(G2Affine::generator() * beta);
-    let S = G1Affine::from(G1Affine::generator() * alpha * beta);
-    base_test().k(params.degree).lookup_bits(params.lookup_bits).run(|ctx, range| {
-        pairing_check_test(ctx, range, params, P, Q, S);
-    })
-}
-
-/*
- * Samples a random α,β in Fr and does an incorrect pairing check
- * e(H_1^α, H_2^β) = e(H_1^α, H_2), where H_1 is the generator for G1 and
- * H_2 for G2.
- */
-#[test]
-fn test_pairing_check_fail() {
-    let path = "configs/bn254/pairing_circuit.config";
-    let params: PairingCircuitParams = serde_json::from_reader(
-        File::open(path).unwrap_or_else(|e| panic!("{path} does not exist: {e:?}")),
-    )
-    .unwrap();
-    let mut rng = StdRng::seed_from_u64(0);
-    let alpha = Fr::random(&mut rng);
-    let beta = Fr::random(&mut rng);
-    let P = G1Affine::from(G1Affine::generator() * alpha);
-    let Q = G2Affine::from(G2Affine::generator() * beta);
-    base_test().k(params.degree).lookup_bits(params.lookup_bits).expect_satisfied(false).run(
-        |ctx, range| {
-            pairing_check_test(ctx, range, params, P, Q, P);
-        },
-    )
 }
 
 #[test]

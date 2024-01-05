@@ -18,7 +18,7 @@ pub fn positive<F: ScalarField>(
     gate.is_zero(ctx, sum)
 }
 
-/// Given ProperUint<F> `a`, returns 1 iff every limb of `a` is zero. Returns 0 otherwise.
+/// Given `ProperUint<F>` `a`, returns 1 iff every limb of `a` is zero. Returns 0 otherwise.
 ///
 /// It is almost always more efficient to use [`positive`] instead.
 ///

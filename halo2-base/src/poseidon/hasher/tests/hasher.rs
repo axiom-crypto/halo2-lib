@@ -1,6 +1,6 @@
 use crate::{
     gates::{range::RangeInstructions, RangeChip},
-    halo2_proofs::halo2curves::bn256::Fr,
+    halo2_proofs::{arithmetic::Field, halo2curves::bn256::Fr},
     poseidon::hasher::{
         spec::OptimizedPoseidonSpec, PoseidonCompactChunkInput, PoseidonCompactInput,
         PoseidonHasher,
@@ -9,7 +9,6 @@ use crate::{
     utils::{testing::base_test, ScalarField},
     Context,
 };
-use halo2_proofs_axiom::arithmetic::Field;
 use itertools::Itertools;
 use pse_poseidon::Poseidon;
 use rand::Rng;
@@ -161,7 +160,7 @@ fn hasher_compact_chunk_inputs_compatiblity_verification<
     for (compact_output, chunk_input) in compact_outputs.iter().zip(chunk_inputs) {
         // into() doesn't work if ! is in the beginning in the bool expression...
         let is_final_input = chunk_input.is_final.as_ref().value();
-        let is_final_output = compact_output.is_final().as_ref().value();
+        let is_final_output = compact_output.is_final.as_ref().value();
         assert_eq!(is_final_input, is_final_output);
         if is_final_output == &Fr::ONE {
             assert_eq!(native_results[output_offset], *compact_output.hash().value());

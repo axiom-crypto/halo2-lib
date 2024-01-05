@@ -421,6 +421,18 @@ impl<'chip, F: BigPrimeField> PairingChip<'chip, F> {
         fp12_chip.final_exp(ctx, f0)
     }
 
+    /// Multi-pairing Miller loop + final exponentiation.
+    pub fn batched_pairing(
+        &self,
+        ctx: &mut Context<F>,
+        pairs: &[(&EcPoint<F, FpPoint<F>>, &EcPoint<F, FqPoint<F>>)],
+    ) -> FqPoint<F> {
+        let mml = self.multi_miller_loop(ctx, pairs.to_vec());
+        let fp12_chip = Fp12Chip::<F>::new(self.fp_chip);
+        let fe = fp12_chip.final_exp(ctx, mml.clone());
+        fe
+    }
+
     /*
      * Conducts an efficient pairing check e(P, Q) = e(S, T) using only one
      * final exponentiation. In particular, this constraints
@@ -438,10 +450,9 @@ impl<'chip, F: BigPrimeField> PairingChip<'chip, F> {
     ) {
         let ecc_chip_fp = EccChip::new(self.fp_chip);
         let negated_P = ecc_chip_fp.negate(ctx, P);
-        let mml = self.multi_miller_loop(ctx, vec![(&negated_P, Q), (S, T)]);
+        let gt = self.batched_pairing(ctx, &[(&negated_P, Q), (S, T)]);
         let fp12_chip = Fp12Chip::<F>::new(self.fp_chip);
-        let fe = fp12_chip.final_exp(ctx, mml);
         let fp12_one = fp12_chip.load_constant(ctx, Fq12::one());
-        fp12_chip.assert_equal(ctx, fe, fp12_one);
+        fp12_chip.assert_equal(ctx, gt, fp12_one);
     }
 }

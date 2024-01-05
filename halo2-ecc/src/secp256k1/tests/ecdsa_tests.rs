@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-use crate::ff::Field as _;
 use crate::halo2_proofs::{
     arithmetic::CurveAffine,
     halo2curves::secp256k1::{Fq, Secp256k1Affine},
