@@ -27,8 +27,8 @@ pub struct VarLenBytes<F: ScalarField, const MAX_LEN: usize> {
 }
 
 impl<F: ScalarField, const MAX_LEN: usize> VarLenBytes<F, MAX_LEN> {
-    // VarLenBytes can be only created by SafeChip.
-    pub(super) fn new(bytes: [SafeByte<F>; MAX_LEN], len: AssignedValue<F>) -> Self {
+    /// Slightly unsafe constructor: it is not constrained that `len <= MAX_LEN`.
+    pub fn new(bytes: [SafeByte<F>; MAX_LEN], len: AssignedValue<F>) -> Self {
         assert!(
             len.value().le(&F::from(MAX_LEN as u64)),
             "Invalid length which exceeds MAX_LEN {MAX_LEN}",
@@ -41,7 +41,15 @@ impl<F: ScalarField, const MAX_LEN: usize> VarLenBytes<F, MAX_LEN> {
         MAX_LEN
     }
 
-    /// Left pads the variable length byte array with 0s to the MAX_LEN
+    /// Left pads the variable length byte array with 0s to the `MAX_LEN`.
+    /// Takes a fixed length array `self.bytes` and returns a length `MAX_LEN` array equal to
+    /// `[[0; MAX_LEN - len], self.bytes[..len]].concat()`, i.e., we take `self.bytes[..len]` and
+    /// zero pad it on the left, where `len = self.len`
+    ///
+    /// Assumes `0 < self.len <= MAX_LEN`.
+    ///
+    /// ## Panics
+    /// If `self.len` is not in the range `(0, MAX_LEN]`.
     pub fn left_pad_to_fixed(
         &self,
         ctx: &mut Context<F>,
@@ -76,8 +84,8 @@ pub struct VarLenBytesVec<F: ScalarField> {
 }
 
 impl<F: ScalarField> VarLenBytesVec<F> {
-    // VarLenBytesVec can be only created by SafeChip.
-    pub(super) fn new(bytes: Vec<SafeByte<F>>, len: AssignedValue<F>, max_len: usize) -> Self {
+    /// Slightly unsafe constructor: it is not constrained that `len <= max_len`.
+    pub fn new(bytes: Vec<SafeByte<F>>, len: AssignedValue<F>, max_len: usize) -> Self {
         assert!(
             len.value().le(&F::from(max_len as u64)),
             "Invalid length which exceeds MAX_LEN {}",
@@ -118,8 +126,8 @@ pub struct FixLenBytes<F: ScalarField, const LEN: usize> {
 }
 
 impl<F: ScalarField, const LEN: usize> FixLenBytes<F, LEN> {
-    // FixLenBytes can be only created by SafeChip.
-    pub(super) fn new(bytes: [SafeByte<F>; LEN]) -> Self {
+    /// Constructor
+    pub fn new(bytes: [SafeByte<F>; LEN]) -> Self {
         Self { bytes }
     }
 
@@ -143,8 +151,8 @@ pub struct FixLenBytesVec<F: ScalarField> {
 }
 
 impl<F: ScalarField> FixLenBytesVec<F> {
-    // FixLenBytes can be only created by SafeChip.
-    pub(super) fn new(bytes: Vec<SafeByte<F>>, len: usize) -> Self {
+    /// Constructor
+    pub fn new(bytes: Vec<SafeByte<F>>, len: usize) -> Self {
         assert_eq!(bytes.len(), len, "bytes length doesn't match");
         Self { bytes }
     }

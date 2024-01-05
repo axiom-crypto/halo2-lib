@@ -4,6 +4,7 @@ use std::{
 };
 
 use super::*;
+use crate::halo2curves::pairing::{group::ff::Field, MillerLoopResult};
 use crate::{
     bn254::bls_signature::BlsSignatureChip, fields::FpStrategy,
     halo2_proofs::halo2curves::bn256::G2Affine,

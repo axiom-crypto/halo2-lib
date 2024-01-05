@@ -1,7 +1,7 @@
 use crate::{
     gates::{
-        builder::{GateCircuitBuilder, GateThreadBuilder},
-        GateChip, GateInstructions,
+        builder::{GateThreadBuilder, RangeCircuitBuilder},
+        RangeChip, RangeInstructions,
     },
     halo2_proofs::{
         plonk::keygen_pk,
@@ -13,6 +13,7 @@ use crate::{
 
 use halo2_proofs_axiom::halo2curves::FieldExt;
 use rand::rngs::OsRng;
+use std::env;
 
 use super::*;
 
@@ -25,19 +26,21 @@ fn test_bitwise_rotate_gen<const BIT: usize, const NUM_BITS: usize>(
     expect_satisfied: bool,
 ) {
     // first create proving and verifying key
+    let lookup_bits = 3;
+    env::set_var("LOOKUP_BITS", lookup_bits.to_string());
     let mut builder = GateThreadBuilder::keygen();
-    let gate = GateChip::default();
+    let gate = RangeChip::<Fr>::default(lookup_bits);
     let dummy_a = builder.main(0).load_witness(Fr::zero());
     let result = if is_left {
-        gate.const_left_rotate_unsafe::<BIT, NUM_BITS>(builder.main(0), dummy_a)
+        gate.const_left_rotate::<BIT, NUM_BITS>(builder.main(0), dummy_a)
     } else {
-        gate.const_right_rotate_unsafe::<BIT, NUM_BITS>(builder.main(0), dummy_a)
+        gate.const_right_rotate::<BIT, NUM_BITS>(builder.main(0), dummy_a)
     };
     // get the offsets of the indicator cells for later 'pranking'
     let result_offsets = result.cell.unwrap().offset;
     // set env vars
     builder.config(k as usize, Some(9));
-    let circuit = GateCircuitBuilder::keygen(builder);
+    let circuit = RangeCircuitBuilder::keygen(builder);
 
     let params = ParamsKZG::setup(k, OsRng);
     // generate proving key
@@ -49,15 +52,16 @@ fn test_bitwise_rotate_gen<const BIT: usize, const NUM_BITS: usize>(
 
     let gen_pf = || {
         let mut builder = GateThreadBuilder::prover();
-        let gate = GateChip::default();
+        let gate = RangeChip::<Fr>::default(lookup_bits);
         let a_witness = builder.main(0).load_witness(Fr::from_u128(a));
         if is_left {
-            gate.const_left_rotate_unsafe::<BIT, NUM_BITS>(builder.main(0), a_witness)
+            gate.const_left_rotate::<BIT, NUM_BITS>(builder.main(0), a_witness);
         } else {
-            gate.const_right_rotate_unsafe::<BIT, NUM_BITS>(builder.main(0), a_witness)
+            gate.const_right_rotate::<BIT, NUM_BITS>(builder.main(0), a_witness);
         };
         builder.main(0).advice[result_offsets] = Assigned::Trivial(Fr::from_u128(result_val));
-        let circuit = GateCircuitBuilder::prover(builder, vec![vec![]]); // no break points
+        builder.config(k as usize, Some(9));
+        let circuit = RangeCircuitBuilder::prover(builder, vec![vec![]]); // no break points
         gen_proof(&params, &pk, circuit)
     };
 
@@ -88,4 +92,35 @@ fn test_bitwise_rotate() {
     test_bitwise_rotate_gen::<5, 128>(8, false, 1, 1 << 123, true);
     // 1u128 >> 5 != 2047
     test_bitwise_rotate_gen::<5, 128>(8, false, 1, 2047, false);
+}
+
+#[test]
+#[should_panic]
+fn test_bitwise_rotate_zero_num_bits() {
+    let lookup_bits = 3;
+    let mut builder = GateThreadBuilder::keygen();
+    let gate = RangeChip::<Fr>::default(lookup_bits);
+    let dummy_a = builder.main(0).load_witness(Fr::zero());
+    gate.const_left_rotate::<1, 0>(builder.main(0), dummy_a);
+}
+
+#[test]
+#[should_panic]
+fn test_bitwise_rotate_too_large_num_bits() {
+    let lookup_bits = 3;
+    let mut builder = GateThreadBuilder::keygen();
+    let gate = RangeChip::<Fr>::default(lookup_bits);
+    let dummy_a = builder.main(0).load_witness(Fr::zero());
+    gate.const_left_rotate::<1, 200>(builder.main(0), dummy_a);
+}
+
+#[test]
+#[should_panic]
+fn test_bitwise_rotate_value_overflow() {
+    let lookup_bits = 3;
+    let mut builder = GateThreadBuilder::keygen();
+    let gate = RangeChip::<Fr>::default(lookup_bits);
+    // 1 << 128
+    let dummy_a = builder.main(0).load_witness(Fr::from_raw([0, 0, 1, 0]));
+    gate.const_left_rotate::<1, 128>(builder.main(0), dummy_a);
 }

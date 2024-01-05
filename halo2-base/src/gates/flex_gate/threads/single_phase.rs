@@ -1,4 +1,4 @@
-use std::{any::TypeId, cell::RefCell};
+use std::cell::RefCell;
 
 use getset::CopyGetters;
 
@@ -13,14 +13,11 @@ use crate::{
     Context, ContextCell,
 };
 use crate::{
-    halo2_proofs::{
-        circuit::{Region, Value},
-        plonk::{FirstPhase, SecondPhase, ThirdPhase},
-    },
+    halo2_proofs::circuit::{Region, Value},
     virtual_region::manager::VirtualRegionManager,
 };
 
-/// Virtual region manager for [Vec<BasicGateConfig>] in a single challenge phase.
+/// Virtual region manager for [`Vec<BasicGateConfig>`] in a single challenge phase.
 /// This is the core manager for [Context]s.
 #[derive(Clone, Debug, Default, CopyGetters)]
 pub struct SinglePhaseCoreManager<F: ScalarField> {
@@ -43,8 +40,8 @@ pub struct SinglePhaseCoreManager<F: ScalarField> {
 }
 
 impl<F: ScalarField> SinglePhaseCoreManager<F> {
-    /// Creates a new [GateThreadBuilder] and spawns a main thread.
-    /// * `witness_gen_only`: If true, the [GateThreadBuilder] is used for witness generation only.
+    /// Creates a new [SinglePhaseCoreManager] and spawns a main thread.
+    /// * `witness_gen_only`: If true, the [SinglePhaseCoreManager] is used for witness generation only.
     ///     * If true, the gate thread builder only does witness asignments and does not store constraint information -- this should only be used for the real prover.
     ///     * If false, the gate thread builder is used for keygen and mock prover (it can also be used for real prover) and the builder stores circuit information (e.g. copy constraints, fixed columns, enabled selectors).
     ///         * These values are fixed for the circuit at key generation time, and they do not need to be re-computed by the prover in the actual proving phase.
@@ -64,7 +61,7 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
         Self { phase, ..self }
     }
 
-    /// Creates a new [GateThreadBuilder] depending on the stage of circuit building. If the stage is [CircuitBuilderStage::Prover], the [GateThreadBuilder] is used for witness generation only.
+    /// Creates a new [SinglePhaseCoreManager] depending on the stage of circuit building. If the stage is [CircuitBuilderStage::Prover], the [SinglePhaseCoreManager] is used for witness generation only.
     pub fn from_stage(
         stage: CircuitBuilderStage,
         copy_manager: SharedCopyConstraintManager<F>,
@@ -73,7 +70,7 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
             .unknown(stage == CircuitBuilderStage::Keygen)
     }
 
-    /// Creates a new [GateThreadBuilder] with `use_unknown` flag set.
+    /// Creates a new [SinglePhaseCoreManager] with `use_unknown` flag set.
     /// * `use_unknown`: If true, during key generation witness [Value]s are replaced with Value::unknown() for safety.
     pub fn unknown(self, use_unknown: bool) -> Self {
         Self { use_unknown, ..self }
@@ -114,11 +111,11 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
     }
 
     /// A distinct tag for this particular type of virtual manager, which is different for each phase.
-    pub fn type_of(&self) -> TypeId {
+    pub fn type_of(&self) -> &'static str {
         match self.phase {
-            0 => TypeId::of::<(Self, FirstPhase)>(),
-            1 => TypeId::of::<(Self, SecondPhase)>(),
-            2 => TypeId::of::<(Self, ThirdPhase)>(),
+            0 => "halo2-base:SinglePhaseCoreManager:FirstPhase",
+            1 => "halo2-base:SinglePhaseCoreManager:SecondPhase",
+            2 => "halo2-base:SinglePhaseCoreManager:ThirdPhase",
             _ => panic!("Unsupported phase"),
         }
     }
@@ -222,9 +219,15 @@ pub fn assign_with_constraints<F: ScalarField, const ROTATIONS: usize>(
                 .assign_advice(|| "", column, row_offset, || value.map(|v| *v))
                 .unwrap()
                 .cell();
-            copy_manager
+            if let Some(old_cell) = copy_manager
                 .assigned_advices
-                .insert(ContextCell::new(ctx.type_id, ctx.context_id, i), cell);
+                .insert(ContextCell::new(ctx.type_id, ctx.context_id, i), cell)
+            {
+                assert!(
+                    old_cell.row_offset == cell.row_offset && old_cell.column == cell.column,
+                    "Trying to overwrite virtual cell with a different raw cell"
+                );
+            }
 
             // If selector enabled and row_offset is valid add break point, account for break point overlap, and enforce equality constraint for gate outputs.
             // ⚠️ This assumes overlap is of form: gate enabled at `i - delta` and `i`, where `delta = ROTATIONS - 1`. We currently do not support `delta < ROTATIONS - 1`.

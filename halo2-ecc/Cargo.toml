@@ -1,54 +1,60 @@
 [package]
-name="halo2-ecc"
-version="0.4.0"
-edition="2021"
+name = "halo2-ecc"
+version = "0.4.1"
+edition = "2021"
 
 [dependencies]
-itertools="0.10"
-num-bigint={ version="0.4", features=["rand"] }
-num-integer="0.1"
-num-traits="0.2"
-rand_core={ version="0.6", default-features=false, features=["getrandom"] }
-rand="0.8"
-rand_chacha="0.3.1"
-serde={ version="1.0", features=["derive"] }
-serde_json="1.0"
-rayon="1.6.1"
-test-case="3.1.0"
+itertools = "0.10"
+num-bigint = { version = "0.4", features = ["rand"] }
+num-integer = "0.1"
+num-traits = "0.2"
+rand_core = { version = "0.6", default-features = false, features = [
+    "getrandom",
+] }
+rand = "0.8"
+rand_chacha = "0.3.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rayon = "1.8"
+test-case = "3.1.0"
 
-halo2-base={ path="../halo2-base", default-features=false }
-# Use additiona axiom-crypto halo2curves for BLS12-381 chips when feature = "halo2-pse" is on,
-# because the PSE halo2curves does not support BLS12-381 chips and Halo2 depnds on lower major version so patchign it is not possible
-halo2curves = { git = "https://github.com/axiom-crypto/halo2curves", optional=true }
+halo2-base = { path = "../halo2-base", default-features = false }
+# Use additional axiom-crypto halo2curves for BLS12-381 chips when [feature = "halo2-pse"] is on,
+# because the PSE halo2curves does not support BLS12-381 chips and Halo2 depnds on lower major version so patching it is not possible
+halo2curves-axiom = { optional = true }
+
+# plotting circuit layout
+plotters = { version = "0.3.0", optional = true }
 
 [dev-dependencies]
-ark-std={ version="0.3.0", features=["print-trace"] }
-pprof={ version="0.11", features=["criterion", "flamegraph"] }
-criterion="0.4"
-criterion-macro="0.4"
-halo2-base={ path="../halo2-base", default-features=false, features=["test-utils"] }
-test-log="0.2.12"
-env_logger="0.10.0"
-pairing="0.23.0"
+ark-std = { version = "0.3.0", features = ["print-trace"] }
+pprof = { version = "0.13", features = ["criterion", "flamegraph"] }
+criterion = "0.5.1"
+criterion-macro = "0.4"
+halo2-base = { path = "../halo2-base", default-features = false, features = [
+    "test-utils",
+] }
+test-log = "0.2.12"
+env_logger = "0.10.0"
 
 [features]
-default=["jemallocator", "halo2-axiom", "display"]
-dev-graph=["halo2-base/dev-graph"]
-display=["halo2-base/display"]
-asm=["halo2-base/asm"]
-halo2-pse=["halo2-base/halo2-pse", "halo2curves"]
-halo2-axiom=["halo2-base/halo2-axiom"]
-jemallocator=["halo2-base/jemallocator"]
-mimalloc=["halo2-base/mimalloc"]
+default = ["jemallocator", "halo2-axiom", "display"]
+dev-graph = ["halo2-base/dev-graph", "plotters"]
+display = ["halo2-base/display"]
+asm = ["halo2-base/asm"]
+halo2-pse = ["halo2-base/halo2-pse", "halo2curves-axiom"]
+halo2-axiom = ["halo2-base/halo2-axiom"]
+jemallocator = ["halo2-base/jemallocator"]
+mimalloc = ["halo2-base/mimalloc"]
 
 [[bench]]
-name="fp_mul"
-harness=false
+name = "fp_mul"
+harness = false
 
 [[bench]]
-name="msm"
-harness=false
+name = "msm"
+harness = false
 
 [[bench]]
-name="fixed_base_msm"
-harness=false
+name = "fixed_base_msm"
+harness = false

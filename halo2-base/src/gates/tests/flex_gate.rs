@@ -100,7 +100,7 @@ pub fn test_inner_product_left_last(
 }
 
 #[test_case([4,5,6].map(Fr::from).to_vec(), [1,2,3].map(|x| Constant(Fr::from(x))).to_vec() => (Fr::from(32), [4,5,6].map(Fr::from).to_vec());
-"inner_product_left(): <[1,2,3],[4,5,6]> Constant b starts with 1")]
+"inner_product_left(): <[4,5,6],[1,2,3]> Constant b starts with 1")]
 #[test_case([1,2,3].map(Fr::from).to_vec(), [4,5,6].map(|x| Witness(Fr::from(x))).to_vec() => (Fr::from(32), [1,2,3].map(Fr::from).to_vec());
 "inner_product_left(): <[1,2,3],[4,5,6]> Witness")]
 pub fn test_inner_product_left(a: Vec<Fr>, b: Vec<QuantumCell<Fr>>) -> (Fr, Vec<Fr>) {
@@ -211,6 +211,14 @@ pub fn test_num_to_bits(num: usize, bits: usize) -> Vec<Fr> {
     base_test().run_gate(|ctx, chip| {
         let num = ctx.load_witness(Fr::from(num as u64));
         chip.num_to_bits(ctx, num, bits).iter().map(|a| *a.value()).collect()
+    })
+}
+
+#[test_case([0,1,1].map(Fr::from).to_vec() => Fr::from(6); "bits_to_num(): [0,1,1]")]
+pub fn test_bits_to_num(bits: Vec<Fr>) -> Fr {
+    base_test().run_gate(|ctx, chip| {
+        let bits = ctx.assign_witnesses(bits);
+        *chip.bits_to_num(ctx, bits.as_slice()).value()
     })
 }
 

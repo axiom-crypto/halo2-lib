@@ -62,6 +62,8 @@ fn test_range_check() {
 #[cfg(feature = "dev-graph")]
 #[test]
 fn plot_fp() {
+    use halo2_base::gates::circuit::builder::BaseCircuitBuilder;
+    use halo2_base::halo2_proofs;
     use plotters::prelude::*;
 
     let root = BitMapBackend::new("layout.png", (1024, 1024)).into_drawing_area();
@@ -72,10 +74,14 @@ fn plot_fp() {
     let a = Fq::zero();
     let b = Fq::zero();
 
-    let mut builder = GateThreadBuilder::keygen();
-    fp_mul_test(builder.main(0), k - 1, 88, 3, a, b);
+    let mut builder = BaseCircuitBuilder::new(false).use_k(k).use_lookup_bits(k - 1);
+    let range = builder.range_chip();
+    let chip = FpChip::<Fr, Fq>::new(&range, 88, 3);
+    let ctx = builder.main(0);
+    let [a, b] = [a, b].map(|x| chip.load_private(ctx, x));
+    let c = chip.mul(ctx, a, b);
 
-    let config_params = builder.config(k, Some(10), Some(k - 1));
-    let circuit = RangeCircuitBuilder::keygen(builder, config_params);
-    halo2_proofs::dev::CircuitLayout::default().render(k as u32, &circuit, &root).unwrap();
+    let cp = builder.calculate_params(Some(10));
+    dbg!(cp);
+    halo2_proofs::dev::CircuitLayout::default().render(k as u32, &builder, &root).unwrap();
 }
