@@ -1012,8 +1012,8 @@ impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         self.field_chip.assert_equal(ctx, P.y, Q.y);
     }
 
-    /// None of elements in `points` can be point at infinity.
-    pub fn sum<C>(
+    /// None of elements in `points` can be point at infinity. Sum cannot be point at infinity either.
+    pub fn sum_unsafe<C>(
         &self,
         ctx: &mut Context<F>,
         points: impl IntoIterator<Item = EcPoint<F, FC::FieldPoint>>,
@@ -1036,7 +1036,8 @@ impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC>
 where
     FC: Selectable<F, FC::FieldPoint>,
 {
-    pub fn sum_safe<C>(
+    /// Expensive version of `sum_unsafe`, but works generally
+    pub fn sum<C>(
         &self,
         ctx: &mut Context<F>,
         points: impl IntoIterator<Item = EcPoint<F, FC::FieldPoint>>,
@@ -1047,15 +1048,14 @@ where
         let rand_point = self.load_random_point::<C>(ctx);
         let rand_point2 = self.load_random_point::<C>(ctx);
         let zero = ctx.load_constant(F::ZERO);
-        let rand_point = into_strict_point(self.field_chip, ctx, rand_point);
-        let neg_rand_point = self.negate_strict(ctx, rand_point.clone());
-        let mut acc = StrictEcPoint::from(neg_rand_point.clone());
+        let neg_rand_point = self.negate(ctx, rand_point.clone());
+        let mut acc = ComparableEcPoint::from(neg_rand_point.clone());
         for point in points {
             let point_is_inf = self.is_infinity(ctx, point.clone());
             let addend = self.select(ctx, rand_point2.clone(), point.clone(), point_is_inf);
             let _acc = self.add_unequal(ctx, acc.clone(), addend.clone(), true);
             let _acc = self.select(ctx, acc.clone().into(), _acc, point_is_inf);
-            acc = into_strict_point(self.field_chip, ctx, _acc);
+            acc = _acc.into();
             let acc_is_inf = self.is_infinity(ctx, acc.clone().into());
             ctx.constrain_equal(&acc_is_inf, &zero);
         }

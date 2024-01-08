@@ -39,7 +39,7 @@ fn g2_add_test<F: BigPrimeField>(
     let points =
         _points.iter().map(|pt| g2_chip.assign_point_unchecked(ctx, *pt)).collect::<Vec<_>>();
 
-    let acc = g2_chip.sum::<G2Affine>(ctx, points);
+    let acc = g2_chip.sum_unsafe::<G2Affine>(ctx, points);
 
     let answer = _points.iter().fold(G2Affine::identity(), |a, b| (a + b).to_affine());
     let x = fp2_chip.get_assigned_value(&acc.x.into());
@@ -60,7 +60,7 @@ fn g1_sum_safe_test<F: BigPrimeField>(
     let points =
         _points.iter().map(|pt| g1_chip.assign_point_unchecked(ctx, *pt)).collect::<Vec<_>>();
 
-    let acc = g1_chip.sum_safe::<G1Affine>(ctx, points);
+    let acc = g1_chip.sum::<G1Affine>(ctx, points);
 
     let answer = _points.iter().fold(G1Affine::identity(), |a, b| (a + b).to_affine());
     let x = fp_chip.get_assigned_value(&acc.x.into());
