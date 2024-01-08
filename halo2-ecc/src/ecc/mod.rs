@@ -1059,7 +1059,7 @@ where
             let acc_is_inf = self.is_infinity(ctx, acc.clone().into());
             ctx.constrain_equal(&acc_is_inf, &zero);
         }
-        let acc_is_neg_rand = self.is_equal(ctx, acc.clone().into(), neg_rand_point.into());
+        let acc_is_neg_rand = self.is_equal(ctx, acc.clone().into(), neg_rand_point);
         let addend = self.select(ctx, rand_point2.clone(), acc.clone().into(), acc_is_neg_rand);
         let sum = self.add_unequal(ctx, addend, rand_point, true);
         let inf = self.load_private_unchecked(ctx, (FC::FieldType::ZERO, FC::FieldType::ZERO));
