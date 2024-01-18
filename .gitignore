@@ -22,3 +22,5 @@ Cargo.lock
 
 **/params/*
 **/params/
+
+**/.DS_Store
