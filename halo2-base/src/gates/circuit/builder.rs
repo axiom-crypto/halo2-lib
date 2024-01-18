@@ -372,3 +372,15 @@ pub struct RangeStatistics {
     /// Total special advice cells that need to be looked up, per phase
     pub total_lookup_advice_per_phase: Vec<usize>,
 }
+
+impl<F: ScalarField> AsRef<BaseCircuitBuilder<F>> for BaseCircuitBuilder<F> {
+    fn as_ref(&self) -> &BaseCircuitBuilder<F> {
+        self
+    }
+}
+
+impl<F: ScalarField> AsMut<BaseCircuitBuilder<F>> for BaseCircuitBuilder<F> {
+    fn as_mut(&mut self) -> &mut BaseCircuitBuilder<F> {
+        self
+    }
+}

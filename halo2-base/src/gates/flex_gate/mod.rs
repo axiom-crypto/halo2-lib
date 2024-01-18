@@ -303,9 +303,9 @@ pub trait GateInstructions<F: ScalarField> {
         ctx.assign_region([Constant(F::ZERO), Existing(x), Existing(x), Existing(x)], [0]);
     }
 
-    /// Constrains and returns a / b = 0.
+    /// Constrains and returns a / b = out.
     ///
-    /// Defines a vertical gate of form | 0 | b^1 * a | b | a |, where b^1 * a = out.
+    /// Defines a vertical gate of form | 0 | a / b | b | a |, where a / b = out.
     ///
     /// Assumes `b != 0`.
     /// * `ctx`: [Context] to add the constraints to
@@ -823,7 +823,7 @@ pub trait GateInstructions<F: ScalarField> {
 
     /// Constrains and returns little-endian bit vector representation of `a`.
     ///
-    /// Assumes `range_bits <= number of bits in a`.
+    /// Assumes `range_bits >= bit_length(a)`.
     /// * `a`: [QuantumCell] of the value to convert
     /// * `range_bits`: range of bits needed to represent `a`
     fn num_to_bits(

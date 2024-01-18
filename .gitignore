@@ -17,8 +17,5 @@ Cargo.lock
 
 *.png
 
-**/params/*
-**/params/
-**/proptest-regressions/
-**/results/
-**/*.DS_Store
+/halo2_ecc/src/bn254/data/
+/halo2_ecc/src/secp256k1/data/

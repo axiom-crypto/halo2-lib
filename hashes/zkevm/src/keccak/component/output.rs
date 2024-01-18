@@ -1,8 +1,12 @@
-use super::{encode::encode_native_input, param::*};
+use std::sync::RwLock;
+
+use super::{create_native_poseidon_sponge, encode::encode_native_input};
 use crate::{keccak::vanilla::keccak_packed_multi::get_num_keccak_f, util::eth_types::Field};
 use itertools::Itertools;
+use lazy_static::lazy_static;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use sha3::{Digest, Keccak256};
-use snark_verifier::loader::native::NativeLoader;
+use type_map::concurrent::TypeMap;
 
 /// Witnesses to be exposed as circuit outputs.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -21,8 +25,8 @@ pub fn multi_inputs_to_circuit_outputs<F: Field>(
     capacity: usize,
 ) -> Vec<KeccakCircuitOutput<F>> {
     assert!(u128::BITS <= F::CAPACITY);
-    let mut outputs =
-        inputs.iter().flat_map(|input| input_to_circuit_outputs::<F>(input)).collect_vec();
+    let mut outputs: Vec<_> =
+        inputs.par_iter().flat_map(|input| input_to_circuit_outputs::<F>(input)).collect();
     assert!(outputs.len() <= capacity);
     outputs.resize(capacity, dummy_circuit_output());
     outputs
@@ -48,8 +52,30 @@ pub fn input_to_circuit_outputs<F: Field>(bytes: &[u8]) -> Vec<KeccakCircuitOutp
     output
 }
 
+lazy_static! {
+    static ref DUMMY_CIRCUIT_OUTPUT_CACHE: RwLock<TypeMap> = Default::default();
+}
+
 /// Return the dummy circuit output for padding.
 pub fn dummy_circuit_output<F: Field>() -> KeccakCircuitOutput<F> {
+    let output = DUMMY_CIRCUIT_OUTPUT_CACHE
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .get::<KeccakCircuitOutput<F>>()
+        .cloned();
+    if let Some(output) = output {
+        return output;
+    }
+    let output = {
+        let mut to_write = DUMMY_CIRCUIT_OUTPUT_CACHE.write().unwrap_or_else(|e| e.into_inner());
+        let output = dummy_circuit_output_impl();
+        to_write.insert(output);
+        output
+    };
+    output
+}
+
+fn dummy_circuit_output_impl<F: Field>() -> KeccakCircuitOutput<F> {
     assert!(u128::BITS <= F::CAPACITY);
     let key = encode_native_input(&[]);
     // Output of Keccak256::digest is big endian.
@@ -61,12 +87,7 @@ pub fn dummy_circuit_output<F: Field>() -> KeccakCircuitOutput<F> {
 
 /// Calculate the commitment of circuit outputs.
 pub fn calculate_circuit_outputs_commit<F: Field>(outputs: &[KeccakCircuitOutput<F>]) -> F {
-    let mut native_poseidon_sponge =
-        snark_verifier::util::hash::Poseidon::<F, F, POSEIDON_T, POSEIDON_RATE>::new::<
-            POSEIDON_R_F,
-            POSEIDON_R_P,
-            POSEIDON_SECURE_MDS,
-        >(&NativeLoader);
+    let mut native_poseidon_sponge = create_native_poseidon_sponge();
     native_poseidon_sponge.update(
         &outputs
             .iter()

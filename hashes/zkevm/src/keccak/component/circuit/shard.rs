@@ -7,7 +7,11 @@ use crate::{
                 get_words_to_witness_multipliers, num_poseidon_absorb_per_keccak_f,
                 num_word_per_witness,
             },
-            output::{dummy_circuit_output, KeccakCircuitOutput},
+            get_poseidon_spec,
+            output::{
+                calculate_circuit_outputs_commit, dummy_circuit_output,
+                multi_inputs_to_circuit_outputs, KeccakCircuitOutput,
+            },
             param::*,
         },
         vanilla::{
@@ -17,7 +21,7 @@ use crate::{
     },
     util::eth_types::Field,
 };
-use getset::{CopyGetters, Getters};
+use getset::{CopyGetters, Getters, MutGetters};
 use halo2_base::{
     gates::{
         circuit::{builder::BaseCircuitBuilder, BaseCircuitParams, BaseConfig},
@@ -28,32 +32,38 @@ use halo2_base::{
         circuit::{Layouter, SimpleFloorPlanner},
         plonk::{Circuit, ConstraintSystem, Error},
     },
-    poseidon::hasher::{
-        spec::OptimizedPoseidonSpec, PoseidonCompactChunkInput, PoseidonCompactOutput,
-        PoseidonHasher,
-    },
+    poseidon::hasher::{PoseidonCompactChunkInput, PoseidonCompactOutput, PoseidonHasher},
     safe_types::{SafeBool, SafeTypeChip},
+    virtual_region::copy_constraints::SharedCopyConstraintManager,
     AssignedValue, Context,
     QuantumCell::Constant,
 };
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
+use snark_verifier_sdk::CircuitExt;
 
 /// Keccak Component Shard Circuit
-#[derive(Getters)]
+#[derive(Getters, MutGetters)]
 pub struct KeccakComponentShardCircuit<F: Field> {
-    inputs: Vec<Vec<u8>>,
+    /// The multiple inputs to be hashed.
+    #[getset(get = "pub")]
+    inputs: RefCell<Vec<Vec<u8>>>,
 
     /// Parameters of this circuit. The same parameters always construct the same circuit.
-    #[getset(get = "pub")]
+    #[getset(get_mut = "pub")]
     params: KeccakComponentShardCircuitParams,
-
+    #[getset(get = "pub")]
     base_circuit_builder: RefCell<BaseCircuitBuilder<F>>,
+    /// Poseidon hasher. Stateless once initialized.
+    #[getset(get = "pub")]
     hasher: RefCell<PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE>>,
+    /// Stateless gate chip
+    #[getset(get = "pub")]
     gate_chip: GateChip<F>,
 }
 
 /// Parameters of KeccakComponentCircuit.
-#[derive(Default, Clone, CopyGetters)]
+#[derive(Default, Clone, CopyGetters, Serialize, Deserialize)]
 pub struct KeccakComponentShardCircuitParams {
     /// This circuit has 2^k rows.
     #[getset(get_copy = "pub")]
@@ -84,7 +94,7 @@ impl KeccakComponentShardCircuitParams {
     ) -> Self {
         assert!(1 << k > num_unusable_row, "Number of unusable rows must be less than 2^k");
         let max_rows = (1 << k) - num_unusable_row;
-        // Derived from [crate::keccak::native_circuit::keccak_packed_multi::get_keccak_capacity].
+        // Derived from [crate::keccak::vanilla::keccak_packed_multi::get_keccak_capacity].
         let rows_per_round = max_rows / (capacity * (NUM_ROUNDS + 1) + 1 + NUM_WORDS_TO_ABSORB);
         assert!(rows_per_round > 0, "No enough rows for the speficied capacity");
         let keccak_circuit_params = KeccakConfigParams { k: k as u32, rows_per_round };
@@ -157,7 +167,7 @@ impl<F: Field> Circuit<F> for KeccakComponentShardCircuit<F> {
             || "keccak circuit",
             |mut region| {
                 let (keccak_rows, _) = multi_keccak::<F>(
-                    &self.inputs,
+                    &self.inputs.borrow(),
                     Some(self.params.capacity),
                     self.params.keccak_circuit_params,
                 );
@@ -220,11 +230,11 @@ impl<F: Field> KeccakComponentShardCircuit<F> {
         witness_gen_only: bool,
     ) -> Self {
         let input_size = inputs.iter().map(|input| get_num_keccak_f(input.len())).sum::<usize>();
-        assert!(input_size < params.capacity, "Input size exceeds capacity");
+        assert!(input_size <= params.capacity, "Input size exceeds capacity");
         let mut base_circuit_builder = BaseCircuitBuilder::new(witness_gen_only);
         base_circuit_builder.set_params(params.base_circuit_params.clone());
         Self {
-            inputs,
+            inputs: RefCell::new(inputs),
             params,
             base_circuit_builder: RefCell::new(base_circuit_builder),
             hasher: RefCell::new(create_hasher()),
@@ -291,31 +301,11 @@ impl<F: Field> KeccakComponentShardCircuit<F> {
     ) -> Vec<LoadedKeccakF<F>> {
         let rows_per_round = self.params.keccak_circuit_params.rows_per_round;
         let base_circuit_builder = self.base_circuit_builder.borrow();
-        let mut copy_manager = base_circuit_builder.core().copy_manager.lock().unwrap();
-        assigned_rows
-            .into_iter()
-            .step_by(rows_per_round)
-            // Skip the first round which is dummy.
-            .skip(1)
-            .chunks(NUM_ROUNDS + 1)
-            .into_iter()
-            .map(|rounds| {
-                let mut rounds = rounds.collect_vec();
-                assert_eq!(rounds.len(), NUM_ROUNDS + 1);
-                let bytes_left = copy_manager.load_external_assigned(rounds[0].bytes_left.clone());
-                let output_row = rounds.pop().unwrap();
-                let word_values = core::array::from_fn(|i| {
-                    let assigned_row = &rounds[i];
-                    copy_manager.load_external_assigned(assigned_row.word_value.clone())
-                });
-                let is_final = SafeTypeChip::unsafe_to_bool(
-                    copy_manager.load_external_assigned(output_row.is_final),
-                );
-                let hash_lo = copy_manager.load_external_assigned(output_row.hash_lo);
-                let hash_hi = copy_manager.load_external_assigned(output_row.hash_hi);
-                LoadedKeccakF { bytes_left, word_values, is_final, hash_lo, hash_hi }
-            })
-            .collect()
+        transmute_keccak_assigned_to_virtual(
+            &base_circuit_builder.core().copy_manager,
+            assigned_rows,
+            rows_per_round,
+        )
     }
 
     /// Generate witnesses of the base circuit.
@@ -362,7 +352,7 @@ impl<F: Field> KeccakComponentShardCircuit<F> {
             lookup_key_per_keccak_f.iter().zip_eq(loaded_keccak_fs)
         {
             let is_final = AssignedValue::from(loaded_keccak_f.is_final);
-            let key = gate.select(ctx, *compact_output.hash(), dummy_key_witness, is_final);
+            let key = gate.select(ctx, compact_output.hash(), dummy_key_witness, is_final);
             let hash_lo =
                 gate.select(ctx, loaded_keccak_f.hash_lo, dummy_keccak_lo_witness, is_final);
             let hash_hi =
@@ -413,23 +403,19 @@ impl<F: Field> KeccakComponentShardCircuit<F> {
 
 pub(crate) fn create_hasher<F: Field>() -> PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE> {
     // Construct in-circuit Poseidon hasher.
-    let spec = OptimizedPoseidonSpec::<F, POSEIDON_T, POSEIDON_RATE>::new::<
-        POSEIDON_R_F,
-        POSEIDON_R_P,
-        POSEIDON_SECURE_MDS,
-    >();
+    let spec = get_poseidon_spec();
     PoseidonHasher::<F, POSEIDON_T, POSEIDON_RATE>::new(spec)
 }
 
-/// Encode raw inputs from Keccak circuit witnesses into lookup keys.
+/// Packs raw inputs from Keccak circuit witnesses into fewer field elements for the purpose of creating lookup keys.
+/// The packed field elements can be either random linearly combined (RLC'd) or Poseidon-hashed into lookup keys.
 ///
 /// Each element in the return value corrresponds to a Keccak chunk. If is_final = true, this element is the lookup key of the corresponding logical input.
-pub fn encode_inputs_from_keccak_fs<F: Field>(
+pub fn pack_inputs_from_keccak_fs<F: Field>(
     ctx: &mut Context<F>,
     gate: &impl GateInstructions<F>,
-    initialized_hasher: &PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE>,
     loaded_keccak_fs: &[LoadedKeccakF<F>],
-) -> Vec<PoseidonCompactOutput<F>> {
+) -> Vec<PoseidonCompactChunkInput<F, POSEIDON_RATE>> {
     // Circuit parameters
     let num_poseidon_absorb_per_keccak_f = num_poseidon_absorb_per_keccak_f::<F>();
     let num_word_per_witness = num_word_per_witness::<F>();
@@ -445,6 +431,7 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
 
     let mut compact_chunk_inputs = Vec::with_capacity(loaded_keccak_fs.len());
     let mut last_is_final = one_const;
+    // TODO: this could be parallelized
     for loaded_keccak_f in loaded_keccak_fs {
         // If this keccak_f is the last of a logical input.
         let is_final = loaded_keccak_f.is_final;
@@ -474,6 +461,96 @@ pub fn encode_inputs_from_keccak_fs<F: Field>(
         compact_chunk_inputs.push(PoseidonCompactChunkInput::new(compact_inputs, is_final));
         last_is_final = is_final.into();
     }
+    compact_chunk_inputs
+}
 
+/// Encode raw inputs from Keccak circuit witnesses into lookup keys.
+///
+/// Each element in the return value corrresponds to a Keccak chunk. If is_final = true, this element is the lookup key of the corresponding logical input.
+pub fn encode_inputs_from_keccak_fs<F: Field>(
+    ctx: &mut Context<F>,
+    gate: &impl GateInstructions<F>,
+    initialized_hasher: &PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE>,
+    loaded_keccak_fs: &[LoadedKeccakF<F>],
+) -> Vec<PoseidonCompactOutput<F>> {
+    let compact_chunk_inputs = pack_inputs_from_keccak_fs(ctx, gate, loaded_keccak_fs);
     initialized_hasher.hash_compact_chunk_inputs(ctx, gate, &compact_chunk_inputs)
+}
+
+/// Converts the pertinent raw assigned cells from a keccak_f permutation into virtual `halo2-lib` cells so they can be used
+/// by [halo2_base]. This function doesn't create any new witnesses/constraints.
+///
+/// This function is made public for external libraries to use for compatibility. It is the responsibility of the developer
+/// to ensure that `rows_per_round` **must** match the configuration of the vanilla zkEVM Keccak circuit itself.
+///
+/// ## Assumptions
+/// - `rows_per_round` **must** match the configuration of the vanilla zkEVM Keccak circuit itself.
+/// - `assigned_rows` **must** start from the 0-th row of the keccak circuit. This is because the first `rows_per_round` rows are dummy rows.
+pub fn transmute_keccak_assigned_to_virtual<F: Field>(
+    copy_manager: &SharedCopyConstraintManager<F>,
+    assigned_rows: Vec<KeccakAssignedRow<'_, F>>,
+    rows_per_round: usize,
+) -> Vec<LoadedKeccakF<F>> {
+    let mut copy_manager = copy_manager.lock().unwrap();
+    assigned_rows
+        .into_iter()
+        .step_by(rows_per_round)
+        // Skip the first round which is dummy.
+        .skip(1)
+        .chunks(NUM_ROUNDS + 1)
+        .into_iter()
+        .map(|rounds| {
+            let mut rounds = rounds.collect_vec();
+            assert_eq!(rounds.len(), NUM_ROUNDS + 1);
+            let bytes_left = copy_manager.load_external_assigned(rounds[0].bytes_left.clone());
+            let output_row = rounds.pop().unwrap();
+            let word_values = core::array::from_fn(|i| {
+                let assigned_row = &rounds[i];
+                copy_manager.load_external_assigned(assigned_row.word_value.clone())
+            });
+            let is_final = SafeTypeChip::unsafe_to_bool(
+                copy_manager.load_external_assigned(output_row.is_final),
+            );
+            let hash_lo = copy_manager.load_external_assigned(output_row.hash_lo);
+            let hash_hi = copy_manager.load_external_assigned(output_row.hash_hi);
+            LoadedKeccakF { bytes_left, word_values, is_final, hash_lo, hash_hi }
+        })
+        .collect()
+}
+
+impl<F: Field> CircuitExt<F> for KeccakComponentShardCircuit<F> {
+    fn instances(&self) -> Vec<Vec<F>> {
+        let circuit_outputs =
+            multi_inputs_to_circuit_outputs(&self.inputs.borrow(), self.params.capacity);
+        if self.params.publish_raw_outputs {
+            vec![
+                circuit_outputs.iter().map(|o| o.key).collect(),
+                circuit_outputs.iter().map(|o| o.hash_lo).collect(),
+                circuit_outputs.iter().map(|o| o.hash_hi).collect(),
+            ]
+        } else {
+            vec![vec![calculate_circuit_outputs_commit(&circuit_outputs)]]
+        }
+    }
+
+    fn num_instance(&self) -> Vec<usize> {
+        if self.params.publish_raw_outputs {
+            vec![self.params.capacity; OUTPUT_NUM_COL_RAW]
+        } else {
+            vec![1; OUTPUT_NUM_COL_COMMIT]
+        }
+    }
+
+    fn accumulator_indices() -> Option<Vec<(usize, usize)>> {
+        None
+    }
+
+    fn selectors(config: &Self::Config) -> Vec<halo2_base::halo2_proofs::plonk::Selector> {
+        // the vanilla keccak circuit does not use selectors
+        // this is from the BaseCircuitBuilder
+        config.base_circuit_config.gate().basic_gates[0]
+            .iter()
+            .map(|basic| basic.q_enable)
+            .collect()
+    }
 }
