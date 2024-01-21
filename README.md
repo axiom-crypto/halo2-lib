@@ -285,7 +285,18 @@ cargo test --release --no-default-features --features "halo2-axiom, mimalloc" --
   - [halo2-base64](https://github.com/zkemail/halo2-base64)
   - [halo2-rsa](https://github.com/zkemail/halo2-rsa/tree/feat/new_bigint)
 - [halo2-fri-gadget](https://github.com/maxgillett/halo2-fri-gadget) -- FRI verifier in halo2.
-- [eth-voice-recovery](https://github.com/SoraSuegami/voice_recovery_circuit)
-- [zkevm tx-circuit](https://github.com/scroll-tech/zkevm-circuits/tree/develop/zkevm-circuits/src/tx_circuit)
+- [eth-voice-recovery](https://github.com/SoraSuegami/voice_recovery_circuit) -- Verify the voice recovery process.
+- [zkEVM signature verification circuit](https://github.com/scroll-tech/zkevm-circuits/tree/develop/zkevm-circuits/src/sig_circuit.rs)
+- [zkEVM tx-circuit](https://github.com/scroll-tech/zkevm-circuits/tree/develop/zkevm-circuits/src/tx_circuit)
 - [webauthn-halo2](https://github.com/zkwebauthn/webauthn-halo2) -- Proving and verifying WebAuthn with halo2.
 - [Fixed Point Arithmetic](https://github.com/DCMMC/halo2-scaffold/tree/main/src/gadget) -- Fixed point arithmetic library in halo2.
+- [Spectre](https://github.com/ChainSafe/Spectre) -- Verifying Beacon chain headers via Altair lightclient protocol
+- [halo2-nn-wasm](https://github.com/metavind/halo2-nn-wasm) -- Neural network in halo2 for WASM.
+- [halo2-cairo](https://github.com/odyssey2077/halo2-cairo) -- Prove Cairo program execution in halo2.
+- [indexed-merkle-tree](https://github.com/aerius-labs/indexed-merkle-tree-halo2) -- Indexed Merkle Tree operations in halo2.
+- [zkCert](https://github.com/zkCert/halo2-zkcert) -- Verify a chain of x509 certificates in halo2.
+- [zk-dcap-verifier](https://github.com/CliqueOfficial/zk-dcap-verifier) -- On-chain DCAP attestation verification.
+- [polymon_gan](https://github.com/Modulus-Labs/polymon_gan) -- Prover for the Polymon GAN network.
+- [MynaWallet](https://github.com/MynaWallet/monorepo/tree/develop/packages/halo2-circuits) -- Verifies RSA signatures signed by Myna Card (Japan's ID Card).
+- [zk-face-circuit](https://github.com/team-byof/zk-face-circuit) -- Face Wallet Verification system for Ethereum wallets.
+- [halo2-lib-secp256r1](https://github.com/CliqueOfficial/halo2-lib-secp256r1)
