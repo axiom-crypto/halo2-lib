@@ -386,7 +386,6 @@ mod scalar_field_impls {
     use crate::ff::PrimeField;
     use crate::halo2_proofs::halo2curves::{
         bn256::{Fq as bn254Fq, Fr as bn254Fr},
-        ed25519::{Fq as ed25519Fq, Fr as ed25519Fr},
         secp256k1::{Fp as secpFp, Fq as secpFq},
     };
 
@@ -452,8 +451,15 @@ mod scalar_field_impls {
     impl_scalar_field!(bn254Fq);
     impl_scalar_field!(secpFp);
     impl_scalar_field!(secpFq);
-    impl_scalar_field!(ed25519Fq);
-    impl_scalar_field!(ed25519Fr);
+
+    #[cfg(feature = "halo2-axiom")]
+    mod ed25519 {
+        use super::*;
+        use crate::halo2_proofs::halo2curves::ed25519::{Fq, Fr};
+
+        impl_scalar_field!(Fq);
+        impl_scalar_field!(Fr);
+    }
 }
 
 /// Module for reading parameters for Halo2 proving system from the file system.
