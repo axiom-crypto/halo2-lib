@@ -7,6 +7,7 @@ use crate::{
                 get_words_to_witness_multipliers, num_poseidon_absorb_per_keccak_f,
                 num_word_per_witness,
             },
+            get_poseidon_spec,
             output::{
                 calculate_circuit_outputs_commit, dummy_circuit_output,
                 multi_inputs_to_circuit_outputs, KeccakCircuitOutput,
@@ -31,10 +32,7 @@ use halo2_base::{
         circuit::{Layouter, SimpleFloorPlanner},
         plonk::{Circuit, ConstraintSystem, Error},
     },
-    poseidon::hasher::{
-        spec::OptimizedPoseidonSpec, PoseidonCompactChunkInput, PoseidonCompactOutput,
-        PoseidonHasher,
-    },
+    poseidon::hasher::{PoseidonCompactChunkInput, PoseidonCompactOutput, PoseidonHasher},
     safe_types::{SafeBool, SafeTypeChip},
     virtual_region::copy_constraints::SharedCopyConstraintManager,
     AssignedValue, Context,
@@ -405,11 +403,7 @@ impl<F: Field> KeccakComponentShardCircuit<F> {
 
 pub(crate) fn create_hasher<F: Field>() -> PoseidonHasher<F, POSEIDON_T, POSEIDON_RATE> {
     // Construct in-circuit Poseidon hasher.
-    let spec = OptimizedPoseidonSpec::<F, POSEIDON_T, POSEIDON_RATE>::new::<
-        POSEIDON_R_F,
-        POSEIDON_R_P,
-        POSEIDON_SECURE_MDS,
-    >();
+    let spec = get_poseidon_spec();
     PoseidonHasher::<F, POSEIDON_T, POSEIDON_RATE>::new(spec)
 }
 
