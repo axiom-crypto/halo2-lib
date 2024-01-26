@@ -3,10 +3,14 @@ use std::collections::hash_map::Entry;
 use crate::ff::Field;
 use crate::halo2_proofs::{
     circuit::{AssignedCell, Cell, Region, Value},
+    halo2curves::bn256::Bn256,
     plonk::{Advice, Assigned, Circuit, Column, Fixed},
+    poly::kzg::commitment::ParamsKZG,
 };
 use crate::virtual_region::copy_constraints::{CopyConstraintManager, EXTERNAL_CELL_TYPE_ID};
 use crate::AssignedValue;
+
+pub use keygen::ProvingKeyGenerator;
 
 /// Raw (physical) assigned cell in Plonkish arithmetization.
 #[cfg(feature = "halo2-axiom")]
@@ -136,17 +140,11 @@ pub trait KeygenCircuitIntent<F: Field> {
     ) -> Self::Pinning;
 }
 
-use halo2_proofs_axiom::halo2curves::bn256::Bn256;
-use halo2_proofs_axiom::poly::kzg::commitment::ParamsKZG;
-pub use keygen::ProvingKeyGenerator;
-
 mod keygen {
-    use halo2_proofs_axiom::poly::commitment::Params;
-
     use crate::halo2_proofs::{
         halo2curves::bn256::{Bn256, Fr, G1Affine},
         plonk::{self, ProvingKey},
-        poly::kzg::commitment::ParamsKZG,
+        poly::{commitment::Params, kzg::commitment::ParamsKZG},
     };
 
     use super::KeygenCircuitIntent;
