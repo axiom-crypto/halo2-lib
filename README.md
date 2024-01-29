@@ -122,7 +122,7 @@ Some tests read files from specific directories, so they will not work if
 you are in the `halo2-lib` root directory.
 
 For benchmarks below, you can symlink a `params` folder within `halo2-ecc` directory with previously generated universal trusted setup files. Otherwise, the benchmarks will generate a new random setup and save them in the `params` directory. **Warning:** These trusted setups are generated using a _known_ random seed, so they are not secure. They should NOT be used in production.
-For more a production suitable trusted setup, see [KZG Trusted Setup](https://docs.axiom.xyz/axiom-architecture/how-axiom-works/kzg-trusted-setup).
+For more a production suitable trusted setup, see [KZG Trusted Setup](https://docs.axiom.xyz/docs/transparency-and-security/kzg-trusted-setup).
 
 Tests can be run in the same way as in the previous [section](#halo2-base). The available commands are:
 
