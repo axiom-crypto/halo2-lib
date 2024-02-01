@@ -181,7 +181,7 @@ fn test_ram_mock() {
 }
 
 #[test]
-#[should_panic = "called `Result::unwrap()` on an `Err` value: [Lookup dynamic lookup table(index: 2) is not satisfied in Region 2 ('[BasicDynLookupConfig] Advice cells to lookup') at offset 16]"]
+#[should_panic = "called `Result::unwrap()` on an `Err` value: [Lookup dummy(index: 1) is not satisfied in Region 2 ('[BasicDynLookupConfig] Advice cells to lookup') at offset 16]"]
 fn test_ram_mock_failed_access() {
     let k = 5u32;
     const CYCLES: usize = 50;
