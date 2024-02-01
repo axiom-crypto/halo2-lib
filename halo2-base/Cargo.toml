@@ -1,6 +1,6 @@
 [package]
 name = "halo2-base"
-version = "0.4.1"
+version = "0.4.2-alpha.0"
 authors = ["Intrinsic Technologies"]
 license = "MIT"
 edition = "2021"

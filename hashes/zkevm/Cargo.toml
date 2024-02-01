@@ -17,7 +17,7 @@ itertools = "0.11"
 lazy_static = "1.4"
 log = "0.4"
 num-bigint = { version = "0.4" }
-halo2-base = { version = "=0.4.1", path = "../../halo2-base", default-features = false, features = ["test-utils"] }
+halo2-base = { version = "0.4.2-alpha", path = "../../halo2-base", default-features = false, features = ["test-utils"] }
 serde = { version = "1.0", features = ["derive"] }
 rayon = "1.8"
 sha3 = "0.10.8"
