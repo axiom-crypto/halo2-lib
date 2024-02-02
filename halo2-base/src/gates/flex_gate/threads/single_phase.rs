@@ -219,9 +219,15 @@ pub fn assign_with_constraints<F: ScalarField, const ROTATIONS: usize>(
                 .assign_advice(|| "", column, row_offset, || value.map(|v| *v))
                 .unwrap()
                 .cell();
-            copy_manager
+            if let Some(old_cell) = copy_manager
                 .assigned_advices
-                .insert(ContextCell::new(ctx.type_id, ctx.context_id, i), cell);
+                .insert(ContextCell::new(ctx.type_id, ctx.context_id, i), cell)
+            {
+                assert!(
+                    old_cell.row_offset == cell.row_offset && old_cell.column == cell.column,
+                    "Trying to overwrite virtual cell with a different raw cell"
+                );
+            }
 
             // If selector enabled and row_offset is valid add break point, account for break point overlap, and enforce equality constraint for gate outputs.
             // ⚠️ This assumes overlap is of form: gate enabled at `i - delta` and `i`, where `delta = ROTATIONS - 1`. We currently do not support `delta < ROTATIONS - 1`.
