@@ -8,5 +8,8 @@ pub type FqChip<'range, F> = fp::FpChip<'range, F, Fq>;
 pub type Secp256k1Chip<'chip, F> = ecc::EccChip<'chip, F, FpChip<'chip, F>>;
 pub const SECP_B: u64 = 7;
 
+pub mod hash_to_curve;
+pub mod sha256;
 #[cfg(test)]
 mod tests;
+pub mod util;
