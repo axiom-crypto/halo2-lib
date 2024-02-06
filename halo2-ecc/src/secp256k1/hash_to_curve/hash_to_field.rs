@@ -48,12 +48,12 @@ fn bytes_to_registers<F: BigPrimeField>(
     }
 
     // TODO: calculate, out = assigned_int (mod SECP_MODULUS)
-    let int_bases = Vec::<F>::with_capacity(assigned_int.len());
+    let mut int_bases = Vec::<F>::with_capacity(assigned_int.len());
     for i in 0..assigned_int.len() {
         int_bases.push(F::from(1 << (64 * i)));
     }
 
-    let assigned_int = ProperUint(assigned_int).into_crt(ctx, gate, value, limb_bases, limb_bits);
+    let assigned_int = ProperUint(assigned_int);
 
     assigned_int
 }
