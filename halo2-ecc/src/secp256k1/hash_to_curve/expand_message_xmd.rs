@@ -112,7 +112,7 @@ fn str_xor<F: BigPrimeField>(
     xor
 }
 
-fn expand_message_xmd<F: BigPrimeField>(
+pub fn expand_message_xmd<F: BigPrimeField>(
     ctx: &mut Context<F>,
     range: &RangeChip<F>,
     sha256_chip: &Sha256Chip<F>,
