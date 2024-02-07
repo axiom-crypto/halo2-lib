@@ -4,8 +4,17 @@ use halo2_base::{
     AssignedValue, Context, QuantumCell,
 };
 use itertools::Itertools;
+use num_bigint::BigUint;
+use num_traits::Pow;
 
-use crate::secp256k1::util::{bits_le_to_fe_assigned, fe_to_bits_le};
+use crate::{
+    bigint::{ProperCrtUint, ProperUint},
+    fields::FieldChip,
+    secp256k1::{
+        util::{bits_le_to_fe_assigned, fe_to_bits_le},
+        FpChip,
+    },
+};
 
 pub fn byte_to_bits_le_assigned<F: BigPrimeField>(
     ctx: &mut Context<F>,
@@ -50,4 +59,57 @@ pub fn bits_le_to_bytes_assigned<F: BigPrimeField>(
     bits: &[AssignedValue<F>],
 ) -> Vec<AssignedValue<F>> {
     bits.chunks(8).map(|chunk| bits_le_to_byte_assigned(ctx, range, chunk)).collect_vec()
+}
+
+pub fn limbs_le_to_bigint<F: BigPrimeField>(
+    ctx: &mut Context<F>,
+    range: &RangeChip<F>,
+    limbs: &[AssignedValue<F>],
+    max_limb_bits: usize,
+) -> ProperCrtUint<F> {
+    let native_limbs = limbs.iter().map(|limb| *limb.value()).collect_vec();
+
+    let mut value = BigUint::from(0u64);
+    let mut limb_bases = Vec::<F>::with_capacity(native_limbs.len());
+    for (idx, limb) in native_limbs.iter().enumerate() {
+        let limb = BigUint::from_bytes_le(limb.to_bytes_le().as_slice());
+        let limb_base = BigUint::from(2u64).pow(BigUint::from(idx) * BigUint::from(max_limb_bits));
+        limb_bases.push(F::from_bytes_le(limb_base.to_bytes_le().as_slice()));
+        let shifted_limb = limb * limb_base;
+        value += shifted_limb;
+    }
+
+    let int = ProperUint(limbs.to_vec()).into_crt(
+        ctx,
+        range.gate(),
+        value,
+        limb_bases.as_slice(),
+        max_limb_bits,
+    );
+
+    int
+}
+
+pub fn mod_inverse<F: BigPrimeField>(
+    ctx: &mut Context<F>,
+    fp_chip: &FpChip<'_, F>,
+    num: ProperCrtUint<F>,
+) -> ProperCrtUint<F> {
+    let one = ctx.load_constant(F::ONE);
+    let one_int = fp_chip.load_constant_uint(ctx, BigUint::from(1u64));
+
+    let p = fp_chip.p.to_biguint().unwrap();
+    let p_minus_two = p.clone() - 2u64;
+
+    let num_native = num.value();
+    let inverse_native = num_native.clone().pow(p_minus_two);
+    let mod_inverse_native = inverse_native % p;
+    assert_eq!(num_native * mod_inverse_native.clone(), BigUint::from(1u64));
+
+    let mod_inverse = fp_chip.load_constant_uint(ctx, mod_inverse_native);
+    let is_one = fp_chip.mul(ctx, num, mod_inverse.clone());
+    let is_equal = fp_chip.is_equal(ctx, is_one, one_int);
+    ctx.constrain_equal(&is_equal, &one);
+
+    mod_inverse
 }

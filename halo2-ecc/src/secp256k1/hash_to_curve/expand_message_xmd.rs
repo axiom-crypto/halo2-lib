@@ -62,11 +62,7 @@ fn hash_bi<F: BigPrimeField>(
     let b0_bits = bytes_to_bits_le_assigned(ctx, range, b0_bytes);
     let bi_minus_one_bits = bytes_to_bits_le_assigned(ctx, range, bi_minus_one_bytes);
 
-    let mut xor_bits = Vec::<AssignedValue<F>>::new();
-    for (bo_bit, bi_minus_one_bit) in b0_bits.iter().zip(bi_minus_one_bits.iter()) {
-        let res = range.gate().xor(ctx, *bo_bit, *bi_minus_one_bit);
-        xor_bits.push(res);
-    }
+    let xor_bits = str_xor(ctx, range, &b0_bits, &bi_minus_one_bits);
     let xor_bytes = bits_le_to_bytes_assigned(ctx, range, &xor_bits);
 
     let bi_bytes = hash_b(ctx, sha256_chip, b_idx_byte, &xor_bytes);
@@ -74,9 +70,9 @@ fn hash_bi<F: BigPrimeField>(
     bi_bytes
 }
 
-fn hash_b<'a, F: BigPrimeField>(
+fn hash_b<F: BigPrimeField>(
     ctx: &mut Context<F>,
-    sha256_chip: &Sha256Chip<'a, F>,
+    sha256_chip: &Sha256Chip<'_, F>,
     b_idx_byte: &AssignedValue<F>,
     b_bytes: &Vec<AssignedValue<F>>,
 ) -> Vec<AssignedValue<F>> {
