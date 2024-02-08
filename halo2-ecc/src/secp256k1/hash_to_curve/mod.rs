@@ -2,7 +2,7 @@ use halo2_base::{utils::BigPrimeField, AssignedValue, Context};
 
 use crate::{bigint::ProperCrtUint, ecc::EcPoint};
 
-use self::hash_to_field::hash_to_field;
+use self::{hash_to_field::hash_to_field, map_to_curve::map_to_curve};
 
 use super::{sha256::Sha256Chip, Secp256k1Chip};
 
@@ -35,7 +35,7 @@ pub fn hash_to_curve<F: BigPrimeField>(
     let (u0, u1) = hash_to_field(ctx, fp_chip, sha256_chip, msg_bytes);
 
     // Step 2: Q0 = map_to_curve(u[0])
-    let (q0_x, q0_y2) = map_to_curve::map_to_curve(
+    let (q0_x, q0_y2) = map_to_curve(
         ctx,
         fp_chip,
         u0,
@@ -47,7 +47,7 @@ pub fn hash_to_curve<F: BigPrimeField>(
     );
 
     // Step 3: Q1 = map_to_curve(u[1])
-    let (q1_x, q1_y2) = map_to_curve::map_to_curve(
+    let (q1_x, q1_y2) = map_to_curve(
         ctx,
         fp_chip,
         u1,

@@ -11,6 +11,10 @@ use super::{
     util::{bits_le_to_bytes_assigned, bytes_to_bits_le_assigned},
 };
 
+fn calc_msg_prime_output_length(msg_length: usize) -> usize {
+    msg_length + 64 + 2 + 50 + 1
+}
+
 fn msg_prime<F: BigPrimeField>(
     ctx: &mut Context<F>,
     msg_bytes: &[AssignedValue<F>],
@@ -21,7 +25,8 @@ fn msg_prime<F: BigPrimeField>(
     let lib_str = get_lib_str(ctx);
     let dst_prime = get_dst_prime(ctx);
 
-    let mut msg_prime = Vec::<AssignedValue<F>>::new();
+    let mut msg_prime =
+        Vec::<AssignedValue<F>>::with_capacity(calc_msg_prime_output_length(msg_bytes.len()));
 
     // msg_prme = z_pad ...
     msg_prime.extend(z_pad);
@@ -108,7 +113,7 @@ fn str_xor<F: BigPrimeField>(
     xor
 }
 
-pub fn expand_message_xmd<F: BigPrimeField>(
+pub(crate) fn expand_message_xmd<F: BigPrimeField>(
     ctx: &mut Context<F>,
     range: &RangeChip<F>,
     sha256_chip: &Sha256Chip<F>,

@@ -47,7 +47,7 @@ fn xy2_selector<F: BigPrimeField>(
     (x, y2)
 }
 
-pub fn map_to_curve<F: BigPrimeField>(
+pub(crate) fn map_to_curve<F: BigPrimeField>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<'_, F>,
     u: ProperCrtUint<F>,
@@ -74,7 +74,8 @@ pub fn map_to_curve<F: BigPrimeField>(
     let tv2 = fp_chip.mul(ctx, tv1.clone(), tv1.clone());
 
     // Step 3: x1 = tv1 + tv2
-    let x1 = ProperCrtUint(fp_chip.add_no_carry(ctx, tv1.clone(), tv2.clone()));
+    let x1 = fp_chip.add_no_carry(ctx, tv1.clone(), tv2.clone());
+    let x1 = fp_chip.carry_mod(ctx, x1);
 
     // Step 4: x1 = inv0(x1)
     let x1 = mod_inverse(ctx, fp_chip, x1);
@@ -83,7 +84,8 @@ pub fn map_to_curve<F: BigPrimeField>(
     let e1 = fp_chip.is_equal(ctx, x1.clone(), zero_int);
 
     // Step 6: x1 = x1 + 1
-    let x1 = ProperCrtUint(fp_chip.add_no_carry(ctx, x1.clone(), one_int));
+    let x1 = fp_chip.add_no_carry(ctx, x1.clone(), one_int);
+    let x1 = fp_chip.carry_mod(ctx, x1);
 
     // Step 7: x1 = e1 ? c2 : x1
     let c2 = get_C2(ctx, range);
@@ -98,14 +100,16 @@ pub fn map_to_curve<F: BigPrimeField>(
 
     // Step 10: gx1 = gx1 + A
     let a = get_A(ctx, range);
-    let gx1 = ProperCrtUint(fp_chip.add_no_carry(ctx, gx1, a));
+    let gx1 = fp_chip.add_no_carry(ctx, gx1, a);
+    let gx1 = fp_chip.carry_mod(ctx, gx1);
 
     // Step 11: gx1 = gx1 * x1
     let gx1 = fp_chip.mul(ctx, gx1, x1.clone());
 
     // Step 12: gx1 = gx1 + B             # gx1 = g(x1) = x1^3 + A * x1 + B
     let b = get_B(ctx, range);
-    let gx1 = ProperCrtUint(fp_chip.add_no_carry(ctx, gx1, b));
+    let gx1 = fp_chip.add_no_carry(ctx, gx1, b);
+    let gx1 = fp_chip.carry_mod(ctx, gx1);
 
     // Step 13: x2 = tv1 * x1            # x2 = Z * u^2 * x1
     let x2 = fp_chip.mul(ctx, tv1.clone(), x1.clone());

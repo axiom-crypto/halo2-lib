@@ -142,7 +142,7 @@ fn y_den<F: BigPrimeField>(
     a_plus_b_plus_c
 }
 
-pub fn iso_map<F: BigPrimeField>(
+pub(crate) fn iso_map<F: BigPrimeField>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<'_, F>,
     x: ProperCrtUint<F>,

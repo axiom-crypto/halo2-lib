@@ -16,7 +16,7 @@ use crate::{
     },
 };
 
-pub fn byte_to_bits_le_assigned<F: BigPrimeField>(
+pub(crate) fn byte_to_bits_le_assigned<F: BigPrimeField>(
     ctx: &mut Context<F>,
     range: &RangeChip<F>,
     byte: &AssignedValue<F>,
@@ -31,7 +31,7 @@ pub fn byte_to_bits_le_assigned<F: BigPrimeField>(
     assigned_bits
 }
 
-pub fn bytes_to_bits_le_assigned<F: BigPrimeField>(
+pub(crate) fn bytes_to_bits_le_assigned<F: BigPrimeField>(
     ctx: &mut Context<F>,
     range: &RangeChip<F>,
     bytes: &[AssignedValue<F>],
@@ -39,7 +39,7 @@ pub fn bytes_to_bits_le_assigned<F: BigPrimeField>(
     bytes.iter().flat_map(|byte| byte_to_bits_le_assigned(ctx, range, byte)).collect_vec()
 }
 
-pub fn bits_le_to_byte_assigned<F: BigPrimeField>(
+pub(crate) fn bits_le_to_byte_assigned<F: BigPrimeField>(
     ctx: &mut Context<F>,
     range: &RangeChip<F>,
     bits: &[AssignedValue<F>],
@@ -53,7 +53,7 @@ pub fn bits_le_to_byte_assigned<F: BigPrimeField>(
     sum
 }
 
-pub fn bits_le_to_bytes_assigned<F: BigPrimeField>(
+pub(crate) fn bits_le_to_bytes_assigned<F: BigPrimeField>(
     ctx: &mut Context<F>,
     range: &RangeChip<F>,
     bits: &[AssignedValue<F>],
@@ -61,7 +61,7 @@ pub fn bits_le_to_bytes_assigned<F: BigPrimeField>(
     bits.chunks(8).map(|chunk| bits_le_to_byte_assigned(ctx, range, chunk)).collect_vec()
 }
 
-pub fn limbs_le_to_bigint<F: BigPrimeField>(
+pub(crate) fn limbs_le_to_bigint<F: BigPrimeField>(
     ctx: &mut Context<F>,
     range: &RangeChip<F>,
     limbs: &[AssignedValue<F>],
@@ -90,7 +90,7 @@ pub fn limbs_le_to_bigint<F: BigPrimeField>(
     int
 }
 
-pub fn mod_inverse<F: BigPrimeField>(
+pub(crate) fn mod_inverse<F: BigPrimeField>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<'_, F>,
     num: ProperCrtUint<F>,

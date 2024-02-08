@@ -12,7 +12,7 @@ use crate::{
 
 use super::expand_message_xmd::expand_message_xmd;
 
-pub fn hash_to_field<F: BigPrimeField>(
+pub(crate) fn hash_to_field<F: BigPrimeField>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<'_, F>,
     sha256_chip: &Sha256Chip<F>,
@@ -33,10 +33,10 @@ fn bytes_to_registers<F: BigPrimeField>(
 ) -> ProperCrtUint<F> {
     assert_eq!(bytes.len(), 48);
 
-    let range = fp_chip.range;
+    let range = fp_chip.range();
     let gate = range.gate();
 
-    let mut assigned_int = Vec::<AssignedValue<F>>::new();
+    let mut assigned_int = Vec::<AssignedValue<F>>::with_capacity(6);
     for (_, chunk) in bytes.chunks(8).enumerate() {
         let mut assigned_u64 = ctx.load_zero();
         for (j, byte) in chunk.iter().enumerate() {
