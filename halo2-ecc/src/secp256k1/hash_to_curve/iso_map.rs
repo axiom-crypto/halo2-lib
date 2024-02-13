@@ -1,7 +1,5 @@
 use halo2_base::{ utils::BigPrimeField, Context };
-
 use crate::{ bigint::ProperCrtUint, fields::FieldChip, secp256k1::FpChip };
-
 use super::constants::{
     get_k_1_0,
     get_k_1_1,

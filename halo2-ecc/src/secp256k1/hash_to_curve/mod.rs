@@ -84,42 +84,41 @@ mod test {
 
     #[test]
     fn test_hash_to_curve() {
-        // msg = "abc"
-        let msg = vec![97u64, 98u64, 99u64];
+        let msg = b"abcdef0123456789";
         let q0_gx1_sqrt = <Secp256k1Affine as CurveAffine>::ScalarExt::from([
-            1664545361815120357u64, 10283872013620121914u64, 9380010581010034654u64, 4261145792225450732u64,
+            8436907082510902807u64, 16481306271273964905u64, 12340693169241754123u64, 5840290864233247061u64,
         ]);
         let q0_gx2_sqrt = <Secp256k1Affine as CurveAffine>::ScalarExt::from([
             1u64, 0u64, 0u64, 0u64,
         ]);
         let q0_y_pos = <Secp256k1Affine as CurveAffine>::ScalarExt::from([
-            1664545361815120357u64, 10283872013620121914u64, 9380010581010034654u64, 4261145792225450732u64,
+            8436907082510902807u64, 16481306271273964905u64, 12340693169241754123u64, 5840290864233247061u64,
         ]);
         let q0_x_mapped = <Secp256k1Affine as CurveAffine>::ScalarExt::from([
-            5925487804738118359u64, 4856574525535083224u64, 12797074899347248930u64, 566772074147120223u64,
+            1666473185380682589u64, 5940335290811295862u64, 16073821616946219607u64, 6299765855519516506u64,
         ]);
         let q0_y_mapped = <Secp256k1Affine as CurveAffine>::ScalarExt::from([
-            4617496280555238207u64, 14690993926117989357u64, 3636581750055392523u64, 6937101362475356158u64,
+            14183132322842682307u64, 3799824159173722014u64, 17680812620347148404u64, 7222729814779291343u64,
         ]);
         let q1_gx1_sqrt = <Secp256k1Affine as CurveAffine>::ScalarExt::from([
-            7355280221998350180u64, 4783425048112263089u64, 5071308975172430165u64, 3916832897263395160u64,
+            909194377947652581u64, 9506023292142230081u64, 13109065517192500057u64, 2140988711709947970u64,
         ]);
         let q1_gx2_sqrt = <Secp256k1Affine as CurveAffine>::ScalarExt::from([
             1u64, 0u64, 0u64, 0u64,
         ]);
         let q1_y_pos = <Secp256k1Affine as CurveAffine>::ScalarExt::from([
-            7355280221998350180u64, 4783425048112263089u64, 5071308975172430165u64, 3916832897263395160u64,
+            909194377947652581u64, 9506023292142230081u64, 13109065517192500057u64, 2140988711709947970u64,
         ]);
         let q1_x_mapped = <Secp256k1Affine as CurveAffine>::ScalarExt::from([
-            13296707460026998648u64, 318503968633800990u64, 15989839026330281858u64, 16856858595694562935u64,
+            15496950058064191480u64, 16608196343028055450u64, 6698082460314400323u64, 17914594903168254206u64,
         ]);
         let q1_y_mapped = <Secp256k1Affine as CurveAffine>::ScalarExt::from([
-            1338026386978707379u64, 6209856281762218480u64, 13772974005733639516u64, 14629888772142879508u64,
+            17158098838744772439u64, 14635829310764858396u64, 7975190798015443370u64, 12914166355471935767u64,
         ]);
 
         base_test()
-            .k(20)
-            .lookup_bits(19)
+            .k(15)
+            .lookup_bits(14)
             .expect_satisfied(true)
             .run(|ctx, range| {
                 let fp_chip = FpChip::<Fr>::new(range, 64, 4);
@@ -130,7 +129,7 @@ mod test {
 
                 let msg_bytes = msg
                     .iter()
-                    .map(|&x| ctx.load_witness(Fr::from(x)))
+                    .map(|&x| ctx.load_witness(Fr::from(x as u64)))
                     .collect::<Vec<_>>();
 
                 let q0_gx1_sqrt = fq_chip.load_private(ctx, q0_gx1_sqrt);

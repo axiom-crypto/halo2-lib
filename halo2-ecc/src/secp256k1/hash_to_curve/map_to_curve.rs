@@ -10,8 +10,6 @@ use crate::{
     },
 };
 
-use super::util::mod_inverse;
-
 fn xy2_selector<F: BigPrimeField>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<'_, F>,
@@ -22,7 +20,7 @@ fn xy2_selector<F: BigPrimeField>(
     x1: ProperCrtUint<F>,
     x2: ProperCrtUint<F>
 ) -> (ProperCrtUint<F>, ProperCrtUint<F>) {
-    let gate = fp_chip.range.gate();
+    let gate = fp_chip.range().gate();
     let one = ctx.load_constant(F::ONE);
 
     let sq_gx1_sqrt = fp_chip.mul(ctx, gx1_sqrt.clone(), gx1_sqrt);
@@ -40,6 +38,29 @@ fn xy2_selector<F: BigPrimeField>(
     (x, y2)
 }
 
+fn mod_inverse<F: BigPrimeField>(
+    ctx: &mut Context<F>,
+    fp_chip: &FpChip<'_, F>,
+    num: ProperCrtUint<F>
+) -> ProperCrtUint<F> {
+    let one = ctx.load_constant(F::ONE);
+    let one_int = fp_chip.load_constant_uint(ctx, BigUint::from(1u64));
+
+    let p = fp_chip.p.to_biguint().unwrap();
+    let p_minus_two = p.clone() - 2u64;
+
+    let num_native = num.value();
+    let inverse_native = num_native.modpow(&p_minus_two, &p);
+    assert_eq!((num_native * inverse_native.clone()) % p, BigUint::from(1u64));
+
+    let mod_inverse = fp_chip.load_constant_uint(ctx, inverse_native);
+    let is_one = fp_chip.mul(ctx, num, mod_inverse.clone());
+    let is_equal = fp_chip.is_equal(ctx, is_one, one_int);
+    ctx.constrain_equal(&is_equal, &one);
+
+    mod_inverse
+}
+
 pub(crate) fn map_to_curve<F: BigPrimeField>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<'_, F>,
@@ -53,7 +74,6 @@ pub(crate) fn map_to_curve<F: BigPrimeField>(
     let range = fp_chip.range();
     let gate = range.gate();
 
-    let zero = ctx.load_zero();
     let one = ctx.load_constant(F::ONE);
 
     let zero_int = fp_chip.load_constant_uint(ctx, BigUint::from(0u64));

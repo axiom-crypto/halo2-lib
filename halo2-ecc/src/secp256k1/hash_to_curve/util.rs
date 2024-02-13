@@ -1,5 +1,3 @@
-use std::ops::{ Mul, Rem };
-
 use halo2_base::{
     gates::{ GateInstructions, RangeChip, RangeInstructions },
     utils::{ fe_to_biguint, BigPrimeField },
@@ -8,9 +6,7 @@ use halo2_base::{
     QuantumCell,
 };
 use itertools::Itertools;
-use num_bigint::{ BigInt, BigUint, ToBigInt };
-use num_integer::Integer;
-use num_traits::{ One, Pow, Zero };
+use num_bigint::{ BigUint, ToBigInt };
 
 use crate::{
     bigint::{ CRTInteger, OverflowInteger, ProperCrtUint },
@@ -71,9 +67,8 @@ pub(crate) fn bits_le_to_bytes_assigned<F: BigPrimeField>(
         .collect_vec()
 }
 
-pub(crate) fn limbs_le_to_bigint<F: BigPrimeField>(
+pub(crate) fn limbs_le_to_bn<F: BigPrimeField>(
     ctx: &mut Context<F>,
-    range: &RangeChip<F>,
     fp_chip: &FpChip<'_, F>,
     limbs: &[AssignedValue<F>]
 ) -> ProperCrtUint<F> {
@@ -92,27 +87,4 @@ pub(crate) fn limbs_le_to_bigint<F: BigPrimeField>(
     let assigned_uint = CRTInteger::new(assigned_uint, assigned_native, value.to_bigint().unwrap());
 
     fp_chip.carry_mod(ctx, assigned_uint)
-}
-
-pub(crate) fn mod_inverse<F: BigPrimeField>(
-    ctx: &mut Context<F>,
-    fp_chip: &FpChip<'_, F>,
-    num: ProperCrtUint<F>
-) -> ProperCrtUint<F> {
-    let one = ctx.load_constant(F::ONE);
-    let one_int = fp_chip.load_constant_uint(ctx, BigUint::from(1u64));
-
-    let p = fp_chip.p.to_biguint().unwrap();
-    let p_minus_two = p.clone() - 2u64;
-
-    let num_native = num.value();
-    let inverse_native = num_native.modpow(&p_minus_two, &p);
-    assert_eq!((num_native * inverse_native.clone()) % p, BigUint::from(1u64));
-
-    let mod_inverse = fp_chip.load_constant_uint(ctx, inverse_native);
-    let is_one = fp_chip.mul(ctx, num, mod_inverse.clone());
-    let is_equal = fp_chip.is_equal(ctx, is_one, one_int);
-    ctx.constrain_equal(&is_equal, &one);
-
-    mod_inverse
 }
