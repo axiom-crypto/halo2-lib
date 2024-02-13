@@ -60,31 +60,9 @@ pub(crate) fn map_to_curve<F: BigPrimeField>(
     let one_int = fp_chip.load_constant_uint(ctx, BigUint::from(1u64));
 
     // Step 1: tv1 = Z * u^2
-    let u_sq = fp_chip.mul_no_carry(ctx, u.clone(), u.clone());
-    let u_sq = fp_chip.carry_mod(ctx, u_sq);
+    let u_sq = fp_chip.mul(ctx, u.clone(), u.clone());
     let z = get_Z(ctx, range, fp_chip);
-    println!("reach here 1");
-    // if z.0.truncation.limbs.len() != u_sq.0.truncation.limbs.len() {
-    //     println!("entered here");
-    //     if z.0.truncation.limbs.len() > u_sq.0.truncation.limbs.len() {
-    //         let diff = z.0.truncation.limbs.len() - u_sq.0.truncation.limbs.len();
-    //         println!("entered here 1: diff = {}", diff);
-    //         for _ in 0..diff {
-    //             u_sq.0.truncation.limbs.push(zero);
-    //         }
-    //         println!("len after push: {}", u_sq.0.truncation.limbs.len());
-    //     } else {
-    //         let diff = u_sq.0.truncation.limbs.len() - z.0.truncation.limbs.len();
-    //         println!("entered here 2: diff = {}", diff);
-    //         for _ in 0..diff {
-    //             z.0.truncation.limbs.push(zero);
-    //         }
-    //         println!("len after push: {}", z.0.truncation.limbs.len());
-    //     }
-    // }
-    let tv1 = fp_chip.mul_no_carry(ctx, z, u_sq);
-    let tv1 = fp_chip.carry_mod(ctx, tv1);
-    println!("reach here 2");
+    let tv1 = fp_chip.mul(ctx, z, u_sq);
 
     // Step 2: tv2 = tv1^2
     let tv2 = fp_chip.mul(ctx, tv1.clone(), tv1.clone());
@@ -94,7 +72,9 @@ pub(crate) fn map_to_curve<F: BigPrimeField>(
     let x1 = fp_chip.carry_mod(ctx, x1);
 
     // Step 4: x1 = inv0(x1)
+    println!("reach here 1");
     let x1 = mod_inverse(ctx, fp_chip, x1);
+    println!("reach here 2");
 
     // Step 5: e1 = x1 == 0
     let e1 = fp_chip.is_equal(ctx, x1.clone(), zero_int);

@@ -122,8 +122,8 @@ mod test {
             .lookup_bits(19)
             .expect_satisfied(true)
             .run(|ctx, range| {
-                let fp_chip = FpChip::<Fr>::new(range, 88, 3);
-                let fq_chip = FqChip::<Fr>::new(range, 88, 3);
+                let fp_chip = FpChip::<Fr>::new(range, 64, 4);
+                let fq_chip = FqChip::<Fr>::new(range, 64, 4);
                 let ecc_chip = EccChip::<Fr, FpChip<Fr>>::new(&fp_chip);
 
                 let sha256_chip = Sha256Chip::new(range);

@@ -5,7 +5,6 @@ use halo2_base::{
     Context,
     QuantumCell,
 };
-use itertools::Itertools;
 use num_bigint::BigUint;
 use num_integer::div_ceil;
 
@@ -36,11 +35,11 @@ fn bytes_to_registers<F: BigPrimeField>(
     fp_chip: &FpChip<'_, F>,
     bytes: &[AssignedValue<F>]
 ) -> ProperCrtUint<F> {
-    let mut limbs = Vec::<AssignedValue<F>>::with_capacity(bytes.len() / 8);
-    for chunk in bytes.chunks(11) {
+    let mut limbs = Vec::<AssignedValue<F>>::with_capacity(div_ceil(bytes.len(), 8));
+    for chunk in bytes.chunks(8) {
         let mut limb = ctx.load_zero();
-        for i in 0..11 {
-            if chunk.len() < 11 && i >= chunk.len() {
+        for i in 0..8 {
+            if chunk.len() < 8 && i >= chunk.len() {
                 break;
             }
             limb = fp_chip
@@ -51,17 +50,19 @@ fn bytes_to_registers<F: BigPrimeField>(
         limbs.push(limb);
     }
 
-    let assigned_ints = limbs
-        .iter()
-        .map(|limb| { limbs_le_to_bigint(ctx, fp_chip.range(), fp_chip, &[*limb], 88) })
-        .collect_vec();
+    let mut lo_limbs = limbs[..3].to_vec();
+    lo_limbs.push(ctx.load_zero());
+    let mut hi_limbs = limbs[3..].to_vec();
+    hi_limbs.push(ctx.load_zero());
 
-    // let mut assigned_int = assigned_ints[0];
-    // for (i, int) in assigned_ints.iter().enumerate() {
-    //     let multiplier = fp_chip.load_constant_uint(ctx, BigUint::from(2u8).pow((88 * i) as u32));
-    //     let limb = fp_chip.mul_no_carry(ctx, *int, multiplier);
-    //     assigned_int = fp_chip.add_no_carry(ctx, assigned_int, limb);
-    // }
+    let lo = limbs_le_to_bigint(ctx, fp_chip.range(), fp_chip, lo_limbs.as_slice());
+    let hi = limbs_le_to_bigint(ctx, fp_chip.range(), fp_chip, hi_limbs.as_slice());
 
-    fp_chip.load_constant_uint(ctx, BigUint::from(1u64)) // TODO
+    let two_power_192 = fp_chip.load_constant_uint(ctx, BigUint::from(1u64) << 192);
+
+    let num = fp_chip.mul_no_carry(ctx, hi, two_power_192);
+    let num = fp_chip.add_no_carry(ctx, num, lo);
+    let num = fp_chip.carry_mod(ctx, num);
+
+    num
 }
