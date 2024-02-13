@@ -1,10 +1,21 @@
-use halo2_base::{utils::BigPrimeField, Context};
+use halo2_base::{ utils::BigPrimeField, Context };
 
-use crate::{bigint::ProperCrtUint, fields::FieldChip, secp256k1::FpChip};
+use crate::{ bigint::ProperCrtUint, fields::FieldChip, secp256k1::FpChip };
 
 use super::constants::{
-    get_k_1_0, get_k_1_1, get_k_1_2, get_k_1_3, get_k_2_0, get_k_2_1, get_k_3_0, get_k_3_1,
-    get_k_3_2, get_k_3_3, get_k_4_0, get_k_4_1, get_k_4_2,
+    get_k_1_0,
+    get_k_1_1,
+    get_k_1_2,
+    get_k_1_3,
+    get_k_2_0,
+    get_k_2_1,
+    get_k_3_0,
+    get_k_3_1,
+    get_k_3_2,
+    get_k_3_3,
+    get_k_4_0,
+    get_k_4_1,
+    get_k_4_2,
 };
 
 fn x_num<F: BigPrimeField>(
@@ -12,14 +23,14 @@ fn x_num<F: BigPrimeField>(
     fp_chip: &FpChip<'_, F>,
     x: ProperCrtUint<F>,
     x_2: ProperCrtUint<F>,
-    x_3: ProperCrtUint<F>,
+    x_3: ProperCrtUint<F>
 ) -> ProperCrtUint<F> {
     let range = fp_chip.range();
 
-    let k_1_3 = get_k_1_3(ctx, range);
-    let k_1_2 = get_k_1_2(ctx, range);
-    let k_1_1 = get_k_1_1(ctx, range);
-    let k_1_0 = get_k_1_0(ctx, range);
+    let k_1_3 = get_k_1_3(ctx, range, fp_chip);
+    let k_1_2 = get_k_1_2(ctx, range, fp_chip);
+    let k_1_1 = get_k_1_1(ctx, range, fp_chip);
+    let k_1_0 = get_k_1_0(ctx, range, fp_chip);
 
     // Step 1: a = k_(1,3) * x'^3
     let a = fp_chip.mul(ctx, k_1_3, x_3);
@@ -49,12 +60,12 @@ fn x_den<F: BigPrimeField>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<'_, F>,
     x: ProperCrtUint<F>,
-    x_2: ProperCrtUint<F>,
+    x_2: ProperCrtUint<F>
 ) -> ProperCrtUint<F> {
     let range = fp_chip.range();
 
-    let k_2_0 = get_k_2_0(ctx, range);
-    let k_2_1 = get_k_2_1(ctx, range);
+    let k_2_0 = get_k_2_0(ctx, range, fp_chip);
+    let k_2_1 = get_k_2_1(ctx, range, fp_chip);
 
     // Step 1: a = x_2 + k_2_0
     let a = fp_chip.add_no_carry(ctx, x_2, k_2_0);
@@ -75,14 +86,14 @@ fn y_num<F: BigPrimeField>(
     fp_chip: &FpChip<'_, F>,
     x: ProperCrtUint<F>,
     x_2: ProperCrtUint<F>,
-    x_3: ProperCrtUint<F>,
+    x_3: ProperCrtUint<F>
 ) -> ProperCrtUint<F> {
     let range = fp_chip.range();
 
-    let k_3_3 = get_k_3_3(ctx, range);
-    let k_3_2 = get_k_3_2(ctx, range);
-    let k_3_1 = get_k_3_1(ctx, range);
-    let k_3_0 = get_k_3_0(ctx, range);
+    let k_3_3 = get_k_3_3(ctx, range, fp_chip);
+    let k_3_2 = get_k_3_2(ctx, range, fp_chip);
+    let k_3_1 = get_k_3_1(ctx, range, fp_chip);
+    let k_3_0 = get_k_3_0(ctx, range, fp_chip);
 
     // Step 1: a = k_3_3 * x_3
     let a = fp_chip.mul(ctx, k_3_3, x_3);
@@ -113,13 +124,13 @@ fn y_den<F: BigPrimeField>(
     fp_chip: &FpChip<'_, F>,
     x: ProperCrtUint<F>,
     x_2: ProperCrtUint<F>,
-    x_3: ProperCrtUint<F>,
+    x_3: ProperCrtUint<F>
 ) -> ProperCrtUint<F> {
     let range = fp_chip.range();
 
-    let k_4_0 = get_k_4_0(ctx, range);
-    let k_4_1 = get_k_4_1(ctx, range);
-    let k_4_2 = get_k_4_2(ctx, range);
+    let k_4_0 = get_k_4_0(ctx, range, fp_chip);
+    let k_4_1 = get_k_4_1(ctx, range, fp_chip);
+    let k_4_2 = get_k_4_2(ctx, range, fp_chip);
 
     // Step 1: a = x_3 + k_4_0
     let a = fp_chip.add_no_carry(ctx, x_3, k_4_0);
@@ -148,7 +159,7 @@ pub(crate) fn iso_map<F: BigPrimeField>(
     x: ProperCrtUint<F>,
     y: ProperCrtUint<F>,
     x_mapped: ProperCrtUint<F>,
-    y_mapped: ProperCrtUint<F>,
+    y_mapped: ProperCrtUint<F>
 ) {
     let one = ctx.load_constant(F::ONE);
 

@@ -1,12 +1,14 @@
 use halo2_base::{
-    gates::{GateInstructions, RangeChip, RangeInstructions},
+    gates::{ GateInstructions, RangeChip, RangeInstructions },
     halo2_proofs::plonk::Error,
     utils::BigPrimeField,
-    AssignedValue, Context, QuantumCell,
+    AssignedValue,
+    Context,
+    QuantumCell,
 };
 use itertools::Itertools;
 
-use self::compression::{sha256_compression, INIT_STATE};
+use self::compression::{ sha256_compression, INIT_STATE };
 
 use self::spread::SpreadChip;
 
@@ -33,7 +35,7 @@ impl<'a, F: BigPrimeField> Sha256Chip<'a, F> {
         &self,
         ctx: &mut Context<F>,
         input: impl IntoIterator<Item = QuantumCell<F>>,
-        max_len: usize,
+        max_len: usize
     ) -> Result<Vec<AssignedValue<F>>, Error> {
         let max_processed_bytes = {
             let mut max_bytes = max_len + 9;
@@ -46,11 +48,13 @@ impl<'a, F: BigPrimeField> Sha256Chip<'a, F> {
 
         let mut assigned_input_bytes = input
             .into_iter()
-            .map(|cell| match cell {
-                QuantumCell::Existing(v) => v,
-                QuantumCell::Witness(v) => ctx.load_witness(v),
-                QuantumCell::Constant(v) => ctx.load_constant(v),
-                _ => unreachable!(),
+            .map(|cell| {
+                match cell {
+                    QuantumCell::Existing(v) => v,
+                    QuantumCell::Witness(v) => ctx.load_witness(v),
+                    QuantumCell::Constant(v) => ctx.load_constant(v),
+                    _ => unreachable!(),
+                }
             })
             .collect_vec();
 
@@ -93,10 +97,12 @@ impl<'a, F: BigPrimeField> Sha256Chip<'a, F> {
         // compute an initial state from the precomputed_input.
         let last_state = INIT_STATE;
 
-        let mut assigned_last_state_vec = vec![last_state
-            .iter()
-            .map(|state| ctx.load_witness(F::from(*state as u64)))
-            .collect_vec()];
+        let mut assigned_last_state_vec = vec![
+            last_state
+                .iter()
+                .map(|state| ctx.load_witness(F::from(*state as u64)))
+                .collect_vec()
+        ];
 
         let mut num_processed_input = 0;
         while num_processed_input < max_processed_bytes {
@@ -106,7 +112,7 @@ impl<'a, F: BigPrimeField> Sha256Chip<'a, F> {
                 ctx,
                 &self.spread,
                 assigned_input_word_at_round,
-                assigned_last_state_vec.last().unwrap(),
+                assigned_last_state_vec.last().unwrap()
             )?;
 
             assigned_last_state_vec.push(new_assigned_hs_out);
@@ -119,7 +125,7 @@ impl<'a, F: BigPrimeField> Sha256Chip<'a, F> {
             let selector = gate.is_equal(
                 ctx,
                 QuantumCell::Constant(F::from(n_round as u64)),
-                assigned_num_round,
+                assigned_num_round
             );
             for i in 0..8 {
                 output_h_out[i] = gate.select(ctx, assigned_state[i], output_h_out[i], selector);
@@ -142,7 +148,7 @@ impl<'a, F: BigPrimeField> Sha256Chip<'a, F> {
                         ctx,
                         assigned_byte,
                         QuantumCell::Constant(F::from(1u64 << (24 - 8 * idx))),
-                        sum,
+                        sum
                     );
                 }
                 ctx.constrain_equal(&assigned_word, &sum);
@@ -156,22 +162,32 @@ impl<'a, F: BigPrimeField> Sha256Chip<'a, F> {
     pub fn digest(
         &self,
         ctx: &mut Context<F>,
-        input: impl IntoIterator<Item = QuantumCell<F>>,
+        input: impl IntoIterator<Item = QuantumCell<F>>
     ) -> Result<Vec<AssignedValue<F>>, Error> {
         let input = input.into_iter().collect_vec();
         let input_len = input.len();
         self.digest_varlen(ctx, input, input_len)
+    }
+
+    pub fn digest_le(
+        &self,
+        ctx: &mut Context<F>,
+        input: impl IntoIterator<Item = QuantumCell<F>>
+    ) -> Result<Vec<AssignedValue<F>>, Error> {
+        self.digest(ctx, input)
     }
 }
 
 #[cfg(test)]
 mod test {
     use halo2_base::{
-        gates::RangeInstructions, halo2_proofs::halo2curves::grumpkin::Fq as Fr,
-        utils::testing::base_test, QuantumCell,
+        gates::RangeInstructions,
+        halo2_proofs::halo2curves::grumpkin::Fq as Fr,
+        utils::testing::base_test,
+        QuantumCell,
     };
     use itertools::Itertools;
-    use sha2::{Digest, Sha256};
+    use sha2::{ Digest, Sha256 };
 
     use super::Sha256Chip;
 
@@ -183,27 +199,31 @@ mod test {
         hasher.update(preimage);
         let result = hasher.finalize();
 
-        base_test().k(14).lookup_bits(13).expect_satisfied(true).run(|ctx, range| {
-            let preimage_assigned = preimage
-                .iter()
-                .map(|byte| QuantumCell::Existing(ctx.load_witness(Fr::from(*byte as u64))))
-                .collect_vec();
+        base_test()
+            .k(14)
+            .lookup_bits(13)
+            .expect_satisfied(true)
+            .run(|ctx, range| {
+                let preimage_assigned = preimage
+                    .iter()
+                    .map(|byte| QuantumCell::Existing(ctx.load_witness(Fr::from(*byte as u64))))
+                    .collect_vec();
 
-            let result_assinged = result
-                .iter()
-                .map(|byte| {
-                    let assigned = ctx.load_witness(Fr::from(*byte as u64));
-                    range.range_check(ctx, assigned, 8);
-                    assigned
-                })
-                .collect_vec();
+                let result_assinged = result
+                    .iter()
+                    .map(|byte| {
+                        let assigned = ctx.load_witness(Fr::from(*byte as u64));
+                        range.range_check(ctx, assigned, 8);
+                        assigned
+                    })
+                    .collect_vec();
 
-            let sha256_chip = Sha256Chip::new(range);
-            let digest = sha256_chip.digest(ctx, preimage_assigned).unwrap();
+                let sha256_chip = Sha256Chip::new(range);
+                let digest = sha256_chip.digest(ctx, preimage_assigned).unwrap();
 
-            for (assigned, expected) in digest.iter().zip(result_assinged.iter()) {
-                ctx.constrain_equal(assigned, expected);
-            }
-        })
+                for (assigned, expected) in digest.iter().zip(result_assinged.iter()) {
+                    ctx.constrain_equal(assigned, expected);
+                }
+            })
     }
 }

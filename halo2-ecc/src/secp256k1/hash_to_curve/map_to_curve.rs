@@ -1,18 +1,11 @@
-use halo2_base::{
-    gates::{GateInstructions, RangeInstructions},
-    utils::BigPrimeField,
-    Context,
-};
+use halo2_base::{ gates::{ GateInstructions, RangeInstructions }, utils::BigPrimeField, Context };
 use num_bigint::BigUint;
 
 use crate::{
     bigint::ProperCrtUint,
-    fields::{FieldChip, Selectable},
+    fields::{ FieldChip, Selectable },
     secp256k1::{
-        hash_to_curve::{
-            constants::{get_A, get_B, get_C1, get_C2, get_Z},
-            iso_map::iso_map,
-        },
+        hash_to_curve::{ constants::{ get_A, get_B, get_C1, get_C2, get_Z }, iso_map::iso_map },
         FpChip,
     },
 };
@@ -27,7 +20,7 @@ fn xy2_selector<F: BigPrimeField>(
     gx2: ProperCrtUint<F>,
     gx2_sqrt: ProperCrtUint<F>,
     x1: ProperCrtUint<F>,
-    x2: ProperCrtUint<F>,
+    x2: ProperCrtUint<F>
 ) -> (ProperCrtUint<F>, ProperCrtUint<F>) {
     let gate = fp_chip.range.gate();
     let one = ctx.load_constant(F::ONE);
@@ -55,20 +48,43 @@ pub(crate) fn map_to_curve<F: BigPrimeField>(
     gx2_sqrt: ProperCrtUint<F>,
     y_pos: ProperCrtUint<F>,
     x_mapped: ProperCrtUint<F>,
-    y_mapped: ProperCrtUint<F>,
+    y_mapped: ProperCrtUint<F>
 ) -> (ProperCrtUint<F>, ProperCrtUint<F>) {
     let range = fp_chip.range();
     let gate = range.gate();
 
+    let zero = ctx.load_zero();
     let one = ctx.load_constant(F::ONE);
 
     let zero_int = fp_chip.load_constant_uint(ctx, BigUint::from(0u64));
     let one_int = fp_chip.load_constant_uint(ctx, BigUint::from(1u64));
 
     // Step 1: tv1 = Z * u^2
-    let u_sq = fp_chip.mul(ctx, u.clone(), u.clone());
-    let z = get_Z(ctx, range);
-    let tv1 = fp_chip.mul(ctx, z, u_sq);
+    let u_sq = fp_chip.mul_no_carry(ctx, u.clone(), u.clone());
+    let u_sq = fp_chip.carry_mod(ctx, u_sq);
+    let z = get_Z(ctx, range, fp_chip);
+    println!("reach here 1");
+    // if z.0.truncation.limbs.len() != u_sq.0.truncation.limbs.len() {
+    //     println!("entered here");
+    //     if z.0.truncation.limbs.len() > u_sq.0.truncation.limbs.len() {
+    //         let diff = z.0.truncation.limbs.len() - u_sq.0.truncation.limbs.len();
+    //         println!("entered here 1: diff = {}", diff);
+    //         for _ in 0..diff {
+    //             u_sq.0.truncation.limbs.push(zero);
+    //         }
+    //         println!("len after push: {}", u_sq.0.truncation.limbs.len());
+    //     } else {
+    //         let diff = u_sq.0.truncation.limbs.len() - z.0.truncation.limbs.len();
+    //         println!("entered here 2: diff = {}", diff);
+    //         for _ in 0..diff {
+    //             z.0.truncation.limbs.push(zero);
+    //         }
+    //         println!("len after push: {}", z.0.truncation.limbs.len());
+    //     }
+    // }
+    let tv1 = fp_chip.mul_no_carry(ctx, z, u_sq);
+    let tv1 = fp_chip.carry_mod(ctx, tv1);
+    println!("reach here 2");
 
     // Step 2: tv2 = tv1^2
     let tv2 = fp_chip.mul(ctx, tv1.clone(), tv1.clone());
@@ -88,18 +104,18 @@ pub(crate) fn map_to_curve<F: BigPrimeField>(
     let x1 = fp_chip.carry_mod(ctx, x1);
 
     // Step 7: x1 = e1 ? c2 : x1
-    let c2 = get_C2(ctx, range);
+    let c2 = get_C2(ctx, range, fp_chip);
     let x1 = fp_chip.select(ctx, c2, x1, e1);
 
     // Step 8: x1 = x1 * c1      # x1 = (-B / A) * (1 + (1 / (Z^2 * u^4 + Z * u^2)))
-    let c1 = get_C1(ctx, range);
+    let c1 = get_C1(ctx, range, fp_chip);
     let x1 = fp_chip.mul(ctx, x1.clone(), c1);
 
     // Step 9: gx1 = x1^2
     let gx1 = fp_chip.mul(ctx, x1.clone(), x1.clone());
 
     // Step 10: gx1 = gx1 + A
-    let a = get_A(ctx, range);
+    let a = get_A(ctx, range, fp_chip);
     let gx1 = fp_chip.add_no_carry(ctx, gx1, a);
     let gx1 = fp_chip.carry_mod(ctx, gx1);
 
@@ -107,7 +123,7 @@ pub(crate) fn map_to_curve<F: BigPrimeField>(
     let gx1 = fp_chip.mul(ctx, gx1, x1.clone());
 
     // Step 12: gx1 = gx1 + B             # gx1 = g(x1) = x1^3 + A * x1 + B
-    let b = get_B(ctx, range);
+    let b = get_B(ctx, range, fp_chip);
     let gx1 = fp_chip.add_no_carry(ctx, gx1, b);
     let gx1 = fp_chip.carry_mod(ctx, gx1);
 

@@ -1,14 +1,16 @@
 use halo2_base::{
-    gates::{GateInstructions, RangeChip, RangeInstructions},
+    gates::{ GateInstructions, RangeChip, RangeInstructions },
     utils::BigPrimeField,
-    AssignedValue, Context, QuantumCell,
+    AssignedValue,
+    Context,
+    QuantumCell,
 };
 
 use crate::secp256k1::sha256::Sha256Chip;
 
 use super::{
-    constants::{get_dst_prime, get_lib_str, get_z_pad},
-    util::{bits_le_to_bytes_assigned, bytes_to_bits_le_assigned},
+    constants::{ get_dst_prime, get_lib_str, get_z_pad },
+    util::{ bits_le_to_bytes_assigned, bytes_to_bits_le_assigned },
 };
 
 fn calc_msg_prime_output_length(msg_length: usize) -> usize {
@@ -17,7 +19,7 @@ fn calc_msg_prime_output_length(msg_length: usize) -> usize {
 
 fn msg_prime<F: BigPrimeField>(
     ctx: &mut Context<F>,
-    msg_bytes: &[AssignedValue<F>],
+    msg_bytes: &[AssignedValue<F>]
 ) -> Vec<AssignedValue<F>> {
     let zero = ctx.load_zero();
 
@@ -25,8 +27,9 @@ fn msg_prime<F: BigPrimeField>(
     let lib_str = get_lib_str(ctx);
     let dst_prime = get_dst_prime(ctx);
 
-    let mut msg_prime =
-        Vec::<AssignedValue<F>>::with_capacity(calc_msg_prime_output_length(msg_bytes.len()));
+    let mut msg_prime = Vec::<AssignedValue<F>>::with_capacity(
+        calc_msg_prime_output_length(msg_bytes.len())
+    );
 
     // msg_prme = z_pad ...
     msg_prime.extend(z_pad);
@@ -49,10 +52,10 @@ fn msg_prime<F: BigPrimeField>(
 fn hash_msg_prime_to_b0<F: BigPrimeField>(
     ctx: &mut Context<F>,
     sha256_chip: &Sha256Chip<'_, F>,
-    msg_prime_bytes: &[AssignedValue<F>],
+    msg_prime_bytes: &[AssignedValue<F>]
 ) -> Vec<AssignedValue<F>> {
     let msg_prime_bytes = msg_prime_bytes.iter().map(|byte| QuantumCell::Existing(*byte));
-    let hash = sha256_chip.digest(ctx, msg_prime_bytes).unwrap();
+    let hash = sha256_chip.digest_le(ctx, msg_prime_bytes).unwrap();
     hash
 }
 
@@ -62,7 +65,7 @@ fn hash_bi<F: BigPrimeField>(
     sha256_chip: &Sha256Chip<F>,
     b_idx_byte: &AssignedValue<F>,
     b0_bytes: &[AssignedValue<F>],
-    bi_minus_one_bytes: &[AssignedValue<F>],
+    bi_minus_one_bytes: &[AssignedValue<F>]
 ) -> Vec<AssignedValue<F>> {
     let b0_bits = bytes_to_bits_le_assigned(ctx, range, b0_bytes);
     let bi_minus_one_bits = bytes_to_bits_le_assigned(ctx, range, bi_minus_one_bytes);
@@ -79,7 +82,7 @@ fn hash_b<F: BigPrimeField>(
     ctx: &mut Context<F>,
     sha256_chip: &Sha256Chip<'_, F>,
     b_idx_byte: &AssignedValue<F>,
-    b_bytes: &Vec<AssignedValue<F>>,
+    b_bytes: &Vec<AssignedValue<F>>
 ) -> Vec<AssignedValue<F>> {
     let dst_prime = get_dst_prime(ctx);
 
@@ -89,7 +92,7 @@ fn hash_b<F: BigPrimeField>(
     preimage.extend(dst_prime);
 
     let preimage = preimage.iter().map(|byte| QuantumCell::Existing(*byte));
-    let hash = sha256_chip.digest(ctx, preimage).unwrap();
+    let hash = sha256_chip.digest_le(ctx, preimage).unwrap();
 
     hash
 }
@@ -98,7 +101,7 @@ fn str_xor<F: BigPrimeField>(
     ctx: &mut Context<F>,
     range: &RangeChip<F>,
     a_bits: &[AssignedValue<F>],
-    b_bits: &[AssignedValue<F>],
+    b_bits: &[AssignedValue<F>]
 ) -> Vec<AssignedValue<F>> {
     assert_eq!(a_bits.len(), b_bits.len());
 
@@ -117,7 +120,7 @@ pub(crate) fn expand_message_xmd<F: BigPrimeField>(
     ctx: &mut Context<F>,
     range: &RangeChip<F>,
     sha256_chip: &Sha256Chip<F>,
-    msg_bytes: &[AssignedValue<F>],
+    msg_bytes: &[AssignedValue<F>]
 ) -> Vec<AssignedValue<F>> {
     let one = ctx.load_constant(F::from(1));
     let two = ctx.load_constant(F::from(2));
