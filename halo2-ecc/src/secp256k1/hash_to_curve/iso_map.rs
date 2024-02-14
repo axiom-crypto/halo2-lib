@@ -8,9 +8,9 @@ use halo2_base::{utils::BigPrimeField, Context};
 fn x_num<F: BigPrimeField>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<'_, F>,
-    x: ProperCrtUint<F>,
-    x_2: ProperCrtUint<F>,
-    x_3: ProperCrtUint<F>,
+    x: &ProperCrtUint<F>,
+    x_2: &ProperCrtUint<F>,
+    x_3: &ProperCrtUint<F>,
 ) -> ProperCrtUint<F> {
     let k_1_3 = get_k_1_3(ctx, fp_chip);
     let k_1_2 = get_k_1_2(ctx, fp_chip);
@@ -44,8 +44,8 @@ fn x_num<F: BigPrimeField>(
 fn x_den<F: BigPrimeField>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<'_, F>,
-    x: ProperCrtUint<F>,
-    x_2: ProperCrtUint<F>,
+    x: &ProperCrtUint<F>,
+    x_2: &ProperCrtUint<F>,
 ) -> ProperCrtUint<F> {
     let k_2_0 = get_k_2_0(ctx, fp_chip);
     let k_2_1 = get_k_2_1(ctx, fp_chip);
@@ -67,9 +67,9 @@ fn x_den<F: BigPrimeField>(
 fn y_num<F: BigPrimeField>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<'_, F>,
-    x: ProperCrtUint<F>,
-    x_2: ProperCrtUint<F>,
-    x_3: ProperCrtUint<F>,
+    x: &ProperCrtUint<F>,
+    x_2: &ProperCrtUint<F>,
+    x_3: &ProperCrtUint<F>,
 ) -> ProperCrtUint<F> {
     let k_3_3 = get_k_3_3(ctx, fp_chip);
     let k_3_2 = get_k_3_2(ctx, fp_chip);
@@ -103,9 +103,9 @@ fn y_num<F: BigPrimeField>(
 fn y_den<F: BigPrimeField>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<'_, F>,
-    x: ProperCrtUint<F>,
-    x_2: ProperCrtUint<F>,
-    x_3: ProperCrtUint<F>,
+    x: &ProperCrtUint<F>,
+    x_2: &ProperCrtUint<F>,
+    x_3: &ProperCrtUint<F>,
 ) -> ProperCrtUint<F> {
     let k_4_0 = get_k_4_0(ctx, fp_chip);
     let k_4_1 = get_k_4_1(ctx, fp_chip);
@@ -135,30 +135,30 @@ fn y_den<F: BigPrimeField>(
 pub(crate) fn iso_map<F: BigPrimeField>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<'_, F>,
-    x: ProperCrtUint<F>,
-    y: ProperCrtUint<F>,
+    x: &ProperCrtUint<F>,
+    y: &ProperCrtUint<F>,
 ) -> (ProperCrtUint<F>, ProperCrtUint<F>) {
     // Step 1: calculate x^2
-    let x_2 = fp_chip.mul(ctx, x.clone(), x.clone());
+    let x_2 = fp_chip.mul(ctx, x, x);
 
     // Step 2: calculate x^3
-    let x_3 = fp_chip.mul(ctx, x.clone(), x_2.clone());
+    let x_3 = fp_chip.mul(ctx, x, &x_2);
 
     // Step 3: calculate x_num
-    let x_num = x_num(ctx, fp_chip, x.clone(), x_2.clone(), x_3.clone());
+    let x_num = x_num(ctx, fp_chip, x, &x_2, &x_3);
 
     // Step 4: calculate x_den
-    let x_den = x_den(ctx, fp_chip, x.clone(), x_2.clone());
+    let x_den = x_den(ctx, fp_chip, x, &x_2);
 
     // Step 5: calculate y_num
-    let y_num = y_num(ctx, fp_chip, x.clone(), x_2.clone(), x_3.clone());
+    let y_num = y_num(ctx, fp_chip, x, &x_2, &x_3);
 
     // Step 6: calculate y_den
-    let y_den = y_den(ctx, fp_chip, x, x_2, x_3);
+    let y_den = y_den(ctx, fp_chip, x, &x_2, &x_3);
 
-    let x_mapped = fp_chip.divide(ctx, x_num.clone(), x_den.clone());
-    let y_mapped = fp_chip.divide(ctx, y_num.clone(), y_den.clone());
-    let y_mapped = fp_chip.mul(ctx, y_mapped, y.clone());
+    let x_mapped = fp_chip.divide(ctx, &x_num, &x_den);
+    let y_mapped = fp_chip.divide(ctx, &y_num, &y_den);
+    let y_mapped = fp_chip.mul(ctx, &y_mapped, y);
 
     (x_mapped, y_mapped)
 }

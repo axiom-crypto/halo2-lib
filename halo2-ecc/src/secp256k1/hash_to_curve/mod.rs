@@ -25,10 +25,10 @@ pub fn hash_to_curve<F: BigPrimeField>(
     let (u0, u1) = hash_to_field(ctx, fp_chip, sha256_chip, msg_bytes);
 
     // Step 2: Q0 = map_to_curve(u[0])
-    let (q0_x, q0_y) = map_to_curve(ctx, fp_chip, u0);
+    let (q0_x, q0_y) = map_to_curve(ctx, fp_chip, &u0);
 
     // Step 3: Q1 = map_to_curve(u[1])
-    let (q1_x, q1_y) = map_to_curve(ctx, fp_chip, u1);
+    let (q1_x, q1_y) = map_to_curve(ctx, fp_chip, &u1);
 
     // Step 4: return A + B
     let q0 = EcPoint::<F, ProperCrtUint<F>>::new(q0_x, q0_y);
@@ -52,7 +52,7 @@ mod test {
 
     #[test]
     fn test_hash_to_curve() {
-        let msg = b"abcdef0123456789";
+        let msg = b"abc";
 
         base_test().k(15).lookup_bits(14).expect_satisfied(true).run(|ctx, range| {
             let fp_chip = FpChip::<Fr>::new(range, 64, 4);
@@ -65,8 +65,8 @@ mod test {
 
             let point = hash_to_curve(ctx, ecc_chip, &sha256_chip, msg_bytes.as_slice());
 
-            println!("point x: {:?}", point.x);
-            println!("point y: {:?}", point.y);
+            println!("point x: {:?}", point.x.value().to_str_radix(16));
+            println!("point y: {:?}", point.y.value().to_str_radix(16));
         })
     }
 }

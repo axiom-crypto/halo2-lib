@@ -81,10 +81,10 @@ fn hash_b<F: BigPrimeField>(
     ctx: &mut Context<F>,
     sha256_chip: &Sha256Chip<'_, F>,
     b_idx_byte: &AssignedValue<F>,
-    b_bytes: &Vec<AssignedValue<F>>,
+    b_bytes: &[AssignedValue<F>],
 ) -> Vec<AssignedValue<F>> {
     assert_eq!(b_bytes.len(), 32);
-    assert_eq!(b_idx_byte.value() < &F::from(8u64), true);
+    assert!(b_idx_byte.value() < &F::from(8u64));
 
     let dst_prime = get_dst_prime(ctx);
 
