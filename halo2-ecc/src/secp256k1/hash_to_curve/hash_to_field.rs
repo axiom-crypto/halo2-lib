@@ -1,23 +1,21 @@
-use halo2_base::{
-    gates::{ GateInstructions, RangeInstructions },
-    utils::BigPrimeField,
-    AssignedValue,
-    Context,
-    QuantumCell,
-};
-use num_bigint::BigUint;
-use num_integer::div_ceil;
+use super::expand_message_xmd::expand_message_xmd;
 use crate::{
     bigint::ProperCrtUint,
     fields::FieldChip,
-    secp256k1::{ hash_to_curve::util::limbs_le_to_bn, sha256::Sha256Chip, FpChip },
+    secp256k1::{hash_to_curve::util::limbs_le_to_bn, sha256::Sha256Chip, FpChip},
 };
-use super::expand_message_xmd::expand_message_xmd;
+use halo2_base::{
+    gates::{GateInstructions, RangeInstructions},
+    utils::BigPrimeField,
+    AssignedValue, Context, QuantumCell,
+};
+use num_bigint::BigUint;
+use num_integer::div_ceil;
 
 fn bytes_le_to_limbs<F: BigPrimeField>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<'_, F>,
-    bytes: &[AssignedValue<F>]
+    bytes: &[AssignedValue<F>],
 ) -> Vec<AssignedValue<F>> {
     let mut limbs = Vec::<AssignedValue<F>>::with_capacity(div_ceil(bytes.len(), 8));
     for chunk in bytes.chunks(8) {
@@ -26,10 +24,12 @@ fn bytes_le_to_limbs<F: BigPrimeField>(
             if chunk.len() < 8 && i >= chunk.len() {
                 break;
             }
-            limb = fp_chip
-                .range()
-                .gate()
-                .mul_add(ctx, chunk[i], QuantumCell::Constant(F::from(1 << (8 * i))), limb);
+            limb = fp_chip.range().gate().mul_add(
+                ctx,
+                chunk[i],
+                QuantumCell::Constant(F::from(1 << (8 * i))),
+                limb,
+            );
         }
         limbs.push(limb);
     }
@@ -40,7 +40,7 @@ fn bytes_le_to_limbs<F: BigPrimeField>(
 fn bytes_to_registers<F: BigPrimeField>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<'_, F>,
-    bytes: &[AssignedValue<F>]
+    bytes: &[AssignedValue<F>],
 ) -> ProperCrtUint<F> {
     let limbs = bytes_le_to_limbs(ctx, fp_chip, bytes);
 
@@ -66,13 +66,13 @@ pub(crate) fn hash_to_field<F: BigPrimeField>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<'_, F>,
     sha256_chip: &Sha256Chip<F>,
-    msg_bytes: &[AssignedValue<F>]
+    msg_bytes: &[AssignedValue<F>],
 ) -> (ProperCrtUint<F>, ProperCrtUint<F>) {
     let expanded_msg_bytes = expand_message_xmd(ctx, fp_chip.range, sha256_chip, msg_bytes);
     assert_eq!(expanded_msg_bytes.len(), 96);
 
-    let u0 = bytes_to_registers(ctx, fp_chip, &expanded_msg_bytes[0..48]);
-    let u1 = bytes_to_registers(ctx, fp_chip, &expanded_msg_bytes[48..96]);
+    let u1 = bytes_to_registers(ctx, fp_chip, &expanded_msg_bytes[0..48]);
+    let u0 = bytes_to_registers(ctx, fp_chip, &expanded_msg_bytes[48..96]);
 
     (u0, u1)
 }
