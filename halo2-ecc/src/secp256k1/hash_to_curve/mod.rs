@@ -23,12 +23,18 @@ pub fn hash_to_curve<F: BigPrimeField>(
 
     // Step 1: u = hash_to_field(msg)
     let (u0, u1) = hash_to_field(ctx, fp_chip, sha256_chip, msg_bytes);
+    println!("u0: {:?}", u0.value().to_str_radix(16));
+    println!("u1: {:?}", u1.value().to_str_radix(16));
 
     // Step 2: Q0 = map_to_curve(u[0])
     let (q0_x, q0_y) = map_to_curve(ctx, fp_chip, &u0);
+    println!("q0_x: {:?}", q0_x.value().to_str_radix(16));
+    println!("q0_y: {:?}", q0_y.value().to_str_radix(16));
 
     // Step 3: Q1 = map_to_curve(u[1])
     let (q1_x, q1_y) = map_to_curve(ctx, fp_chip, &u1);
+    println!("q1_x: {:?}", q1_x.value().to_str_radix(16));
+    println!("q1_y: {:?}", q1_y.value().to_str_radix(16));
 
     // Step 4: return A + B
     let q0 = EcPoint::<F, ProperCrtUint<F>>::new(q0_x, q0_y);
@@ -55,7 +61,7 @@ mod test {
         let msg = b"abc";
 
         base_test().k(15).lookup_bits(14).expect_satisfied(true).run(|ctx, range| {
-            let fp_chip = FpChip::<Fr>::new(range, 64, 4);
+            let fp_chip = FpChip::<Fr>::new(range, 88, 3);
             let ecc_chip = EccChip::<Fr, FpChip<Fr>>::new(&fp_chip);
 
             let sha256_chip = Sha256Chip::new(range);

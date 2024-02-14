@@ -9,30 +9,23 @@ use halo2_base::{
     utils::BigPrimeField,
     AssignedValue, Context, QuantumCell,
 };
+use itertools::Itertools;
 use num_bigint::BigUint;
-use num_integer::div_ceil;
 
 fn bytes_le_to_limbs<F: BigPrimeField>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<'_, F>,
     bytes: &[AssignedValue<F>],
 ) -> Vec<AssignedValue<F>> {
-    let mut limbs = Vec::<AssignedValue<F>>::with_capacity(div_ceil(bytes.len(), 8));
-    for chunk in bytes.chunks(8) {
-        let mut limb = ctx.load_zero();
-        for i in 0..8 {
-            if chunk.len() < 8 && i >= chunk.len() {
-                break;
-            }
-            limb = fp_chip.range().gate().mul_add(
-                ctx,
-                chunk[i],
-                QuantumCell::Constant(F::from(1 << (8 * i))),
-                limb,
-            );
-        }
-        limbs.push(limb);
-    }
+    let gate = fp_chip.range().gate();
+
+    let limb_bytes = fp_chip.limb_bits() / 8;
+    let byte_base =
+        (0..limb_bytes).map(|i| QuantumCell::Constant(gate.pow_of_two()[i * 8])).collect_vec();
+    let limbs = bytes
+        .chunks(limb_bytes)
+        .map(|chunk| gate.inner_product(ctx, chunk.to_vec(), byte_base[..chunk.len()].to_vec()))
+        .collect::<Vec<_>>();
 
     limbs
 }
@@ -44,18 +37,17 @@ fn bytes_to_registers<F: BigPrimeField>(
 ) -> ProperCrtUint<F> {
     let limbs = bytes_le_to_limbs(ctx, fp_chip, bytes);
 
-    let mut lo_limbs = limbs[..3].to_vec();
-    lo_limbs.push(ctx.load_zero());
+    let lo_limbs = limbs[..3].to_vec();
 
     let mut hi_limbs = limbs[3..].to_vec();
     hi_limbs.push(ctx.load_zero());
 
-    let lo = limbs_le_to_bn(ctx, fp_chip, lo_limbs.as_slice());
-    let hi = limbs_le_to_bn(ctx, fp_chip, hi_limbs.as_slice());
+    let lo = limbs_le_to_bn(ctx, fp_chip, lo_limbs.as_slice(), fp_chip.limb_bits());
+    let hi = limbs_le_to_bn(ctx, fp_chip, hi_limbs.as_slice(), fp_chip.limb_bits());
 
-    let two_power_192 = fp_chip.load_constant_uint(ctx, BigUint::from(2u8).pow(192));
+    let two_power_264 = fp_chip.load_constant_uint(ctx, BigUint::from(2u8).pow(264));
 
-    let num = fp_chip.mul_no_carry(ctx, hi, two_power_192);
+    let num = fp_chip.mul_no_carry(ctx, hi, two_power_264);
     let num = fp_chip.add_no_carry(ctx, num, lo);
     let num = fp_chip.carry_mod(ctx, num);
 

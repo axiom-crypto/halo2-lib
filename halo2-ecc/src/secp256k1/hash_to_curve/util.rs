@@ -66,13 +66,14 @@ pub(crate) fn limbs_le_to_bn<F: BigPrimeField>(
     ctx: &mut Context<F>,
     fp_chip: &FpChip<'_, F>,
     limbs: &[AssignedValue<F>],
+    max_limb_bits: usize,
 ) -> ProperCrtUint<F> {
     let mut value = BigUint::from(0u64);
     for i in 0..limbs.len() {
-        value += (BigUint::from(1u64) << (64 * i)) * fe_to_biguint(limbs[i].value());
+        value += (BigUint::from(1u64) << (max_limb_bits * i)) * fe_to_biguint(limbs[i].value());
     }
 
-    let assigned_uint = OverflowInteger::new(limbs.to_vec(), 64);
+    let assigned_uint = OverflowInteger::new(limbs.to_vec(), max_limb_bits);
     let assigned_native = OverflowInteger::evaluate_native(
         ctx,
         fp_chip.range().gate(),
