@@ -7,7 +7,7 @@ use halo2_base::{
 };
 use num_bigint::BigInt;
 use num_integer::Integer;
-use num_traits::One;
+use num_traits::{One, Signed, Zero};
 use std::{cmp::max, iter};
 
 // same as carry_mod::crt but `out = 0` so no need to range check
@@ -29,14 +29,15 @@ pub fn crt<F: BigPrimeField>(
     let k = a.truncation.limbs.len();
     let trunc_len = n * k;
 
-    // FIXME: hotfix for BLS12 support
-    // debug_assert!(a.value.bits() as usize <= n * k - 1 + (F::NUM_BITS as usize) - 2);
+    debug_assert!(a.value.bits() as usize <= n * k - 1 + (F::NUM_BITS as usize) - 2);
 
     // see carry_mod.rs for explanation
     let quot_max_bits = trunc_len - 1 + (F::NUM_BITS as usize) - 1 - (modulus.bits() as usize);
     assert!(quot_max_bits < trunc_len);
-    // FIXME: hotfix for BLS12 support
-    let _quot_last_limb_bits = 0; // quot_max_bits - n * (k - 1);
+    let bits_wo_last_limb: usize = n * (k - 1);
+    // `has_redunant_limb` will be true when native element can be represented in k-1 limbs, but some cases require an extra limb to carry.
+    // This is only the case for BLS12-381, which requires k=5 and n > 102 because of the check above.
+    let has_redunant_limb = quot_max_bits < bits_wo_last_limb;
 
     // these are witness vectors:
     // we need to find `quot_vec` as a proper BigInt with k limbs
@@ -46,9 +47,8 @@ pub fn crt<F: BigPrimeField>(
     let (quot_val, _out_val) = a.value.div_mod_floor(modulus);
 
     // only perform safety checks in debug mode
-    // FIXME: hotfix for BLS12 support
-    // debug_assert_eq!(_out_val, BigInt::zero());
-    // debug_assert!(quot_val.abs() < (BigInt::one() << quot_max_bits));
+    debug_assert_eq!(_out_val, BigInt::zero());
+    debug_assert!(quot_val.abs() < (BigInt::one() << quot_max_bits));
 
     let quot_vec = decompose_bigint::<F>(&quot_val, k, n);
 
@@ -93,12 +93,12 @@ pub fn crt<F: BigPrimeField>(
 
     // range check that quot_cell in quot_assigned is in [-2^n, 2^n) except for last cell check it's in [-2^quot_last_limb_bits, 2^quot_last_limb_bits)
     for (q_index, quot_cell) in quot_assigned.iter().enumerate() {
-        // FIXME: hotfix for BLS12 support
-        let limb_bits = if q_index == k - 1 {
-            n /* quot_last_limb_bits */
-        } else {
-            n
-        };
+        if has_redunant_limb && q_index == k - 1 {
+            let zero = ctx.load_zero();
+            ctx.constrain_equal(quot_cell, &zero);
+            continue;
+        }
+        let limb_bits = if q_index == k - 1 { quot_max_bits - n * (k - 1) } else { n };
         let limb_base =
             if q_index == k - 1 { range.gate().pow_of_two()[limb_bits] } else { limb_bases[1] };
 
