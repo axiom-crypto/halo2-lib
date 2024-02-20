@@ -27,7 +27,7 @@ test-case = "3.1.0"
 halo2-base = { version = "=0.4.1", path = "../halo2-base", default-features = false }
 # Use additional axiom-crypto halo2curves for BLS12-381 chips when [feature = "halo2-pse"] is on,
 # because the PSE halo2curves does not support BLS12-381 chips and Halo2 depnds on lower major version so patching it is not possible
-halo2curves-axiom = { optional = true }
+halo2curves = { package = "halo2curves-axiom", version = "0.5", optional=true }
 
 # plotting circuit layout
 plotters = { version = "0.3.0", optional = true }
@@ -46,7 +46,7 @@ default = ["jemallocator", "halo2-axiom", "display"]
 dev-graph = ["halo2-base/dev-graph", "plotters"]
 display = ["halo2-base/display"]
 asm = ["halo2-base/asm"]
-halo2-pse = ["halo2-base/halo2-pse", "halo2curves-axiom"]
+halo2-pse = ["halo2-base/halo2-pse", "halo2curves"]
 halo2-axiom = ["halo2-base/halo2-axiom"]
 jemallocator = ["halo2-base/jemallocator"]
 mimalloc = ["halo2-base/mimalloc"]
