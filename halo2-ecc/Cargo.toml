@@ -1,10 +1,16 @@
 [package]
 name = "halo2-ecc"
 version = "0.4.1"
+authors = ["Intrinsic Technologies"]
+license = "MIT"
 edition = "2021"
+repository = "https://github.com/axiom-crypto/halo2-lib"
+readme = "../README.md"
+description = "In-circuit elliptic curve library for halo2."
+rust-version = "1.73.0"
 
 [dependencies]
-itertools = "0.10"
+itertools = "0.11"
 num-bigint = { version = "0.4", features = ["rand"] }
 num-integer = "0.1"
 num-traits = "0.2"
@@ -18,7 +24,7 @@ serde_json = "1.0"
 rayon = "1.8"
 test-case = "3.1.0"
 
-halo2-base = { path = "../halo2-base", default-features = false }
+halo2-base = { version = "=0.4.1", path = "../halo2-base", default-features = false }
 # Use additional axiom-crypto halo2curves for BLS12-381 chips when [feature = "halo2-pse"] is on,
 # because the PSE halo2curves does not support BLS12-381 chips and Halo2 depnds on lower major version so patching it is not possible
 halo2curves-axiom = { optional = true }
@@ -31,9 +37,7 @@ ark-std = { version = "0.3.0", features = ["print-trace"] }
 pprof = { version = "0.13", features = ["criterion", "flamegraph"] }
 criterion = "0.5.1"
 criterion-macro = "0.4"
-halo2-base = { path = "../halo2-base", default-features = false, features = [
-    "test-utils",
-] }
+halo2-base = { version = "=0.4.1", path = "../halo2-base", default-features = false, features = ["test-utils"] }
 test-log = "0.2.12"
 env_logger = "0.10.0"
 sha2 = "0.10"

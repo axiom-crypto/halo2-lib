@@ -164,7 +164,7 @@ impl<'chip, F: BigPrimeField> HashToCurveInstructions<F, Fp2Chip<'chip, F>, G2>
     // Reference: https://github.com/celer-network/brevis-circuits/blob/3a7adf8/gadgets/pairing_bls12381/g2.go#L227
     fn mul_by_bls_x(&self, ctx: &mut Context<F>, p: G2Point<F>) -> G2Point<F> {
         let p2 = self.double(ctx, &p);
-        res = self.add_unequal(ctx, &p2, &p, false);
+        let mut res = self.add_unequal(ctx, &p2, &p, false);
 
         for i in 1..32 {
             res = self.double(ctx, res);
