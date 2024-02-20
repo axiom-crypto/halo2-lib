@@ -74,8 +74,7 @@ impl<'chip, F: BigPrimeField> HashToCurveInstructions<F, Fp2Chip<'chip, F>, G2>
                                 fp_chip.limb_bits(),
                             );
 
-                            let mut y: CRTInteger<F> = y.into();
-                            y.truncation.limbs.pop();
+                            let y: CRTInteger<F> = y.into();
 
                             fp_chip.carry_mod(ctx, y)
                         })
