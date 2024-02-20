@@ -136,8 +136,6 @@ impl<'chip, F: BigPrimeField> HashToCurveInstructions<F, Fp2Chip<'chip, F>, G2>
     /// - https://github.com/paulmillr/noble-curves/blob/bf70ba9/src/bls12-381.ts#L1111
     fn clear_cofactor(&self, ctx: &mut Context<F>, p: G2Point<F>) -> G2Point<F> {
         let t1 = {
-            // scalar multiplication is very expensive in terms of rows used
-            // TODO: is there other ways to clear cofactor that avoid scalar multiplication?
             let tv = self.mul_by_bls_x(ctx, p.clone());
             self.negate(ctx, tv)
         }; // [-x]P
@@ -165,12 +163,7 @@ impl<'chip, F: BigPrimeField> HashToCurveInstructions<F, Fp2Chip<'chip, F>, G2>
 
     // Optimized implementation from https://eprint.iacr.org/2017/419.pdf, 4.1
     // Reference: https://github.com/celer-network/brevis-circuits/blob/3a7adf8/gadgets/pairing_bls12381/g2.go#L227
-    fn mul_by_bls_x(
-        &self,
-        ctx: &mut Context<F>,
-        p: G2Point<F>,
-    ) -> G2Point<F> {
-        let mut res = p.clone();
+    fn mul_by_bls_x(&self, ctx: &mut Context<F>, p: G2Point<F>) -> G2Point<F> {
         let p2 = self.double(ctx, &p);
         res = self.add_unequal(ctx, &p2, &p, false);
 
