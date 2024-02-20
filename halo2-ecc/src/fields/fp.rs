@@ -6,7 +6,7 @@ use crate::bigint::{
 };
 use crate::halo2_proofs::halo2curves::CurveAffine;
 use halo2_base::gates::RangeChip;
-use halo2_base::utils::{BigPrimeField, ScalarField};
+use halo2_base::utils::{log2_ceil, BigPrimeField, ScalarField};
 use halo2_base::{
     gates::{range::RangeConfig, GateInstructions, RangeInstructions},
     utils::{bigint_to_fe, biguint_to_fe, bit_length, decompose_biguint, fe_to_biguint, modulus},
@@ -91,7 +91,7 @@ impl<'range, F: BigPrimeField, Fp: BigPrimeField> FpChip<'range, F, Fp> {
             limb_bits,
             num_limbs,
             num_limbs_bits: bit_length(num_limbs as u64),
-            num_limbs_log2_ceil: bit_length(num_limbs as u64),
+            num_limbs_log2_ceil: log2_ceil(num_limbs as u64),
             limb_bases,
             limb_base_big: BigInt::one() << limb_bits,
             limb_mask,
