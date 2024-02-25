@@ -71,7 +71,7 @@ where
 
     // compute (x1, y1) = u1 * G + u2 * pubkey and check (r mod n) == x1 as integers
     // because it is possible for u1 * G == u2 * pubkey, we must use `EccChip::sum`
-    let sum = chip.sum::<GA>(ctx, [u1_mul, u2_mul]);
+    let sum = chip.sum_unsafe::<GA>(ctx, [u1_mul, u2_mul]);
     // WARNING: For optimization reasons, does not reduce x1 mod n, which is
     //          invalid unless p is very close to n in size.
     // enforce x1 < n
