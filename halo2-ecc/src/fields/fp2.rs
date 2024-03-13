@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+#[cfg(feature = "halo2-axiom")]
 use crate::ff::PrimeField as _;
 use crate::impl_field_ext_chip_common;
 
@@ -120,6 +121,24 @@ where
 mod bn254 {
     use crate::fields::FieldExtConstructor;
     use crate::halo2_proofs::halo2curves::bn256::{Fq, Fq2};
+    impl FieldExtConstructor<Fq, 2> for Fq2 {
+        fn new(c: [Fq; 2]) -> Self {
+            Fq2 { c0: c[0], c1: c[1] }
+        }
+
+        fn coeffs(&self) -> Vec<Fq> {
+            vec![self.c0, self.c1]
+        }
+    }
+}
+
+mod bls12_381 {
+    use crate::fields::FieldExtConstructor;
+    #[cfg(feature = "halo2-axiom")]
+    use crate::halo2_proofs::halo2curves::bls12_381::{Fq, Fq2};
+    #[cfg(feature = "halo2-pse")]
+    use halo2curves::bls12_381::{Fq, Fq2};
+
     impl FieldExtConstructor<Fq, 2> for Fq2 {
         fn new(c: [Fq; 2]) -> Self {
             Fq2 { c0: c[0], c1: c[1] }
