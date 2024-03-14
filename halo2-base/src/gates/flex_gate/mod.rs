@@ -137,7 +137,7 @@ impl<F: ScalarField> FlexGateConfig<F> {
         Self {
             basic_gates,
             constants,
-            /// Warning: this needs to be updated if you create more advice columns after this `FlexGateConfig` is created
+            // Warning: this needs to be updated if you create more advice columns after this `FlexGateConfig` is created
             max_rows: (1 << params.k) - meta.minimum_rows(),
         }
     }
