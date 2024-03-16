@@ -302,7 +302,10 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
                     let copy_manager = self.core.copy_manager.lock().unwrap();
                     let cell =
                         copy_manager.assigned_advices.get(&cell).expect("instance not assigned");
+                    #[cfg(feature = "halo2-axiom")]
                     layouter.constrain_instance(*cell, *instance_col, i);
+                    #[cfg(not(feature = "halo2-axiom"))]
+                    layouter.constrain_instance(*cell, *instance_col, i).unwrap();
                 }
             }
         }
