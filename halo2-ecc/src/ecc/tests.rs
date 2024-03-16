@@ -9,6 +9,7 @@ use crate::halo2_proofs::{
     plonk::*,
 };
 use halo2_base::gates::RangeChip;
+use halo2_base::halo2_proofs::halo2curves::secp256k1::Secp256k1Affine;
 use halo2_base::utils::bigint_to_fe;
 use halo2_base::utils::testing::base_test;
 use halo2_base::utils::value_to_option;
@@ -47,7 +48,7 @@ fn basic_g1_tests<F: BigPrimeField>(
     println!("add unequal witness OK");
 
     // test double
-    let doub = chip.double(ctx, &P_assigned);
+    let doub = chip.double::<G1Affine>(ctx, &P_assigned);
     assert_eq!(doub.x.0.truncation.to_bigint(limb_bits), doub.x.0.value);
     assert_eq!(doub.y.0.truncation.to_bigint(limb_bits), doub.y.0.value);
     {
