@@ -34,7 +34,10 @@ pub fn crt<F: BigPrimeField>(
     // see carry_mod.rs for explanation
     let quot_max_bits = trunc_len - 1 + (F::NUM_BITS as usize) - 1 - (modulus.bits() as usize);
     assert!(quot_max_bits < trunc_len);
-    let quot_last_limb_bits = quot_max_bits - n * (k - 1);
+    let bits_wo_last_limb: usize = n * (k - 1);
+    // `has_redunant_limb` will be true when native element can be represented in k-1 limbs, but some cases require an extra limb to carry.
+    // This is only the case for BLS12-381, which requires k=5 and n > 102 because of the check above.
+    let has_redunant_limb = quot_max_bits < bits_wo_last_limb;
 
     // these are witness vectors:
     // we need to find `quot_vec` as a proper BigInt with k limbs
@@ -90,7 +93,12 @@ pub fn crt<F: BigPrimeField>(
 
     // range check that quot_cell in quot_assigned is in [-2^n, 2^n) except for last cell check it's in [-2^quot_last_limb_bits, 2^quot_last_limb_bits)
     for (q_index, quot_cell) in quot_assigned.iter().enumerate() {
-        let limb_bits = if q_index == k - 1 { quot_last_limb_bits } else { n };
+        if has_redunant_limb && q_index == k - 1 {
+            let zero = ctx.load_zero();
+            ctx.constrain_equal(quot_cell, &zero);
+            continue;
+        }
+        let limb_bits = if q_index == k - 1 { quot_max_bits - n * (k - 1) } else { n };
         let limb_base =
             if q_index == k - 1 { range.gate().pow_of_two()[limb_bits] } else { limb_bases[1] };
 

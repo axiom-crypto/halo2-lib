@@ -30,16 +30,71 @@ pub trait BigPrimeField: ScalarField {
     fn from_u64_digits(val: &[u64]) -> Self;
 }
 #[cfg(feature = "halo2-axiom")]
-impl<F> BigPrimeField for F
-where
-    F: ScalarField + From<[u64; 4]>, // Assume [u64; 4] is little-endian. We only implement ScalarField when this is true.
-{
-    #[inline(always)]
-    fn from_u64_digits(val: &[u64]) -> Self {
-        debug_assert!(val.len() <= 4);
-        let mut raw = [0u64; 4];
-        raw[..val.len()].copy_from_slice(val);
-        Self::from(raw)
+mod bn256 {
+    use crate::halo2_proofs::halo2curves::bn256::{Fq, Fr};
+
+    impl super::BigPrimeField for Fr {
+        #[inline(always)]
+        fn from_u64_digits(val: &[u64]) -> Self {
+            let mut raw = [0u64; 4];
+            raw[..val.len()].copy_from_slice(val);
+            Self::from(raw)
+        }
+    }
+
+    impl super::BigPrimeField for Fq {
+        #[inline(always)]
+        fn from_u64_digits(val: &[u64]) -> Self {
+            let mut raw = [0u64; 4];
+            raw[..val.len()].copy_from_slice(val);
+            Self::from(raw)
+        }
+    }
+}
+
+#[cfg(feature = "halo2-axiom")]
+mod secp256k1 {
+    use crate::halo2_proofs::halo2curves::secp256k1::{Fp, Fq};
+
+    impl super::BigPrimeField for Fp {
+        #[inline(always)]
+        fn from_u64_digits(val: &[u64]) -> Self {
+            let mut raw = [0u64; 4];
+            raw[..val.len()].copy_from_slice(val);
+            Self::from(raw)
+        }
+    }
+
+    impl super::BigPrimeField for Fq {
+        #[inline(always)]
+        fn from_u64_digits(val: &[u64]) -> Self {
+            let mut raw = [0u64; 4];
+            raw[..val.len()].copy_from_slice(val);
+            Self::from(raw)
+        }
+    }
+}
+
+#[cfg(feature = "halo2-axiom")]
+mod bls12_381 {
+    use crate::halo2_proofs::halo2curves::bls12_381::{Fq, Fr};
+
+    impl super::BigPrimeField for Fr {
+        #[inline(always)]
+        fn from_u64_digits(val: &[u64]) -> Self {
+            let mut raw = [0u64; 4];
+            raw[..val.len()].copy_from_slice(val);
+            Self::from(raw)
+        }
+    }
+
+    impl super::BigPrimeField for Fq {
+        #[inline(always)]
+        fn from_u64_digits(val: &[u64]) -> Self {
+            let mut raw = [0u64; 6];
+            raw[..val.len()].copy_from_slice(val);
+            Self::from(raw)
+        }
     }
 }
 
@@ -95,7 +150,7 @@ pub trait ScalarField: PrimeField + FromUniformBytes<64> + From<bool> + Hash + O
 
 /// [ScalarField] that is ~256 bits long
 #[cfg(feature = "halo2-pse")]
-pub trait BigPrimeField = PrimeField<Repr = [u8; 32]> + ScalarField;
+pub trait BigPrimeField = PrimeField + ScalarField;
 
 /// Converts an [Iterator] of u64 digits into `number_of_limbs` limbs of `bit_len` bits returned as a [Vec].
 ///
