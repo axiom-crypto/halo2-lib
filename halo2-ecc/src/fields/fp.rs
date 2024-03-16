@@ -1,4 +1,4 @@
-use super::{FieldChip, PrimeFieldChip, Selectable};
+use super::{FieldChip, FieldChipExt, PrimeFieldChip, Selectable};
 use crate::bigint::{
     add_no_carry, big_is_equal, big_is_even, big_is_zero, carry_mod, check_carry_mod_to_zero,
     mul_no_carry, scalar_mul_and_add_no_carry, scalar_mul_no_carry, select, select_by_indicator,
@@ -479,6 +479,23 @@ impl<'range, F: BigPrimeField, Fp: BigPrimeField> Selectable<F, ProperCrtUint<F>
     ) -> ProperCrtUint<F> {
         let out = select_by_indicator::crt(self.gate(), ctx, a.as_ref(), coeffs, &self.limb_bases);
         ProperCrtUint(out)
+    }
+}
+
+impl<'range, F: BigPrimeField, Fp: BigPrimeField> FieldChipExt<F> for FpChip<'range, F, Fp> {
+    fn sgn0(&self, ctx: &mut Context<F>, a: impl Into<Self::FieldPoint>) -> AssignedValue<F> {
+        let a: Self::FieldPoint = a.into();
+        let range = self.range();
+        let _gate = range.gate();
+
+        let msl = a.limbs()[0]; // most significant limb
+
+        let lsb = range.div_mod(ctx, msl, BigUint::from(256u64), self.limb_bits()).1; // get least significant *byte*
+        range.div_mod(ctx, lsb, BigUint::from(2u64), 8).1 // sgn0 = lsb % 2
+    }
+
+    fn conjugate(&self, ctx: &mut Context<F>, a: impl Into<Self::FieldPoint>) -> Self::FieldPoint {
+        self.negate(ctx, a.into())
     }
 }
 

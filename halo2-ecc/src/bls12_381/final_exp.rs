@@ -1,24 +1,11 @@
+use super::XI_0;
 use super::{Fp12Chip, Fp2Chip, FpChip, FqPoint};
-use crate::{
-    ecc::get_naf,
-    fields::{fp12::mul_no_carry_w6, vector::FieldVector, FieldChip},
-};
-use crate::{
-    fields::FieldChipExt,
-    halo2_proofs::{
-        arithmetic::Field,
-        halo2curves::bn256::{Fq, Fq2, BN_X, FROBENIUS_COEFF_FQ12_C1},
-    },
-};
-use halo2_base::{
-    gates::GateInstructions,
-    utils::{modulus, BigPrimeField},
-    Context,
-    QuantumCell::Constant,
-};
+use super::{Fq, Fq12, Fq2, FROBENIUS_COEFF_FQ12_C1};
+use crate::fields::FieldChipExt;
+use crate::fields::{fp12::mul_no_carry_w6, vector::FieldVector, FieldChip};
+use halo2_base::utils::BigPrimeField;
+use halo2_base::{gates::GateInstructions, utils::modulus, Context, QuantumCell::Constant};
 use num_bigint::BigUint;
-
-const XI_0: i64 = 9;
 
 impl<'chip, F: BigPrimeField> Fp12Chip<'chip, F> {
     // computes a ** (p ** power)
@@ -38,7 +25,7 @@ impl<'chip, F: BigPrimeField> Fp12Chip<'chip, F> {
         let fp_chip = self.fp_chip();
         let fp2_chip = Fp2Chip::<F>::new(fp_chip);
         for i in 0..6 {
-            let frob_coeff = FROBENIUS_COEFF_FQ12_C1[pow].pow_vartime([i as u64]);
+            let frob_coeff = FROBENIUS_COEFF_FQ12_C1[pow].pow_vartime(&[i as u64]);
             // possible optimization (not implemented): load `frob_coeff` as we multiply instead of loading first
             // frobenius map is used infrequently so this is a small optimization
 
@@ -68,41 +55,6 @@ impl<'chip, F: BigPrimeField> Fp12Chip<'chip, F> {
             .collect();
 
         FieldVector(out_coeffs)
-    }
-
-    // exp is in little-endian
-    /// # Assumptions
-    /// * `a` is nonzero field point
-    pub fn pow(
-        &self,
-        ctx: &mut Context<F>,
-        a: &<Self as FieldChip<F>>::FieldPoint,
-        exp: Vec<u64>,
-    ) -> <Self as FieldChip<F>>::FieldPoint {
-        let mut res = a.clone();
-        let mut is_started = false;
-        let naf = get_naf(exp);
-
-        for &z in naf.iter().rev() {
-            if is_started {
-                res = self.mul(ctx, &res, &res);
-            }
-
-            if z != 0 {
-                assert!(z == 1 || z == -1);
-                if is_started {
-                    res = if z == 1 {
-                        self.mul(ctx, &res, a)
-                    } else {
-                        self.divide_unsafe(ctx, &res, a)
-                    };
-                } else {
-                    assert_eq!(z, 1);
-                    is_started = true;
-                }
-            }
-        }
-        res
     }
 
     // assume input is an element of Fp12 in the cyclotomic subgroup GΦ₁₂
@@ -220,7 +172,6 @@ impl<'chip, F: BigPrimeField> Fp12Chip<'chip, F> {
     //  h5 = 2(g5 + 3B_23)
     //  A_ij = (g_i + g_j)(g_i + c g_j)
     //  B_ij = g_i g_j
-
     pub fn cyclotomic_square(
         &self,
         ctx: &mut Context<F>,
@@ -270,126 +221,66 @@ impl<'chip, F: BigPrimeField> Fp12Chip<'chip, F> {
         [h2, h3, h4, h5].into_iter().map(|h| fp2_chip.carry_mod(ctx, h)).collect()
     }
 
-    // exp is in little-endian
+    fn cyclotomic_square_for(&self, ctx: &mut Context<F>, a: &FqPoint<F>, n: usize) -> FqPoint<F> {
+        let mut tv = self.cyclotomic_compress(a);
+        for _ in 0..n {
+            tv = self.cyclotomic_square(ctx, &tv);
+        }
+        self.cyclotomic_decompress(ctx, tv)
+    }
+
     /// # Assumptions
     /// * `a` is a nonzero element in the cyclotomic subgroup
-    pub fn cyclotomic_pow(&self, ctx: &mut Context<F>, a: FqPoint<F>, exp: Vec<u64>) -> FqPoint<F> {
-        let mut compression = self.cyclotomic_compress(&a);
-        let mut out = None;
-        let mut is_started = false;
-        let naf = get_naf(exp);
+    pub fn cyclotomic_pow(&self, ctx: &mut Context<F>, a: FqPoint<F>, exp: u64) -> FqPoint<F> {
+        let mut res = self.load_private(ctx, Fq12::one());
+        let mut found_one = false;
 
-        for &z in naf.iter().rev() {
-            if is_started {
-                compression = self.cyclotomic_square(ctx, &compression);
+        for bit in (0..64).rev().map(|i| ((exp >> i) & 1) == 1) {
+            if found_one {
+                let compressed = self.cyclotomic_square(ctx, &self.cyclotomic_compress(&res));
+                res = self.cyclotomic_decompress(ctx, compressed);
+            } else {
+                found_one = bit;
             }
-            if z != 0 {
-                assert!(z == 1 || z == -1);
-                if is_started {
-                    let mut res = self.cyclotomic_decompress(ctx, compression);
-                    res = if z == 1 {
-                        self.mul(ctx, &res, &a)
-                    } else {
-                        self.divide_unsafe(ctx, &res, &a)
-                    };
-                    // compression is free, so it doesn't hurt (except possibly witness generation runtime) to do it
-                    // TODO: alternatively we go from small bits to large to avoid this compression
-                    compression = self.cyclotomic_compress(&res);
-                    out = Some(res);
-                } else {
-                    assert_eq!(z, 1);
-                    is_started = true;
-                }
+
+            if bit {
+                res = self.mul(ctx, &res, &a);
             }
         }
-        if naf[0] == 0 {
-            out = Some(self.cyclotomic_decompress(ctx, compression));
+
+        self.conjugate(ctx, res)
+    }
+
+    // Optimized implementation of cyclotomic_pow on BLS_X for BLS12-381
+    // Reference: https://github.com/celer-network/brevis-circuits/blob/fe7936f7f/gadgets/pairing_bls12381/tower.go#L801
+    fn cyclotomic_pow_bls_x(&self, ctx: &mut Context<F>, a: &FqPoint<F>) -> FqPoint<F> {
+        let mut tv = self.cyclotomic_compress(a);
+        for _ in 0..15 {
+            tv = self.cyclotomic_square(ctx, &tv);
         }
-        out.unwrap_or(a)
-    }
+        let t0 = self.cyclotomic_decompress(ctx, tv.clone());
 
-    #[allow(non_snake_case)]
-    // use equation for (p^4 - p^2 + 1)/r in Section 5 of https://eprint.iacr.org/2008/490.pdf for BN curves
-    pub fn hard_part_BN(
-        &self,
-        ctx: &mut Context<F>,
-        m: <Self as FieldChip<F>>::FieldPoint,
-    ) -> <Self as FieldChip<F>>::FieldPoint {
-        // x = BN_X
+        for _ in 0..32 {
+            tv = self.cyclotomic_square(ctx, &tv);
+        }
+        let t1 = self.cyclotomic_decompress(ctx, tv);
 
-        // m^p
-        let mp = self.frobenius_map(ctx, &m, 1);
-        // m^{p^2}
-        let mp2 = self.frobenius_map(ctx, &m, 2);
-        // m^{p^3}
-        let mp3 = self.frobenius_map(ctx, &m, 3);
+        let mut res = self.mul(ctx, &t0, &t1);
+        let mut t1 = self.cyclotomic_square_for(ctx, &t1, 9);
 
-        // y0 = m^p * m^{p^2} * m^{p^3}
-        let mp2_mp3 = self.mul(ctx, &mp2, &mp3);
-        let y0 = self.mul(ctx, &mp, &mp2_mp3);
-        // y1 = 1/m,  inverse = frob(6) = conjugation in cyclotomic subgroup
-        let y1 = self.conjugate(ctx, m.clone());
+        res = self.mul(ctx, &res, &t1);
+        t1 = self.cyclotomic_square_for(ctx, &t1, 3);
 
-        // m^x
-        let mx = self.cyclotomic_pow(ctx, m, vec![BN_X]);
-        // (m^x)^p
-        let mxp = self.frobenius_map(ctx, &mx, 1);
-        // m^{x^2}
+        res = self.mul(ctx, &res, &t1);
+        t1 = self.cyclotomic_square_for(ctx, &t1, 2);
 
-        let mx2 = self.cyclotomic_pow(ctx, mx.clone(), vec![BN_X]);
-        // (m^{x^2})^p
-        let mx2p = self.frobenius_map(ctx, &mx2, 1);
-        // y2 = (m^{x^2})^{p^2}
-        let y2 = self.frobenius_map(ctx, &mx2, 2);
-        // m^{x^3}
-        // y5 = 1/mx2
-        let y5 = self.conjugate(ctx, mx2.clone());
+        res = self.mul(ctx, &res, &t1);
+        t1 = self.cyclotomic_square_for(ctx, &t1, 1);
 
-        let mx3 = self.cyclotomic_pow(ctx, mx2, vec![BN_X]);
-        // (m^{x^3})^p
-        let mx3p = self.frobenius_map(ctx, &mx3, 1);
+        res = self.mul(ctx, &res, &t1);
+        res = self.conjugate(ctx, res);
 
-        // y3 = 1/mxp
-        let y3 = self.conjugate(ctx, mxp);
-        // y4 = 1/(mx * mx2p)
-        let mx_mx2p = self.mul(ctx, &mx, &mx2p);
-        let y4 = self.conjugate(ctx, mx_mx2p);
-        // y6 = 1/(mx3 * mx3p)
-        let mx3_mx3p = self.mul(ctx, &mx3, &mx3p);
-        let y6 = self.conjugate(ctx, mx3_mx3p);
-
-        // out = y0 * y1^2 * y2^6 * y3^12 * y4^18 * y5^30 * y6^36
-        // we compute this using the vectorial addition chain from p. 6 of https://eprint.iacr.org/2008/490.pdf
-        let mut T0 = self.mul(ctx, &y6, &y6);
-        T0 = self.mul(ctx, &T0, &y4);
-        T0 = self.mul(ctx, &T0, &y5);
-        let mut T1 = self.mul(ctx, &y3, &y5);
-        T1 = self.mul(ctx, &T1, &T0);
-        T0 = self.mul(ctx, &T0, &y2);
-        T1 = self.mul(ctx, &T1, &T1);
-        T1 = self.mul(ctx, &T1, &T0);
-        T1 = self.mul(ctx, &T1, &T1);
-        T0 = self.mul(ctx, &T1, &y1);
-        T1 = self.mul(ctx, &T1, &y0);
-        T0 = self.mul(ctx, &T0, &T0);
-        T0 = self.mul(ctx, &T0, &T1);
-
-        T0
-    }
-
-    // out = in^{ (q^6 - 1)*(q^2 + 1) }
-    /// # Assumptions
-    /// * `a` is nonzero field point
-    pub fn easy_part(
-        &self,
-        ctx: &mut Context<F>,
-        a: <Self as FieldChip<F>>::FieldPoint,
-    ) -> <Self as FieldChip<F>>::FieldPoint {
-        // a^{q^6} = conjugate of a
-        let f1 = self.conjugate(ctx, a.clone());
-        let f2 = self.divide_unsafe(ctx, &f1, a);
-        let f3 = self.frobenius_map(ctx, &f2, 2);
-        self.mul(ctx, &f3, &f2)
+        self.cyclotomic_square_for(ctx, &res, 1)
     }
 
     // out = in^{(q^12 - 1)/r}
@@ -398,8 +289,45 @@ impl<'chip, F: BigPrimeField> Fp12Chip<'chip, F> {
         ctx: &mut Context<F>,
         a: <Self as FieldChip<F>>::FieldPoint,
     ) -> <Self as FieldChip<F>>::FieldPoint {
-        let f0 = self.easy_part(ctx, a);
-        let f = self.hard_part_BN(ctx, f0);
-        f
+        // a^{q^6} = conjugate of a
+        let f1 = self.conjugate(ctx, a.clone());
+        let f2 = self.divide_unsafe(ctx, &f1, a);
+        let f3 = self.frobenius_map(ctx, &f2, 2);
+
+        let t2 = self.mul(ctx, &f3, &f2);
+        let t1 = {
+            let tv = self.cyclotomic_square(ctx, &self.cyclotomic_compress(&t2));
+            let tv = self.cyclotomic_decompress(ctx, tv);
+            self.conjugate(ctx, tv)
+        };
+        let t3 = self.cyclotomic_pow_bls_x(ctx, &t2);
+        let t4 = {
+            let tv = self.cyclotomic_square(ctx, &self.cyclotomic_compress(&t3));
+            self.cyclotomic_decompress(ctx, tv)
+        };
+
+        let t5 = self.mul(ctx, &t1, &t3);
+        let t1 = self.cyclotomic_pow_bls_x(ctx, &t5);
+
+        let t0 = self.cyclotomic_pow_bls_x(ctx, &t1.clone());
+
+        let t6 = self.cyclotomic_pow_bls_x(ctx, &t0.clone());
+        let t6 = self.mul(ctx, &t6, &t4);
+        let t4 = self.cyclotomic_pow_bls_x(ctx, &t6.clone());
+        let t5 = self.conjugate(ctx, t5);
+        let t4 = self.mul(ctx, &t4, &t5);
+        let t4 = self.mul(ctx, &t4, &t2);
+        let t5 = self.conjugate(ctx, t2.clone());
+        let t1 = self.mul(ctx, &t1, &t2);
+
+        let t1 = self.frobenius_map(ctx, &t1, 3);
+        let t6 = self.mul(ctx, &t6, &t5);
+        let t6 = self.frobenius_map(ctx, &t6, 1);
+        let t3 = self.mul(ctx, &t3, &t0);
+        let t3 = self.frobenius_map(ctx, &t3, 2);
+        let t3 = self.mul(ctx, &t3, &t1);
+        let t3 = self.mul(ctx, &t3, &t6);
+
+        self.mul(ctx, &t3, &t4)
     }
 }

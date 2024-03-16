@@ -99,6 +99,20 @@ impl<F: Field> Sha256CircuitConfig<F> {
         start_offset: usize,
     ) -> Vec<AssignedSha256Block<'v, F>> {
         let virtual_rows = generate_witnesses_multi_sha256(bytes, capacity);
+        self.assign_sha256_rows(region, virtual_rows, capacity, start_offset)
+    }
+
+    /// Computes witnesses for computing SHA-256 for each bytearray in `bytes` 
+    /// and assigns the witnesses to Halo2 cells, starting from a blank region.
+    /// 
+    /// This is a helper method to allow implementing decorator pattern from oustide of this crate.
+    pub fn assign_sha256_rows<'v>(
+        &self,
+        region: &mut Region<'_, F>,
+        virtual_rows: Vec<VirtualShaRow>,
+        capacity: Option<usize>,
+        start_offset: usize,
+    ) -> Vec<AssignedSha256Block<'v, F>> {
         let assigned_rows: Vec<_> = virtual_rows
             .into_iter()
             .enumerate()

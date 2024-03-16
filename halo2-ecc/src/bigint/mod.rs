@@ -23,6 +23,7 @@ pub mod select;
 pub mod select_by_indicator;
 pub mod sub;
 pub mod sub_no_carry;
+pub mod utils;
 
 #[derive(Clone, Debug, PartialEq, Default)]
 pub enum BigIntStrategy {
