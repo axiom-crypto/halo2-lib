@@ -34,7 +34,7 @@ const BITS_PER_BYTE: usize = 8;
 /// where each [`AssignedValue`] represents 1 byte. However, the range of [`AssignedValue<F>`] is much
 /// larger than 1 byte(0~255). If a circuit takes 32 [`AssignedValue<F>`] as inputs and some of them
 /// are actually greater than 255, there could be some undefined behaviors.
-/// [`SafeType`] gurantees the value range of its owned [`AssignedValue<F>`]. So circuits don't need to
+/// [`SafeType`] guarantees the value range of its owned [`AssignedValue<F>`]. So circuits don't need to
 /// do any extra value checking if they take SafeType as inputs.
 /// - `TOTAL_BITS` is the number of total bits of this type.
 /// - `BYTES_PER_ELE` is the number of bytes of each element.
@@ -131,7 +131,7 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
 
     /// Convert a vector of AssignedValue (treated as little-endian) to a SafeType.
     /// The number of bytes of inputs must equal to the number of bytes of outputs.
-    /// This function also add contraints that a AssignedValue in inputs must be in the range of a byte.
+    /// This function also add constraints that a AssignedValue in inputs must be in the range of a byte.
     pub fn raw_bytes_to<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
         &self,
         ctx: &mut Context<F>,
@@ -276,7 +276,7 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
     ///
     /// * inputs: Vector representing the byte array, right padded to `max_len`. See [VarLenBytesVec] for details about padding.
     /// * len: [`AssignedValue<F>`] witness representing the variable length of the byte array. Constrained to be `<= max_len`.
-    /// * max_len: [usize] representing the maximum length of the byte array and the number of elements it must contain. We enforce this to be provided explictly to make sure length of `inputs` is determinstic.
+    /// * max_len: [usize] representing the maximum length of the byte array and the number of elements it must contain. We enforce this to be provided explicitly to make sure length of `inputs` is deterministic.
     ///
     /// ## Assumptions
     /// * `max_len < u64::MAX` to prevent overflow (but you should never make an array this large)
@@ -311,7 +311,7 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
     /// Converts a slice of AssignedValue(treated as little-endian) to FixLenBytesVec.
     ///
     /// * inputs: Slice representing the byte array.
-    /// * len: length of the byte array. We enforce this to be provided explictly to make sure length of `inputs` is determinstic.
+    /// * len: length of the byte array. We enforce this to be provided explicitly to make sure length of `inputs` is deterministic.
     pub fn raw_to_fix_len_bytes_vec(
         &self,
         ctx: &mut Context<F>,

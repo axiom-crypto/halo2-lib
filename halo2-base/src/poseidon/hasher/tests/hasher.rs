@@ -22,7 +22,7 @@ struct Payload<F: ScalarField> {
 }
 
 // check if the results from hasher and native sponge are same for hash_var_len_array.
-fn hasher_compatiblity_verification<
+fn hasher_compatibility_verification<
     const T: usize,
     const RATE: usize,
     const R_F: usize,
@@ -50,7 +50,7 @@ fn hasher_compatiblity_verification<
 }
 
 // check if the results from hasher and native sponge are same for hash_compact_input.
-fn hasher_compact_inputs_compatiblity_verification<
+fn hasher_compact_inputs_compatibility_verification<
     const T: usize,
     const RATE: usize,
     const R_F: usize,
@@ -115,7 +115,7 @@ fn hasher_compact_inputs_compatiblity_verification<
 }
 
 // check if the results from hasher and native sponge are same for hash_compact_input.
-fn hasher_compact_chunk_inputs_compatiblity_verification<
+fn hasher_compact_chunk_inputs_compatibility_verification<
     const T: usize,
     const RATE: usize,
     const R_F: usize,
@@ -189,7 +189,7 @@ fn random_payload_without_len<F: ScalarField>(max_len: usize, max_value: usize) 
 }
 
 #[test]
-fn test_poseidon_hasher_compatiblity() {
+fn test_poseidon_hasher_compatibility() {
     {
         const T: usize = 3;
         const RATE: usize = 2;
@@ -216,7 +216,7 @@ fn test_poseidon_hasher_compatiblity() {
             random_payload(RATE * 2 + 1, RATE * 2 + 1, usize::MAX),
             random_payload(RATE * 5 + 1, RATE * 5 + 1, usize::MAX),
         ];
-        hasher_compatiblity_verification::<T, RATE, 8, 57>(payloads);
+        hasher_compatibility_verification::<T, RATE, 8, 57>(payloads);
     }
 }
 
@@ -262,7 +262,7 @@ fn test_poseidon_hasher_compact_inputs() {
             random_payload(RATE * 5, RATE * 5, usize::MAX),
         ];
         base_test().k(12).run(|ctx, range| {
-            hasher_compact_inputs_compatiblity_verification::<T, RATE, 8, 57>(payloads, ctx, range);
+            hasher_compact_inputs_compatibility_verification::<T, RATE, 8, 57>(payloads, ctx, range);
         });
     }
 }
@@ -289,7 +289,7 @@ fn test_poseidon_hasher_compact_inputs_with_prover() {
             .collect::<Vec<_>>();
         base_test().k(12).bench_builder(init_payloads, logic_payloads, |pool, range, input| {
             let ctx = pool.main();
-            hasher_compact_inputs_compatiblity_verification::<T, RATE, 8, 57>(input, ctx, range);
+            hasher_compact_inputs_compatibility_verification::<T, RATE, 8, 57>(input, ctx, range);
         });
     }
 }
@@ -306,7 +306,7 @@ fn test_poseidon_hasher_compact_chunk_inputs() {
             (random_payload(RATE * 3, RATE * 3, usize::MAX), true),
         ];
         base_test().k(12).run(|ctx, range| {
-            hasher_compact_chunk_inputs_compatiblity_verification::<T, RATE, 8, 57>(
+            hasher_compact_chunk_inputs_compatibility_verification::<T, RATE, 8, 57>(
                 payloads, ctx, range,
             );
         });
@@ -320,7 +320,7 @@ fn test_poseidon_hasher_compact_chunk_inputs() {
             (random_payload(0, 0, usize::MAX), false),
         ];
         base_test().k(12).run(|ctx, range| {
-            hasher_compact_chunk_inputs_compatiblity_verification::<T, RATE, 8, 57>(
+            hasher_compact_chunk_inputs_compatibility_verification::<T, RATE, 8, 57>(
                 payloads, ctx, range,
             );
         });
@@ -349,7 +349,7 @@ fn test_poseidon_hasher_compact_chunk_inputs_with_prover() {
             .collect::<Vec<_>>();
         base_test().k(12).bench_builder(init_payloads, logic_payloads, |pool, range, input| {
             let ctx = pool.main();
-            hasher_compact_chunk_inputs_compatiblity_verification::<T, RATE, 8, 57>(
+            hasher_compact_chunk_inputs_compatibility_verification::<T, RATE, 8, 57>(
                 input, ctx, range,
             );
         });

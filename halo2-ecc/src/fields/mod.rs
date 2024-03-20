@@ -61,7 +61,7 @@ pub trait FieldChip<F: BigPrimeField>: Clone + Send + Sync {
     /// Assigns `fe` as private witness. Note that the witness may **not** be constrained to be a unique representation of the field element `fe`.
     fn load_private(&self, ctx: &mut Context<F>, fe: Self::FieldType) -> Self::FieldPoint;
 
-    /// Assigns `fe` as private witness and contrains the witness to be in reduced form.
+    /// Assigns `fe` as private witness and constrains the witness to be in reduced form.
     fn load_private_reduced(
         &self,
         ctx: &mut Context<F>,

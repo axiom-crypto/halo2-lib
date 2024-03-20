@@ -4,14 +4,14 @@
 
 SHA-256 circuit in vanilla halo2. This implementation is largely based on [Brechtpd](https://github.com/Brechtpd)'s [PR](https://github.com/privacy-scaling-explorations/zkevm-circuits/pull/756) to the PSE `zkevm-circuits`. His implementation of SHA-256 is in turn based on his implementation of Keccak using the "Bits" approach: one can read more about it [here](https://hackmd.io/NaTuIvmaQCybaOYgd-DG1Q?view#Bit-implementation).
 
-The major differences is that this version directly represent raw inputs and SHA-256 digests as witnesses, while the original version only has RLCs (random linear combination) of raw inputs and outputs. Because this version doesn't need RLCs, it doesn't have the 2nd phase or use challenge APIs.
+The major difference is that this version directly represent raw inputs and SHA-256 digests as witnesses, while the original version only has RLCs (random linear combination) of raw inputs and outputs. Because this version doesn't need RLCs, it doesn't have the 2nd phase or use challenge APIs.
 
 ### Logical Input/Output
 
 Logically the circuit takes a variable length array of variable length bytes as inputs and SHA-256 digests of these bytes as outputs.
 While these logical inputs are variable, what is fixed in a given circuit is max number of _total number of SHA-256 input blocks_ that can be processed (see below). We refer to this as the capacity of the circuit.
 
-`sha256::vanilla::witness::generate_witnesses_multi_sha256` generates the witnesses of the ciruit for a given input.
+`sha256::vanilla::witness::generate_witnesses_multi_sha256` generates the witnesses of the circuit for a given input.
 
 ### Background Knowledge
 

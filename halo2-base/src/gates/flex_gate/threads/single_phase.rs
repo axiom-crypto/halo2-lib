@@ -42,7 +42,7 @@ pub struct SinglePhaseCoreManager<F: ScalarField> {
 impl<F: ScalarField> SinglePhaseCoreManager<F> {
     /// Creates a new [SinglePhaseCoreManager] and spawns a main thread.
     /// * `witness_gen_only`: If true, the [SinglePhaseCoreManager] is used for witness generation only.
-    ///     * If true, the gate thread builder only does witness asignments and does not store constraint information -- this should only be used for the real prover.
+    ///     * If true, the gate thread builder only does witness assignments and does not store constraint information -- this should only be used for the real prover.
     ///     * If false, the gate thread builder is used for keygen and mock prover (it can also be used for real prover) and the builder stores circuit information (e.g. copy constraints, fixed columns, enabled selectors).
     ///         * These values are fixed for the circuit at key generation time, and they do not need to be re-computed by the prover in the actual proving phase.
     pub fn new(witness_gen_only: bool, copy_manager: SharedCopyConstraintManager<F>) -> Self {

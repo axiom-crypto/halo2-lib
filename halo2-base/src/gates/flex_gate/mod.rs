@@ -545,7 +545,7 @@ pub trait GateInstructions<F: ScalarField> {
         ctx.last().unwrap()
     }
 
-    /// Constrains and returns `a & b`, assumeing `a` and `b` are boolean.
+    /// Constrains and returns `a & b`, assuming `a` and `b` are boolean.
     ///
     /// Defines a vertical gate of form | 0 | a | b | out |, where out = a * b.
     /// * `ctx`: [Context] to add the constraints to.
@@ -590,7 +590,7 @@ pub trait GateInstructions<F: ScalarField> {
         ctx.last().unwrap()
     }
 
-    /// Constrains and returns `!a` assumeing `a` is boolean.
+    /// Constrains and returns `!a` assuming `a` is boolean.
     ///
     /// Defines a vertical gate of form | 1 - a | a | 1 | 1 |, where 1 - a = out.
     /// * `ctx`: [Context] to add the constraints to.
@@ -1204,7 +1204,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
         ctx.last().unwrap()
     }
 
-    /// Constains and returns `a || (b && c)`, assuming `a`, `b` and `c` are boolean.
+    /// Constrains and returns `a || (b && c)`, assuming `a`, `b` and `c` are boolean.
     ///
     /// Defines a vertical gate of form `| 1 - b c | b | c | 1 | a - 1 | 1 - b c | out | a - 1 | 1 | 1 | a |`, where out = a + b * c - a * b * c.
     /// * `ctx`: [Context] to add the constraints to
