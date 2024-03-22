@@ -175,7 +175,7 @@ fn test_prove_shard_circuit_commit() {
     circuit.set_base_circuit_break_points(break_points);
 
     let circuit_outputs = multi_inputs_to_circuit_outputs::<Fr>(&inputs, circuit_params.capacity());
-    let instances = vec![vec![calculate_circuit_outputs_commit(&circuit_outputs)]];
+    let instances = [[calculate_circuit_outputs_commit(&circuit_outputs)]];
 
     let proof = gen_proof_with_instances(
         &params,
