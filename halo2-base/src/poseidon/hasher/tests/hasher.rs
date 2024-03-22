@@ -262,7 +262,9 @@ fn test_poseidon_hasher_compact_inputs() {
             random_payload(RATE * 5, RATE * 5, usize::MAX),
         ];
         base_test().k(12).run(|ctx, range| {
-            hasher_compact_inputs_compatibility_verification::<T, RATE, 8, 57>(payloads, ctx, range);
+            hasher_compact_inputs_compatibility_verification::<T, RATE, 8, 57>(
+                payloads, ctx, range,
+            );
         });
     }
 }
