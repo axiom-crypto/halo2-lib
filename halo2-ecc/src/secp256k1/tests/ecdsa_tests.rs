@@ -28,14 +28,18 @@ fn custom_parameters_ecdsa(sk: u64, msg_hash: u64, k: u64) -> ECDSAInput {
 }
 
 #[test]
-#[should_panic(expected = "assertion failed: `(left == right)`")]
+#[should_panic(
+    expected = "assertion `left == right` failed\n  left: 0x0000000000000000000000000000000000000000000000000000000000000000\n right: 0x0000000000000000000000000000000000000000000000000000000000000001"
+)]
 fn test_ecdsa_msg_hash_zero() {
     let input = custom_parameters_ecdsa(random::<u64>(), 0, random::<u64>());
     run_test(input);
 }
 
 #[test]
-#[should_panic(expected = "assertion failed: `(left == right)`")]
+#[should_panic(
+    expected = "assertion `left == right` failed\n  left: 0x0000000000000000000000000000000000000000000000000000000000000000\n right: 0x0000000000000000000000000000000000000000000000000000000000000001"
+)]
 fn test_ecdsa_private_key_zero() {
     let input = custom_parameters_ecdsa(0, random::<u64>(), random::<u64>());
     run_test(input);
