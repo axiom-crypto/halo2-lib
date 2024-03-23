@@ -63,7 +63,7 @@ where
     let x_neq = base_chip.gate().not(ctx, x_eq);
 
     // R = s⋅G - e⋅P
-    // R is not infinity point implicitly constrainted by is_strict = true
+    // R is not infinity point implicitly constrained by is_strict = true
     let R = chip.sub_unequal(ctx, s_G, e_P, true);
 
     // check R.y is even

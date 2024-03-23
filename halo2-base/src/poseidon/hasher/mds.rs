@@ -34,7 +34,7 @@ pub struct SparseMDSMatrix<F: PrimeField, const T: usize, const RATE: usize> {
     pub(crate) col_hat: [F; RATE],
 }
 
-/// `MDSMatrix` is applied to `State` to achive linear layer of Poseidon
+/// `MDSMatrix` is applied to `State` to achieve linear layer of Poseidon
 #[derive(Clone, Debug)]
 pub struct MDSMatrix<F, const T: usize, const RATE: usize>(pub(crate) Mds<F, T>);
 

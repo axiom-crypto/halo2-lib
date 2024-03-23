@@ -71,7 +71,7 @@ pub struct KeccakComponentShardCircuitParams {
     // Number of unusable rows withhold by Halo2.
     #[getset(get_copy = "pub")]
     num_unusable_row: usize,
-    /// Max keccak_f this circuits can aceept. The circuit can at most process `capacity` of inputs
+    /// Max keccak_f this circuits can accept. The circuit can at most process `capacity` of inputs
     /// with < NUM_BYTES_TO_ABSORB bytes or an input with `capacity * NUM_BYTES_TO_ABSORB - 1` bytes.
     #[getset(get_copy = "pub")]
     capacity: usize,
@@ -410,7 +410,7 @@ pub(crate) fn create_hasher<F: Field>() -> PoseidonHasher<F, POSEIDON_T, POSEIDO
 /// Packs raw inputs from Keccak circuit witnesses into fewer field elements for the purpose of creating lookup keys.
 /// The packed field elements can be either random linearly combined (RLC'd) or Poseidon-hashed into lookup keys.
 ///
-/// Each element in the return value corrresponds to a Keccak chunk. If is_final = true, this element is the lookup key of the corresponding logical input.
+/// Each element in the return value corresponds to a Keccak chunk. If is_final = true, this element is the lookup key of the corresponding logical input.
 pub fn pack_inputs_from_keccak_fs<F: Field>(
     ctx: &mut Context<F>,
     gate: &impl GateInstructions<F>,
@@ -466,7 +466,7 @@ pub fn pack_inputs_from_keccak_fs<F: Field>(
 
 /// Encode raw inputs from Keccak circuit witnesses into lookup keys.
 ///
-/// Each element in the return value corrresponds to a Keccak chunk. If is_final = true, this element is the lookup key of the corresponding logical input.
+/// Each element in the return value corresponds to a Keccak chunk. If is_final = true, this element is the lookup key of the corresponding logical input.
 pub fn encode_inputs_from_keccak_fs<F: Field>(
     ctx: &mut Context<F>,
     gate: &impl GateInstructions<F>,

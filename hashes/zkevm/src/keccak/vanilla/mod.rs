@@ -266,7 +266,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
         // that allows reusing the same parts in an optimal way for the chi step.
         // We can save quite a few columns by not recombining the parts after rho/pi and
         // re-splitting the words again before chi. Instead we do chi directly
-        // on the output parts of rho/pi. For rho/pi specically we do
+        // on the output parts of rho/pi. For rho/pi specially we do
         // `s[j][2 * i + 3 * j) % 5] = normalize(rot(s[i][j], RHOM[i][j]))`.
         cell_manager.start_region();
         let mut lookup_counter = 0;
@@ -278,7 +278,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
         // multiple rows with lookups in a way that doesn't require any
         // extra additional cells or selectors we have to put all `s[i]`'s on the same
         // row. This isn't that strong of a requirement actually because we the
-        // words are split into multipe parts, and so only the parts at the same
+        // words are split into multiple parts, and so only the parts at the same
         // position of those words need to be on the same row.
         let target_word_sizes = target_part_sizes(part_size);
         let num_word_parts = target_word_sizes.len();
@@ -637,7 +637,7 @@ impl<F: Field> KeccakCircuitConfig<F> {
             // Logically here we want !q_input[cur] && !start_new_hash(cur) ==> bytes_left[cur + num_rows_per_round] == bytes_left[cur]
             // In practice, in order to save a degree we use !(q_input[cur] ^ start_new_hash(cur)) ==> bytes_left[cur + num_rows_per_round] == bytes_left[cur]
             // When q_input[cur] is true, the above constraint q_input[cur] ==> bytes_left[cur + num_rows_per_round] + word_len == bytes_left[cur] has
-            // already been enabled. Even is_final in start_new_hash(cur) is true, it's just over-constrainted.
+            // already been enabled. Even is_final in start_new_hash(cur) is true, it's just over-constrained.
             // Note: At the first row of any round except the last round, is_final could be either true or false.
             cb.condition(not::expr(q(q_input, meta) + start_new_hash(meta, Rotation::cur())), |cb| {
                 let bytes_left_next_expr =

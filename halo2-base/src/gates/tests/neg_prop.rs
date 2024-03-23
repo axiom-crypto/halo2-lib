@@ -101,7 +101,7 @@ fn arb_indicator<F: ScalarField>(max_size: usize) -> impl Strategy<Value = Vec<F
 
 fn check_idx_to_indicator(idx: Fr, len: usize, ind_witnesses: &[Fr]) -> bool {
     // check that:
-    // the length of the witnes array is correct
+    // the length of the witness array is correct
     // the sum of the witnesses is 1, indicting that there is only one index that is 1
     if ind_witnesses.len() != len
         || ind_witnesses.iter().fold(Fr::zero(), |acc, val| acc + *val) != Fr::one()

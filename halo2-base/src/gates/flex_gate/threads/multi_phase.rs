@@ -29,7 +29,7 @@ impl<F: ScalarField> MultiPhaseCoreManager<F> {
     /// Creates a new [MultiPhaseCoreManager] with a default [SinglePhaseCoreManager] in phase 0.
     /// Creates an empty [SharedCopyConstraintManager] and sets `witness_gen_only` flag.
     /// * `witness_gen_only`: If true, the [MultiPhaseCoreManager] is used for witness generation only.
-    ///     * If true, the gate thread builder only does witness asignments and does not store constraint information -- this should only be used for the real prover.
+    ///     * If true, the gate thread builder only does witness assignments and does not store constraint information -- this should only be used for the real prover.
     ///     * If false, the gate thread builder is used for keygen and mock prover (it can also be used for real prover) and the builder stores circuit information (e.g. copy constraints, fixed columns, enabled selectors).
     ///         * These values are fixed for the circuit at key generation time, and they do not need to be re-computed by the prover in the actual proving phase.
     pub fn new(witness_gen_only: bool) -> Self {
@@ -126,7 +126,7 @@ impl<F: ScalarField> MultiPhaseCoreManager<F> {
 
     /// Auto-calculates configuration parameters for the circuit
     ///
-    /// * `k`: The number of in the circuit (i.e. numeber of rows = 2<sup>k</sup>)
+    /// * `k`: The number of in the circuit (i.e. number of rows = 2<sup>k</sup>)
     /// * `minimum_rows`: The minimum number of rows in the circuit that cannot be used for witness assignments and contain random `blinding factors` to ensure zk property, defaults to 0.
     pub fn calculate_params(&self, k: usize, minimum_rows: Option<usize>) -> FlexGateConfigParams {
         let max_rows = (1 << k) - minimum_rows.unwrap_or(0);

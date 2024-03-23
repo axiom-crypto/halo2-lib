@@ -19,7 +19,7 @@ pub struct KeccakCircuitOutput<E> {
     pub hash_hi: E,
 }
 
-/// Return circuit outputs of the specified Keccak corprocessor circuit for a specified input.
+/// Return circuit outputs of the specified Keccak coprocessor circuit for a specified input.
 pub fn multi_inputs_to_circuit_outputs<F: Field>(
     inputs: &[Vec<u8>],
     capacity: usize,
