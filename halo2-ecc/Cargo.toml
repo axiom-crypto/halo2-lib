@@ -13,7 +13,7 @@ rust-version = "1.73.0"
 itertools = "0.11"
 num-bigint = { version = "0.4", features = ["rand"] }
 num-integer = "0.1"
-num-traits = "0.2"
+num-traits = "0.2.17"
 rand_core = { version = "0.6", default-features = false, features = ["getrandom"] }
 rand = "0.8"
 rand_chacha = "0.3.1"
@@ -26,6 +26,7 @@ halo2-base = { version = "=0.4.1", path = "../halo2-base", default-features = fa
 
 # plotting circuit layout
 plotters = { version = "0.3.0", optional = true }
+sha2 = "0.10.8"
 
 [dev-dependencies]
 ark-std = { version = "0.3.0", features = ["print-trace"] }
