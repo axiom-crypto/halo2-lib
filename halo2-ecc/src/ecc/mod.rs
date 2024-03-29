@@ -415,7 +415,7 @@ where
     EcPoint::new(Rx, Ry)
 }
 
-// takes the dot product of points with sel, where each is intepreted as
+// takes the dot product of points with sel, where each is interpreted as
 // a _vector_
 pub fn ec_select_by_indicator<F: BigPrimeField, FC, Pt>(
     chip: &FC,
@@ -635,7 +635,7 @@ where
 
 // need to supply an extra generic `C` implementing `CurveAffine` trait in order to generate random witness points on the curve in question
 // Using Simultaneous 2^w-Ary Method, see https://www.bmoeller.de/pdf/multiexp-sac2001.pdf
-// Random Accumlation point trick learned from halo2wrong: https://hackmd.io/ncuKqRXzR-Cw-Au2fGzsMg?view
+// Random Accumulation point trick learned from halo2wrong: https://hackmd.io/ncuKqRXzR-Cw-Au2fGzsMg?view
 // Input:
 // - `scalars` is vector of same length as `P`
 // - each `scalar` in `scalars` satisfies same assumptions as in `scalar_multiply` above

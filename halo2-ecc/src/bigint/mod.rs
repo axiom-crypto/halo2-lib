@@ -125,7 +125,7 @@ impl<F: BigPrimeField> FixedOverflowInteger<F> {
 
     /// Input: a BigInteger `value`, Output: the `FixedOverflowInteger` that represents the same value
     /// Can handle signs
-    /// Note the representation of the integer will be in proper (no overflow) format, if signs are interpretted correctly
+    /// Note the representation of the integer will be in proper (no overflow) format, if signs are interpreted correctly
     pub fn from_native(value: &BigUint, num_limbs: usize, limb_bits: usize) -> Self {
         let limbs = decompose_biguint(value, num_limbs, limb_bits);
         Self { limbs }

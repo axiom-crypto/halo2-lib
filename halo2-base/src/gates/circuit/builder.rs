@@ -67,7 +67,7 @@ impl<F: ScalarField> Default for BaseCircuitBuilder<F> {
 impl<F: ScalarField> BaseCircuitBuilder<F> {
     /// Creates a new [BaseCircuitBuilder] with all default managers.
     /// * `witness_gen_only`:
-    ///     * If true, the builder only does witness asignments and does not store constraint information -- this should only be used for the real prover.
+    ///     * If true, the builder only does witness assignments and does not store constraint information -- this should only be used for the real prover.
     ///     * If false, the builder also imposes constraints (selectors, fixed columns, copy constraints). Primarily used for keygen and mock prover (but can also be used for real prover).
     ///
     /// By default, **no** circuit configuration parameters have been set.
@@ -254,7 +254,7 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
 
     /// Auto-calculates configuration parameters for the circuit and sets them.
     ///
-    /// * `k`: The number of in the circuit (i.e. numeber of rows = 2<sup>k</sup>)
+    /// * `k`: The number of in the circuit (i.e. number of rows = 2<sup>k</sup>)
     /// * `minimum_rows`: The minimum number of rows in the circuit that cannot be used for witness assignments and contain random `blinding factors` to ensure zk property, defaults to 0.
     /// * `lookup_bits`: The fixed lookup table will consist of [0, 2<sup>lookup_bits</sup>)
     pub fn calculate_params(&mut self, minimum_rows: Option<usize>) -> BaseCircuitParams {

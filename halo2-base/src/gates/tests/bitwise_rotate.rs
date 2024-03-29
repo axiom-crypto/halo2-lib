@@ -71,7 +71,7 @@ fn test_bitwise_rotate_gen<const BIT: usize, const NUM_BITS: usize>(
 
 #[test]
 fn test_bitwise_rotate() {
-    // "<<" is leftroate. ">>" is rightrotate.
+    // "<<" is leftrotate. ">>" is rightrotate.
     // 1 << 8 == 256
     test_bitwise_rotate_gen::<8, 10>(8, true, 1, 256, true);
     // 1 << 8 != 255
