@@ -48,7 +48,7 @@ use virtual_region::copy_constraints::SharedCopyConstraintManager;
 pub mod gates;
 /// Module for the Poseidon hash function.
 pub mod poseidon;
-/// Module for SafeType which enforce value range and realted functions.
+/// Module for SafeType which enforce value range and related functions.
 pub mod safe_types;
 /// Utility functions for converting between different types of field elements.
 pub mod utils;

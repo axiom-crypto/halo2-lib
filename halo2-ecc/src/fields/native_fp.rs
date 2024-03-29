@@ -145,7 +145,7 @@ impl<'range, F: BigPrimeField> FieldChip<F> for NativeFieldChip<'range, F> {
         a: impl Into<AssignedValue<F>>,
         max_bits: usize, // the maximum bits that a.value could take
     ) {
-        // skip range chek if max_bits >= F::NUM_BITS
+        // skip range check if max_bits >= F::NUM_BITS
         if max_bits < F::NUM_BITS as usize {
             let a: AssignedValue<F> = a.into();
             self.range().range_check(ctx, a, max_bits);
