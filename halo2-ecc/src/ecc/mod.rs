@@ -991,14 +991,15 @@ impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
     }
 
     /// Checks if a point is the point at infinity (represented by (0, 0))
+    /// Assumes points at infinity are always serialized as (0, 0) as bigints
     pub fn is_infinity(
         &self,
         ctx: &mut Context<F>,
         P: EcPoint<F, FC::FieldPoint>,
     ) -> AssignedValue<F> {
         // TODO: optimize
-        let x_is_zero = self.field_chip.is_zero(ctx, P.x);
-        let y_is_zero = self.field_chip.is_zero(ctx, P.y);
+        let x_is_zero = self.field_chip.is_soft_zero(ctx, P.x);
+        let y_is_zero = self.field_chip.is_soft_zero(ctx, P.y);
         self.field_chip.range().gate().and(ctx, x_is_zero, y_is_zero)
     }
 
@@ -1036,7 +1037,9 @@ impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC>
 where
     FC: Selectable<F, FC::FieldPoint>,
 {
-    /// Expensive version of `sum_unsafe`, but works generally
+    /// Expensive version of `sum_unsafe`, but works generally meaning that
+    /// * sum can be the point at infinity
+    /// * addends can be points at infinity
     pub fn sum<C>(
         &self,
         ctx: &mut Context<F>,
@@ -1056,8 +1059,6 @@ where
             let _acc = self.add_unequal(ctx, acc.clone(), addend.clone(), true);
             let _acc = self.select(ctx, acc.clone().into(), _acc, point_is_inf);
             acc = _acc.into();
-            let acc_is_inf = self.is_infinity(ctx, acc.clone().into());
-            ctx.constrain_equal(&acc_is_inf, &zero);
         }
         let acc_is_neg_rand = self.is_equal(ctx, acc.clone().into(), neg_rand_point);
         let addend = self.select(ctx, rand_point2.clone(), acc.clone().into(), acc_is_neg_rand);
