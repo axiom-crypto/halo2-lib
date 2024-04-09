@@ -1050,7 +1050,6 @@ where
     {
         let rand_point = self.load_random_point::<C>(ctx);
         let rand_point2 = self.load_random_point::<C>(ctx);
-        let zero = ctx.load_constant(F::ZERO);
         let neg_rand_point = self.negate(ctx, rand_point.clone());
         let mut acc = ComparableEcPoint::from(neg_rand_point.clone());
         for point in points {
