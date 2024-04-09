@@ -29,6 +29,9 @@ criterion-macro = "0.4"
 halo2-base = { path = "../halo2-base", default-features = false, features = ["test-utils"] }
 test-log = "0.2.12"
 env_logger = "0.10.0"
+clap = "=4.4" # fix clap version to prevent requiring rustc 1.74
+clap_builder = "=4.4"
+clap_lex = "=0.6.0"
 
 [features]
 default = ["jemallocator", "halo2-axiom", "display"]
