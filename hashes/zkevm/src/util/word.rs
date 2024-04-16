@@ -1,5 +1,5 @@
 //! Define generic Word type with utility functions
-// Naming Convesion
+// Naming conversion
 // - Limbs: An EVM word is 256 bits **big-endian**. Limbs N means split 256 into N limb. For example, N = 4, each
 //   limb is 256/4 = 64 bits
 
