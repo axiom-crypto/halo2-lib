@@ -57,9 +57,8 @@ pub fn crt<F: BigPrimeField>(
     // If quot[i] <= 2^n for i < k - 1 and quot[k-1] <= 2^{n'} then
     // quot < 2^{n(k-1)+1} + 2^{n' + n(k-1)} = (2+2^{n'}) 2^{n(k-1)} < 2^{n'+1} * 2^{n(k-1)} <= 2^{quot_max_bits - n(k-1)} * 2^{n(k-1)}
     let bits_wo_last_limb: usize = n * (k - 1);
-    // `has_redunant_limb` will be true when native element can be represented in k-1 limbs, but some cases require an extra limb to carry.
-    // This is only the case for BLS12-381, which requires k=5 and n > 102 because of the check above.
-    let has_redunant_limb = quot_max_bits < bits_wo_last_limb;
+    // it takes `out_num_limbs` to represented a native field element, any extra limbs are used to carry.
+    let out_num_limbs = modulus.bits().div_ceil(n as u64) as usize;
     let out_max_bits = modulus.bits() as usize;
 
     // these are witness vectors:
@@ -137,31 +136,34 @@ pub fn crt<F: BigPrimeField>(
     //}
 
     // range check limbs of `out` are in [0, 2^n) except last limb should be in [0, 2^out_last_limb_bits)
-    for (out_index, out_cell) in out_assigned.iter().enumerate() {
-        if has_redunant_limb && out_index == k - 1 {
-            let zero = ctx.load_zero();
-            ctx.constrain_equal(out_cell, &zero);
-            continue;
-        }
+    for (out_index, out_cell) in out_assigned.iter().take(out_num_limbs).enumerate() {
         // we assume `modulus` requires *exactly* `k` limbs to represent (if `< k` limbs ok, you should just be using that)
         let limb_bits = if out_index == k - 1 { out_max_bits - bits_wo_last_limb } else { n };
         range.range_check(ctx, *out_cell, limb_bits);
     }
 
+    // enforce that extra `out` limbs are zero
+    for out_cell in out_assigned.iter().skip(out_num_limbs) {
+        let zero = ctx.load_zero();
+        ctx.constrain_equal(out_cell, &zero);
+    }
+
     // range check that quot_cell in quot_assigned is in [-2^n, 2^n) except for last cell check it's in [-2^quot_last_limb_bits, 2^quot_last_limb_bits)
-    for (q_index, quot_cell) in quot_assigned.iter().enumerate() {
-        if has_redunant_limb && q_index == k - 1 {
-            let zero = ctx.load_zero();
-            ctx.constrain_equal(quot_cell, &zero);
-            continue;
-        }
-        let limb_bits = if q_index == k - 1 {  quot_max_bits - bits_wo_last_limb } else { n };
+    for (q_index, quot_cell) in quot_assigned.iter().take(out_num_limbs).enumerate() {
+        let limb_bits = if q_index == k - 1 { quot_max_bits - bits_wo_last_limb } else { n };
         let limb_base =
             if q_index == k - 1 { range.gate().pow_of_two()[limb_bits] } else { limb_bases[1] };
 
         // compute quot_cell + 2^n and range check with n + 1 bits
         let quot_shift = range.gate().add(ctx, *quot_cell, Constant(limb_base));
         range.range_check(ctx, quot_shift, limb_bits + 1);
+    }
+
+    // enforce that extra quotient limbs are zero
+    for quot_cell in quot_assigned.iter().skip(out_num_limbs) {
+        let zero = ctx.load_zero();
+        ctx.constrain_equal(quot_cell, &zero);
+        continue;
     }
 
     let check_overflow_int = OverflowInteger::new(
