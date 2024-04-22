@@ -29,73 +29,45 @@ pub trait BigPrimeField: ScalarField {
     /// * The integer value of `val` is already less than the modulus of `Self`
     fn from_u64_digits(val: &[u64]) -> Self;
 }
+
+macro_rules! impl_big_prime_field { // Implements BigPrimeField for $field with $limbs limbs.
+    ($field:tt, $limbs:expr) => {
+        impl super::BigPrimeField for $field {
+            #[inline(always)]
+            fn from_u64_digits(val: &[u64]) -> Self {
+                let mut raw = [0u64; $limbs];
+                raw[..val.len()].copy_from_slice(val);
+                Self::from(raw)
+            }
+        }
+    };
+}
+
 #[cfg(feature = "halo2-axiom")]
 mod bn256 {
     use crate::halo2_proofs::halo2curves::bn256::{Fq, Fr};
 
-    impl super::BigPrimeField for Fr {
-        #[inline(always)]
-        fn from_u64_digits(val: &[u64]) -> Self {
-            let mut raw = [0u64; 4];
-            raw[..val.len()].copy_from_slice(val);
-            Self::from(raw)
-        }
-    }
+    impl_big_prime_field!(Fr, 4);
 
-    impl super::BigPrimeField for Fq {
-        #[inline(always)]
-        fn from_u64_digits(val: &[u64]) -> Self {
-            let mut raw = [0u64; 4];
-            raw[..val.len()].copy_from_slice(val);
-            Self::from(raw)
-        }
-    }
+    impl_big_prime_field!(Fq, 4);
 }
 
 #[cfg(feature = "halo2-axiom")]
 mod secp256k1 {
     use crate::halo2_proofs::halo2curves::secp256k1::{Fp, Fq};
 
-    impl super::BigPrimeField for Fp {
-        #[inline(always)]
-        fn from_u64_digits(val: &[u64]) -> Self {
-            let mut raw = [0u64; 4];
-            raw[..val.len()].copy_from_slice(val);
-            Self::from(raw)
-        }
-    }
-
-    impl super::BigPrimeField for Fq {
-        #[inline(always)]
-        fn from_u64_digits(val: &[u64]) -> Self {
-            let mut raw = [0u64; 4];
-            raw[..val.len()].copy_from_slice(val);
-            Self::from(raw)
-        }
-    }
+    impl_big_prime_field!(Fp, 4);
+    
+    impl_big_prime_field!(Fq, 4);
 }
 
 #[cfg(feature = "halo2-axiom")]
 mod bls12_381 {
     use crate::halo2_proofs::halo2curves::bls12_381::{Fq, Fr};
 
-    impl super::BigPrimeField for Fr {
-        #[inline(always)]
-        fn from_u64_digits(val: &[u64]) -> Self {
-            let mut raw = [0u64; 4];
-            raw[..val.len()].copy_from_slice(val);
-            Self::from(raw)
-        }
-    }
-
-    impl super::BigPrimeField for Fq {
-        #[inline(always)]
-        fn from_u64_digits(val: &[u64]) -> Self {
-            let mut raw = [0u64; 6];
-            raw[..val.len()].copy_from_slice(val);
-            Self::from(raw)
-        }
-    }
+    impl_big_prime_field!(Fr, 4);
+    
+    impl_big_prime_field!(Fq, 6);
 }
 
 /// Helper trait to represent a field element that can be converted into [u64] limbs.
