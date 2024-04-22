@@ -39,6 +39,7 @@ pub fn bits_le_to_fe_assigned<F: BigPrimeField>(
     let gate = range.gate();
     let mut sum = ctx.load_zero();
     for (idx, bit) in bits.iter().enumerate() {
+        gate.assert_bit(ctx, *bit);
         sum = gate.mul_add(
             ctx,
             QuantumCell::Existing(*bit),

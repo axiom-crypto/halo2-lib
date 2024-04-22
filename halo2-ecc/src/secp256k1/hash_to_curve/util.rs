@@ -21,9 +21,16 @@ pub(crate) fn byte_to_bits_le_assigned<F: BigPrimeField>(
     range: &RangeChip<F>,
     byte: &AssignedValue<F>,
 ) -> Vec<AssignedValue<F>> {
+    range.range_check(ctx, *byte, 8);
     let bits = fe_to_bits_le(byte.value(), 8);
-    let assigned_bits =
-        bits.iter().map(|bit| ctx.load_constant(F::from(*bit as u64))).collect_vec();
+    let assigned_bits = bits
+        .iter()
+        .map(|bit| {
+            let bit = ctx.load_constant(F::from(*bit as u64));
+            range.gate().assert_bit(ctx, bit);
+            bit
+        })
+        .collect_vec();
 
     let _byte = bits_le_to_fe_assigned(ctx, range, &assigned_bits).unwrap();
     assert_eq!(byte.value(), _byte.value());
@@ -49,6 +56,7 @@ pub(crate) fn bits_le_to_byte_assigned<F: BigPrimeField>(
     let gate = range.gate();
     let mut sum = ctx.load_zero();
     for (idx, bit) in bits.iter().enumerate() {
+        gate.assert_bit(ctx, *bit);
         sum = gate.mul_add(ctx, *bit, QuantumCell::Constant(F::from(1 << idx)), sum);
     }
     sum
