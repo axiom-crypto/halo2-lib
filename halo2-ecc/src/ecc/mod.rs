@@ -1090,7 +1090,7 @@ where
             if radix == 0 {
                 radix = 1;
             }*/
-            // guessing that is is always better to use parallelism for >25 points
+            // guessing that is always better to use parallelism for >25 points
             pippenger::multi_exp_par::<F, FC, C>(
                 self.field_chip,
                 builder,
