@@ -243,7 +243,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
             let is_full = gate.is_equal(ctx, input.len, Constant(F::from(RATE as u64)));
             // Case 1: if len != RATE.
             state.permutation(ctx, gate, &input.inputs, Some(input.len), &self.spec);
-            // Case 2: if len == RATE, an extra permuation is needed for squeeze.
+            // Case 2: if len == RATE, an extra permutation is needed for squeeze.
             let mut state_2 = state.clone();
             state_2.permutation(ctx, gate, &[], None, &self.spec);
             // Select the result of case 1/2 depending on if len == RATE.
