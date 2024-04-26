@@ -1,7 +1,7 @@
 use halo2_base::{
     gates::{GateInstructions, RangeChip, RangeInstructions},
     utils::{fe_to_biguint, BigPrimeField},
-    AssignedValue, Context, QuantumCell,
+    AssignedValue, Context,
 };
 use itertools::Itertools;
 use num_bigint::{BigUint, ToBigInt};
@@ -9,34 +9,16 @@ use num_bigint::{BigUint, ToBigInt};
 use crate::{
     bigint::{CRTInteger, OverflowInteger, ProperCrtUint},
     fields::FieldChip,
-    secp256k1::{
-        util::{bits_le_to_fe_assigned, fe_to_bits_le},
-        FpChip,
-    },
+    secp256k1::FpChip,
 };
 
-// Assumes that input is a byte
 pub(crate) fn byte_to_bits_le_assigned<F: BigPrimeField>(
     ctx: &mut Context<F>,
     range: &RangeChip<F>,
     byte: &AssignedValue<F>,
 ) -> Vec<AssignedValue<F>> {
     range.range_check(ctx, *byte, 8);
-    let bits = fe_to_bits_le(byte.value(), 8);
-    let assigned_bits = bits
-        .iter()
-        .map(|bit| {
-            let bit = ctx.load_constant(F::from(*bit as u64));
-            range.gate().assert_bit(ctx, bit);
-            bit
-        })
-        .collect_vec();
-
-    let _byte = bits_le_to_fe_assigned(ctx, range, &assigned_bits).unwrap();
-    assert_eq!(byte.value(), _byte.value());
-    ctx.constrain_equal(byte, &_byte);
-
-    assigned_bits
+    range.gate().num_to_bits(ctx, *byte, 8)
 }
 
 pub(crate) fn bytes_to_bits_le_assigned<F: BigPrimeField>(
@@ -53,13 +35,8 @@ pub(crate) fn bits_le_to_byte_assigned<F: BigPrimeField>(
     bits: &[AssignedValue<F>],
 ) -> AssignedValue<F> {
     assert_eq!(bits.len(), 8);
-    let gate = range.gate();
-    let mut sum = ctx.load_zero();
-    for (idx, bit) in bits.iter().enumerate() {
-        gate.assert_bit(ctx, *bit);
-        sum = gate.mul_add(ctx, *bit, QuantumCell::Constant(F::from(1 << idx)), sum);
-    }
-    sum
+    let _ = bits.iter().map(|bit| range.gate().assert_bit(ctx, *bit));
+    range.gate().bits_to_num(ctx, bits)
 }
 
 pub(crate) fn bits_le_to_bytes_assigned<F: BigPrimeField>(

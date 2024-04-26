@@ -10,7 +10,7 @@ use halo2_base::{
 };
 
 fn calc_msg_prime_output_length(msg_length: usize) -> usize {
-    msg_length + 64 + 2 + 50 + 1
+    msg_length + 64 + 2 + 50 + 1 // msg + z_pad + lib_str + dst_prime + 0
 }
 
 fn msg_prime<F: BigPrimeField>(
@@ -51,6 +51,7 @@ fn hash_msg_prime_to_b0<F: BigPrimeField>(
     msg_prime_bytes: &[AssignedValue<F>],
 ) -> Vec<AssignedValue<F>> {
     let msg_prime_bytes = msg_prime_bytes.iter().map(|byte| QuantumCell::Existing(*byte));
+    // TODO: Have a max len for the sha hash.
     let hash = sha256_chip.digest(ctx, msg_prime_bytes).unwrap();
     hash
 }
@@ -94,6 +95,7 @@ fn hash_b<F: BigPrimeField>(
     preimage.extend(dst_prime);
 
     let preimage = preimage.iter().map(|byte| QuantumCell::Existing(*byte));
+    // TODO: Have a max len for the sha hash.
     let hash = sha256_chip.digest(ctx, preimage).unwrap();
 
     hash
