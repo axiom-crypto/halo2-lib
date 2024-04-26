@@ -208,7 +208,7 @@ where
         },
     );
     let ctx = builder.main();
-    // sum `scalar_mults` but take into account possiblity of identity points
+    // sum `scalar_mults` but take into account possibility of identity points
     let any_point2 = chip.load_random_point::<C>(ctx);
     let mut acc = any_point2.clone();
     for point in scalar_mults {
