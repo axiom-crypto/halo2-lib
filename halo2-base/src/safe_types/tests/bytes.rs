@@ -16,7 +16,7 @@ use rand::rngs::OsRng;
 use std::vec;
 use test_case::test_case;
 
-// =========== Utilies ===============
+// =========== Utilities ===============
 fn mock_circuit_test<FM: FnMut(&mut Context<Fr>, SafeTypeChip<'_, Fr>)>(mut f: FM) {
     base_test().k(10).lookup_bits(8).run(|ctx, range| {
         let safe = SafeTypeChip::new(range);

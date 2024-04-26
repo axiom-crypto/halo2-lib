@@ -62,7 +62,7 @@ pub trait ScalarField: PrimeField + FromUniformBytes<64> + From<bool> + Hash + O
     /// Creates a field element from a little endian byte representation.
     ///
     /// The default implementation assumes that `PrimeField::from_repr` is implemented for little-endian.
-    /// It should be overriden if this is not the case.
+    /// It should be overridden if this is not the case.
     fn from_bytes_le(bytes: &[u8]) -> Self {
         let mut repr = Self::Repr::default();
         repr.as_mut()[..bytes.len()].copy_from_slice(bytes);
