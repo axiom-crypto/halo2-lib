@@ -10,7 +10,7 @@ use crate::{
 
 use getset::{CopyGetters, Getters};
 use num_bigint::BigUint;
-use std::{cell::OnceCell, mem};
+use std::{mem, sync::OnceLock};
 
 #[cfg(test)]
 mod tests;
@@ -28,7 +28,7 @@ pub struct PoseidonHasher<F: ScalarField, const T: usize, const RATE: usize> {
     /// Spec, contains round constants and optimized matrices.
     #[getset(get = "pub")]
     spec: OptimizedPoseidonSpec<F, T, RATE>,
-    consts: OnceCell<PoseidonHasherConsts<F, T, RATE>>,
+    consts: OnceLock<PoseidonHasherConsts<F, T, RATE>>,
 }
 #[derive(Clone, Debug, Getters)]
 struct PoseidonHasherConsts<F: ScalarField, const T: usize, const RATE: usize> {
@@ -123,7 +123,7 @@ pub struct PoseidonCompactOutput<F: ScalarField> {
 impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RATE> {
     /// Create a poseidon hasher from an existing spec.
     pub fn new(spec: OptimizedPoseidonSpec<F, T, RATE>) -> Self {
-        Self { spec, consts: OnceCell::new() }
+        Self { spec, consts: OnceLock::new() }
     }
     /// Initialize necessary consts of hasher. Must be called before any computation.
     pub fn initialize_consts(&mut self, ctx: &mut Context<F>, gate: &impl GateInstructions<F>) {
