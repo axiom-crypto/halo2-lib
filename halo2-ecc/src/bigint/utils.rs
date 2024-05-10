@@ -21,7 +21,7 @@ pub fn decode_into_bn<F: BigPrimeField>(
         BigUint::from_bytes_le(&bytes.iter().map(|v| v.value().get_lower_32() as u8).collect_vec());
 
     // inputs is a bool or uint8.
-    let assigned_uint = if bits == 1 || limb_bytes == 8 {
+    let assigned_uint = if bits == 1 || bits == 8 || limb_bits == 8 {
         ProperUint(bytes)
     } else {
         let byte_base =
