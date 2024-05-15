@@ -315,6 +315,8 @@ where
     // Implements [Appendix F.2.1 of draft-irtf-cfrg-hash-to-curve-16][sqrt_ration]
     //
     // Assumption: `num` != 0
+    // Warning: `y_assigned` returned value can be sqrt(y_sqr) and -sqrt(y_sqr).
+    // The sign of `y_assigned` must be constrainted at the callsite according to the composed algorithm.
     //
     // [sqrt_ration]: https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#appendix-F.2.1
     fn sqrt_ratio(
