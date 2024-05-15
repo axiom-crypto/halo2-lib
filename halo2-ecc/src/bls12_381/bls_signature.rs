@@ -47,6 +47,7 @@ impl<'chip, F: BigPrimeField> BlsSignatureChip<'chip, F> {
     /// Checks that e(g1, signature) = e(pubkey, H(m)) by checking e(g1, signature)*e(pubkey, -H(m)) === 1
     /// where e(,) is optimal Ate pairing
     /// G1: {g1, pubkey}, G2: {signature, message}
+    #[must_use]
     pub fn is_valid_signature(
         &self,
         ctx: &mut Context<F>,
