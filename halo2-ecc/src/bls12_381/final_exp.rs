@@ -231,7 +231,7 @@ impl<'chip, F: BigPrimeField> Fp12Chip<'chip, F> {
     /// # Assumptions
     /// * `a` is a nonzero element in the cyclotomic subgroup
     pub fn cyclotomic_pow(&self, ctx: &mut Context<F>, a: FqPoint<F>, exp: u64) -> FqPoint<F> {
-        let mut res = self.load_private(ctx, Fq12::one());
+        let mut res = self.load_constant(ctx, Fq12::one());
         let mut found_one = false;
 
         for bit in (0..64).rev().map(|i| ((exp >> i) & 1) == 1) {
