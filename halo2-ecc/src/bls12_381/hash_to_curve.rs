@@ -153,14 +153,16 @@ impl<'chip, F: BigPrimeField> HashToCurveInstructions<F, Fp2Chip<'chip, F>, G2>
 
         // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P)
         let t3 = self.add_unequal(ctx, t3, t2, false);
-        // Ψ²(2P) - Ψ(Plet ) + [x²]P - [x]Ψ(P) + [x]P
+        // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P) + [x]P
         let t3 = self.sub_unequal(ctx, t3, t1, false);
 
         // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P) + [x]P - 1P => [x²-x-1]P + [x-1]Ψ(P) + Ψ²(2P)
         self.sub_unequal(ctx, t3, p, false)
     }
 
-    // Optimized implementation from https://eprint.iacr.org/2017/419.pdf, 4.1
+    // Specific case of `scalar * P` multiplication where scalar is [C::BLS_X] variant of [C: HashCurveExt].
+    //
+    // This is optimized implementation from https://eprint.iacr.org/2017/419.pdf, 4.1
     // Reference: https://github.com/celer-network/brevis-circuits/blob/3a7adf8/gadgets/pairing_bls12381/g2.go#L227
     fn mul_by_bls_x(&self, ctx: &mut Context<F>, p: G2Point<F>) -> G2Point<F> {
         let p2 = self.double(ctx, &p);

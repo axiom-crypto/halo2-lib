@@ -133,7 +133,7 @@ pub trait HashToCurveInstructions<
         p: EcPoint<F, FC::FieldPoint>,
     ) -> EcPoint<F, FC::FieldPoint>;
 
-    /// Computes `scalar * P` where scalar is [C::BLS_X] variant of [C: HashCurveExt].
+    /// Specific case of `scalar * P` multiplication where scalar is [C::BLS_X] variant of [C: HashCurveExt].
     fn mul_by_bls_x(
         &self,
         ctx: &mut Context<F>,
