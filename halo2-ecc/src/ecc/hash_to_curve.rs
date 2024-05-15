@@ -237,7 +237,7 @@ where
         let p1 = self.map_to_curve_simple_swu(ctx, u0);
         let p2 = self.map_to_curve_simple_swu(ctx, u1);
 
-        let p_sum = self.ecc_chip.add_unequal(ctx, p1, p2, false);
+        let p_sum = self.ecc_chip.add_unequal(ctx, p1, p2, true);
 
         let iso_p = self.ecc_chip.isogeny_map(ctx, p_sum);
 
