@@ -314,6 +314,8 @@ where
 
     // Implements [Appendix F.2.1 of draft-irtf-cfrg-hash-to-curve-16][sqrt_ration]
     //
+    // Assumption: `num` != 0
+    //
     // [sqrt_ration]: https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#appendix-F.2.1
     fn sqrt_ratio(
         &self,
@@ -324,6 +326,9 @@ where
         let field_chip = self.ecc_chip.field_chip();
         let num_v = field_chip.get_assigned_value(&num.clone().into());
         let div_v = field_chip.get_assigned_value(&div.clone().into());
+
+        let num_is_zero = field_chip.is_zero(ctx, num.clone());
+        field_chip.gate().assert_is_const(ctx, &num_is_zero, &F::ZERO);
 
         let (is_square, y) = FC::FieldType::sqrt_ratio(&num_v, &div_v);
 
