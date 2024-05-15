@@ -20,24 +20,33 @@ impl<'chip, F: BigPrimeField> BlsSignatureChip<'chip, F> {
         Self { fp_chip, pairing_chip }
     }
 
-    // Verifies that e(g1, signature) = e(pubkey, H(m)) by checking e(g1, signature)*e(pubkey, -H(m)) === 1
-    // where e(,) is optimal Ate pairing
-    // G1: {g1, pubkey}, G2: {signature, message}
+    /// Warning: this function loads (signature, pubkey, msghash) as private witnesses but does not validate that any of the them.
+    /// This function is mainly intended for testing. If you're using this function make sure to add constraints for the returned assigned points.
+    ///
+    /// Verifies that e(g1, signature) = e(pubkey, H(m)) by checking e(g1, signature)*e(pubkey, -H(m)) === 1
+    /// where e(,) is optimal Ate pairing
+    /// G1: {g1, pubkey}, G2: {signature, message}
     pub fn bls_signature_verify(
         &self,
         ctx: &mut Context<F>,
         signature: G2Affine,
         pubkey: G1Affine,
         msghash: G2Affine,
-    ) {
+    ) -> (EcPoint<F, FieldVector<ProperCrtUint<F>>>, EcPoint<F, FieldVector<ProperCrtUint<F>>>, EcPoint<F, ProperCrtUint<F>>) {
         let signature_assigned = self.pairing_chip.load_private_g2_unchecked(ctx, signature);
         let pubkey_assigned = self.pairing_chip.load_private_g1_unchecked(ctx, pubkey);
         let hash_m_assigned = self.pairing_chip.load_private_g2_unchecked(ctx, msghash);
 
-        self.assert_valid_signature(ctx, signature_assigned, hash_m_assigned, pubkey_assigned);
+        self.assert_valid_signature(ctx, signature_assigned.clone(), hash_m_assigned.clone(), pubkey_assigned.clone());
+
+        (signature_assigned, hash_m_assigned, pubkey_assigned)
     }
 
     /// Verifies BLS signature and returns assigned selector.
+    /// 
+    /// Checks that e(g1, signature) = e(pubkey, H(m)) by checking e(g1, signature)*e(pubkey, -H(m)) === 1
+    /// where e(,) is optimal Ate pairing
+    /// G1: {g1, pubkey}, G2: {signature, message}
     pub fn is_valid_signature(
         &self,
         ctx: &mut Context<F>,
@@ -58,6 +67,10 @@ impl<'chip, F: BigPrimeField> BlsSignatureChip<'chip, F> {
     }
 
     /// Verifies BLS signature with equality check.
+    /// 
+    /// Checks that e(g1, signature) = e(pubkey, H(m)) by checking e(g1, signature)*e(pubkey, -H(m)) === 1
+    /// where e(,) is optimal Ate pairing
+    /// G1: {g1, pubkey}, G2: {signature, message}
     pub fn assert_valid_signature(
         &self,
         ctx: &mut Context<F>,
