@@ -59,11 +59,11 @@ impl<'chip, F: BigPrimeField> Fp12Chip<'chip, F> {
     // assume input is an element of Fp12 in the cyclotomic subgroup GΦ₁₂
     // A cyclotomic group is a subgroup of Fp^n defined by
     //   GΦₙ(p) = {α ∈ Fpⁿ : α^{Φₙ(p)} = 1}
-
+    //
     // below we implement compression and decompression for an element  GΦ₁₂ following Theorem 3.1 of https://eprint.iacr.org/2010/542.pdf
     // Fp4 = Fp2(w^3) where (w^3)^2 = XI_0 +u
     // Fp12 = Fp4(w) where w^3 = w^3
-
+    // 
     /// in = g0 + g2 w + g4 w^2 + g1 w^3 + g3 w^4 + g5 w^5 where g_i = g_i0 + g_i1 * u are elements of Fp2
     /// out = Compress(in) = [ g2, g3, g4, g5 ]
     pub fn cyclotomic_compress(&self, a: &FqPoint<F>) -> Vec<FqPoint<F>> {
@@ -86,7 +86,9 @@ impl<'chip, F: BigPrimeField> Fp12Chip<'chip, F> {
     ///         g0 = (2 g1^2 + g2 * g5 - 3 g3*g4) * c + 1
     ///     if g2 = 0:
     ///         g1 = (2 g4 * g5)/g3
-    ///         g0 = (2 g1^2 - 3 g3 * g4) * c + 1    
+    ///         g0 = (2 g1^2 - 3 g3 * g4) * c + 1  
+    /// 
+    /// Warning: functions uses `divide_unsafe` so it assumes that value `g2_4`, `g3` are non-zero
     pub fn cyclotomic_decompress(
         &self,
         ctx: &mut Context<F>,
@@ -283,6 +285,8 @@ impl<'chip, F: BigPrimeField> Fp12Chip<'chip, F> {
     }
 
     // out = in^{(q^12 - 1)/r}
+    //
+    // Assumption: a != 0  
     pub fn final_exp(
         &self,
         ctx: &mut Context<F>,
