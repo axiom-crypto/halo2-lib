@@ -116,10 +116,10 @@ impl<'chip, F: BigPrimeField> HashToCurveInstructions<F, Fp2Chip<'chip, F>, G2>
             })
         });
 
-        let x = { fp2_chip.divide_unsafe(ctx, x_num, x_den) };
+        let x = { fp2_chip.divide(ctx, x_num, x_den) };
 
         let y = {
-            let tv = fp2_chip.divide_unsafe(ctx, y_num, y_den);
+            let tv = fp2_chip.divide(ctx, y_num, y_den);
             fp2_chip.mul(ctx, &p.y, tv)
         };
 
