@@ -397,9 +397,8 @@ impl ExpandMessageChip for ExpandMsgXmd {
         let assigned_msg = msg
             .map(|cell| match cell {
                 QuantumCell::Existing(v) => v,
-                QuantumCell::Witness(v) => thread_pool.main().load_witness(v),
                 QuantumCell::Constant(v) => thread_pool.main().load_constant(v),
-                _ => unreachable!(),
+                _ => panic!("passing unassigned witness to this function is insecure"),
             })
             .collect_vec();
 
