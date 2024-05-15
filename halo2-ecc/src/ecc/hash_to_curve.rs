@@ -377,6 +377,12 @@ impl ExpandMessageChip for ExpandMsgXmd {
         len_in_bytes: usize,
     ) -> Result<Vec<AssignedValue<F>>, Error> {
         let gate = range.gate();
+        let ell = (len_in_bytes as f64 / HC::DIGEST_SIZE as f64).ceil() as usize;
+
+        assert!(len_in_bytes >= 32, "Expand length must be at least 32 bytes");
+        assert!(len_in_bytes <= 65535, "abort if len_in_bytes > 65535");
+        assert!(dst.len() <= 255, "abort if DST len > 255");
+        assert!(ell <= 255, "abort if ell > 255");
 
         let zero = thread_pool.main().load_zero();
         let one = thread_pool.main().load_constant(F::ONE);
@@ -403,7 +409,6 @@ impl ExpandMessageChip for ExpandMsgXmd {
             .collect_vec();
 
         // compute blocks
-        let ell = (len_in_bytes as f64 / HC::DIGEST_SIZE as f64).ceil() as usize;
         let mut b_vals = Vec::with_capacity(ell);
         let msg_prime = z_pad
             .into_iter()
