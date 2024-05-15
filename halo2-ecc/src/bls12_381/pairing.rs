@@ -11,14 +11,14 @@ use crate::{
 use halo2_base::utils::BigPrimeField;
 use halo2_base::Context;
 
+// Assuming curve is of form Y^2 = X^3 + b (a = 0) to save operations
 // Inputs:
-//  Q0 = (x_1, y_1) and Q1 = (x_2, y_2) are points in E(Fp2)
-//  P is point (X, Y) in E(Fp)
-// Assuming Q0 != Q1
+//  Q = (Q.x, Q.y) is a point in E(Fp)
+//  P = (x, y) in E(Fp2)
 // Output:
-//  line_{Psi(Q0), Psi(Q1)}(P) where Psi(x,y) = (w^2 x, w^3 y)
-//  - equals w^3 (y_1 - y_2) X + w^2 (x_2 - x_1) Y + w^5 (x_1 y_2 - x_2 y_1) =: out3 * w^3 + out2 * w^2 + out5 * w^5 where out2, out3, out5 are Fp2 points
-// Output is [None, None, out2, out3, None, out5] as vector of `Option<FqPoint>`s
+//  line_{Psi(P), Psi(P)}(Q) where Psi(x,y) = (1/w^2 x, 1/w^3 y)
+//  - equals (3x^3 - 2y^2) + w^2 (-3 x^2 * Q.x) + w^3 (2 y * Q.y) =: out0 + out2 * w^2 + out3 * w^3 where out0, out2, out3 are Fp2 points
+// Output is [None, out1, None, out3, out4, None] as vector of `Option<FqPoint>`s
 pub fn sparse_line_function_unequal<F: BigPrimeField>(
     fp2_chip: &Fp2Chip<F>,
     ctx: &mut Context<F>,
@@ -40,11 +40,11 @@ pub fn sparse_line_function_unequal<F: BigPrimeField>(
 
     let out3 = fp2_chip.0.fp_mul_no_carry(ctx, y1_minus_y2, X);
     let out4 = fp2_chip.0.fp_mul_no_carry(ctx, x2_minus_x1, Y);
-    let out2 = fp2_chip.sub_no_carry(ctx, &x1y2, &x2y1);
+    let out1 = fp2_chip.sub_no_carry(ctx, &x1y2, &x2y1);
 
     // so far we have not "carried mod p" for any of the outputs
     // we do this below
-    [None, Some(out2), None, Some(out3), Some(out4), None]
+    [None, Some(out1), None, Some(out3), Some(out4), None]
         .into_iter()
         .map(|option_nc| option_nc.map(|nocarry| fp2_chip.carry_mod(ctx, nocarry)))
         .collect()
@@ -52,11 +52,12 @@ pub fn sparse_line_function_unequal<F: BigPrimeField>(
 
 // Assuming curve is of form Y^2 = X^3 + b (a = 0) to save operations
 // Inputs:
-//  Q = (x, y) is a point in E(Fp)
-//  P = (P.x, P.y) in E(Fp2)
+//  Q0 = (x_1, y_1) and Q1 = (x_2, y_2) are points in E(Fp2)
+//  P is point (X, Y) in E(Fp)
+// Assuming Q0 != Q1
 // Output:
-//  line_{Psi(Q), Psi(Q)}(P) where Psi(x,y) = (w^2 x, w^3 y)
-//  - equals (3x^3 - 2y^2)(XI_0 + u) + w^4 (-3 x^2 * Q.x) + w^3 (2 y * Q.y) =: out0 + out4 * w^4 + out3 * w^3 where out0, out3, out4 are Fp2 points
+//  line_{Psi(Q0), Psi(Q1)}(P) where Psi(x,y) = (1/w^2 x, 1/w^3 y)
+//  - equals w^3 (y_1 - y_2) X + w^4 (x_2 - x_1) Y + w (x_1 y_2 - x_2 y_1) =: out3 * w^3 + out4 * w^4 + out2 * w where out2, out3, out4 are Fp2 points
 // Output is [out0, None, out2, out3, None, None] as vector of `Option<FqPoint>`s
 pub fn sparse_line_function_equal<F: BigPrimeField>(
     fp2_chip: &Fp2Chip<F>,
