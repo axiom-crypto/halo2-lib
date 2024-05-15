@@ -162,8 +162,8 @@ pub trait HashToCurveInstructions<
         let x_frob = self.field_chip().conjugate(ctx, p.x);
         let y_frob = self.field_chip().conjugate(ctx, p.y);
 
-        let x = self.field_chip().mul(ctx, x_frob, psi_x.clone());
-        let y = self.field_chip().mul(ctx, y_frob, psi_y.clone());
+        let x = self.field_chip().mul(ctx, x_frob, psi_x);
+        let y = self.field_chip().mul(ctx, y_frob, psi_y);
 
         EcPoint::new(x, y)
     }
@@ -177,7 +177,7 @@ pub trait HashToCurveInstructions<
         // 1 / 2 ^ ((q-1)/3)
         let psi2_x = self.field_chip().load_constant(ctx, C::PSI2_X);
 
-        let x = self.field_chip().mul(ctx, p.x, psi2_x.clone());
+        let x = self.field_chip().mul(ctx, p.x, psi2_x);
         let y = self.field_chip().negate(ctx, p.y);
 
         EcPoint::new(x, y)

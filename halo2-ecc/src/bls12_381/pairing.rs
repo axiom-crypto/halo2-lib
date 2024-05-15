@@ -429,7 +429,7 @@ impl<'chip, F: BigPrimeField> PairingChip<'chip, F> {
     ) -> FqPoint<F> {
         let mml = self.multi_miller_loop(ctx, pairs.to_vec());
         let fp12_chip = Fp12Chip::<F>::new(self.fp_chip);
-        let fe = fp12_chip.final_exp(ctx, mml.clone());
+        let fe = fp12_chip.final_exp(ctx, mml);
         fe
     }
 
