@@ -1,6 +1,6 @@
 use halo2_base::{
     gates::{GateInstructions, RangeInstructions},
-    halo2_proofs::halo2curves::secq256k1::Fq as Fp,
+    halo2_proofs::{arithmetic::Field, halo2curves::secp256k1::Fp},
     utils::{BigPrimeField, ScalarField},
     Context,
 };
@@ -54,7 +54,7 @@ fn mod_inverse<F: BigPrimeField>(
     num: &ProperCrtUint<F>,
 ) -> ProperCrtUint<F> {
     let one = ctx.load_constant(F::ONE);
-    let one_int = fp_chip.load_constant_uint(ctx, BigUint::from(1u64));
+    let one_int = fp_chip.load_constant(ctx, Fp::ONE);
 
     let p = fp_chip.p.to_biguint().unwrap();
     let p_minus_two = p.clone() - 2u64;
@@ -63,7 +63,7 @@ fn mod_inverse<F: BigPrimeField>(
     let inverse_native = num_native.modpow(&p_minus_two, &p);
     assert_eq!((num_native * inverse_native.clone()) % p, BigUint::from(1u64));
 
-    let mod_inverse = fp_chip.load_constant_uint(ctx, inverse_native);
+    let mod_inverse = fp_chip.load_private(ctx, Fp::from_bytes_le(&inverse_native.to_bytes_le()));
     let is_one = fp_chip.mul(ctx, num, &mod_inverse);
     let is_equal = fp_chip.is_equal(ctx, is_one, one_int);
     assert_eq!(is_equal.value(), &F::ONE);

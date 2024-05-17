@@ -41,7 +41,7 @@ pub fn hash_to_curve<F: BigPrimeField>(
 
 #[cfg(test)]
 mod test {
-    use halo2_base::{halo2_proofs::halo2curves::grumpkin::Fq as Fr, utils::testing::base_test};
+    use halo2_base::{halo2_proofs::halo2curves::bn256::Fr, utils::testing::base_test};
 
     use crate::{
         ecc::EccChip,
@@ -50,6 +50,7 @@ mod test {
 
     use super::hash_to_curve;
 
+    #[derive(Debug, Default, Clone)]
     struct TestData {
         message: String,
         point: (String, String),
@@ -119,14 +120,18 @@ mod test {
             }
         ];
 
-        base_test().k(15).lookup_bits(14).expect_satisfied(true).run(|ctx, range| {
-            let fp_chip = FpChip::<Fr>::new(range, 88, 3);
-            let ecc_chip = EccChip::<Fr, FpChip<Fr>>::new(&fp_chip);
+        base_test().k(15).lookup_bits(14).expect_satisfied(true).bench_builder(
+            TestData::default(),
+            test_data[2].clone(),
+            |pool, range, _: TestData| {
+                let ctx = pool.main();
 
-            let sha256_chip = Sha256Chip::new(range);
+                let fp_chip = FpChip::<Fr>::new(range, 88, 3);
+                let ecc_chip = EccChip::<Fr, FpChip<Fr>>::new(&fp_chip);
 
-            for i in 0..test_data.len() {
-                let msg_bytes = test_data[i]
+                let sha256_chip = Sha256Chip::new(range);
+
+                let msg_bytes = test_data[2]
                     .message
                     .as_bytes()
                     .iter()
@@ -135,9 +140,9 @@ mod test {
 
                 let point = hash_to_curve(ctx, &ecc_chip, &sha256_chip, msg_bytes.as_slice());
 
-                assert_eq!(point.x.value().to_str_radix(16), test_data[i].point.0);
-                assert_eq!(point.y.value().to_str_radix(16), test_data[i].point.1);
-            }
-        });
+                assert_eq!(point.x.value().to_str_radix(16), test_data[2].point.0);
+                assert_eq!(point.y.value().to_str_radix(16), test_data[2].point.1);
+            },
+        );
     }
 }
