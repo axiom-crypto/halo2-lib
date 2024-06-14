@@ -78,6 +78,8 @@ pub(crate) fn sqrt<F: BigPrimeField>(
     num: &ProperCrtUint<F>,
 ) -> ProperCrtUint<F> {
     let p = fp_chip.p.to_biguint().unwrap();
+    assert_eq!(&p % 4u64, BigUint::from(3u64), "p must be congruent to 3 mod 4");
+
     let p_plus_1 = p.clone() + 1u64;
     let p_plus_1_by_4 = p_plus_1 / 4u64;
 
