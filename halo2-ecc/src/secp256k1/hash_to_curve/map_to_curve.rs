@@ -26,21 +26,10 @@ fn xy2_selector<F: BigPrimeField>(
     x1: &ProperCrtUint<F>,
     x2: &ProperCrtUint<F>,
 ) -> (ProperCrtUint<F>, ProperCrtUint<F>) {
-    let gate = fp_chip.range().gate();
-    let one = ctx.load_constant(F::ONE);
-
     let gx1_sqrt = sqrt(ctx, fp_chip, gx1);
-    let gx2_sqrt = sqrt(ctx, fp_chip, gx2);
-
     let sq_gx1_sqrt = fp_chip.mul(ctx, &gx1_sqrt, &gx1_sqrt);
-    let sq_gx2_sqrt = fp_chip.mul(ctx, &gx2_sqrt, &gx2_sqrt);
 
     let s1 = fp_chip.is_equal(ctx, &sq_gx1_sqrt, gx1);
-    let s2 = fp_chip.is_equal(ctx, &sq_gx2_sqrt, gx2);
-
-    let _one = gate.add(ctx, s1, s2);
-    assert_eq!(_one.value(), &F::ONE);
-    ctx.constrain_equal(&_one, &one);
 
     let x = fp_chip.select(ctx, x1.into(), x2.into(), s1);
     let y2 = fp_chip.select(ctx, gx1.into(), gx2.into(), s1);
