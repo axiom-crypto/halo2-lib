@@ -95,7 +95,7 @@ impl<'a, F: BigPrimeField> Sha256Chip<'a, F> {
 
         let mut assigned_last_state_vec = vec![last_state
             .iter()
-            .map(|state| ctx.load_witness(F::from(*state as u64)))
+            .map(|state| ctx.load_constant(F::from(*state as u64)))
             .collect_vec()];
 
         let mut num_processed_input = 0;
