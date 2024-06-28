@@ -1,3 +1,5 @@
+// ! This file is a modified version of the original file from https://github.com/ChainSafe/Spectre (sha256-flex) (GPL-3.0 license)
+
 use halo2_base::{
     gates::{GateInstructions, RangeChip, RangeInstructions},
     halo2_proofs::plonk::Error,
