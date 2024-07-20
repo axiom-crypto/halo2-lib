@@ -1,7 +1,11 @@
 [package]
 name = "zkevm-hashes"
 version = "0.2.1"
-authors = ["Privacy Scaling Explorations Team", "Taiko Labs", "Intrinsic Technologies"]
+authors = [
+    "Privacy Scaling Explorations Team",
+    "Taiko Labs",
+    "Intrinsic Technologies",
+]
 license = "MIT OR Apache-2.0"
 edition = "2021"
 repository = "https://github.com/axiom-crypto/halo2-lib"
@@ -17,7 +21,9 @@ itertools = "0.11"
 lazy_static = "1.4"
 log = "0.4"
 num-bigint = { version = "0.4" }
-halo2-base = { version = "=0.4.1", path = "../../halo2-base", default-features = false, features = ["test-utils"] }
+halo2-base = { version = "=0.4.1", path = "../../halo2-base", default-features = false, features = [
+    "test-utils",
+] }
 serde = { version = "1.0", features = ["derive"] }
 rayon = "1.8"
 sha3 = "0.10.8"
@@ -39,10 +45,11 @@ test-case = "3.1.0"
 sha2 = "0.10.7"
 
 [features]
-default = ["halo2-axiom", "display"]
+default = ["halo2-scroll", "display"]
 display = ["snark-verifier-sdk/display"]
 halo2-pse = ["halo2-base/halo2-pse", "snark-verifier-sdk/halo2-pse"]
 halo2-axiom = ["halo2-base/halo2-axiom", "snark-verifier-sdk/halo2-axiom"]
+halo2-scroll = ["halo2-base/halo2-scroll", "snark-verifier-sdk/halo2-scroll"]
 jemallocator = ["halo2-base/jemallocator"]
 mimalloc = ["halo2-base/mimalloc"]
 asm = ["halo2-base/asm"]
