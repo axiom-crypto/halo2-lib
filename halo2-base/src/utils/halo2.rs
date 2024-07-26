@@ -100,7 +100,10 @@ pub fn constrain_virtual_equals_external<F: Field + Ord>(
     match copy_manager.assigned_advices.entry(ctx_cell) {
         Entry::Occupied(acell) => {
             // The virtual cell has already been assigned, so we can constrain it to equal the external cell.
+            #[cfg(feature = "halo2-axiom")]
             region.constrain_equal(*acell.get(), external_cell);
+            #[cfg(not(feature = "halo2-axiom"))]
+            region.constrain_equal(*acell.get(), external_cell).unwrap();
         }
         Entry::Vacant(assigned) => {
             // The virtual cell **must** be an external cell

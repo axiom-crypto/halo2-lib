@@ -88,6 +88,16 @@ pub trait ScalarField: PrimeField + FromUniformBytes<64> + From<bool> + Hash + O
         }
         lower_64
     }
+
+    /// Gets the least significant 128 bits of the field element.
+    fn get_lower_128(&self) -> u128 {
+        let bytes = self.to_bytes_le();
+        let mut lower_128 = 0u128;
+        for (i, byte) in bytes.into_iter().enumerate().take(16) {
+            lower_128 |= (byte as u128) << (i * 8);
+        }
+        lower_128
+    }
 }
 // See below for implementations
 
