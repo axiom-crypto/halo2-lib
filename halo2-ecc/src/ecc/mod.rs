@@ -250,14 +250,14 @@ pub fn ec_sub_unequal<F: BigPrimeField, FC: FieldChip<F>>(
 ///
 /// Assumptions
 /// # Neither P or Q is the point at infinity
-pub fn ec_sub_strict<F: BigPrimeField, FC: FieldChip<F>>(
+pub fn ec_sub_strict<F: BigPrimeField, FC>(
     chip: &FC,
     ctx: &mut Context<F>,
     P: impl Into<EcPoint<F, FC::FieldPoint>>,
     Q: impl Into<EcPoint<F, FC::FieldPoint>>,
 ) -> EcPoint<F, FC::FieldPoint>
 where
-    FC: Selectable<F, FC::FieldPoint>,
+    FC: FieldChip<F> + Selectable<F, FC::FieldPoint>,
 {
     let mut P = P.into();
     let Q = Q.into();
