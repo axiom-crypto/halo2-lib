@@ -123,6 +123,7 @@ impl<'chip, F: BigPrimeField> Fp12Chip<'chip, F> {
 
     /// Input:
     /// * `compression = [g2, g3, g4, g5]` where g_i are proper elements of Fp2
+    ///
     /// Output:
     /// * `Decompress(compression) = g0 + g2 w + g4 w^2 + g1 w^3 + g3 w^4 + g5 w^5` where
     /// * All elements of output are proper elements of Fp2 and:
@@ -132,7 +133,7 @@ impl<'chip, F: BigPrimeField> Fp12Chip<'chip, F> {
     ///         g0 = (2 g1^2 + g2 * g5 - 3 g3*g4) * c + 1
     ///     if g2 = 0:
     ///         g1 = (2 g4 * g5)/g3
-    ///         g0 = (2 g1^2 - 3 g3 * g4) * c + 1    
+    ///         g0 = (2 g1^2 - 3 g3 * g4) * c + 1
     pub fn cyclotomic_decompress(
         &self,
         ctx: &mut Context<F>,
