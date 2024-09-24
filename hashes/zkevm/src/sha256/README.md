@@ -41,7 +41,7 @@ such that the bits in the message are: <original message of length L> 1 <K zeros
     - Only constrained when `q_input` is true.
   - `output` (2): the hash digest the SHA-256 algorithm on the input bytes (32 bytes). We represent this as two field elements in hi-lo form - we split 32 bytes into two 16 byte chunks, and convert them to `u128` as _big endian_.
     - Only constrained when the last row of a block. Should only be considered meaningful when `is_enabled` is true.
-- We convenient store the relevant cells for the above data, per input block, in the struct `AssignedSha256Block`.
+- We conveniently store the relevant cells for the above data, per input block, in the struct `AssignedSha256Block`.
 - This circuit has a hard constraint that the input array has length up to `2^32 - 1` bits, whereas the official SHA-256 spec supports up to `2^64 - 1`. (In practice it is likely impossible to create a circuit that can handle `2^32 - 1` bit inputs.)
 - Details are provided in inline comments.
 
@@ -69,4 +69,4 @@ To illustrate, let's consider `inputs = [[], [0x00, 0x01, ..., 0x37]]`. The corr
 | 163 | 1         | `0x0`        | 56     | false      |         |
 | 215 | 1         | -            | -      | true       | RESULT  | RESULT  |
 
-Here the second input has length 56 (in bytes) and requires two blocks due to padding: `56 * 8 + 1 + 64 > 512`.
+Here the second input has a length of 56 (in bytes) and requires two blocks due to padding: `56 * 8 + 1 + 64 > 512`.
