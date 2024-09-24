@@ -71,7 +71,7 @@ cargo bench --bench mul
 cargo bench --bench inner_product
 ```
 
-These benchmarks use the `criterion` crate to run `create_proof` 10 times for statistical analysis. Note the benchmark circuits perform more than a one multiplication / inner product per circuit.
+These benchmarks use the `criterion` crate to run `create_proof` 10 times for statistical analysis. Note the benchmark circuits perform more than one multiplication / inner product per circuit.
 
 ## halo2-ecc
 
@@ -198,7 +198,7 @@ cargo bench --bench fixed_base_msm
 cargo bench --bench fp_mul
 ```
 
-This run the same proof generation over 10 runs and collect the average. Each circuit has a fixed configuration chosen for optimal speed. These benchmarks are mostly for use in performance optimization.
+This runs the same proof generation over 10 runs and collect the average. Each circuit has a fixed configuration chosen for optimal speed. These benchmarks are mostly for use in performance optimization.
 
 ### Secp256k1 ECDSA
 
@@ -290,7 +290,7 @@ The r6a has a higher clock speed than the r6g. We hypothesize that the Apple Sil
 
 We provide benchmarks of multi-scalar multiplication (MSM, multi-exp) with a batch size of `100` for BN254.
 
-On a M2 Max Macbook Pro (12 CPU cores, 96 GB RAM) we ran the bench using
+On an M2 Max Macbook Pro (12 CPU cores, 96 GB RAM) we ran the bench using
 
 ```
 cargo test --release --no-default-features --features "halo2-axiom, mimalloc" -- --nocapture bench_msm
