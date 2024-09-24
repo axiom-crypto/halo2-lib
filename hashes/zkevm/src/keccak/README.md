@@ -23,7 +23,7 @@ All these items remain consistent across all versions.
 - Every input is padded to be a multiple of RATE (136 bytes). If the length of the logical input already matches a multiple of RATE, an additional RATE bytes are added as padding.
 - Each `keccak_f` absorbs `RATE` bytes, which are splitted into `NUM_WORDS_TO_ABSORB`(17) words. Each word has `NUM_BYTES_PER_WORD`(8) bytes.
 - Each of the first `NUM_WORDS_TO_ABSORB`(17) rounds of each `keccak_f` absorbs a word.
-- `is_final`(anothe name is `is_enabled`) is meaningful only at the first row of the "squeeze" round. It must be true if this is the last `keccak_f` of a logical input.
+- `is_final`(another name is `is_enabled`) is meaningful only at the first row of the "squeeze" round. It must be true if this is the last `keccak_f` of a logical input.
 - The first round of the circuit is a dummy round, which doesn't correspond to any input.
 
 ### Raw inputs
@@ -81,7 +81,7 @@ Keccak component circuits and utilities based on halo2-lib.
 
 ### Motivation
 
-Move expensive Keccak computation into standalone circuits(**Component Circuits**) and circuits with actual business logic(**App Circuits**) can read Keccak results from component circuits. Then we achieve better scalability - the maximum size of a single circuit could be managed and component/app circuits could be proved in paralle.
+Move expensive Keccak computation into standalone circuits(**Component Circuits**) and circuits with actual business logic(**App Circuits**) can read Keccak results from component circuits. Then we achieve better scalability - the maximum size of a single circuit could be managed and component/app circuits could be proved in parallel.
 
 ### Output
 
