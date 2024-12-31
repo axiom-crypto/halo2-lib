@@ -16,12 +16,12 @@ Logically the circuit takes an array of bytes as inputs and Keccak results of th
 
 All these items remain consistent across all versions.
 
-- Keccak process a logical input `keccak_f` by `keccak_f`.
+- Keccak processes a logical input `keccak_f` by `keccak_f`.
 - Each `keccak_f` has `NUM_ROUNDS`(24) rounds.
 - The number of rows of a round(`rows_per_round`) is configurable. Usually less rows means less wasted cells.
 - Each `keccak_f` takes `(NUM_ROUNDS + 1) * rows_per_round` rows. The last `rows_per_round` rows could be considered as a virtual round for "squeeze".
 - Every input is padded to be a multiple of RATE (136 bytes). If the length of the logical input already matches a multiple of RATE, an additional RATE bytes are added as padding.
-- Each `keccak_f` absorbs `RATE` bytes, which are splitted into `NUM_WORDS_TO_ABSORB`(17) words. Each word has `NUM_BYTES_PER_WORD`(8) bytes.
+- Each `keccak_f` absorbs `RATE` bytes, which are split into `NUM_WORDS_TO_ABSORB`(17) words. Each word has `NUM_BYTES_PER_WORD`(8) bytes.
 - Each of the first `NUM_WORDS_TO_ABSORB`(17) rounds of each `keccak_f` absorbs a word.
 - `is_final`(another name is `is_enabled`) is meaningful only at the first row of the "squeeze" round. It must be true if this is the last `keccak_f` of a logical input.
 - The first round of the circuit is a dummy round, which doesn't correspond to any input.
@@ -90,7 +90,7 @@ Logically a component circuit outputs 3 columns `lookup_key`, `hash_lo`, `hash_h
 - `lookup_key` can be cheaply derived from a bytes input. Specs can be found at `keccak::component::encode::encode_native_input`. Also `keccak::component::encode` provides some utilities to encode bytes inputs in halo2-lib.
 - `hash_lo`/`hash_hi` are low/high 128 bits of the corresponding Keccak result.
 
-There 2 ways to publish circuit outputs:
+There are 2 ways to publish circuit outputs:
 
 - Publish all these 3 columns as 3 public instance columns.
 - Publish the commitment of all these 3 columns as a single public instance.
@@ -123,7 +123,7 @@ For easier understanding specs at `keccak::component::encode::encode_native_inpu
 | 1 | 16 | `0x0000000000000000` | - | |
 | 1 | 17 | `0x0000000000000000` | `0x000000000000000000000000000000000000000000000000` | [word[15], word[16], word[17]] |
 
-The raw input is transformed into `payload = [0x7A7B7C7D7E7F808182838485868788890000000000000089, 0x62636465666768696A6B6C6D6E6F70717273747576777879, ... , 0x02030405060708090A0B0C0D0E0F10111213141516171819, 0x000000000000000000000000000000010000000000000000, 0x000000000000000000000000000000000000000000000000, ... , 0x000000000000000000000000000000000000000000000000]`. 2 keccak_fs, 6 witnesses each keecak_f, 12 witnesses in total.
+The raw input is transformed into `payload = [0x7A7B7C7D7E7F808182838485868788890000000000000089, 0x62636465666768696A6B6C6D6E6F70717273747576777879, ... , 0x02030405060708090A0B0C0D0E0F10111213141516171819, 0x000000000000000000000000000000010000000000000000, 0x000000000000000000000000000000000000000000000000, ... , 0x000000000000000000000000000000000000000000000000]`. 2 keccak_fs, 6 witnesses each keccak_f, 12 witnesses in total.
 
 Finally the lookup key will be `Poseidon(payload)`.
 
