@@ -32,7 +32,7 @@ pub fn multi_inputs_to_circuit_outputs<F: Field>(
     outputs
 }
 
-/// Return corresponding circuit outputs of a native input in bytes. An logical input could produce multiple
+/// Return corresponding circuit outputs of a native input in bytes. A logical input could produce multiple
 /// outputs. The last one is the lookup key and hash of the input. Other outputs are paddings which are the lookup
 /// key and hash of an empty input.
 pub fn input_to_circuit_outputs<F: Field>(bytes: &[u8]) -> Vec<KeccakCircuitOutput<F>> {

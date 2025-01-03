@@ -141,7 +141,7 @@ pub struct KeccakTable {
     pub output: Word<Column<Advice>>,
     /// Raw keccak words(NUM_BYTES_PER_WORD bytes) of inputs
     pub word_value: Column<Advice>,
-    /// Number of bytes left of a input
+    /// Number of bytes left of an input
     pub bytes_left: Column<Advice>,
 }
 
