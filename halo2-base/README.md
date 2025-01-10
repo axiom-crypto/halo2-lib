@@ -1,6 +1,6 @@
 # `halo2-base`
 
-`halo2-base` provides an embedded domain specific language (eDSL) for writing circuits with the [`halo2`](https://github.com/axiom-crypto/halo2) API. It simplifies circuit programming to declaring constraints over a single advice and selector column and provides built-in circuit tuning and support for multi-threaded witness generation.
+`halo2-base` provides an embedded domain specific language (eDSL) for writing circuits with the [`halo2`](https://github.com/axiom-crypto/halo2) API. It simplifies circuit programming to declaring constraints over a single advice and selector column and provides built-in circuit tuning and support for multithreaded witness generation.
 
 For further details, see the [Rust docs](https://axiom-crypto.github.io/halo2-lib/halo2_base/).
 
