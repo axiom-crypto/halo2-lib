@@ -22,7 +22,7 @@ begin with the original message of length L bits
 append a single '1' bit
 append K '0' bits, where K is the minimum number >= 0 such that (L + 1 + K + 64) is a multiple of 512
 append L as a 64-bit big-endian integer, making the total post-processed length a multiple of 512 bits
-such that the bits in the message are: <original message of length L> 1 <K zeros> <L as 64 bit integer> , (the number of bits will be a multiple of 512)
+such that the bits in the message are: <original message of length L> 1 <K zeros> <L as 64-bit integer> , (the number of bits will be a multiple of 512)
 ```
 
 - The SHA-256 algorithm processes padded input data in _blocks_ of 512 bits or 64 bytes.
