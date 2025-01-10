@@ -27,7 +27,7 @@ When filing a new bug report in the issue tracker, you will be presented with a 
 
 The most important pieces of information we need in a bug report are:
 
-- The branch you are on (and that it is up to date)
+- The branch you are on (and that it is up-to-date)
 - The platform you are on (Windows, macOS, an M1 Mac or Linux)
 - Code snippets if this is happening in relation to testing or building code
 - Concrete steps to reproduce the bug
