@@ -145,7 +145,7 @@ cargo test -- --nocapture test_pairing # for BN254
 A special features of circuits written using `halo2-base` is that any such circuit can be configured to have a different number of rows vs. columns, while keeping the total number of cells roughly the same. Different configurations make sense for different circumstances. For example, more rows vs. columns always leads to a cheaper gas cost for on-chain verification, but often at the cost of slower proving speed. For a rough mental model, see [Cost Modeling](https://docs.axiom.xyz/zero-knowledge-proofs/getting-started-with-halo2#cost-modeling).
 
 In some of the tests above, the circuit configuration is read from a file. You can change the configuration by changing the numbers in the file. If some numbers are too small, the test will panic because there are not enough cells to construct the circuit. If you put numbers that are too large, the test will display suggestions for what the optimal numbers should be.
-In a future version we will have the circuits auto-configure themselves.
+In a future version we will have the circuits autoconfigure themselves.
 
 The benchmark config files below also give a list of possible configurations you can put in a test config files.
 
