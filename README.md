@@ -1,6 +1,6 @@
 # halo2-lib
 
-> ⚠️ **This branch contains un-audited contributions from the community.** Community contributions in this branch have been reviewed by maintainers of this repository, but they have not undergone official audit. To use the latest audited version make sure to use the correct commit. The tagged versions that have undergone official audit and are ready for production use can be found in the [releases](https://github.com/axiom-crypto/halo2-lib/releases).
+> ⚠️ **This branch contains unaudited contributions from the community.** Community contributions in this branch have been reviewed by maintainers of this repository, but they have not undergone an official audit. To use the latest audited version make sure to use the correct commit. The tagged versions that have undergone an official audit and are ready for production use can be found in the [releases](https://github.com/axiom-crypto/halo2-lib/releases).
 
 This repository aims to provide basic primitives for writing zero-knowledge proof circuits using the [Halo 2](https://zcash.github.io/halo2/) proving stack. To discuss or collaborate, join our community on [Telegram](https://t.me/halo2lib).
 
@@ -36,7 +36,7 @@ cd halo2-lib
 - [zkEVM tx-circuit](https://github.com/scroll-tech/zkevm-circuits/tree/develop/zkevm-circuits/src/tx_circuit)
 - [webauthn-halo2](https://github.com/zkwebauthn/webauthn-halo2) -- Proving and verifying WebAuthn with halo2.
 - [Fixed Point Arithmetic](https://github.com/DCMMC/halo2-scaffold/tree/main/src/gadget) -- Fixed point arithmetic library in halo2.
-- [Spectre](https://github.com/ChainSafe/Spectre) -- Verifying Beacon chain headers via Altair lightclient protocol
+- [Spectre](https://github.com/ChainSafe/Spectre) -- Verifying Beacon chain headers via Altair light client protocol
 - [halo2-nn-wasm](https://github.com/metavind/halo2-nn-wasm) -- Neural network in halo2 for WASM.
 - [halo2-cairo](https://github.com/odyssey2077/halo2-cairo) -- Prove Cairo program execution in halo2.
 - [indexed-merkle-tree](https://github.com/aerius-labs/indexed-merkle-tree-halo2) -- Indexed Merkle Tree operations in halo2.
