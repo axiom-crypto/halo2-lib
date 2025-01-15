@@ -97,7 +97,7 @@ There are 2 ways to publish circuit outputs:
 
 Developers can choose either way according to their needs. Specs of these 2 ways can be found at `keccak::component::circuit::shard::KeccakComponentShardCircuit::publish_outputs`.
 
-`keccak::component::output` provides utilities to compute component circuit outputs for given inputs. App circuits could use these utilities to load Keccak results before witness generation of component circuits.
+`keccak::component::output` provides utilities to compute component circuit outputs for given inputs. App circuits could use these utilities to load Keccak results before witnessing the generation of component circuits.
 
 ### Lookup Key Encode
 
