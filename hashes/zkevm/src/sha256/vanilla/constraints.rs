@@ -485,7 +485,7 @@ impl<F: Field> Sha256CircuitConfig<F> {
             // column len at offsets [20-70]
             cb.condition(q_extend.clone() + q_end.clone() - q_squeeze.clone(), |cb| {
                 cb.require_zero(
-                    "if q_extend or (q_end and not(q_squeeze)) hash_table.lenght = 0",
+                    "if q_extend or (q_end and not(q_squeeze)) hash_table.length = 0",
                     length.clone(),
                 );
             });
