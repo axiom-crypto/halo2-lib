@@ -201,7 +201,7 @@ fn extract_value<F: Field>(assigned_value: KeccakAssignedValue<F>) -> F {
     match assigned {
         halo2_base::halo2_proofs::plonk::Assigned::Zero => F::ZERO,
         halo2_base::halo2_proofs::plonk::Assigned::Trivial(f) => f,
-        _ => panic!("value should be trival"),
+        _ => panic!("value should be trivial"),
     }
 }
 
