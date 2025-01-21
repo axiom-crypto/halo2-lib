@@ -42,7 +42,6 @@ cd halo2-lib
 - [indexed-merkle-tree](https://github.com/aerius-labs/indexed-merkle-tree-halo2) -- Indexed Merkle Tree operations in halo2.
 - [zkCert](https://github.com/zkCert/halo2-zkcert) -- Verify a chain of x509 certificates in halo2.
 - [zk-dcap-verifier](https://github.com/CliqueOfficial/zk-dcap-verifier) -- On-chain DCAP attestation verification.
-- [polymon_gan](https://github.com/Modulus-Labs/polymon_gan) -- Prover for the Polymon GAN network.
 - [MynaWallet](https://github.com/MynaWallet/monorepo/tree/develop/packages/halo2-circuits) -- Verifies RSA signatures signed by Myna Card (Japan's ID Card).
 - [zk-face-circuit](https://github.com/team-byof/zk-face-circuit) -- Face Wallet Verification system for Ethereum wallets.
 - [halo2-lib-secp256r1](https://github.com/CliqueOfficial/halo2-lib-secp256r1)
