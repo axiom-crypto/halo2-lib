@@ -848,7 +848,7 @@
 <span class="kw">impl</span>&lt;F: ScalarField&gt; GateThreadBuilder&lt;F&gt; {
     <span class="doccomment">/// Creates a new [GateThreadBuilder] and spawns a main thread in phase 0.
     /// * `witness_gen_only`: If true, the [GateThreadBuilder] is used for witness generation only.
-    ///     * If true, the gate thread builder only does witness asignments and does not store constraint information -- this should only be used for the real prover.
+    ///     * If true, the gate thread builder only does witness assignments and does not store constraint information -- this should only be used for the real prover.
     ///     * If false, the gate thread builder is used for keygen and mock prover (it can also be used for real prover) and the builder stores circuit information (e.g. copy constraints, fixed columns, enabled selectors).
     ///         * These values are fixed for the circuit at key generation time, and they do not need to be re-computed by the prover in the actual proving phase.
     </span><span class="kw">pub fn </span>new(witness_gen_only: bool) -&gt; <span class="self">Self </span>{
@@ -928,7 +928,7 @@
 
     <span class="doccomment">/// Auto-calculates configuration parameters for the circuit
     ///
-    /// * `k`: The number of in the circuit (i.e. numeber of rows = 2&lt;sup&gt;k&lt;/sup&gt;)
+    /// * `k`: The number of in the circuit (i.e. number of rows = 2&lt;sup&gt;k&lt;/sup&gt;)
     /// * `minimum_rows`: The minimum number of rows in the circuit that cannot be used for witness assignments and contain random `blinding factors` to ensure zk property, defaults to 0.
     </span><span class="kw">pub fn </span>config(<span class="kw-2">&amp;</span><span class="self">self</span>, k: usize, minimum_rows: <span class="prelude-ty">Option</span>&lt;usize&gt;) -&gt; FlexGateConfigParams {
         <span class="kw">let </span>max_rows = (<span class="number">1 </span>&lt;&lt; k) - minimum_rows.unwrap_or(<span class="number">0</span>);
