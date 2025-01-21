@@ -22,7 +22,7 @@ use super::{check_carry_to_zero, CRTInteger, OverflowInteger, ProperCrtUint, Pro
 //
 // Assumption: the leading two bits (in big endian) are 1,
 /// # Assumptions
-/// * abs(a) <= 2<sup>n * k - 1 + F::NUM_BITS - 2</sup> (A weaker assumption is also enough, but this is good enough for forseeable use cases)
+/// * abs(a) <= 2<sup>n * k - 1 + F::NUM_BITS - 2</sup> (A weaker assumption is also enough, but this is good enough for foreseeable use cases)
 /// * `native_modulus::<F>` requires *exactly* `k = a.limbs.len()` limbs to represent
 
 // This is currently optimized for limbs greater than 64 bits, so we need `F` to be a `BigPrimeField`
