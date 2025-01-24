@@ -567,7 +567,7 @@
     <span class="doccomment">/// Creates a field element from a little endian byte representation.
     ///
     /// The default implementation assumes that `PrimeField::from_repr` is implemented for little-endian.
-    /// It should be overriden if this is not the case.
+    /// It should be overridden if this is not the case.
     </span><span class="kw">fn </span>from_bytes_le(bytes: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span><span class="kw-2">mut </span>repr = <span class="self">Self</span>::Repr::default();
         repr.as_mut()[..bytes.len()].copy_from_slice(bytes);
