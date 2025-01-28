@@ -83,7 +83,7 @@ pub struct AssignedValue<F: ScalarField> {
 }
 ```
 
-### [**Assigned**](./src/plonk/assigned.rs)
+### [**Assigned**](https://github.com/zcash/halo2/blob/main/halo2_proofs/src/plonk/assigned.rs)
 
 `Assigned` is not a ZK or circuit-related type.
 `Assigned` is a wrapper enum for a field element which stores the value as a fraction and marks it for batched inversion using [Montgomery's trick](https://zcash.github.io/halo2/background/fields.html#montgomerys-trick). Performing batched inversion allows for the computation of the inverse of all marked values with a single inversion operation.
