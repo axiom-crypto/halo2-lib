@@ -147,6 +147,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
     /// Assumes `len` is within [usize] and `len <= inputs.len()`.
     /// * inputs: An right-padded array of [AssignedValue]. Constraints on paddings are not required.
     /// * len: Length of `inputs`.
+    ///
     /// Return hash of `inputs`.
     pub fn hash_var_len_array(
         &self,
@@ -211,6 +212,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
     /// Constrains and returns hash of a witness array.
     ///
     /// * inputs: An array of [AssignedValue].
+    ///
     /// Return hash of `inputs`.
     pub fn hash_fix_len_array(
         &self,

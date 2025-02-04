@@ -43,6 +43,7 @@ struct AssignedShaTableRow<'v, F: Field> {
     /// This cell contains different IO data depending on the `offset` of the row within
     /// a SHA256 input block ([SHA256_NUM_ROWS] = 72 rows):
     /// - When `q_input` is true (offset in [NUM_START_ROWS]..[NUM_START_ROWS] + [NUM_WORDS_TO_ABSORB]): Raw SHA256 word([NUM_BYTES_PER_WORD] bytes) of inputs. u32 input word, little-endian.
+    ///
     /// SHA256 hash of input in hi-lo format:
     /// - When offset is [SHA256_NUM_ROWS] - 2: output.hi()
     /// - When `q_squeeze` (offset equals [SHA256_NUM_ROWS] - 1): output.lo()

@@ -33,6 +33,7 @@ pub(super) const MAX_PHASE: usize = 3;
 /// * `a = value[0], b = value[1], c = value[2], d = value[3]`
 /// * `q = q_enable[0]`
 /// * `q` is either 0 or 1 so this is just a simple selector
+///
 /// We chose `a + b * c` instead of `a * b + c` to allow "chaining" of gates, i.e., the output of one gate because `a` in the next gate.
 ///
 /// A configuration for a basic gate chip describing the selector, and advice column values.
@@ -137,7 +138,7 @@ impl<F: ScalarField> FlexGateConfig<F> {
         Self {
             basic_gates,
             constants,
-            /// Warning: this needs to be updated if you create more advice columns after this `FlexGateConfig` is created
+            // Warning: this needs to be updated if you create more advice columns after this `FlexGateConfig` is created
             max_rows: (1 << params.k) - meta.minimum_rows(),
         }
     }

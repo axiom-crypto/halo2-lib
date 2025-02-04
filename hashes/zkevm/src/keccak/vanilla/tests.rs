@@ -36,7 +36,7 @@ pub struct KeccakCircuit<F: Field> {
     _marker: PhantomData<F>,
 }
 
-#[cfg(any(feature = "test", test))]
+#[cfg(test)]
 impl<F: Field> Circuit<F> for KeccakCircuit<F> {
     type Config = KeccakCircuitConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;

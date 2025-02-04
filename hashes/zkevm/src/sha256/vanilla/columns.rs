@@ -16,6 +16,7 @@ pub struct ShaTable {
     /// a SHA256 input block ([SHA256_NUM_ROWS] = 72 rows): If offset is in
     /// Encoded input:
     /// - [NUM_START_ROWS]..[NUM_START_ROWS] + [NUM_WORDS_TO_ABSORB]: Raw SHA256 word([NUM_BYTES_PER_WORD] bytes) of inputs
+    ///
     /// SHA256 hash of input in hi-lo format:
     /// - [SHA256_NUM_ROWS] - 2: output.hi()
     /// - [SHA256_NUM_ROWS] - 1: output.lo()

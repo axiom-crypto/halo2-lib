@@ -145,7 +145,7 @@ impl<F: Field + Ord> VirtualRegionManager<F> for SharedCopyConstraintManager<F> 
         let mut fixed_col = 0;
         let mut fixed_offset = 0;
         for (c, _) in manager.constant_equalities.iter() {
-            if manager.assigned_constants.get(c).is_none() {
+            if !manager.assigned_constants.contains_key(c) {
                 // this will panic if you run out of rows
                 let cell = raw_assign_fixed(region, config[fixed_col], fixed_offset, *c);
                 manager.assigned_constants.insert(*c, cell);

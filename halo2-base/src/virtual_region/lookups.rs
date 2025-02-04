@@ -26,8 +26,10 @@ pub mod basic;
 /// the table is either fixed or dynamic (advice), then we want to dynamically allocate chunks of `ADVICE_COLS` columns
 /// that have the lookup into the table **always on** so that:
 /// - every time we want to lookup [_; ADVICE_COLS] values, we copy them over to a row in the special
+///
 /// lookup-enabled advice columns.
 /// - note that just for assignment, we don't need to know anything about the table itself.
+///
 /// Note: the manager does not need to know the value of `TABLE_COLS`.
 ///
 /// We want this manager to be CPU thread safe, while ensuring that the resulting circuit is
