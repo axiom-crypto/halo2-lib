@@ -219,7 +219,7 @@
 //
 // Assumption: the leading two bits (in big endian) are 1,
 </span><span class="doccomment">/// # Assumptions
-/// * abs(a) &lt;= 2&lt;sup&gt;n * k - 1 + F::NUM_BITS - 2&lt;/sup&gt; (A weaker assumption is also enough, but this is good enough for forseeable use cases)
+/// * abs(a) &lt;= 2&lt;sup&gt;n * k - 1 + F::NUM_BITS - 2&lt;/sup&gt; (A weaker assumption is also enough, but this is good enough for foreseeable use cases)
 /// * `native_modulus::&lt;F&gt;` requires *exactly* `k = a.limbs.len()` limbs to represent
 
 </span><span class="comment">// This is currently optimized for limbs greater than 64 bits, so we need `F` to be a `BigPrimeField`
