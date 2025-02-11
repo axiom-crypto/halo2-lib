@@ -85,7 +85,7 @@ The default features are: "jemallocator", "halo2-axiom", "display".
 You can turn off "display" for a very small performance increase, where certain statistics about the circuit are not
 computed and printed.
 
-**Exactly one** of "halo2-axiom" or "halo2-pse" feature should be turned on at all times.
+**Exactly one** of "halo2-axiom" or "halo2-pse" features should be turned on at all times.
 
 - The "halo2-axiom" feature uses our [`halo2_proofs`](https://github.com/axiom-crypto/halo2) which is a fork of the [PSE one](https://github.com/privacy-scaling-explorations/halo2) which we have slightly optimized for proving speed.
 - The "halo2-pse" feature uses the Privacy Scaling Explorations [`halo2_proofs`](https://github.com/privacy-scaling-explorations/halo2) which is the most stable and has the most reviewers.
