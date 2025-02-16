@@ -92,7 +92,6 @@ fn bench(c: &mut Criterion) {
     let vk = keygen_vk(&params, &circuit).expect("vk should not fail");
     let pk = keygen_pk(&params, vk, &circuit).expect("pk should not fail");
     let break_points = circuit.break_points();
-    drop(circuit);
 
     let (bases, scalars): (Vec<_>, Vec<_>) =
         (0..config.batch_size).map(|_| (G1Affine::random(&mut rng), Fr::random(&mut rng))).unzip();
