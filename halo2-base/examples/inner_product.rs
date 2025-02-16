@@ -4,7 +4,7 @@ use halo2_base::gates::RangeInstructions;
 use halo2_base::halo2_proofs::{arithmetic::Field, halo2curves::bn256::Fr};
 use halo2_base::utils::testing::base_test;
 use halo2_base::utils::ScalarField;
-use halo2_base::{Context, QuantumCell::Existing};
+use halo2_base::{Context, QuantumCell};
 use itertools::Itertools;
 use rand::rngs::OsRng;
 
@@ -21,7 +21,7 @@ fn inner_prod_bench<F: ScalarField>(
     let b = ctx.assign_witnesses(b);
 
     for _ in 0..(1 << K) / 16 - 10 {
-        gate.inner_product(ctx, a.clone(), b.clone().into_iter().map(Existing));
+        gate.inner_product(ctx, a.clone(), b.clone().into_iter().map(QuantumCell::Existing));
     }
 }
 
