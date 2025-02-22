@@ -4,7 +4,7 @@
 
 SHA-256 circuit in vanilla halo2. This implementation is largely based on [Brechtpd](https://github.com/Brechtpd)'s [PR](https://github.com/privacy-scaling-explorations/zkevm-circuits/pull/756) to the PSE `zkevm-circuits`. His implementation of SHA-256 is in turn based on his implementation of Keccak using the "Bits" approach: one can read more about it [here](https://hackmd.io/NaTuIvmaQCybaOYgd-DG1Q?view#Bit-implementation).
 
-The major difference is that this version directly represent raw inputs and SHA-256 digests as witnesses, while the original version only has RLCs (random linear combination) of raw inputs and outputs. Because this version doesn't need RLCs, it doesn't have the 2nd phase or use challenge APIs.
+The major difference is that this version directly represents raw inputs and SHA-256 digests as witnesses, while the original version only has RLCs (random linear combination) of raw inputs and outputs. Because this version doesn't need RLCs, it doesn't have the 2nd phase or use challenge APIs.
 
 ### Logical Input/Output
 
