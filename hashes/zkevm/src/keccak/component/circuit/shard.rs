@@ -68,10 +68,10 @@ pub struct KeccakComponentShardCircuitParams {
     /// This circuit has 2^k rows.
     #[getset(get_copy = "pub")]
     k: usize,
-    // Number of unusable rows withhold by Halo2.
+    // Number of unusable rows withheld by Halo2.
     #[getset(get_copy = "pub")]
     num_unusable_row: usize,
-    /// Max keccak_f this circuits can accept. The circuit can at most process `capacity` of inputs
+    /// Max keccak_f this circuit can accept. The circuit can at most process `capacity` of inputs
     /// with < NUM_BYTES_TO_ABSORB bytes or an input with `capacity * NUM_BYTES_TO_ABSORB - 1` bytes.
     #[getset(get_copy = "pub")]
     capacity: usize,
@@ -96,7 +96,7 @@ impl KeccakComponentShardCircuitParams {
         let max_rows = (1 << k) - num_unusable_row;
         // Derived from [crate::keccak::vanilla::keccak_packed_multi::get_keccak_capacity].
         let rows_per_round = max_rows / (capacity * (NUM_ROUNDS + 1) + 1 + NUM_WORDS_TO_ABSORB);
-        assert!(rows_per_round > 0, "No enough rows for the specified capacity");
+        assert!(rows_per_round > 0, "Not enough rows for the specified capacity");
         let keccak_circuit_params = KeccakConfigParams { k: k as u32, rows_per_round };
         let base_circuit_params = BaseCircuitParams {
             k,
@@ -371,7 +371,7 @@ impl<F: Field> KeccakComponentShardCircuit<F> {
             let mut base_circuit_builder_mut = self.base_circuit_builder.borrow_mut();
             let ctx = base_circuit_builder_mut.main(0);
 
-            // TODO: wrap this into a function which should be shared wiht App circuits.
+            // TODO: wrap this into a function which should be shared with App circuits.
             let output_commitment = self.hasher.borrow().hash_fix_len_array(
                 ctx,
                 gate,
