@@ -4,7 +4,7 @@
 
 Keccak circuit in vanilla halo2. This implementation starts from [PSE version](https://github.com/privacy-scaling-explorations/zkevm-circuits/tree/main/zkevm-circuits/src/keccak_circuit), then adopts some changes from [this PR](https://github.com/scroll-tech/zkevm-circuits/pull/216) and later updates in PSE version.
 
-The major difference is that this version directly represent raw inputs and Keccak results as witnesses, while the original version only has RLCs(random linear combination) of raw inputs and Keccak results. Because this version doesn't need RLCs, it doesn't have the 2nd phase or use challenge APIs.
+The major difference is that this version directly represents raw inputs and Keccak results as witnesses, while the original version only has RLCs(random linear combination) of raw inputs and Keccak results. Because this version doesn't need RLCs, it doesn't have the 2nd phase or use challenge APIs.
 
 ### Logical Input/Output
 
@@ -18,7 +18,7 @@ All these items remain consistent across all versions.
 
 - Keccak processes a logical input `keccak_f` by `keccak_f`.
 - Each `keccak_f` has `NUM_ROUNDS`(24) rounds.
-- The number of rows of a round(`rows_per_round`) is configurable. Usually less rows means less wasted cells.
+- The number of rows of a round(`rows_per_round`) is configurable. Usually fewer rows means less wasted cells.
 - Each `keccak_f` takes `(NUM_ROUNDS + 1) * rows_per_round` rows. The last `rows_per_round` rows could be considered as a virtual round for "squeeze".
 - Every input is padded to be a multiple of RATE (136 bytes). If the length of the logical input already matches a multiple of RATE, an additional RATE bytes are added as padding.
 - Each `keccak_f` absorbs `RATE` bytes, which are split into `NUM_WORDS_TO_ABSORB`(17) words. Each word has `NUM_BYTES_PER_WORD`(8) bytes.
