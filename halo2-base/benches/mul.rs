@@ -21,7 +21,7 @@ use pprof::criterion::{Output, PProfProfiler};
 const K: u32 = 9;
 
 fn mul_bench<F: ScalarField>(ctx: &mut Context<F>, inputs: [F; 2]) {
-    let [a, b]: [_; 2] = ctx.assign_witnesses(inputs).try_into().unwrap();
+    let [a, b]: [F; 2] = ctx.assign_witnesses(inputs).try_into().unwrap();
     let chip = GateChip::default();
 
     for _ in 0..120 {
