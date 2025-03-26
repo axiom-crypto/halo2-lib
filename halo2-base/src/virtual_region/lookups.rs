@@ -125,6 +125,7 @@ impl<F: Field + Ord, const ADVICE_COLS: usize> VirtualRegionManager<F>
     for LookupAnyManager<F, ADVICE_COLS>
 {
     type Config = Vec<[Column<Advice>; ADVICE_COLS]>;
+    type Assignment = ();
 
     fn assign_raw(&self, config: &Self::Config, region: &mut Region<F>) {
         let mut copy_manager =

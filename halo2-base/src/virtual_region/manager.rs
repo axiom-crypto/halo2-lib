@@ -9,7 +9,7 @@ pub trait VirtualRegionManager<F: Field> {
     /// that this virtual region manager is responsible for.
     type Config: Clone;
     /// Return type of the `assign_raw` method. Default is `()`.
-    type Assignment = ();
+    type Assignment;
 
     /// Assign virtual region this is in charge of to the raw region described by `config`.
     fn assign_raw(&self, config: &Self::Config, region: &mut Region<F>) -> Self::Assignment;

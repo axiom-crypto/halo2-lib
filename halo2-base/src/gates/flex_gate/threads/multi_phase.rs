@@ -136,7 +136,7 @@ impl<F: ScalarField> MultiPhaseCoreManager<F> {
         let num_advice_per_phase = stats
             .total_advice_per_phase
             .iter()
-            .map(|count| (count + max_rows - 1) / max_rows)
+            .map(|count| count.div_ceil(max_rows))
             .collect::<Vec<_>>();
         let num_fixed = (stats.total_fixed + (1 << k) - 1) >> k;
 

@@ -1,7 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::op_ref)]
 #![allow(clippy::type_complexity)]
-#![feature(trait_alias)]
 
 pub mod bigint;
 pub mod ecc;

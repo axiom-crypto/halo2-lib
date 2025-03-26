@@ -1415,9 +1415,9 @@ dependencies = [
 
 [[package]]
 name = "halo2-axiom"
-version = "0.4.5"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f81aee7974478f9e3ea0cfd349d2a59a3482f7844386486a98e4af9ed8bada6"
+checksum = "62f0ca78d12ac5c893f286d7cdfe3869290305ab8cac376e2592cdc8396da102"
 dependencies = [
  "ark-std",
  "blake2b_simd",
@@ -1438,7 +1438,7 @@ dependencies = [
 
 [[package]]
 name = "halo2-base"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "ark-std",
  "criterion",
@@ -1471,7 +1471,7 @@ dependencies = [
 
 [[package]]
 name = "halo2-ecc"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "ark-std",
  "criterion",
@@ -2315,9 +2315,9 @@ dependencies = [
 
 [[package]]
 name = "poseidon-primitives"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bd95570f7ea849b4187298b5bb229643e44e1d47ddf3979d0db8a1c28be26a8"
+checksum = "6e4aaeda7a092e21165cc5f0cbc738e72a46f31c03c3cbd87b71ceae9d2d93bc"
 dependencies = [
  "bitvec",
  "ff",

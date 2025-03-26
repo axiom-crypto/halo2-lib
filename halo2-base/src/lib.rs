@@ -1,8 +1,4 @@
 //! Base library to build Halo2 circuits.
-#![feature(generic_const_exprs)]
-#![feature(stmt_expr_attributes)]
-#![feature(trait_alias)]
-#![feature(associated_type_defaults)]
 #![allow(incomplete_features)]
 #![deny(clippy::perf)]
 #![allow(clippy::too_many_arguments)]

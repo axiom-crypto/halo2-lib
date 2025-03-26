@@ -199,8 +199,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// ## Assumptions
     /// * `ceil(b.bits() / lookup_bits) * lookup_bits <= F::CAPACITY`
     fn check_less_than_safe(&self, ctx: &mut Context<F>, a: AssignedValue<F>, b: u64) {
-        let range_bits =
-            (bit_length(b) + self.lookup_bits() - 1) / self.lookup_bits() * self.lookup_bits();
+        let range_bits = bit_length(b).div_ceil(self.lookup_bits()) * self.lookup_bits();
 
         self.range_check(ctx, a, range_bits);
         self.check_less_than(ctx, a, Constant(F::from(b)), range_bits)
@@ -217,8 +216,7 @@ pub trait RangeInstructions<F: ScalarField> {
     where
         F: BigPrimeField,
     {
-        let range_bits =
-            (b.bits() as usize + self.lookup_bits() - 1) / self.lookup_bits() * self.lookup_bits();
+        let range_bits = (b.bits() as usize).div_ceil(self.lookup_bits()) * self.lookup_bits();
 
         self.range_check(ctx, a, range_bits);
         self.check_less_than(ctx, a, Constant(biguint_to_fe(&b)), range_bits)
@@ -250,8 +248,7 @@ pub trait RangeInstructions<F: ScalarField> {
         a: AssignedValue<F>,
         b: u64,
     ) -> AssignedValue<F> {
-        let range_bits =
-            (bit_length(b) + self.lookup_bits() - 1) / self.lookup_bits() * self.lookup_bits();
+        let range_bits = bit_length(b).div_ceil(self.lookup_bits()) * self.lookup_bits();
 
         self.range_check(ctx, a, range_bits);
         self.is_less_than(ctx, a, Constant(F::from(b)), range_bits)
@@ -274,8 +271,7 @@ pub trait RangeInstructions<F: ScalarField> {
     where
         F: BigPrimeField,
     {
-        let range_bits =
-            (b.bits() as usize + self.lookup_bits() - 1) / self.lookup_bits() * self.lookup_bits();
+        let range_bits = (b.bits() as usize).div_ceil(self.lookup_bits()) * self.lookup_bits();
 
         self.range_check(ctx, a, range_bits);
         self.is_less_than(ctx, a, Constant(biguint_to_fe(&b)), range_bits)
@@ -491,7 +487,7 @@ impl<F: ScalarField> RangeChip<F> {
             return a;
         }
         // the number of limbs
-        let num_limbs = (range_bits + self.lookup_bits - 1) / self.lookup_bits;
+        let num_limbs = range_bits.div_ceil(self.lookup_bits);
         // println!("range check {} bits {} len", range_bits, k);
         let rem_bits = range_bits % self.lookup_bits;
 
@@ -620,7 +616,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         let a = a.into();
         let b = b.into();
 
-        let k = (num_bits + self.lookup_bits - 1) / self.lookup_bits;
+        let k = num_bits.div_ceil(self.lookup_bits);
         let padded_bits = k * self.lookup_bits;
         debug_assert!(
             padded_bits + self.lookup_bits <= F::CAPACITY as usize,

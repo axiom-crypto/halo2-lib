@@ -130,6 +130,7 @@ impl<F: Field + Ord> Drop for CopyConstraintManager<F> {
 impl<F: Field + Ord> VirtualRegionManager<F> for SharedCopyConstraintManager<F> {
     // The fixed columns
     type Config = Vec<Column<Fixed>>;
+    type Assignment = ();
 
     /// This should be the last manager to be assigned, after all other managers have assigned cells.
     fn assign_raw(&self, config: &Self::Config, region: &mut Region<F>) -> Self::Assignment {
