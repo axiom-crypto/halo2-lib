@@ -147,6 +147,7 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
 
 impl<F: ScalarField> VirtualRegionManager<F> for SinglePhaseCoreManager<F> {
     type Config = (Vec<BasicGateConfig<F>>, usize); // usize = usable_rows
+    type Assignment = ();
 
     fn assign_raw(&self, (config, usable_rows): &Self::Config, region: &mut Region<F>) {
         if self.witness_gen_only {

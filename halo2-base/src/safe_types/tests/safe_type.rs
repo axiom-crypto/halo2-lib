@@ -8,6 +8,17 @@ use crate::{
 use itertools::Itertools;
 use rand::rngs::OsRng;
 
+/// Represent TOTAL_BITS with the least number of AssignedValue<F>.
+/// (2^(F::NUM_BITS) - 1) might not be a valid value for F. e.g. max value of F is a prime in [2^(F::NUM_BITS-1), 2^(F::NUM_BITS) - 1]
+// @dev Cannot compute BYTES_PER_ELEMENT = F::CAPACITY / 8 generically due to Rust const generic limitations in stable Rust.
+// Fr::CAPACITY = 253 so 253 / 8 = 31.
+type CompactSafeType<const TOTAL_BITS: usize> = SafeType<Fr, 31, TOTAL_BITS>;
+
+/// SafeType for uint64.
+pub type SafeUint64 = CompactSafeType<64>;
+/// SafeType for uint256.
+pub type SafeUint256 = CompactSafeType<256>;
+
 // soundness checks for `raw_bytes_to` function
 fn test_raw_bytes_to_gen<const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>(
     k: u32,
@@ -74,8 +85,8 @@ fn test_raw_bytes_to_bool() {
 
 #[test]
 fn test_raw_bytes_to_uint256() {
-    const BYTES_PER_ELE: usize = SafeUint256::<Fr>::BYTES_PER_ELE;
-    const TOTAL_BITS: usize = SafeUint256::<Fr>::TOTAL_BITS;
+    const BYTES_PER_ELE: usize = SafeUint256::BYTES_PER_ELE;
+    const TOTAL_BITS: usize = SafeUint256::TOTAL_BITS;
     let k = 11;
     // [0x0; 32] -> [0x0, 0x0]
     test_raw_bytes_to_gen::<BYTES_PER_ELE, TOTAL_BITS>(
@@ -146,8 +157,8 @@ fn test_raw_bytes_to_uint256() {
 
 #[test]
 fn test_raw_bytes_to_uint64() {
-    const BYTES_PER_ELE: usize = SafeUint64::<Fr>::BYTES_PER_ELE;
-    const TOTAL_BITS: usize = SafeUint64::<Fr>::TOTAL_BITS;
+    const BYTES_PER_ELE: usize = SafeUint64::BYTES_PER_ELE;
+    const TOTAL_BITS: usize = SafeUint64::TOTAL_BITS;
     let k = 10;
     // [0x0; 8] -> [0x0]
     test_raw_bytes_to_gen::<BYTES_PER_ELE, TOTAL_BITS>(k, &[Fr::from(0); 8], &[Fr::from(0)], true);

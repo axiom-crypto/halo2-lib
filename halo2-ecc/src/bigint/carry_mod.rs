@@ -24,7 +24,6 @@ use super::{check_carry_to_zero, CRTInteger, OverflowInteger, ProperCrtUint, Pro
 /// # Assumptions
 /// * abs(a) <= 2<sup>n * k - 1 + F::NUM_BITS - 2</sup> (A weaker assumption is also enough, but this is good enough for forseeable use cases)
 /// * `native_modulus::<F>` requires *exactly* `k = a.limbs.len()` limbs to represent
-
 // This is currently optimized for limbs greater than 64 bits, so we need `F` to be a `BigPrimeField`
 // In the future we'll need a slightly different implementation for limbs that fit in 32 or 64 bits (e.g., `F` is Goldilocks)
 pub fn crt<F: BigPrimeField>(

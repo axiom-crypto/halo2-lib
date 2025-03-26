@@ -252,7 +252,7 @@ where
     }
 
     let c = clump_factor;
-    let num_rounds = (points.len() + c - 1) / c;
+    let num_rounds = points.len().div_ceil(c);
     // to avoid adding two points that are equal or negative of each other,
     // we use a trick from halo2wrong where we load a "sufficiently generic" `C` point as witness
     // note that while we load a random point, an adversary could load a specifically chosen point, so we must carefully handle edge cases with constraints

@@ -20,7 +20,7 @@ use super::{create_native_poseidon_sponge, param::*};
 
 /// Module to encode raw inputs into lookup keys for looking up keccak results. The encoding is
 /// designed to be efficient in component circuits.
-
+///
 /// Encode a native input bytes into its corresponding lookup key. This function can be considered as the spec of the encoding.
 pub fn encode_native_input<F: Field>(bytes: &[u8]) -> F {
     let witnesses_per_keccak_f = pack_native_input(bytes);

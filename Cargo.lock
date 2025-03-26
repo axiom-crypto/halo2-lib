@@ -1415,9 +1415,9 @@ dependencies = [
 
 [[package]]
 name = "halo2-axiom"
-version = "0.4.5"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f81aee7974478f9e3ea0cfd349d2a59a3482f7844386486a98e4af9ed8bada6"
+checksum = "62f0ca78d12ac5c893f286d7cdfe3869290305ab8cac376e2592cdc8396da102"
 dependencies = [
  "ark-std",
  "blake2b_simd",
@@ -1438,7 +1438,7 @@ dependencies = [
 
 [[package]]
 name = "halo2-base"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "ark-std",
  "criterion",
@@ -1471,7 +1471,7 @@ dependencies = [
 
 [[package]]
 name = "halo2-ecc"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "ark-std",
  "criterion",
@@ -2315,9 +2315,9 @@ dependencies = [
 
 [[package]]
 name = "poseidon-primitives"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bd95570f7ea849b4187298b5bb229643e44e1d47ddf3979d0db8a1c28be26a8"
+checksum = "6e4aaeda7a092e21165cc5f0cbc738e72a46f31c03c3cbd87b71ceae9d2d93bc"
 dependencies = [
  "bitvec",
  "ff",
@@ -2946,8 +2946,8 @@ checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
 name = "snark-verifier"
-version = "0.1.7"
-source = "git+https://github.com/axiom-crypto/snark-verifier.git?tag=v0.1.7-git#4b733e0ca8be017954b111f359bcf8622c5b7c66"
+version = "0.2.0"
+source = "git+https://github.com/axiom-crypto/snark-verifier.git?tag=v0.2.0-git#e2f2bb9ee9b2f40ad7e6a416453bbd7d83917ae9"
 dependencies = [
  "halo2-base",
  "halo2-ecc",
@@ -2964,8 +2964,8 @@ dependencies = [
 
 [[package]]
 name = "snark-verifier-sdk"
-version = "0.1.7"
-source = "git+https://github.com/axiom-crypto/snark-verifier.git?tag=v0.1.7-git#4b733e0ca8be017954b111f359bcf8622c5b7c66"
+version = "0.2.0"
+source = "git+https://github.com/axiom-crypto/snark-verifier.git?tag=v0.2.0-git#e2f2bb9ee9b2f40ad7e6a416453bbd7d83917ae9"
 dependencies = [
  "ark-std",
  "bincode",
@@ -3835,7 +3835,7 @@ checksum = "ced3678a2879b30306d323f4542626697a464a97c0a07c9aebf7ebca65cd4dde"
 
 [[package]]
 name = "zkevm-hashes"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "array-init",
  "env_logger 0.10.2",

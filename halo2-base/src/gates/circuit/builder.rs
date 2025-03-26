@@ -266,7 +266,7 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
         let total_lookup_advice_per_phase = self.total_lookup_advice_per_phase();
         let num_lookup_advice_per_phase = total_lookup_advice_per_phase
             .iter()
-            .map(|count| (count + max_rows - 1) / max_rows)
+            .map(|count| count.div_ceil(max_rows))
             .collect::<Vec<_>>();
 
         let params = BaseCircuitParams {
