@@ -47,7 +47,7 @@ sha2 = "0.10.7"
 [features]
 default = ["halo2-axiom", "display"]
 display = ["snark-verifier-sdk/display"]
-halo2-pse = ["halo2-base/halo2-pse", "snark-verifier-sdk/halo2-pse"]
+# halo2-pse = ["halo2-base/halo2-pse", "snark-verifier-sdk/halo2-pse"]
 halo2-axiom = ["halo2-base/halo2-axiom", "snark-verifier-sdk/halo2-axiom"]
 jemallocator = ["halo2-base/jemallocator"]
 mimalloc = ["halo2-base/mimalloc"]
