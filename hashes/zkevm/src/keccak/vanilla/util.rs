@@ -184,7 +184,7 @@ pub fn target_part_sizes(part_size: usize) -> Vec<usize> {
 
 /// Gets the rotation count in parts
 pub fn get_rotate_count(count: usize, part_size: usize) -> usize {
-    (count + part_size - 1) / part_size
+    count.div_ceil(part_size)
 }
 
 /// Encodes the data using rlc

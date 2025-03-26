@@ -2946,8 +2946,8 @@ checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
 name = "snark-verifier"
-version = "0.1.7"
-source = "git+https://github.com/axiom-crypto/snark-verifier.git?tag=v0.1.7-git#4b733e0ca8be017954b111f359bcf8622c5b7c66"
+version = "0.2.0"
+source = "git+https://github.com/axiom-crypto/snark-verifier.git?tag=v0.2.0-git#e2f2bb9ee9b2f40ad7e6a416453bbd7d83917ae9"
 dependencies = [
  "halo2-base",
  "halo2-ecc",
@@ -2964,8 +2964,8 @@ dependencies = [
 
 [[package]]
 name = "snark-verifier-sdk"
-version = "0.1.7"
-source = "git+https://github.com/axiom-crypto/snark-verifier.git?tag=v0.1.7-git#4b733e0ca8be017954b111f359bcf8622c5b7c66"
+version = "0.2.0"
+source = "git+https://github.com/axiom-crypto/snark-verifier.git?tag=v0.2.0-git#e2f2bb9ee9b2f40ad7e6a416453bbd7d83917ae9"
 dependencies = [
  "ark-std",
  "bincode",
