@@ -93,7 +93,9 @@ pub trait ScalarField: PrimeField + FromUniformBytes<64> + From<bool> + Hash + O
 
 /// [ScalarField] that is ~256 bits long
 #[cfg(feature = "halo2-pse")]
-pub trait BigPrimeField = PrimeField<Repr = [u8; 32]> + ScalarField;
+pub trait BigPrimeField: PrimeField<Repr = [u8; 32]> + ScalarField {}
+#[cfg(feature = "halo2-pse")]
+impl<F: PrimeField<Repr = [u8; 32]> + ScalarField> BigPrimeField for F {}
 
 /// Converts an [Iterator] of u64 digits into `number_of_limbs` limbs of `bit_len` bits returned as a [Vec].
 ///

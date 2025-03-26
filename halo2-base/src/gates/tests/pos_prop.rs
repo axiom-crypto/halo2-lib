@@ -297,7 +297,7 @@ proptest! {
         seed in any::<u64>()
     ) {
         // current is_less_than requires bits to not be too large
-        prop_assume!(((bits + lookup_bits - 1) / lookup_bits + 1) * lookup_bits <= Fr::CAPACITY as usize);
+        prop_assume!((bits.div_ceil(lookup_bits) + 1) * lookup_bits <= Fr::CAPACITY as usize);
         let mut rng = StdRng::seed_from_u64(seed);
         let a = biguint_to_fe(&rng.sample(RandomBits::new(bits as u64)));
         let b = biguint_to_fe(&rng.sample(RandomBits::new(bits as u64)));
@@ -348,7 +348,7 @@ proptest! {
         let ground_truth = div_mod_ground_truth((a, b));
         let a_num_bits = fe_to_biguint(&a).bits() as usize;
         let lookup_bits = 9;
-        prop_assume!((a_num_bits + lookup_bits - 1) / lookup_bits * lookup_bits <= Fr::CAPACITY as usize);
+        prop_assume!(a_num_bits.div_ceil(lookup_bits) * lookup_bits <= Fr::CAPACITY as usize);
         let b_num_bits= bit_length(b);
         let result = range::test_div_mod_var(Witness(a), Witness(Fr::from(b)), a_num_bits, b_num_bits);
         prop_assert_eq!(result, ground_truth);
@@ -357,13 +357,13 @@ proptest! {
     #[test]
     fn prop_test_range_check((k, lookup_bits, a, range_bits) in range_check_strat((14,22),3,253)) {
         // current range check only works when range_bits isn't too big:
-        prop_assume!((range_bits + lookup_bits - 1) / lookup_bits * lookup_bits <= Fr::CAPACITY as usize);
+        prop_assume!(range_bits.div_ceil(lookup_bits) * lookup_bits <= Fr::CAPACITY as usize);
         range::test_range_check(k, lookup_bits, a, range_bits);
     }
 
     #[test]
     fn prop_test_check_less_than((k, lookup_bits, a, b, num_bits) in check_less_than_strat((10,18),8,253)) {
-        prop_assume!((num_bits + lookup_bits - 1) / lookup_bits * lookup_bits <= Fr::CAPACITY as usize);
+        prop_assume!(num_bits.div_ceil(lookup_bits) * lookup_bits <= Fr::CAPACITY as usize);
         range::test_check_less_than(k, lookup_bits, Witness(a), Witness(b), num_bits);
     }
 
@@ -374,7 +374,7 @@ proptest! {
 
     #[test]
     fn prop_test_check_big_less_than_safe((k, lookup_bits, a, b, num_bits) in check_less_than_strat((18,22),8,253)) {
-        prop_assume!((num_bits + lookup_bits - 1) / lookup_bits * lookup_bits <= Fr::CAPACITY as usize);
+        prop_assume!(num_bits.div_ceil(lookup_bits) * lookup_bits <= Fr::CAPACITY as usize);
         range::test_check_big_less_than_safe(k, lookup_bits, a, fe_to_biguint(&b));
     }
 }

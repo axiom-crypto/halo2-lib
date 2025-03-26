@@ -114,7 +114,7 @@ pub fn mul_no_carry_w6<F: BigPrimeField, FC: FieldChip<F>, const XI_0: i64>(
 // a lot of this is common to any field extension (lots of for loops), but due to the way rust traits work, it is hard to create a common generic trait that does this. The main problem is that if you had a `FieldExtCommon` trait and wanted to implement `FieldChip` for anything with `FieldExtCommon`, rust will stop you because someone could implement `FieldExtCommon` and `FieldChip` for the same type, causing a conflict.
 // partially solved using macro
 
-impl<'a, F, FpChip, Fp12, const XI_0: i64> FieldChip<F> for Fp12Chip<'a, F, FpChip, Fp12, XI_0>
+impl<F, FpChip, Fp12, const XI_0: i64> FieldChip<F> for Fp12Chip<'_, F, FpChip, Fp12, XI_0>
 where
     F: BigPrimeField,
     FpChip: PrimeFieldChip<F>,

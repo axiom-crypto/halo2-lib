@@ -668,7 +668,7 @@ where
 
     let scalar_len = scalars[0].len();
     let total_bits = max_bits * scalar_len;
-    let num_windows = (total_bits + window_bits - 1) / window_bits;
+    let num_windows = total_bits.div_ceil(window_bits);
     let rounded_bitlen = num_windows * window_bits;
 
     let zero_cell = ctx.load_zero();
@@ -1010,7 +1010,7 @@ impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
     }
 }
 
-impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC>
+impl<F: BigPrimeField, FC: FieldChip<F>> EccChip<'_, F, FC>
 where
     FC: Selectable<F, FC::FieldPoint>,
 {
@@ -1102,7 +1102,7 @@ where
     }
 }
 
-impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
+impl<F: BigPrimeField, FC: FieldChip<F>> EccChip<'_, F, FC> {
     /// See [`fixed_base::scalar_multiply`] for more details.
     // TODO: put a check in place that scalar is < modulus of C::Scalar
     pub fn fixed_base_scalar_mult<C>(

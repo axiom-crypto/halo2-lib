@@ -41,7 +41,7 @@ where
     assert!((max_bits as u32) <= F::NUM_BITS);
 
     let total_bits = max_bits * scalar.len();
-    let num_windows = (total_bits + window_bits - 1) / window_bits;
+    let num_windows = total_bits.div_ceil(window_bits);
 
     // Jacobian coordinate
     let base_pt = point.to_curve();
@@ -132,7 +132,7 @@ where
     assert!(!points.is_empty(), "fixed_base::msm_par requires at least one point");
     let scalar_len = scalars[0].len();
     let total_bits = max_scalar_bits_per_cell * scalar_len;
-    let num_windows = (total_bits + window_bits - 1) / window_bits;
+    let num_windows = total_bits.div_ceil(window_bits);
 
     // `cached_points` is a flattened 2d vector
     // first we compute all cached points in Jacobian coordinates since it's fastest

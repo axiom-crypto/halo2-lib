@@ -60,8 +60,8 @@ pub trait PoseidonInstructions<F: ScalarField> {
         F: BigPrimeField;
 }
 
-impl<'a, F: ScalarField, const T: usize, const RATE: usize> PoseidonInstructions<F>
-    for PoseidonChip<'a, F, T, RATE>
+impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonInstructions<F>
+    for PoseidonChip<'_, F, T, RATE>
 {
     fn hash_var_len_bytes<const MAX_LEN: usize>(
         &self,

@@ -213,7 +213,7 @@ fn neg_test_is_less_than_safe(k: usize, b: u64, lookup_bits: usize, rand_a: Fr, 
     let a_big = fe_to_biguint(&rand_a);
     let is_lt = a_big < BigUint::from(b);
     let correct = (is_lt == prank_out)
-        && (a_big.bits() as usize <= (bit_length(b) + lookup_bits - 1) / lookup_bits * lookup_bits); // circuit should always fail if `a` doesn't pass range check
+        && (a_big.bits() as usize <= bit_length(b).div_ceil(lookup_bits) * lookup_bits); // circuit should always fail if `a` doesn't pass range check
 
     base_test().k(k as u32).lookup_bits(lookup_bits).expect_satisfied(correct).run(|ctx, range| {
         let a_witness = ctx.load_witness(rand_a);

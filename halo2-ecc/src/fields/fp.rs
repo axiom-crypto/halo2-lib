@@ -133,7 +133,7 @@ impl<'range, F: BigPrimeField, Fp: BigPrimeField> FpChip<'range, F, Fp> {
     }
 }
 
-impl<'range, F: BigPrimeField, Fp: BigPrimeField> PrimeFieldChip<F> for FpChip<'range, F, Fp> {
+impl<F: BigPrimeField, Fp: BigPrimeField> PrimeFieldChip<F> for FpChip<'_, F, Fp> {
     fn num_limbs(&self) -> usize {
         self.num_limbs
     }
@@ -402,9 +402,7 @@ impl<'range, F: BigPrimeField, Fp: BigPrimeField> FieldChip<F> for FpChip<'range
     }
 }
 
-impl<'range, F: BigPrimeField, Fp: BigPrimeField> Selectable<F, CRTInteger<F>>
-    for FpChip<'range, F, Fp>
-{
+impl<F: BigPrimeField, Fp: BigPrimeField> Selectable<F, CRTInteger<F>> for FpChip<'_, F, Fp> {
     fn select(
         &self,
         ctx: &mut Context<F>,
@@ -425,9 +423,7 @@ impl<'range, F: BigPrimeField, Fp: BigPrimeField> Selectable<F, CRTInteger<F>>
     }
 }
 
-impl<'range, F: BigPrimeField, Fp: BigPrimeField> Selectable<F, ProperCrtUint<F>>
-    for FpChip<'range, F, Fp>
-{
+impl<F: BigPrimeField, Fp: BigPrimeField> Selectable<F, ProperCrtUint<F>> for FpChip<'_, F, Fp> {
     fn select(
         &self,
         ctx: &mut Context<F>,

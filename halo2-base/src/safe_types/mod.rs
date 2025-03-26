@@ -21,6 +21,7 @@ mod primitives;
 pub use bytes::*;
 pub use primitives::*;
 
+/// Unit Tests
 #[cfg(test)]
 pub mod tests;
 
@@ -52,8 +53,7 @@ impl<F: ScalarField, const BYTES_PER_ELE: usize, const TOTAL_BITS: usize>
     /// Total bits of this type.
     pub const TOTAL_BITS: usize = TOTAL_BITS;
     /// Number of elements of this type.
-    pub const VALUE_LENGTH: usize =
-        (TOTAL_BITS + BYTES_PER_ELE * BITS_PER_BYTE - 1) / (BYTES_PER_ELE * BITS_PER_BYTE);
+    pub const VALUE_LENGTH: usize = TOTAL_BITS.div_ceil(BYTES_PER_ELE * BITS_PER_BYTE);
 
     /// Number of bits of each element.
     pub fn bits_per_ele() -> usize {

@@ -65,7 +65,7 @@ where
     }
 }
 
-impl<'a, F, FpChip, Fp2> FieldChip<F> for Fp2Chip<'a, F, FpChip, Fp2>
+impl<F, FpChip, Fp2> FieldChip<F> for Fp2Chip<'_, F, FpChip, Fp2>
 where
     F: BigPrimeField,
     FpChip::FieldType: BigPrimeField,

@@ -17,7 +17,7 @@ use num_bigint::BigUint;
 
 const XI_0: i64 = 9;
 
-impl<'chip, F: BigPrimeField> Fp12Chip<'chip, F> {
+impl<F: BigPrimeField> Fp12Chip<'_, F> {
     // computes a ** (p ** power)
     // only works for p = 3 (mod 4) and p = 1 (mod 6)
     pub fn frobenius_map(
