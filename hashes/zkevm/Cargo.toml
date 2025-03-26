@@ -1,6 +1,6 @@
 [package]
 name = "zkevm-hashes"
-version = "0.2.1"
+version = "0.3.0"
 authors = [
     "Privacy Scaling Explorations Team",
     "Taiko Labs",
