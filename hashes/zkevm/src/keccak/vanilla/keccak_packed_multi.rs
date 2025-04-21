@@ -51,6 +51,7 @@ pub(crate) struct AbsorbData<F: PrimeField> {
 
 /// SqueezeData
 #[derive(Clone, Default, Debug, PartialEq)]
+#[allow(dead_code)]
 pub(crate) struct SqueezeData<F: PrimeField> {
     packed: F,
 }

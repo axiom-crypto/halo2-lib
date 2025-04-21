@@ -22,6 +22,7 @@ pub use bytes::*;
 pub use primitives::*;
 
 #[cfg(test)]
+/// Tests for the safe types module
 pub mod tests;
 
 type RawAssignedValues<F> = Vec<AssignedValue<F>>;
