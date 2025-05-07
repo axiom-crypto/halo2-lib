@@ -516,7 +516,7 @@ where
     let zero_cell = ctx.load_zero();
     rounded_bits.resize(rounded_bitlen, zero_cell);
 
-    // is_started[idx] holds whether there is a 1 in bits with index at least (rounded_bitlen - idx)
+    // is_started[idx] holds whether there is a 1 in bits with an index at least (rounded_bitlen - idx)
     let mut is_started = Vec::with_capacity(rounded_bitlen);
     is_started.resize(rounded_bitlen - total_bits + 1, zero_cell);
     for idx in 1..=total_bits {
@@ -755,7 +755,7 @@ where
                 &rounded_bits
                     [rounded_bitlen - window_bits * (idx + 1)..rounded_bitlen - window_bits * idx],
             );
-            // this all needs strict add_unequal since A can be non-randomly chosen by adversary
+            // this all needs strict add_unequal since A can be non-randomly chosen by an adversary
             curr_point = ec_add_unequal(chip, ctx, curr_point, add_point, true);
         }
     }
