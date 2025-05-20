@@ -302,3 +302,6 @@ cargo test --release --no-default-features --features "halo2-axiom, mimalloc" --
 | 19  | 20         | 3                 | 1         | 32.6s               |
 | 20  | 11         | 2                 | 1         | 41.3s               |
 | 21  | 6          | 1                 | 1         | 51.9s               |
+
+## Star History
+[![Star History Chart](https://api.star-history.com/svg?repos=axiom-crypto/halo2-lib&type=Date)](https://www.star-history.com/#axiom-crypto/halo2-lib&Date)
