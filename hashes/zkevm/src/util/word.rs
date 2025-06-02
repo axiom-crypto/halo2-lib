@@ -325,4 +325,285 @@ impl<F: Field, const N1: usize> WordExpr<F> for WordLimbs<Expression<F>, N1> {
     }
 }
 
-// TODO unittest
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::halo2_proofs::halo2curves::bn256::Fr as F;
+    use crate::util::expression::Expr;
+    use eth_types::{H160, H256, Word as EthWord};
+
+    #[test]
+    fn test_word_basic_operations() {
+        let word = Word::<F>::new([F::from(10), F::from(20)]);
+        assert_eq!(word.lo(), F::from(10));
+        assert_eq!(word.hi(), F::from(20));
+        assert_eq!(word.n(), 2);
+        
+        let (lo, hi) = word.to_lo_hi();
+        assert_eq!(lo, F::from(10));
+        assert_eq!(hi, F::from(20));
+        
+        let (lo_moved, hi_moved) = word.into_lo_hi();
+        assert_eq!(lo_moved, F::from(10));
+        assert_eq!(hi_moved, F::from(20));
+    }
+
+    #[test]
+    fn test_word_equality() {
+        let word1 = Word::<F>::new([F::from(10), F::from(20)]);
+        let word2 = Word::<F>::new([F::from(10), F::from(20)]);
+        let word3 = Word::<F>::new([F::from(10), F::from(21)]);
+        
+        assert_eq!(word1, word2);
+        assert_ne!(word1, word3);
+    }
+
+    #[test]
+    fn test_word_from_u64() {
+        let value: u64 = 0x123456789ABCDEF0;
+        let word = Word::<F>::from(value);
+        
+        // For u64, high limb should be 0
+        assert_eq!(word.hi(), F::from(0));
+        // Low limb should contain the value constructed from bytes
+        let bytes = value.to_le_bytes();
+        let expected_lo = from_bytes::value(&bytes);
+        assert_eq!(word.lo(), expected_lo);
+    }
+
+    #[test]
+    fn test_word_from_u8() {
+        let value: u8 = 0xFF;
+        let word = Word::<F>::from(value);
+        
+        assert_eq!(word.lo(), F::from(255));
+        assert_eq!(word.hi(), F::from(0));
+    }
+
+    #[test]
+    fn test_word_from_bool() {
+        let word_true = Word::<F>::from(true);
+        let word_false = Word::<F>::from(false);
+        
+        assert_eq!(word_true.lo(), F::from(1));
+        assert_eq!(word_true.hi(), F::from(0));
+        
+        assert_eq!(word_false.lo(), F::from(0));
+        assert_eq!(word_false.hi(), F::from(0));
+    }
+
+    #[test]
+    fn test_word_from_h256() {
+        let h256 = H256::from([0xFF; 32]);
+        let word = Word::<F>::from(h256);
+        
+        // Check that conversion produces expected values
+        let le_bytes = {
+            let mut b = h256.to_fixed_bytes();
+            b.reverse();
+            b
+        };
+        let expected_lo = from_bytes::value(&le_bytes[..N_BYTES_HALF_WORD]);
+        let expected_hi = from_bytes::value(&le_bytes[N_BYTES_HALF_WORD..]);
+        
+        assert_eq!(word.lo(), expected_lo);
+        assert_eq!(word.hi(), expected_hi);
+    }
+
+    #[test]
+    fn test_word_from_h160() {
+        let h160 = H160::from([0xFF; 20]);
+        let word = Word::<F>::from(h160);
+        
+        let mut bytes = *h160.as_fixed_bytes();
+        bytes.reverse();
+        let expected_lo = from_bytes::value(&bytes[..N_BYTES_HALF_WORD]);
+        let expected_hi = from_bytes::value(&bytes[N_BYTES_HALF_WORD..]);
+        
+        assert_eq!(word.lo(), expected_lo);
+        assert_eq!(word.hi(), expected_hi);
+    }
+
+    #[test]
+    fn test_word_from_eth_word() {
+        let eth_word = EthWord::from(0x123456789ABCDEF0u64);
+        let word = Word::<F>::from(eth_word);
+        
+        let bytes = eth_word.to_le_bytes();
+        let expected_lo = from_bytes::value(&bytes[..N_BYTES_HALF_WORD]);
+        let expected_hi = from_bytes::value(&bytes[N_BYTES_HALF_WORD..]);
+        
+        assert_eq!(word.lo(), expected_lo);
+        assert_eq!(word.hi(), expected_hi);
+    }
+
+    #[test]
+    fn test_word_expression_zero_one() {
+        let zero_word = Word::<Expression<F>>::zero();
+        let one_word = Word::<Expression<F>>::one();
+        
+        // We can't directly compare expressions, but we can verify structure
+        assert_eq!(zero_word.n(), 2);
+        assert_eq!(one_word.n(), 2);
+    }
+
+    #[test]
+    fn test_word_expression_from_lo_unchecked() {
+        let lo_expr = F::from(42).expr();
+        let word = Word::<Expression<F>>::from_lo_unchecked(lo_expr);
+        
+        assert_eq!(word.n(), 2);
+    }
+
+    #[test]
+    fn test_word_expression_arithmetic() {
+        let word1 = Word::<Expression<F>>::one();
+        let word2 = Word::<Expression<F>>::one();
+        
+        let sum = word1.clone().add_unchecked(word2.clone());
+        let diff = word1.clone().sub_unchecked(word2.clone());
+        let product = word1.mul_unchecked(word2);
+        
+        // Verify operations return words with correct structure
+        assert_eq!(sum.n(), 2);
+        assert_eq!(diff.n(), 2);
+        assert_eq!(product.n(), 2);
+    }
+
+    #[test]
+    fn test_word_expression_select() {
+        let selector = F::from(1).expr();
+        let word_true = Word::<Expression<F>>::one();
+        let word_false = Word::<Expression<F>>::zero();
+        
+        let selected = Word::<Expression<F>>::select(selector, word_true, word_false);
+        assert_eq!(selected.n(), 2);
+    }
+
+    #[test]
+    fn test_word_expression_mul_selector() {
+        let word = Word::<Expression<F>>::one();
+        let selector = F::from(5).expr();
+        
+        let result = word.mul_selector(selector);
+        assert_eq!(result.n(), 2);
+    }
+
+    #[test]
+    fn test_word_limbs_basic() {
+        let limbs = WordLimbs::<F, 4>::new([F::from(1), F::from(2), F::from(3), F::from(4)]);
+        assert_eq!(limbs.n(), 4);
+        assert_eq!(limbs.limbs[0], F::from(1));
+        assert_eq!(limbs.limbs[3], F::from(4));
+    }
+
+    #[test]
+    fn test_word_limbs_default() {
+        let limbs = WordLimbs::<F, 4>::default();
+        assert_eq!(limbs.n(), 4);
+        for limb in &limbs.limbs {
+            assert_eq!(*limb, F::ZERO);
+        }
+    }
+
+    #[test]
+    fn test_word_limbs_is_zero_vartime() {
+        let zero_limbs = WordLimbs::<F, 4>::new([F::ZERO; 4]);
+        let non_zero_limbs = WordLimbs::<F, 4>::new([F::from(1), F::ZERO, F::ZERO, F::ZERO]);
+        
+        assert!(zero_limbs.is_zero_vartime());
+        assert!(!non_zero_limbs.is_zero_vartime());
+    }
+
+    #[test]
+    fn test_word_limbs_u8_to_expr() {
+        let limbs_u8 = WordLimbs::<u8, 4>::new([1, 2, 3, 4]);
+        let limbs_expr = limbs_u8.to_expr::<F>();
+        
+        // Can't directly compare expressions, but verify structure
+        assert_eq!(limbs_expr.n(), 4);
+    }
+
+    #[test]
+    fn test_word_limbs_expression_to_word_n() {
+        // Test conversion from 4 limbs to 2 limbs
+        let limbs_4 = WordLimbs::<Expression<F>, 4>::new([
+            F::from(1).expr(),
+            F::from(2).expr(), 
+            F::from(3).expr(),
+            F::from(4).expr()
+        ]);
+        
+        let limbs_2 = limbs_4.to_word_n::<2>();
+        assert_eq!(limbs_2.n(), 2);
+    }
+
+    #[test]
+    fn test_word_limbs_expression_eq() {
+        let limbs1 = WordLimbs::<Expression<F>, 2>::new([
+            F::from(1).expr(),
+            F::from(2).expr()
+        ]);
+        let limbs2 = WordLimbs::<Expression<F>, 2>::new([
+            F::from(1).expr(),
+            F::from(2).expr()
+        ]);
+        
+        let eq_expr = limbs1.eq(&limbs2);
+        // Verify that eq returns an expression (structure test)
+        // The actual equality testing would need circuit evaluation
+    }
+
+    #[test]
+    fn test_word_into_value() {
+        let word = Word::<F>::new([F::from(10), F::from(20)]);
+        let value_word = word.into_value();
+        
+        // Test structure of Value wrapper
+        assert_eq!(value_word.n(), 2);
+    }
+
+    #[test]
+    fn test_word_map() {
+        let word = Word::<u64>::new([10, 20]);
+        let mapped_word = word.map(|x| x * 2);
+        
+        assert_eq!(mapped_word.lo(), 20);
+        assert_eq!(mapped_word.hi(), 40);
+    }
+
+    #[test]
+    fn test_word_expr_trait() {
+        let word = Word::<Expression<F>>::one();
+        let word_expr = word.to_word();
+        
+        assert_eq!(word_expr.n(), 2);
+    }
+
+    #[test]
+    fn test_word_limbs_expr_trait() {
+        let limbs = WordLimbs::<Expression<F>, 4>::new([
+            F::from(1).expr(),
+            F::from(2).expr(),
+            F::from(3).expr(), 
+            F::from(4).expr()
+        ]);
+        
+        let word = limbs.to_word();
+        assert_eq!(word.n(), 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed")]
+    fn test_word_limbs_to_word_n_invalid_ratio() {
+        // Test that invalid conversions panic
+        let limbs_3 = WordLimbs::<Expression<F>, 3>::new([
+            F::from(1).expr(),
+            F::from(2).expr(),
+            F::from(3).expr()
+        ]);
+        
+        // This should panic because 3 % 2 != 0
+        let _ = limbs_3.to_word_n::<2>();
+    }
+}
