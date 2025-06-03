@@ -19,6 +19,14 @@ git clone https://github.com/axiom-crypto/halo2-lib.git
 cd halo2-lib
 ```
 
+## Status
+
+As of June 2023, `halo2-lib` v0.3.0 and later are recommended for production use. It completed external audits conducted by [Spearbit](https://spearbit.com/) (available [here](https://github.com/axiom-crypto/halo2-lib/blob/main/audits/v0.4.1-spearbit-report.pdf)) and [Trail of Bits](https://www.trailofbits.com/) (available [here](https://github.com/trailofbits/publications/blob/948e6e08db485b22bba2d53a48bb6a7d0f8d694b/reviews/2023-06-axiom-halo2libraries-securityreview.pdf) and [here](https://github.com/trailofbits/publications/blob/948e6e08db485b22bba2d53a48bb6a7d0f8d694b/reviews/2023-10-axiom-halo2libraryupgrades-securityreview.pdf)).
+
+## Security
+
+See [SECURITY.md](https://github.com/axiom-crypto/halo2-lib/blob/main/SECURITY.md).
+
 ## Projects built with `halo2-lib`
 
 - [Axiom](https://github.com/axiom-crypto/axiom-eth) -- Prove facts about Ethereum on-chain data via aggregate block header, account, and storage proofs.
