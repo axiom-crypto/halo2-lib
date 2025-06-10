@@ -39,7 +39,7 @@ such that the bits in the message are: <original message of length L> 1 <K zeros
   - `length`: the running length in bytes of input data "absorbed" so far, including the current block, excluding padding. This is only constrained when `q_input` is true. One recovers the length of the unpadded input by reading this value on the last "absorb" row in a block with `is_enabled` true.
   - `word_value`: 32 bits of the input, as described above. We use the following slightly funny conversion: we consider the 4 byte chunk of the input, replace the padding with 0s, and then convert to a 32-bit integer by considering the 4 bytes _in little endian_. This choice was chosen for consistency with the Keccak circuit, but is arbitrary.
     - Only constrained when `q_input` is true.
-  - `output` (2): the hash digest the SHA-256 algorithm on the input bytes (32 bytes). We represent this as two field elements in hi-lo form - we split 32 bytes into two 16 byte chunks, and convert them to `u128` as _big endian_.
+  - `output` (2): the hash digest of the SHA-256 algorithm on the input bytes (32 bytes). We represent this as two field elements in hi-lo form - we split 32 bytes into two 16 byte chunks, and convert them to `u128` as _big endian_.
     - Only constrained when the last row of a block. Should only be considered meaningful when `is_enabled` is true.
 - We conveniently store the relevant cells for the above data, per input block, in the struct `AssignedSha256Block`.
 - This circuit has a hard constraint that the input array has length up to `2^32 - 1` bits, whereas the official SHA-256 spec supports up to `2^64 - 1`. (In practice it is likely impossible to create a circuit that can handle `2^32 - 1` bit inputs.)
