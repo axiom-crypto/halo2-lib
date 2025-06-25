@@ -6,7 +6,7 @@ This repository aims to provide basic primitives for writing zero-knowledge proo
 
 ## Getting Started
 
-For a brief introduction to zero-knowledge proofs (ZK), see this [doc](https://docs.axiom.xyz/zero-knowledge-proofs/introduction-to-zk).
+For a brief introduction to zero-knowledge proofs (ZK), see this [blog post](https://blog.axiom.xyz/introducing-axiom/).
 
 Halo 2 is written in Rust, so you need to [install](https://www.rust-lang.org/tools/install) Rust to use this library:
 
