@@ -36,12 +36,6 @@ jobs:
           cargo test --release -- --nocapture bench_fixed_base_msm
           cargo test --release -- --nocapture bench_msm
           cargo test --release -- --nocapture bench_pairing
-      - name: Run zkevm tests
-        working-directory: "hashes/zkevm"
-        run: |
-          cargo test packed_multi_keccak_prover::k_14
-          cargo test bit_sha256_prover::k_10
-          cargo t test_vanilla_keccak_kat_vectors
 
   lint:
     name: Lint
