@@ -27,7 +27,7 @@ use rand::{rngs::StdRng, SeedableRng};
 
 use super::fs::gen_srs;
 
-/// Helper function to generate a proof with real prover using SHPLONK KZG multi-open polynomical commitment scheme
+/// Helper function to generate a proof with real prover using SHPLONK KZG multi-open polynomial commitment scheme
 /// and Blake2b as the hash function for Fiat-Shamir.
 pub fn gen_proof_with_instances(
     params: &ParamsKZG<Bn256>,
@@ -49,7 +49,7 @@ pub fn gen_proof_with_instances(
     transcript.finalize()
 }
 
-/// For testing use only: Helper function to generate a proof **without public instances** with real prover using SHPLONK KZG multi-open polynomical commitment scheme
+/// For testing use only: Helper function to generate a proof **without public instances** with real prover using SHPLONK KZG multi-open polynomial commitment scheme
 /// and Blake2b as the hash function for Fiat-Shamir.
 pub fn gen_proof(
     params: &ParamsKZG<Bn256>,
@@ -59,7 +59,7 @@ pub fn gen_proof(
     gen_proof_with_instances(params, pk, circuit, &[])
 }
 
-/// Helper function to verify a proof (generated using [`gen_proof_with_instances`]) using SHPLONK KZG multi-open polynomical commitment scheme
+/// Helper function to verify a proof (generated using [`gen_proof_with_instances`]) using SHPLONK KZG multi-open polynomial commitment scheme
 /// and Blake2b as the hash function for Fiat-Shamir.
 pub fn check_proof_with_instances(
     params: &ParamsKZG<Bn256>,
@@ -87,7 +87,7 @@ pub fn check_proof_with_instances(
     }
 }
 
-/// For testing only: Helper function to verify a proof (generated using [`gen_proof`]) without public instances using SHPLONK KZG multi-open polynomical commitment scheme
+/// For testing only: Helper function to verify a proof (generated using [`gen_proof`]) without public instances using SHPLONK KZG multi-open polynomial commitment scheme
 /// and Blake2b as the hash function for Fiat-Shamir.
 pub fn check_proof(
     params: &ParamsKZG<Bn256>,
