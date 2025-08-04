@@ -1,6 +1,7 @@
 use halo2_base::gates::circuit::{builder::RangeCircuitBuilder, CircuitBuilderStage};
 use halo2_base::gates::flex_gate::{GateChip, GateInstructions};
 use halo2_base::halo2_proofs::{
+    dev::MockProver,
     halo2curves::bn256::{Bn256, Fr},
     halo2curves::ff::Field,
     plonk::*,
@@ -36,11 +37,15 @@ fn bench(c: &mut Criterion) {
     mul_bench(builder.main(0), [Fr::zero(); 2]);
     let config_params = builder.calculate_params(Some(9));
 
+    // check the circuit is correct just in case
+    MockProver::run(K, &builder, vec![]).unwrap().assert_satisfied();
+
     let params = ParamsKZG::<Bn256>::setup(K, OsRng);
     let vk = keygen_vk(&params, &builder).expect("vk should not fail");
     let pk = keygen_pk(&params, vk, &builder).expect("pk should not fail");
 
     let break_points = builder.break_points();
+    drop(builder);
 
     let a = Fr::random(OsRng);
     let b = Fr::random(OsRng);
