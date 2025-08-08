@@ -1,3 +1,3 @@
 (function() {var implementors = {
-"halo2_base":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/marker/trait.StructuralEq.html\" title=\"trait core::marker::StructuralEq\">StructuralEq</a> for <a class=\"enum\" href=\"halo2_base/gates/builder/enum.CircuitBuilderStage.html\" title=\"enum halo2_base::gates::builder::CircuitBuilderStage\">CircuitBuilderStage</a>"]]
+"halo2_base":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/stable/std/cmp/trait.Eq.html\" title=\"trait std::cmp::Eq\">Eq</a> for <a class=\"enum\" href=\"halo2_base/gates/builder/enum.CircuitBuilderStage.html\" title=\"enum halo2_base::gates::builder::CircuitBuilderStage\">CircuitBuilderStage</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
