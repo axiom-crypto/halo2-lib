@@ -284,7 +284,7 @@ where
                 prev = Some(coeff);
             }
         }
-        prev.unwrap()
+        prev.expect("empty coefficient vector in is_soft_zero")
     }
 
     pub fn is_soft_nonzero(
@@ -302,7 +302,7 @@ where
                 prev = Some(coeff);
             }
         }
-        prev.unwrap()
+        prev.expect("empty coefficient vector in is_soft_nonzero")
     }
 
     pub fn is_zero(
@@ -320,7 +320,7 @@ where
                 prev = Some(coeff);
             }
         }
-        prev.unwrap()
+        prev.expect("empty coefficient vector in is_zero")
     }
 
     pub fn is_equal_unenforced(
@@ -338,7 +338,7 @@ where
                 acc = Some(coeff);
             }
         }
-        acc.unwrap()
+        acc.expect("empty coefficient vector in is_equal_unenforced")
     }
 
     pub fn assert_equal(
