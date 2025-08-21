@@ -82,6 +82,6 @@ fn plot_fp() {
     let c = chip.mul(ctx, a, b);
 
     let cp = builder.calculate_params(Some(10));
-    dbg!(cp);
+    log::info!("cp: {:?}", cp);
     halo2_proofs::dev::CircuitLayout::default().render(k as u32, &builder, &root).unwrap();
 }
