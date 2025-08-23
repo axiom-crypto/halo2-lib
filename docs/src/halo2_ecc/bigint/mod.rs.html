@@ -430,7 +430,7 @@
 
     <span class="doccomment">/// Input: a BigInteger `value`, Output: the `FixedOverflowInteger` that represents the same value
     /// Can handle signs
-    /// Note the representation of the integer will be in proper (no overflow) format, if signs are interpretted correctly
+    /// Note the representation of the integer will be in proper (no overflow) format, if signs are interpreted correctly
     </span><span class="kw">pub fn </span>from_native(value: <span class="kw-2">&amp;</span>BigUint, num_limbs: usize, limb_bits: usize) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>limbs = decompose_biguint(value, num_limbs, limb_bits);
         <span class="self">Self </span>{ limbs }

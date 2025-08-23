@@ -15,7 +15,7 @@ use super::{check_carry_to_zero, CRTInteger, OverflowInteger, ProperCrtUint, Pro
 // Input `a` is `CRTInteger` with `a.truncation` of length `k` with "signed" limbs
 // Output is `out = a (mod modulus)` as CRTInteger with
 // `out.value = a.value (mod modulus)`
-// `out.trunction = (a (mod modulus)) % 2^t` a proper BigInt of length `k` with limbs in [0, 2^limb_bits)`
+// `out.truncation = (a (mod modulus)) % 2^t` a proper BigInt of length `k` with limbs in [0, 2^limb_bits)`
 // The witness for `out.truncation` is a BigInt in [0, modulus), but we do not constrain the inequality
 // `out.native = (a (mod modulus)) % (native_modulus::<F>)`
 // We constrain `a = out + modulus * quotient` and range check `out` and `quotient`

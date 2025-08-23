@@ -2789,7 +2789,7 @@
     }
 }
 
-<span class="comment">// Transfroms values to cells
+<span class="comment">// Transforms values to cells
 </span><span class="kw">mod </span>transform_to {
     <span class="kw">use super</span>::{Cell, Expr, Field, FieldExt, KeccakRegion, Part, PartValue};
     <span class="kw">use </span><span class="kw">crate</span>::halo2_proofs::plonk::{ConstraintSystem, TableColumn};
@@ -3074,7 +3074,7 @@
         // that allows reusing the same parts in an optimal way for the chi step.
         // We can save quite a few columns by not recombining the parts after rho/pi and
         // re-splitting the words again before chi. Instead we do chi directly
-        // on the output parts of rho/pi. For rho/pi specically we do
+        // on the output parts of rho/pi. For rho/pi specifically we do
         // `s[j][2 * i + 3 * j) % 5] = normalize(rot(s[i][j], RHOM[i][j]))`.
         </span>cell_manager.start_region();
         <span class="kw">let </span><span class="kw-2">mut </span>lookup_counter = <span class="number">0</span>;
@@ -3086,7 +3086,7 @@
         // multiple rows with lookups in a way that doesn&#39;t require any
         // extra additional cells or selectors we have to put all `s[i]`&#39;s on the same
         // row. This isn&#39;t that strong of a requirement actually because we the
-        // words are split into multipe parts, and so only the parts at the same
+        // words are split into multiple parts, and so only the parts at the same
         // position of those words need to be on the same row.
         </span><span class="kw">let </span>target_word_sizes = target_part_sizes(part_size);
         <span class="kw">let </span>num_word_parts = target_word_sizes.len();
