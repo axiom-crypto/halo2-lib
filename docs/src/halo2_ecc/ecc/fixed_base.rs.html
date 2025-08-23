@@ -427,7 +427,7 @@
         },
     );
     <span class="kw">let </span>ctx = builder.main(phase);
-    <span class="comment">// sum `scalar_mults` but take into account possiblity of identity points
+    <span class="comment">// sum `scalar_mults` but take into account possibility of identity points
     </span><span class="kw">let </span>any_point2 = chip.load_random_point::&lt;C&gt;(ctx);
     <span class="kw">let </span><span class="kw-2">mut </span>acc = any_point2.clone();
     <span class="kw">for </span>point <span class="kw">in </span>scalar_mults {
