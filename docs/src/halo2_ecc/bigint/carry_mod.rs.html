@@ -212,14 +212,14 @@
 <span class="comment">// Input `a` is `CRTInteger` with `a.truncation` of length `k` with &quot;signed&quot; limbs
 // Output is `out = a (mod modulus)` as CRTInteger with
 // `out.value = a.value (mod modulus)`
-// `out.trunction = (a (mod modulus)) % 2^t` a proper BigInt of length `k` with limbs in [0, 2^limb_bits)`
+// `out.truncation = (a (mod modulus)) % 2^t` a proper BigInt of length `k` with limbs in [0, 2^limb_bits)`
 // The witness for `out.truncation` is a BigInt in [0, modulus), but we do not constrain the inequality
 // `out.native = (a (mod modulus)) % (native_modulus::&lt;F&gt;)`
 // We constrain `a = out + modulus * quotient` and range check `out` and `quotient`
 //
 // Assumption: the leading two bits (in big endian) are 1,
 </span><span class="doccomment">/// # Assumptions
-/// * abs(a) &lt;= 2&lt;sup&gt;n * k - 1 + F::NUM_BITS - 2&lt;/sup&gt; (A weaker assumption is also enough, but this is good enough for forseeable use cases)
+/// * abs(a) &lt;= 2&lt;sup&gt;n * k - 1 + F::NUM_BITS - 2&lt;/sup&gt; (A weaker assumption is also enough, but this is good enough for foreseeable use cases)
 /// * `native_modulus::&lt;F&gt;` requires *exactly* `k = a.limbs.len()` limbs to represent
 
 </span><span class="comment">// This is currently optimized for limbs greater than 64 bits, so we need `F` to be a `BigPrimeField`
