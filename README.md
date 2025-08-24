@@ -124,7 +124,7 @@ Some tests read files from specific directories, so they will not work if
 you are in the `halo2-lib` root directory.
 
 For benchmarks below, you can symlink a `params` folder within `halo2-ecc` directory with previously generated universal trusted setup files. Otherwise, the benchmarks will generate a new random setup and save them in the `params` directory. **Warning:** These trusted setups are generated using a _known_ random seed, so they are not secure. They should NOT be used in production.
-For more a production suitable trusted setup, see [KZG Trusted Setup](https://docs.axiom.xyz/docs/transparency-and-security/kzg-trusted-setup).
+For a more production-suitable trusted setup, see [KZG Trusted Setup](https://docs.axiom.xyz/docs/transparency-and-security/kzg-trusted-setup).
 
 Tests can be run in the same way as in the previous [section](#halo2-base). The available commands are:
 
@@ -197,7 +197,7 @@ cargo bench --bench fixed_base_msm
 cargo bench --bench fp_mul
 ```
 
-This runs the same proof generation over 10 runs and collect the average. Each circuit has a fixed configuration chosen for optimal speed. These benchmarks are mostly for use in performance optimization.
+This runs the same proof generation over 10 runs and collects the average. Each circuit has a fixed configuration chosen for optimal speed. These benchmarks are mostly for use in performance optimization.
 
 ### Secp256k1 ECDSA
 
@@ -283,7 +283,7 @@ The other columns provide information about the [PLONKish arithmetization](https
 | 21  | 2          | 1                 | 1         | 40.3s               | 40.8s                | 82.5s                |
 | 22  | 1          | 1                 | 1         | 69.1s               | 66.9s                | 135s                 |
 
-The r6a has a higher clock speed than the r6g. We hypothesize that the Apple Silicon integrated memory leads to the faster performance on the M2 Max.
+The r6a has a higher clock speed than the r6g. We hypothesize that the Apple Silicon integrated memory leads to faster performance on the M2 Max.
 
 ### BN254 MSM
 
