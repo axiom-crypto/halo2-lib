@@ -119,10 +119,10 @@ impl<F: Field + Ord> Drop for CopyConstraintManager<F> {
             return;
         }
         if !self.advice_equalities.is_empty() {
-            log::warn!("WARNING: advice_equalities not empty");
+            log::info!("WARNING: advice_equalities not empty");
         }
         if !self.constant_equalities.is_empty() {
-            log::warn!("WARNING: constant_equalities not empty");
+            log::info!("WARNING: constant_equalities not empty");
         }
     }
 }

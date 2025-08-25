@@ -116,7 +116,7 @@ impl<F: Field + Ord, const ADVICE_COLS: usize> Drop for LookupAnyManager<F, ADVI
             return;
         }
         if self.total_rows() > 0 && self.assigned.get().is_none() {
-            log::warn!("WARNING: LookupAnyManager was not assigned!");
+            log::info!("WARNING: LookupAnyManager was not assigned!");
         }
     }
 }
