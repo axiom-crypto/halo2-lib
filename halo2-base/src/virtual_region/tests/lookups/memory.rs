@@ -95,7 +95,7 @@ impl<F: ScalarField, const CYCLES: usize> Circuit<F> for RAMCircuit<F, CYCLES> {
         let memory = BasicDynLookupConfig::new(meta, || FirstPhase, params.num_lu_sets);
         let cpu = FlexGateConfig::configure(meta, params.cpu);
 
-        log::info!("Poisoned rows: {}", meta.minimum_rows());
+        log::debug!("Poisoned rows: {}", meta.minimum_rows());
 
         RAMConfig { cpu, memory }
     }

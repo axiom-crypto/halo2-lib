@@ -281,7 +281,7 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
         #[cfg(feature = "display")]
         {
             println!("Total range check advice cells to lookup per phase: {total_lookup_advice_per_phase:?}");
-            log::info!("Auto-calculated config params:\n {params:#?}");
+            log::debug!("Auto-calculated config params:\n {params:#?}");
         }
         params
     }

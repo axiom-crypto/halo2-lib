@@ -98,7 +98,7 @@ impl<F: ScalarField> RangeConfig<F> {
         let mut config = Self { lookup_advice, q_lookup, lookup, lookup_bits, gate };
         config.create_lookup(meta);
 
-        log::info!("Poisoned rows after RangeConfig::configure {}", meta.minimum_rows());
+        log::debug!("Poisoned rows after RangeConfig::configure {}", meta.minimum_rows());
         config.gate.max_rows = (1 << gate_params.k) - meta.minimum_rows();
         assert!(
             (1 << lookup_bits) <= config.gate.max_rows,

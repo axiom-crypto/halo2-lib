@@ -201,7 +201,7 @@ where
     FC::FieldType: PrimeField,
     C: CurveAffine<Base = FC::FieldType>,
 {
-    log::info!("radix: {}", radix);
+    log::debug!("radix: {}", radix);
     let (points, bool_scalars) = decompose::<F, _>(
         chip.range().gate(),
         ctx,
@@ -227,7 +227,7 @@ where
     } else {
         clump_factor
     };
-    log::info!("c: {}", c);
+    log::debug!("c: {}", c);
 
     let (mut agg, rand_point) = multi_product::<F, FC, C>(chip, ctx, points, bool_scalars, c);
 
