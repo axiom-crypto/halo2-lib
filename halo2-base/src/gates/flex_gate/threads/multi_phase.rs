@@ -147,7 +147,7 @@ impl<F: ScalarField> MultiPhaseCoreManager<F> {
                 println!("Gate Chip | Phase {phase}: {num_advice} advice cells",);
             }
             println!("Total {} fixed cells", stats.total_fixed);
-            log::info!("Auto-calculated config params:\n {params:#?}");
+            log::debug!("Auto-calculated config params:\n {params:#?}");
         }
         params
     }
