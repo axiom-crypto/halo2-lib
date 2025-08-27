@@ -34,27 +34,25 @@ fn inner_prod_bench<F: ScalarField>(ctx: &mut Context<F>, a: Vec<F>, b: Vec<F>) 
 }
 
 fn bench(c: &mut Criterion) {
-    let k = 19u32;
     // create circuit for keygen
     let mut builder =
-        RangeCircuitBuilder::from_stage(CircuitBuilderStage::Keygen).use_k(k as usize);
+        RangeCircuitBuilder::from_stage(CircuitBuilderStage::Keygen).use_k(K as usize);
     inner_prod_bench(builder.main(0), vec![Fr::zero(); 5], vec![Fr::zero(); 5]);
     let config_params = builder.calculate_params(Some(20));
 
     // check the circuit is correct just in case
-    MockProver::run(k, &builder, vec![]).unwrap().assert_satisfied();
+    MockProver::run(K, &builder, vec![]).unwrap().assert_satisfied();
 
-    let params = ParamsKZG::<Bn256>::setup(k, OsRng);
+    let params = ParamsKZG::<Bn256>::setup(K, OsRng);
     let vk = keygen_vk(&params, &builder).expect("vk should not fail");
     let pk = keygen_pk(&params, vk, &builder).expect("pk should not fail");
 
     let break_points = builder.break_points();
-    drop(builder);
 
     let mut group = c.benchmark_group("plonk-prover");
     group.sample_size(10);
     group.bench_with_input(
-        BenchmarkId::new("inner_product", k),
+        BenchmarkId::new("inner_product", K),
         &(&params, &pk),
         |bencher, &(params, pk)| {
             bencher.iter(|| {
