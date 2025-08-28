@@ -83,11 +83,11 @@ impl<F: ScalarField, const RATE: usize> PoseidonCompactInput<F, RATE> {
         range: &impl RangeInstructions<F>,
     ) {
         range.is_less_than_safe(ctx, self.len, (RATE + 1) as u64);
-        // Invalid case: (!is_final && len != RATE) ==> !(is_final || len == RATE)
+        // Valid iff: (is_final || len == RATE)
         let is_full: AssignedValue<F> =
             range.gate().is_equal(ctx, self.len, Constant(F::from(RATE as u64)));
-        let invalid_cond = range.gate().or(ctx, *self.is_final.as_ref(), is_full);
-        range.gate().assert_is_const(ctx, &invalid_cond, &F::ZERO);
+        let valid_cond = range.gate().or(ctx, *self.is_final.as_ref(), is_full);
+        range.gate().assert_is_const(ctx, &valid_cond, &F::ONE);
     }
 }
 
@@ -103,7 +103,7 @@ pub struct PoseidonCompactChunkInput<F: ScalarField, const RATE: usize> {
 }
 
 impl<F: ScalarField, const RATE: usize> PoseidonCompactChunkInput<F, RATE> {
-    /// Create a new PoseidonCompactInput.
+    /// Create a new PoseidonCompactChunkInput.
     pub fn new(inputs: Vec<[AssignedValue<F>; RATE]>, is_final: SafeBool<F>) -> Self {
         Self { inputs, is_final }
     }
@@ -295,7 +295,7 @@ pub struct PoseidonSponge<F: ScalarField, const T: usize, const RATE: usize> {
 }
 
 impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonSponge<F, T, RATE> {
-    /// Create new Poseidon hasher.
+    /// Create new Poseidon sponge.
     pub fn new<const R_F: usize, const R_P: usize, const SECURE_MDS: usize>(
         ctx: &mut Context<F>,
     ) -> Self {
