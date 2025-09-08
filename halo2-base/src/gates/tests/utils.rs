@@ -57,15 +57,15 @@ pub fn inner_product_with_sums_ground_truth<F: ScalarField>(
     input: &(Vec<QuantumCell<F>>, Vec<QuantumCell<F>>),
 ) -> Vec<F> {
     let (a, b) = &input;
-    let mut result = Vec::new();
     let mut sum = F::ZERO;
-    // TODO: convert to fold
-    for (ai, bi) in a.iter().zip(b) {
-        let product = *ai.value() * *bi.value();
-        sum += product;
-        result.push(sum);
-    }
-    result
+    a.iter()
+        .zip(b)
+        .map(|(ai, bi)| {
+            let product = *ai.value() * *bi.value();
+            sum += product;
+            sum
+        })
+        .collect()
 }
 
 pub fn sum_products_with_coeff_and_var_ground_truth<F: ScalarField>(
