@@ -23,7 +23,7 @@ use crate::{
     Context,
 };
 use ark_std::{end_timer, perf_trace::TimerInfo, start_timer};
-use rand::{rngs::StdRng, SeedableRng};
+use rand::rngs::OsRng;
 
 use super::fs::gen_srs;
 
@@ -35,7 +35,8 @@ pub fn gen_proof_with_instances(
     circuit: impl Circuit<Fr>,
     instances: &[&[Fr]],
 ) -> Vec<u8> {
-    let rng = StdRng::seed_from_u64(0);
+    // Use OS-backed CSPRNG to avoid deterministic RNG in a public testing helper
+    let rng = OsRng;
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
     create_proof::<
         KZGCommitmentScheme<Bn256>,
