@@ -32,7 +32,6 @@ compile_error!(
 #[cfg(not(any(feature = "halo2-pse", feature = "halo2-axiom")))]
 compile_error!("Must enable exactly one of \"halo2-pse\" or \"halo2-axiom\" features to choose which halo2_proofs crate to use.");
 
-// use gates::flex_gate::MAX_PHASE;
 #[cfg(feature = "halo2-pse")]
 pub use halo2_proofs;
 #[cfg(feature = "halo2-axiom")]
