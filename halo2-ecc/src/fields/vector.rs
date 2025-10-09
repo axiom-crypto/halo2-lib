@@ -40,7 +40,7 @@ impl<T> AsRef<[T]> for FieldVector<T> {
 
 impl<'a, T: Clone, U: From<T>> From<&'a FieldVector<T>> for FieldVector<U> {
     fn from(other: &'a FieldVector<T>) -> Self {
-        FieldVector(other.clone().into_iter().map(Into::into).collect())
+        FieldVector(other.0.iter().cloned().map(Into::into).collect())
     }
 }
 
