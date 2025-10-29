@@ -341,10 +341,12 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
             // if q_lookup is Some, that means there should be a single advice column and it has lookup enabled
             assert_eq!(config.gate.basic_gates[phase].len(), 1);
             if !self.witness_gen_only() {
+                // Lock copy_manager once before the loop to avoid repeated locking/unlocking
+                // and to maintain consistent lock order (copy_manager -> cells_to_lookup)
+                let copy_manager = self.core.copy_manager.lock().unwrap();
                 let cells_to_lookup = lookup_manager.cells_to_lookup.lock().unwrap();
                 for advice in cells_to_lookup.iter().flat_map(|(_, advices)| advices) {
                     let cell = advice[0].cell.as_ref().unwrap();
-                    let copy_manager = self.core.copy_manager.lock().unwrap();
                     let acell = copy_manager.assigned_advices[cell];
                     assert_eq!(
                         acell.column,
