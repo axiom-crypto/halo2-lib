@@ -391,6 +391,7 @@ mod scalar_field_impls {
         secp256k1::{Fp as secpFp, Fq as secpFq},
         secp256r1::{Fp as secp256r1Fp, Fq as secp256r1Fq},
     };
+    use crate::halo2_proofs::halo2curves::ff::PrimeField;
 
     /// To ensure `ScalarField` is only implemented for `ff:Field` where `Repr` is little endian, we use the following macro
     /// to implement the trait for each field.
@@ -454,8 +455,83 @@ mod scalar_field_impls {
     impl_scalar_field!(bn254Fq);
     impl_scalar_field!(secpFp);
     impl_scalar_field!(secpFq);
-    impl_scalar_field!(secp256r1Fp);
-    impl_scalar_field!(secp256r1Fq);
+    impl ScalarField for secp256r1Fp {
+        #[inline(always)]
+        fn to_u64_limbs(self, num_limbs: usize, bit_len: usize) -> Vec<u64> {
+            let tmp: [u64; 4] = self.into();
+            // Reverse to convert from BE to LE limb order
+            let tmp_le = [tmp[3], tmp[2], tmp[1], tmp[0]];
+            decompose_u64_digits_to_limbs(tmp_le, num_limbs, bit_len)
+        }
+
+        #[inline(always)]
+        fn to_bytes_le(&self) -> Vec<u8> {
+            let tmp: [u64; 4] = (*self).into();
+            // Reverse to convert from BE to LE limb order
+            let tmp_le = [tmp[3], tmp[2], tmp[1], tmp[0]];
+            tmp_le.iter().flat_map(|x| x.to_le_bytes()).collect()
+        }
+
+        #[inline(always)]
+        fn get_lower_32(&self) -> u32 {
+            let tmp: [u64; 4] = (*self).into();
+            tmp[3] as u32 // LSB is in last position for BE
+        }
+
+        #[inline(always)]
+        fn get_lower_64(&self) -> u64 {
+            let tmp: [u64; 4] = (*self).into();
+            tmp[3] // LSB is in last position for BE
+        }
+
+        #[inline(always)]
+        fn from_bytes_le(bytes: &[u8]) -> Self {
+            let mut repr = Self::Repr::default();
+            repr.as_mut()[..bytes.len()].copy_from_slice(bytes);
+            // Reverse to convert from LE to BE for from_repr
+            repr.as_mut().reverse();
+            Self::from_repr(repr).unwrap()
+        }
+    }
+
+    impl ScalarField for secp256r1Fq {
+        #[inline(always)]
+        fn to_u64_limbs(self, num_limbs: usize, bit_len: usize) -> Vec<u64> {
+            let tmp: [u64; 4] = self.into();
+            // Reverse to convert from BE to LE limb order
+            let tmp_le = [tmp[3], tmp[2], tmp[1], tmp[0]];
+            decompose_u64_digits_to_limbs(tmp_le, num_limbs, bit_len)
+        }
+
+        #[inline(always)]
+        fn to_bytes_le(&self) -> Vec<u8> {
+            let tmp: [u64; 4] = (*self).into();
+            // Reverse to convert from BE to LE limb order
+            let tmp_le = [tmp[3], tmp[2], tmp[1], tmp[0]];
+            tmp_le.iter().flat_map(|x| x.to_le_bytes()).collect()
+        }
+
+        #[inline(always)]
+        fn get_lower_32(&self) -> u32 {
+            let tmp: [u64; 4] = (*self).into();
+            tmp[3] as u32 // LSB is in last position for BE
+        }
+
+        #[inline(always)]
+        fn get_lower_64(&self) -> u64 {
+            let tmp: [u64; 4] = (*self).into();
+            tmp[3] // LSB is in last position for BE
+        }
+
+        #[inline(always)]
+        fn from_bytes_le(bytes: &[u8]) -> Self {
+            let mut repr = Self::Repr::default();
+            repr.as_mut()[..bytes.len()].copy_from_slice(bytes);
+            // Reverse to convert from LE to BE for from_repr
+            repr.as_mut().reverse();
+            Self::from_repr(repr).unwrap()
+        }
+    }
 }
 
 /// Module for reading parameters for Halo2 proving system from the file system.
