@@ -799,7 +799,7 @@ pub fn get_naf(mut exp: Vec<u64>) -> Vec<i8> {
         }
     }
     if exp.len() != len {
-        assert_eq!(len, exp.len() + 1);
+        assert_eq!(exp.len(), len + 1);
         assert!(exp[len] == 1);
         naf.push(1);
     }
