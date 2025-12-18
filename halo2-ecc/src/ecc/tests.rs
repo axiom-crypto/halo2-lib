@@ -13,7 +13,7 @@ use halo2_base::utils::bigint_to_fe;
 use halo2_base::utils::testing::base_test;
 use halo2_base::utils::value_to_option;
 use halo2_base::SKIP_FIRST_PASS;
-use num_bigint::{BigInt, RandBigInt};
+use num_bigint::{BigInt, BigUint, RandBigInt};
 use rand_core::OsRng;
 use std::marker::PhantomData;
 use std::ops::Neg;
@@ -65,4 +65,31 @@ fn test_ecc() {
         let Q = G1Affine::random(OsRng);
         basic_g1_tests(ctx, range, 22, 88, 3, P, Q);
     });
+}
+
+#[test]
+fn test_get_naf_roundtrip() {
+    fn roundtrip(exp: BigUint) {
+        let limbs: Vec<u64> = exp.iter_u64_digits().collect();
+        let naf = get_naf(limbs);
+
+        let mut value = BigInt::from(0u64);
+        let mut pow2 = BigInt::from(1u64);
+        for z in naf {
+            match z {
+                -1 => value -= &pow2,
+                0 => {}
+                1 => value += &pow2,
+                _ => panic!("unexpected NAF digit"),
+            }
+            pow2 <<= 1;
+        }
+
+        let reconstructed = value.to_biguint().expect("NAF representation should be non-negative");
+        assert_eq!(reconstructed, exp);
+    }
+
+    roundtrip(BigUint::from(1u64));
+    roundtrip((BigUint::from(u64::MAX) << 64) + BigUint::from(u64::MAX));
+    roundtrip((BigUint::from(1u64) << 127) + BigUint::from(123456789u64));
 }
