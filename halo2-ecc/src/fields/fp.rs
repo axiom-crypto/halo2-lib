@@ -6,7 +6,7 @@ use crate::bigint::{
 };
 use crate::halo2_proofs::halo2curves::CurveAffine;
 use halo2_base::gates::RangeChip;
-use halo2_base::utils::{log2_ceil, BigPrimeField, ScalarField};
+use halo2_base::utils::{log2_ceil, BigPrimeField};
 use halo2_base::{
     gates::{range::RangeConfig, GateInstructions, RangeInstructions},
     utils::{bigint_to_fe, biguint_to_fe, bit_length, decompose_biguint, fe_to_biguint, modulus},
