@@ -25,6 +25,8 @@ ark-std = { version = "0.3.0", features = ["print-trace"], optional = true }
 
 # Use Axiom's custom halo2 monorepo for faster proving when feature = "halo2-axiom" is on
 halo2_proofs_axiom = { version = "0.5", package = "halo2-axiom", optional = true }
+# Use Axiom's CUDA halo2 prover when features = ["halo2-axiom", "cuda"] are on
+halo2_proofs_axiom_cuda = { package = "halo2-axiom-gpu", path = "../../halo2-gpu/halo2_proofs", optional = true }
 # Use PSE halo2 and halo2curves for compatibility when feature = "halo2-pse" is on
 halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v0.3.0", features = [
     "circuit-params",
@@ -61,15 +63,16 @@ mimalloc = { version = "0.1", default-features = false, optional = true }
 
 [features]
 default = ["halo2-axiom", "display", "test-utils"]
-asm = ["halo2_proofs_axiom?/asm"]
+asm = ["halo2_proofs_axiom?/asm", "halo2_proofs_axiom_cuda?/asm"]
 dev-graph = [
     "halo2_proofs?/dev-graph",
     "plotters",
 ] # only works with halo2-pse for now
 halo2-pse = ["halo2_proofs/circuit-params"]
 halo2-axiom = ["halo2_proofs_axiom"]
+cuda = ["halo2_proofs_axiom_cuda"]
 display = []
-profile = ["halo2_proofs_axiom?/profile"]
+profile = ["halo2_proofs_axiom?/profile", "halo2_proofs_axiom_cuda?/profile"]
 test-utils = ["dep:rand", "ark-std"]
 
 [[bench]]

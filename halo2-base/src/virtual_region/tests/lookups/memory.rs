@@ -4,15 +4,15 @@ use crate::{
         circuit::{Layouter, SimpleFloorPlanner},
         dev::MockProver,
         halo2curves::bn256::Fr,
-        plonk::{keygen_pk, keygen_vk, Assigned, Circuit, ConstraintSystem, Error},
+        plonk::{keygen_pk, keygen_vk, Assigned, Circuit, ConstraintSystem, Error, FirstPhase},
     },
     virtual_region::{
         copy_constraints::EXTERNAL_CELL_TYPE_ID, lookups::basic::BasicDynLookupConfig,
     },
     AssignedValue, ContextCell,
 };
-use halo2_proofs_axiom::plonk::FirstPhase;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use test_case::test_case;
 use test_log::test;
 
 use crate::{
@@ -213,9 +213,9 @@ fn test_ram_mock_failed_access() {
     MockProver::run(k, &circuit, vec![]).unwrap().verify().unwrap();
 }
 
-#[test]
-fn test_ram_prover() {
-    let k = 10u32;
+#[test_case(10)]
+#[test_case(14)]
+fn test_ram_prover(k: u32) {
     const CYCLES: usize = 2000;
 
     let mut rng = StdRng::seed_from_u64(0);

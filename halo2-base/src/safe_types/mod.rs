@@ -23,6 +23,7 @@ pub use primitives::*;
 
 /// Unit Tests
 #[cfg(test)]
+/// Testing suite for halo2-base
 pub mod tests;
 
 type RawAssignedValues<F> = Vec<AssignedValue<F>>;
