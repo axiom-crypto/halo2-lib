@@ -22,17 +22,19 @@ use mimalloc::MiMalloc;
 static GLOBAL: MiMalloc = MiMalloc;
 
 #[cfg(all(feature = "halo2-pse", feature = "halo2-axiom"))]
-compile_error!(
-    "Cannot have both \"halo2-pse\" and \"halo2-axiom\" features enabled at the same time!"
-);
+compile_error!("Cannot enable both \"halo2-pse\" and \"halo2-axiom\" features.");
 #[cfg(not(any(feature = "halo2-pse", feature = "halo2-axiom")))]
-compile_error!("Must enable exactly one of \"halo2-pse\" or \"halo2-axiom\" features to choose which halo2_proofs crate to use.");
+compile_error!("Must enable exactly one of \"halo2-pse\" or \"halo2-axiom\".");
+#[cfg(all(feature = "halo2-pse", feature = "cuda"))]
+compile_error!("The \"cuda\" feature is only supported with \"halo2-axiom\".");
 
 // use gates::flex_gate::MAX_PHASE;
 #[cfg(feature = "halo2-pse")]
 pub use halo2_proofs;
-#[cfg(feature = "halo2-axiom")]
+#[cfg(all(feature = "halo2-axiom", not(feature = "cuda")))]
 pub use halo2_proofs_axiom as halo2_proofs;
+#[cfg(all(feature = "halo2-axiom", feature = "cuda"))]
+pub use halo2_proofs_axiom_gpu as halo2_proofs;
 
 use halo2_proofs::halo2curves::ff;
 use halo2_proofs::plonk::Assigned;
