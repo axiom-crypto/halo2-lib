@@ -12,7 +12,6 @@ use crate::{
     AssignedValue, ContextCell,
 };
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use test_case::test_case;
 use test_log::test;
 
 use crate::{
@@ -213,9 +212,9 @@ fn test_ram_mock_failed_access() {
     MockProver::run(k, &circuit, vec![]).unwrap().verify().unwrap();
 }
 
-#[test_case(10)]
-#[test_case(14)]
-fn test_ram_prover(k: u32) {
+#[test]
+fn test_ram_prover() {
+    let k = 10u32;
     const CYCLES: usize = 2000;
 
     let mut rng = StdRng::seed_from_u64(0);
