@@ -34,7 +34,7 @@ pub use halo2_proofs;
 #[cfg(all(feature = "halo2-axiom", not(feature = "cuda")))]
 pub use halo2_proofs_axiom as halo2_proofs;
 #[cfg(all(feature = "halo2-axiom", feature = "cuda"))]
-pub use halo2_proofs_axiom_cuda as halo2_proofs;
+pub use halo2_proofs_axiom_gpu as halo2_proofs;
 
 use halo2_proofs::halo2curves::ff;
 use halo2_proofs::plonk::Assigned;
