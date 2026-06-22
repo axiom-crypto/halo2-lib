@@ -6,7 +6,7 @@ use crate::impl_field_ext_chip_common;
 
 use super::{
     vector::{FieldVector, FieldVectorChip},
-    BigPrimeField, FieldChip, FieldExtConstructor, PrimeFieldChip,
+    BigPrimeField, FieldChip, FieldExtConstructor, PrimeFieldChip, Selectable,
 };
 use halo2_base::{utils::modulus, AssignedValue, Context};
 use num_bigint::BigUint;
@@ -115,6 +115,34 @@ where
 
     // ========= inherited from FieldVectorChip =========
     impl_field_ext_chip_common!();
+}
+
+impl<'a, F, FpChip, Fp2> Selectable<F, FieldVector<FpChip::FieldPoint>>
+    for Fp2Chip<'a, F, FpChip, Fp2>
+where
+    F: BigPrimeField,
+    FpChip: PrimeFieldChip<F> + Selectable<F, FpChip::FieldPoint>,
+    FpChip::FieldType: BigPrimeField,
+    Fp2: crate::ff::Field,
+{
+    fn select(
+        &self,
+        ctx: &mut Context<F>,
+        a: FieldVector<FpChip::FieldPoint>,
+        b: FieldVector<FpChip::FieldPoint>,
+        sel: AssignedValue<F>,
+    ) -> FieldVector<FpChip::FieldPoint> {
+        self.0.select(ctx, a, b, sel)
+    }
+
+    fn select_by_indicator(
+        &self,
+        ctx: &mut Context<F>,
+        a: &impl AsRef<[FieldVector<FpChip::FieldPoint>]>,
+        coeffs: &[AssignedValue<F>],
+    ) -> FieldVector<FpChip::FieldPoint> {
+        self.0.select_by_indicator(ctx, a, coeffs)
+    }
 }
 
 mod bn254 {

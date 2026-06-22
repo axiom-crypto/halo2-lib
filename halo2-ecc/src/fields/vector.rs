@@ -116,6 +116,32 @@ where
         )
     }
 
+    pub fn select_by_indicator<FP>(
+        &self,
+        ctx: &mut Context<F>,
+        a: &impl AsRef<[FieldVector<FP>]>,
+        coeffs: &[AssignedValue<F>],
+    ) -> FieldVector<FP>
+    where
+        FP: Clone,
+        FpChip: Selectable<F, FP>,
+    {
+        let a = a.as_ref();
+        assert!(!a.is_empty());
+        let degree = a[0].0.len();
+        for point in a {
+            assert_eq!(point.0.len(), degree);
+        }
+        FieldVector(
+            (0..degree)
+                .map(|idx| {
+                    let coords = a.iter().map(|point| point[idx].clone()).collect_vec();
+                    self.fp_chip.select_by_indicator(ctx, &coords, coeffs)
+                })
+                .collect(),
+        )
+    }
+
     pub fn load_private<FieldExt, const DEGREE: usize>(
         &self,
         ctx: &mut Context<F>,
