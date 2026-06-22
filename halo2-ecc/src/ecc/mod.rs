@@ -990,7 +990,14 @@ impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
         self.field_chip.assert_equal(ctx, P.y, Q.y);
     }
 
-    /// None of elements in `points` can be point at infinity.
+    /// Returns the group sum of `points`.
+    ///
+    /// The encoded identity is `(0, 0)`. Identity inputs are ignored, and an
+    /// identity total is returned as `(0, 0)`.
+    ///
+    /// # Assumptions
+    /// * Each input is either a curve point or the encoded identity `(0, 0)`.
+    /// * No non-identity input has y-coordinate zero.
     pub fn sum<C>(
         &self,
         ctx: &mut Context<F>,
@@ -998,15 +1005,18 @@ impl<'chip, F: BigPrimeField, FC: FieldChip<F>> EccChip<'chip, F, FC> {
     ) -> EcPoint<F, FC::FieldPoint>
     where
         C: CurveAffineExt<Base = FC::FieldType>,
+        FC: Selectable<F, FC::FieldPoint>,
     {
         let rand_point = self.load_random_point::<C>(ctx);
         let rand_point = into_strict_point(self.field_chip, ctx, rand_point);
         let mut acc = rand_point.clone();
         for point in points {
-            let _acc = self.add_unequal(ctx, acc, point, true);
-            acc = into_strict_point(self.field_chip, ctx, _acc);
+            let is_infinity = self.field_chip.is_zero(ctx, &point.y);
+            let sum = self.add_unequal(ctx, acc.clone(), point, true);
+            let sum = ec_select(self.field_chip, ctx, acc.into(), sum, is_infinity);
+            acc = into_strict_point(self.field_chip, ctx, sum);
         }
-        self.sub_unequal(ctx, acc, rand_point, true)
+        ec_sub_strict(self.field_chip, ctx, acc, rand_point)
     }
 }
 
