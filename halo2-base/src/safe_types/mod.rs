@@ -10,7 +10,7 @@ use crate::{
     },
     utils::ScalarField,
     AssignedValue, Context,
-    QuantumCell::Witness,
+    QuantumCell::Constant,
 };
 
 use itertools::Itertools;
@@ -128,9 +128,13 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
         if bits == 1 || element_bits == BITS_PER_BYTE {
             return SafeType::<F, BYTES_PER_ELE, TOTAL_BITS>::new(inputs);
         };
+        assert!(
+            element_bits <= F::CAPACITY as usize,
+            "packed SafeType element exceeds native field capacity"
+        );
 
         let byte_base = (0..BYTES_PER_ELE)
-            .map(|i| Witness(self.range_chip.gate.pow_of_two[i * BITS_PER_BYTE]))
+            .map(|i| Constant(self.range_chip.gate.pow_of_two[i * BITS_PER_BYTE]))
             .collect::<Vec<_>>();
         let value = inputs
             .chunks(BYTES_PER_ELE)
