@@ -9,7 +9,10 @@ use halo2_base::gates::RangeChip;
 use halo2_base::utils::{BigPrimeField, ScalarField};
 use halo2_base::{
     gates::{range::RangeConfig, GateInstructions, RangeInstructions},
-    utils::{bigint_to_fe, biguint_to_fe, bit_length, decompose_biguint, fe_to_biguint, modulus},
+    utils::{
+        bigint_to_fe, biguint_to_fe, bit_length, decompose_biguint, fe_to_biguint, log2_ceil,
+        modulus,
+    },
     AssignedValue, Context,
     QuantumCell::{Constant, Existing},
 };

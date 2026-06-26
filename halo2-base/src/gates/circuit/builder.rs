@@ -365,7 +365,7 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
                 .collect_vec();
             assert!(!lookup_cols.is_empty(), "range lookups require lookup advice columns");
             let lookup_rows = lookup_manager.total_rows();
-            let assigned_rows = (lookup_rows + lookup_cols.len() - 1) / lookup_cols.len();
+            let assigned_rows = lookup_rows.div_ceil(lookup_cols.len());
             assert!(
                 assigned_rows <= config.gate.max_rows,
                 "range lookups would be assigned to unusable rows"

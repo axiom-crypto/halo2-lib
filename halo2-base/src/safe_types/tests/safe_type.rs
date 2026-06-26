@@ -160,10 +160,10 @@ fn test_raw_bytes_to_uint256() {
 fn test_raw_bytes_to_rejects_oversized_packed_element() {
     const BYTES_PER_ELE: usize = 32;
     const TOTAL_BITS: usize = 256;
-    let k = 11;
+    let k: usize = 11;
     let lookup_bits = 3;
     let mut builder = RangeCircuitBuilder::from_stage(CircuitBuilderStage::Keygen)
-        .use_k(k as usize)
+        .use_k(k)
         .use_lookup_bits(lookup_bits);
     let range_chip = builder.range_chip();
     let safe_type_chip = SafeTypeChip::new(&range_chip);
