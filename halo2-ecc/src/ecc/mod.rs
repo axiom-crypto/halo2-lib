@@ -675,7 +675,7 @@ where
     let rounded_bits = scalars
         .into_iter()
         .flat_map(|scalar| {
-            debug_assert_eq!(scalar.len(), scalar_len);
+            assert_eq!(scalar.len(), scalar_len);
             scalar
                 .into_iter()
                 .flat_map(|scalar_chunk| chip.gate().num_to_bits(ctx, scalar_chunk, max_bits))
