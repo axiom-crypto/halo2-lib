@@ -343,6 +343,10 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
                     let cell = advice[0].cell.as_ref().unwrap();
                     let copy_manager = self.core.copy_manager.lock().unwrap();
                     let acell = copy_manager.assigned_advices[cell];
+                    assert!(
+                        acell.row_offset < config.gate.max_rows,
+                        "range lookup assigned to an unusable row"
+                    );
                     assert_eq!(
                         acell.column,
                         config.gate.basic_gates[phase][0].value.into(),
@@ -359,6 +363,13 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
                 .iter()
                 .map(|c| [*c])
                 .collect_vec();
+            assert!(!lookup_cols.is_empty(), "range lookups require lookup advice columns");
+            let lookup_rows = lookup_manager.total_rows();
+            let assigned_rows = (lookup_rows + lookup_cols.len() - 1) / lookup_cols.len();
+            assert!(
+                assigned_rows <= config.gate.max_rows,
+                "range lookups would be assigned to unusable rows"
+            );
             lookup_manager.assign_raw(&lookup_cols, region);
         }
         let _ = lookup_manager.assigned.set(());
