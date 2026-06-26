@@ -247,7 +247,7 @@ pub fn fe_to_bigint<F: BigPrimeField>(fe: &F) -> BigInt {
 /// * `number_of_limbs`: number of limbs to decompose `e` into
 /// * `bit_len`: number of bits in each limb
 pub fn decompose<F: BigPrimeField>(e: &F, number_of_limbs: usize, bit_len: usize) -> Vec<F> {
-    if bit_len > 64 {
+    if bit_len >= 64 {
         decompose_biguint(&fe_to_biguint(e), number_of_limbs, bit_len)
     } else {
         decompose_fe_to_u64_limbs(e, number_of_limbs, bit_len).into_iter().map(F::from).collect()
@@ -566,6 +566,12 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_decompose_bit_len_64() {
+        let e = Fr::from(1u64) + Fr::from_u128(1u128 << 64);
+        assert_eq!(decompose(&e, 2, 64), vec![Fr::from(1u64), Fr::from(1u64)]);
     }
 
     #[test]
