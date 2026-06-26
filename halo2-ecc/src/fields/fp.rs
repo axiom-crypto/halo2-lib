@@ -393,6 +393,8 @@ impl<'range, F: BigPrimeField, Fp: BigPrimeField> FieldChip<F> for FpChip<'range
     ) {
         let a = a.into();
         let b = b.into();
+        assert_eq!(a.limbs().len(), self.num_limbs);
+        assert_eq!(b.limbs().len(), self.num_limbs);
         // a.native and b.native are derived from `a.truncation, b.truncation`, so no need to check if they're equal
         for (limb_a, limb_b) in a.limbs().iter().zip(b.limbs().iter()) {
             ctx.constrain_equal(limb_a, limb_b);

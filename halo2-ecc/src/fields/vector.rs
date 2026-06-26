@@ -373,7 +373,7 @@ where
         a: impl IntoIterator<Item = FpChip::FieldPoint>,
         b: impl IntoIterator<Item = FpChip::FieldPoint>,
     ) {
-        for (a_coeff, b_coeff) in a.into_iter().zip(b) {
+        for (a_coeff, b_coeff) in a.into_iter().zip_eq(b) {
             self.fp_chip.assert_equal(ctx, a_coeff, b_coeff)
         }
     }
