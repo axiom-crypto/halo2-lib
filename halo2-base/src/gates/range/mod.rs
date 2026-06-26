@@ -8,8 +8,8 @@ use crate::{
         poly::Rotation,
     },
     utils::{
-        biguint_to_fe, bit_length, decompose_fe_to_u64_limbs, fe_to_biguint, BigPrimeField,
-        ScalarField,
+        biguint_to_fe, bit_length, decompose_fe_to_u64_limbs, fe_to_biguint, modulus,
+        BigPrimeField, ScalarField,
     },
     virtual_region::lookups::LookupAnyManager,
     AssignedValue, Context,
@@ -21,8 +21,21 @@ use super::flex_gate::{FlexGateConfigParams, GateChip};
 use getset::Getters;
 use num_bigint::BigUint;
 use num_integer::Integer;
-use num_traits::One;
+use num_traits::{One, Zero};
 use std::{cmp::Ordering, ops::Shl};
+
+fn assert_div_mod_no_wrap<F: BigPrimeField>(b: &BigUint, a_num_bits: usize) {
+    assert!(!b.is_zero());
+    assert!(a_num_bits <= F::CAPACITY as usize);
+
+    let native_modulus = modulus::<F>();
+    assert!(b < &native_modulus);
+
+    let div_bound = BigUint::one().shl(a_num_bits as u32) / b + BigUint::one();
+    let max_div = div_bound - BigUint::one();
+    let max_lhs = b * max_div + (b - BigUint::one());
+    assert!(max_lhs < native_modulus);
+}
 
 /// Configuration for Range Chip
 #[derive(Clone, Debug)]
@@ -286,7 +299,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// ## Assumptions
     /// * `b != 0` and that `a` has <= `a_num_bits` bits.
     /// * `a_num_bits <= F::CAPACITY = F::NUM_BITS - 1`
-    ///   * Unsafe behavior if `a_num_bits >= F::NUM_BITS`
+    /// * the bounds on `b`, quotient, and remainder imply `b * quotient + remainder < F::MODULUS`
     fn div_mod(
         &self,
         ctx: &mut Context<F>,
@@ -299,6 +312,7 @@ pub trait RangeInstructions<F: ScalarField> {
     {
         let a = a.into();
         let b = b.into();
+        assert_div_mod_no_wrap::<F>(&b, a_num_bits);
         let a_val = fe_to_biguint(a.value());
         let (div, rem) = a_val.div_mod_floor(&b);
         let [div, rem] = [div, rem].map(|v| biguint_to_fe(&v));
@@ -334,9 +348,10 @@ pub trait RangeInstructions<F: ScalarField> {
     /// * b_num_bits: number of bits needed to represent the value of `b`
     ///
     /// ## Assumptions
+    /// * `b != 0`
     /// * `a_num_bits <= F::CAPACITY = F::NUM_BITS - 1`
     /// * `b_num_bits <= F::CAPACITY = F::NUM_BITS - 1`
-    /// * Unsafe behavior if `a_num_bits >= F::NUM_BITS` or `b_num_bits >= F::NUM_BITS`
+    /// * the native products used by the split division do not wrap in `F`
     fn div_mod_var(
         &self,
         ctx: &mut Context<F>,
@@ -348,12 +363,30 @@ pub trait RangeInstructions<F: ScalarField> {
     where
         F: BigPrimeField,
     {
+        assert!(a_num_bits <= F::CAPACITY as usize);
+        assert!(b_num_bits > 0 && b_num_bits <= F::CAPACITY as usize);
+
+        let native_modulus = modulus::<F>();
+        let x = BigUint::one().shl(b_num_bits as u32);
+        let max_bcr0 = &x * (&x - BigUint::one());
+        assert!(max_bcr0 < native_modulus.clone());
+        if a_num_bits > b_num_bits {
+            let max_b = &x - BigUint::one();
+            let max_div_hi = BigUint::one().shl((a_num_bits - b_num_bits) as u32) - BigUint::one();
+            let max_bcr0_hi = BigUint::one().shl((a_num_bits - b_num_bits) as u32);
+            let max_bcr_hi = max_b * max_div_hi + max_bcr0_hi;
+            assert!(max_bcr_hi < native_modulus);
+        }
+
         let a = a.into();
         let b = b.into();
+        ctx.assign_cell(b);
+        let b = ctx.get(-1);
+        self.range_check(ctx, b, b_num_bits);
         let a_val = fe_to_biguint(a.value());
         let b_val = fe_to_biguint(b.value());
+        assert!(!b_val.is_zero());
         let (div, rem) = a_val.div_mod_floor(&b_val);
-        let x = BigUint::one().shl(b_num_bits as u32);
         let (div_hi, div_lo) = div.div_mod_floor(&x);
 
         let x_fe = self.gate().pow_of_two()[b_num_bits];
@@ -371,17 +404,17 @@ pub trait RangeInstructions<F: ScalarField> {
         }
 
         let (bcr0_hi, bcr0_lo) = {
-            let bcr0 = self.gate().mul_add(ctx, b, Existing(div_lo), Existing(rem));
+            let bcr0 = self.gate().mul_add(ctx, Existing(b), Existing(div_lo), Existing(rem));
             self.div_mod(ctx, Existing(bcr0), x.clone(), a_num_bits)
         };
-        let bcr_hi = self.gate().mul_add(ctx, b, Existing(div_hi), Existing(bcr0_hi));
+        let bcr_hi = self.gate().mul_add(ctx, Existing(b), Existing(div_hi), Existing(bcr0_hi));
 
         let (a_hi, a_lo) = self.div_mod(ctx, a, x, a_num_bits);
         ctx.constrain_equal(&bcr_hi, &a_hi);
         ctx.constrain_equal(&bcr0_lo, &a_lo);
 
         self.range_check(ctx, rem, b_num_bits);
-        self.check_less_than(ctx, Existing(rem), b, b_num_bits);
+        self.check_less_than(ctx, Existing(rem), Existing(b), b_num_bits);
         (div, rem)
     }
 
