@@ -608,6 +608,10 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         b: impl Into<QuantumCell<F>>,
         num_bits: usize,
     ) {
+        assert!(
+            num_bits < F::CAPACITY as usize,
+            "num_bits must leave one native-field bit of headroom for check_less_than"
+        );
         let a = a.into();
         let b = b.into();
         let pow_of_two = self.gate.pow_of_two[num_bits];
@@ -651,7 +655,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
 
         let k = num_bits.div_ceil(self.lookup_bits);
         let padded_bits = k * self.lookup_bits;
-        debug_assert!(
+        assert!(
             padded_bits + self.lookup_bits <= F::CAPACITY as usize,
             "num_bits is too large for this is_less_than implementation"
         );
