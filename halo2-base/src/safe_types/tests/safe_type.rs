@@ -156,6 +156,23 @@ fn test_raw_bytes_to_uint256() {
 }
 
 #[test]
+#[should_panic(expected = "packed SafeType element exceeds native field capacity")]
+fn test_raw_bytes_to_rejects_oversized_packed_element() {
+    const BYTES_PER_ELE: usize = 32;
+    const TOTAL_BITS: usize = 256;
+    let k = 11;
+    let lookup_bits = 3;
+    let mut builder = RangeCircuitBuilder::from_stage(CircuitBuilderStage::Keygen)
+        .use_k(k as usize)
+        .use_lookup_bits(lookup_bits);
+    let range_chip = builder.range_chip();
+    let safe_type_chip = SafeTypeChip::new(&range_chip);
+    let raw_bytes = builder.main(0).assign_witnesses(vec![Fr::zero(); 32]);
+
+    safe_type_chip.raw_bytes_to::<BYTES_PER_ELE, TOTAL_BITS>(builder.main(0), raw_bytes);
+}
+
+#[test]
 fn test_raw_bytes_to_uint64() {
     const BYTES_PER_ELE: usize = SafeUint64::BYTES_PER_ELE;
     const TOTAL_BITS: usize = SafeUint64::TOTAL_BITS;
