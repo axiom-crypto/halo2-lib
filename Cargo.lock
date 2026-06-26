@@ -1148,7 +1148,7 @@ dependencies = [
 
 [[package]]
 name = "halo2-base"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "ark-std",
  "criterion",
@@ -1182,7 +1182,7 @@ dependencies = [
 
 [[package]]
 name = "halo2-ecc"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "ark-std",
  "criterion",
