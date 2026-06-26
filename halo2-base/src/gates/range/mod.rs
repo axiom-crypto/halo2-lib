@@ -210,7 +210,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// * b: upper bound expressed as a [u64] value
     ///
     /// ## Assumptions
-    /// * `ceil(b.bits() / lookup_bits) * lookup_bits <= F::CAPACITY`
+    /// * `ceil(b.bits() / lookup_bits) * lookup_bits < F::CAPACITY`
     fn check_less_than_safe(&self, ctx: &mut Context<F>, a: AssignedValue<F>, b: u64) {
         let range_bits = bit_length(b).div_ceil(self.lookup_bits()) * self.lookup_bits();
 
@@ -224,7 +224,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// * b: upper bound expressed as a [BigUint] value
     ///
     /// ## Assumptions
-    /// * `ceil(b.bits() / lookup_bits) * lookup_bits <= F::CAPACITY`
+    /// * `ceil(b.bits() / lookup_bits) * lookup_bits < F::CAPACITY`
     fn check_big_less_than_safe(&self, ctx: &mut Context<F>, a: AssignedValue<F>, b: BigUint)
     where
         F: BigPrimeField,
