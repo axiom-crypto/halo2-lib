@@ -274,7 +274,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// * a: [AssignedValue] value to check
     /// * b: upper bound as [BigUint] value
     ///
-    /// For the current implementation using `is_less_than`, we require `ceil(b.bits() / lookup_bits) + 1 < F::NUM_BITS / lookup_bits`
+    /// For the current implementation using `is_less_than`, we require `(ceil(b.bits() / lookup_bits) + 1) * lookup_bits <= F::CAPACITY`
     fn is_big_less_than_safe(
         &self,
         ctx: &mut Context<F>,
