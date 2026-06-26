@@ -56,7 +56,7 @@ See [SECURITY.md](https://github.com/axiom-crypto/halo2-lib/blob/main/SECURITY.m
 
 This crate provides an additional API for writing circuits in Halo 2 using our [simple vertical gate](https://docs.axiom.xyz/zero-knowledge-proofs/getting-started-with-halo2#halo2-lib). It also provides basic functions built using this API. The provided methods can be found in [`GateInstructions`](https://axiom-crypto.github.io/halo2-lib/halo2_base/gates/trait.GateInstructions.html) and [`RangeInstructions`](https://axiom-crypto.github.io/halo2-lib/halo2_base/gates/trait.RangeInstructions.html). The latter are operations that require using a lookup table for range checks.
 
-- Read the [Rust docs](https://docs.rs/halo2-base/0.4.1/halo2_base/) for this crate.
+- Read the [Rust docs](https://docs.rs/halo2-base/latest/halo2_base/) for this crate.
 - To get started with Halo 2 and to learn how to build using the `halo2-base` API, see the [Getting Started](https://docs.axiom.xyz/zero-knowledge-proofs/getting-started-with-halo2) guide.
 
 To run some basic tests, run the following command:
