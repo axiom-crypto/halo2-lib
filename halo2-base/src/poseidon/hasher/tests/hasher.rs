@@ -188,6 +188,33 @@ fn random_payload_without_len<F: ScalarField>(max_len: usize, max_value: usize) 
     Payload { values, len: rng.gen_range(0..=max_len) }
 }
 
+fn validate_compact_input_row(len: usize, is_final: bool, expect_satisfied: bool) {
+    const RATE: usize = 2;
+
+    base_test().k(10).lookup_bits(8).expect_satisfied(expect_satisfied).run(|ctx, range| {
+        let safe = SafeTypeChip::new(range);
+        let is_final = safe.load_bool(ctx, is_final);
+        let len = ctx.load_witness(Fr::from(len as u64));
+        let inputs = [ctx.load_witness(Fr::from(111u64)), ctx.load_witness(Fr::from(222u64))];
+        let row = PoseidonCompactInput::<Fr, RATE>::new(inputs, is_final, len);
+
+        row.add_validation_constraints(ctx, range);
+    });
+}
+
+#[test]
+fn test_poseidon_compact_input_validation_accepts_valid_rows() {
+    validate_compact_input_row(2, false, true);
+    validate_compact_input_row(1, true, true);
+    validate_compact_input_row(0, true, true);
+}
+
+#[test]
+fn test_poseidon_compact_input_validation_rejects_invalid_rows() {
+    validate_compact_input_row(1, false, false);
+    validate_compact_input_row(3, false, false);
+}
+
 #[test]
 fn test_poseidon_hasher_compatiblity() {
     {

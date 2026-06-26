@@ -82,12 +82,12 @@ impl<F: ScalarField, const RATE: usize> PoseidonCompactInput<F, RATE> {
         ctx: &mut Context<F>,
         range: &impl RangeInstructions<F>,
     ) {
-        range.is_less_than_safe(ctx, self.len, (RATE + 1) as u64);
-        // Invalid case: (!is_final && len != RATE) ==> !(is_final || len == RATE)
+        range.check_less_than_safe(ctx, self.len, (RATE + 1) as u64);
+        // Valid rows either end a logical input or fill the entire absorb rate.
         let is_full: AssignedValue<F> =
             range.gate().is_equal(ctx, self.len, Constant(F::from(RATE as u64)));
-        let invalid_cond = range.gate().or(ctx, *self.is_final.as_ref(), is_full);
-        range.gate().assert_is_const(ctx, &invalid_cond, &F::ZERO);
+        let valid_cond = range.gate().or(ctx, *self.is_final.as_ref(), is_full);
+        range.gate().assert_is_const(ctx, &valid_cond, &F::ONE);
     }
 }
 
