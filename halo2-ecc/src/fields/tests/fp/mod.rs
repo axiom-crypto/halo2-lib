@@ -13,6 +13,30 @@ pub mod assert_eq;
 
 const K: usize = 10;
 
+#[test]
+#[should_panic(expected = "limb configuration does not cover the represented field modulus")]
+fn test_fp_chip_constructor_rejects_insufficient_field_coverage() {
+    base_test().k(K as u32).lookup_bits(K - 1).run(|_, range| {
+        let _ = FpChip::<Fr, Fq>::new(range, 126, 2);
+    });
+}
+
+#[test]
+#[should_panic(expected = "limb configuration exceeds native-field multiplication budget")]
+fn test_fp_chip_constructor_rejects_native_mul_overflow_budget() {
+    base_test().k(K as u32).lookup_bits(K - 1).run(|_, range| {
+        let _ = FpChip::<Fr, Fq>::new(range, 127, 2);
+    });
+}
+
+#[test]
+#[should_panic(expected = "limb_bits must be in [64, 128) for BigUint decomposition")]
+fn test_fp_chip_constructor_rejects_unsupported_limb_bits() {
+    base_test().k(K as u32).lookup_bits(K - 1).run(|_, range| {
+        let _ = FpChip::<Fr, Fq>::new(range, 32, 8);
+    });
+}
+
 fn fp_chip_test(
     k: usize,
     lookup_bits: usize,
