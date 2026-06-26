@@ -163,6 +163,16 @@ impl<F: BigPrimeField> Fp12Chip<'_, F> {
         let g1_0 = fp2_chip.divide_unsafe(ctx, &g1_num, &g3);
 
         let g2_is_zero = fp2_chip.is_zero(ctx, &g2);
+        let g3_is_zero = fp2_chip.is_zero(ctx, &g3);
+        let g4_is_zero = fp2_chip.is_zero(ctx, &g4);
+        let g5_is_zero = fp2_chip.is_zero(ctx, &g5);
+        let is_identity_compression = {
+            let g2_g3_are_zero = fp2_chip.gate().and(ctx, g2_is_zero, g3_is_zero);
+            let g4_g5_are_zero = fp2_chip.gate().and(ctx, g4_is_zero, g5_is_zero);
+            fp2_chip.gate().and(ctx, g2_g3_are_zero, g4_g5_are_zero)
+        };
+        let zero_fp2 = fp2_chip.load_constant(ctx, Fq2::zero());
+        let g1_0 = fp2_chip.0.select(ctx, zero_fp2, g1_0, is_identity_compression);
         // resulting `g1` is already in "carried" format (witness is in `[0, p)`)
         let g1 = fp2_chip.0.select(ctx, g1_0, g1_1, g2_is_zero);
 
