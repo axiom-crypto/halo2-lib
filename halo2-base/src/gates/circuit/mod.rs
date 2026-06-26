@@ -169,6 +169,11 @@ impl<F: ScalarField> Circuit<F> for BaseCircuitBuilder<F> {
         // only load lookup table if we are actually doing lookups
         if let MaybeRangeConfig::WithRange(config) = &config.base {
             config.load_lookup_table(&mut layouter).expect("load lookup table should not fail");
+        } else {
+            assert!(
+                self.lookup_manager.iter().all(|lookup_manager| lookup_manager.total_rows() == 0),
+                "range lookups were queued but the circuit was configured without a RangeConfig"
+            );
         }
         // Only FirstPhase (phase 0)
         layouter
