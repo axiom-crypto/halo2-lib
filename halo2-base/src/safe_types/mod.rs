@@ -245,7 +245,7 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
     ///
     /// ## Assumptions
     /// * `MAX_LEN < u64::MAX` to prevent overflow (but you should never make an array this large)
-    /// * `ceil((MAX_LEN + 1).bits() / lookup_bits) * lookup_bits <= F::CAPACITY` where `lookup_bits = self.range_chip.lookup_bits`
+    /// * `ceil((MAX_LEN + 1).bits() / lookup_bits) * lookup_bits < F::CAPACITY` where `lookup_bits = self.range_chip.lookup_bits`
     pub fn raw_to_var_len_bytes<const MAX_LEN: usize>(
         &self,
         ctx: &mut Context<F>,
@@ -264,7 +264,7 @@ impl<'a, F: ScalarField> SafeTypeChip<'a, F> {
     ///
     /// ## Assumptions
     /// * `max_len < u64::MAX` to prevent overflow (but you should never make an array this large)
-    /// * `ceil((max_len + 1).bits() / lookup_bits) * lookup_bits <= F::CAPACITY` where `lookup_bits = self.range_chip.lookup_bits`
+    /// * `ceil((max_len + 1).bits() / lookup_bits) * lookup_bits < F::CAPACITY` where `lookup_bits = self.range_chip.lookup_bits`
     pub fn raw_to_var_len_bytes_vec(
         &self,
         ctx: &mut Context<F>,
