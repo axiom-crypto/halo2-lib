@@ -72,7 +72,21 @@ impl<'range, F: BigPrimeField, Fp: BigPrimeField> FpChip<'range, F, Fp> {
     pub fn new(range: &'range RangeChip<F>, limb_bits: usize, num_limbs: usize) -> Self {
         assert!(limb_bits > 0);
         assert!(num_limbs > 0);
+        assert!(
+            (64..128).contains(&limb_bits),
+            "limb_bits must be in [64, 128) for BigUint decomposition"
+        );
         assert!(limb_bits <= F::CAPACITY as usize);
+        let total_limb_bits = limb_bits.checked_mul(num_limbs).expect("limb bit length overflow");
+        assert!(
+            total_limb_bits >= Fp::NUM_BITS as usize,
+            "limb configuration does not cover the represented field modulus"
+        );
+        let num_limbs_log2_ceil = log2_ceil(num_limbs as u64);
+        assert!(
+            num_limbs_log2_ceil + 2 * limb_bits <= F::NUM_BITS as usize - 2,
+            "limb configuration exceeds native-field multiplication budget"
+        );
         let limb_mask = (BigUint::from(1u64) << limb_bits) - 1usize;
         let p = modulus::<Fp>();
         let p_limbs = decompose_biguint(&p, num_limbs, limb_bits);
@@ -91,7 +105,7 @@ impl<'range, F: BigPrimeField, Fp: BigPrimeField> FpChip<'range, F, Fp> {
             limb_bits,
             num_limbs,
             num_limbs_bits: bit_length(num_limbs as u64),
-            num_limbs_log2_ceil: bit_length(num_limbs as u64),
+            num_limbs_log2_ceil,
             limb_bases,
             limb_base_big: BigInt::one() << limb_bits,
             limb_mask,
