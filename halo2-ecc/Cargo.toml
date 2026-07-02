@@ -37,7 +37,7 @@ criterion-macro = "0.4"
 halo2-base = { version = "=0.5.3", path = "../halo2-base", default-features = false, features = [
     "test-utils",
 ] }
-test-log = "0.2.12"
+test-log = "0.2.21"
 env_logger = "0.10.0"
 
 [features]
