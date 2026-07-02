@@ -90,18 +90,13 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
         keys: impl IntoIterator<Item = [AssignedValue<F>; KEY_COL]>,
         copy_manager: Option<&SharedCopyConstraintManager<F>>,
     ) {
-        #[cfg(not(feature = "halo2-axiom"))]
-        let keys = keys.into_iter().collect::<Vec<_>>();
         layouter
             .assign_region(
                 || "[BasicDynLookupConfig] Advice cells to lookup",
                 |mut region| {
                     self.assign_virtual_to_lookup_to_raw_from_offset(
                         &mut region,
-                        #[cfg(feature = "halo2-axiom")]
                         keys,
-                        #[cfg(not(feature = "halo2-axiom"))]
-                        keys.clone(),
                         0,
                         copy_manager,
                     );
@@ -156,18 +151,13 @@ impl<const KEY_COL: usize> BasicDynLookupConfig<KEY_COL> {
         rows: impl IntoIterator<Item = [AssignedValue<F>; KEY_COL]>,
         copy_manager: Option<&SharedCopyConstraintManager<F>>,
     ) {
-        #[cfg(not(feature = "halo2-axiom"))]
-        let rows = rows.into_iter().collect::<Vec<_>>();
         layouter
             .assign_region(
                 || "[BasicDynLookupConfig] Dynamic Lookup Table",
                 |mut region| {
                     self.assign_virtual_table_to_raw_from_offset(
                         &mut region,
-                        #[cfg(feature = "halo2-axiom")]
                         rows,
-                        #[cfg(not(feature = "halo2-axiom"))]
-                        rows.clone(),
                         0,
                         copy_manager,
                     );

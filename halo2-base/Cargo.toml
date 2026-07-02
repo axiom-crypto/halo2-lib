@@ -23,16 +23,10 @@ log = "0.4"
 getset = "0.1.2"
 ark-std = { version = "0.3.0", features = ["print-trace"], optional = true }
 
-# Use Axiom's custom halo2 monorepo for faster proving when feature = "halo2-axiom" is on
-halo2_proofs_axiom = { version = "0.5", package = "halo2-axiom", optional = true }
-# Use Axiom's CUDA halo2 prover when features = ["halo2-axiom", "cuda"] are on
+# Use Axiom's custom halo2 monorepo for faster proving
+halo2_proofs_axiom = { version = "0.5", package = "halo2-axiom" }
+# Use Axiom's CUDA halo2 prover when feature = "cuda" is on
 halo2_proofs_axiom_gpu = { package = "halo2-axiom-gpu", git = "https://github.com/axiom-crypto/halo2-gpu.git", tag = "v1.0.0-rc.0", optional = true }
-# Use PSE halo2 and halo2curves for compatibility when feature = "halo2-pse" is on
-halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v0.3.0", features = [
-    "circuit-params",
-    "derive_serde",
-], optional = true }
-
 # This is Scroll's audited poseidon circuit. We only use it for the Native Poseidon spec. We do not use the halo2 circuit at all (and it wouldn't even work because the halo2_proofs tag is not compatbile).
 # We forked it to upgrade to ff v0.13 and removed the circuit module
 poseidon-rs = { package = "poseidon-primitives", version = "=0.2.0" }
@@ -62,17 +56,15 @@ jemallocator = { version = "0.5", optional = true }
 mimalloc = { version = "0.1", default-features = false, optional = true }
 
 [features]
-default = ["halo2-axiom", "display", "test-utils"]
-asm = ["halo2_proofs_axiom?/asm", "halo2_proofs_axiom_gpu?/asm"]
+default = ["display", "test-utils"]
+asm = ["halo2_proofs_axiom/asm", "halo2_proofs_axiom_gpu?/asm"]
 dev-graph = [
-    "halo2_proofs?/dev-graph",
+    "halo2_proofs_axiom/dev-graph",
     "plotters",
-] # only works with halo2-pse for now
-halo2-pse = ["halo2_proofs/circuit-params"]
-halo2-axiom = ["halo2_proofs_axiom"]
+]
 cuda = ["halo2_proofs_axiom_gpu"]
 display = []
-profile = ["halo2_proofs_axiom?/profile", "halo2_proofs_axiom_gpu?/profile"]
+profile = ["halo2_proofs_axiom/profile", "halo2_proofs_axiom_gpu?/profile"]
 test-utils = ["dep:rand", "ark-std"]
 
 [[bench]]

@@ -1,7 +1,7 @@
 To benchmark with flamegraph:
 
 ```
-cargo bench --bench <BENCH NAME> --profile=flamegraph --no-default-features --features "halo2-axiom, jemallocator" -- --profile-time <TIME IN SECONDS>
+cargo bench --bench <BENCH NAME> --profile=flamegraph --no-default-features --features "jemallocator" -- --profile-time <TIME IN SECONDS>
 ```
 
 We will now find a file called `flamegraph.svg` in `target/criterion/<name-of-benchmark>/profile/flamegraph.svg`.
