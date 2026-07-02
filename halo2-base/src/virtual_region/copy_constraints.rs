@@ -64,14 +64,7 @@ impl<F: Field + Ord> CopyConstraintManager<F> {
         let context_cell = self.load_external_cell(assigned_cell.cell());
         let mut value = Assigned::Trivial(F::ZERO);
         assigned_cell.value().map(|v| {
-            #[cfg(feature = "halo2-axiom")]
-            {
-                value = **v;
-            }
-            #[cfg(not(feature = "halo2-axiom"))]
-            {
-                value = *v;
-            }
+            value = **v;
         });
         AssignedValue { value, cell: Some(context_cell) }
     }

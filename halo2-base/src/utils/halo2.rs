@@ -13,11 +13,7 @@ use crate::AssignedValue;
 pub use keygen::ProvingKeyGenerator;
 
 /// Raw (physical) assigned cell in Plonkish arithmetization.
-#[cfg(feature = "halo2-axiom")]
 pub type Halo2AssignedCell<'v, F> = AssignedCell<&'v Assigned<F>, F>;
-/// Raw (physical) assigned cell in Plonkish arithmetization.
-#[cfg(not(feature = "halo2-axiom"))]
-pub type Halo2AssignedCell<'v, F> = AssignedCell<Assigned<F>, F>;
 
 /// Assign advice to physical region.
 #[inline(always)]
@@ -27,22 +23,7 @@ pub fn raw_assign_advice<'v, F: Field>(
     offset: usize,
     value: Value<impl Into<Assigned<F>>>,
 ) -> Halo2AssignedCell<'v, F> {
-    #[cfg(feature = "halo2-axiom")]
-    {
-        region.assign_advice(column, offset, value)
-    }
-    #[cfg(feature = "halo2-pse")]
-    {
-        let value = value.map(|a| Into::<Assigned<F>>::into(a));
-        region
-            .assign_advice(
-                || format!("assign advice {column:?} offset {offset}"),
-                column,
-                offset,
-                || value,
-            )
-            .unwrap()
-    }
+    region.assign_advice(column, offset, value)
 }
 
 /// Assign fixed to physical region.
@@ -53,31 +34,13 @@ pub fn raw_assign_fixed<F: Field>(
     offset: usize,
     value: F,
 ) -> Cell {
-    #[cfg(feature = "halo2-axiom")]
-    {
-        region.assign_fixed(column, offset, value)
-    }
-    #[cfg(feature = "halo2-pse")]
-    {
-        region
-            .assign_fixed(
-                || format!("assign fixed {column:?} offset {offset}"),
-                column,
-                offset,
-                || Value::known(value),
-            )
-            .unwrap()
-            .cell()
-    }
+    region.assign_fixed(column, offset, value)
 }
 
 /// Constrain two physical cells to be equal.
 #[inline(always)]
 pub fn raw_constrain_equal<F: Field>(region: &mut Region<F>, left: Cell, right: Cell) {
-    #[cfg(feature = "halo2-axiom")]
     region.constrain_equal(left, right);
-    #[cfg(not(feature = "halo2-axiom"))]
-    region.constrain_equal(left, right).unwrap();
 }
 
 /// Constrains that `virtual_cell` is equal to `external_cell`. The `virtual_cell` must have
@@ -169,13 +132,7 @@ mod keygen {
         ) -> (ProvingKey<G1Affine>, serde_json::Value) {
             assert_eq!(kzg_params.k(), self.get_k());
             let circuit = self.clone().build_keygen_circuit();
-            #[cfg(feature = "halo2-axiom")]
             let pk = plonk::keygen_pk2(kzg_params, &circuit, false).unwrap();
-            #[cfg(not(feature = "halo2-axiom"))]
-            let pk = {
-                let vk = plonk::keygen_vk_custom(kzg_params, &circuit, false).unwrap();
-                plonk::keygen_pk(kzg_params, vk, &circuit).unwrap()
-            };
             let pinning = self.get_pinning_after_keygen(kzg_params, &circuit);
             (pk, serde_json::to_value(pinning).unwrap())
         }

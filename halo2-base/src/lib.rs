@@ -21,19 +21,10 @@ use mimalloc::MiMalloc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-#[cfg(all(feature = "halo2-pse", feature = "halo2-axiom"))]
-compile_error!("Cannot enable both \"halo2-pse\" and \"halo2-axiom\" features.");
-#[cfg(not(any(feature = "halo2-pse", feature = "halo2-axiom")))]
-compile_error!("Must enable exactly one of \"halo2-pse\" or \"halo2-axiom\".");
-#[cfg(all(feature = "halo2-pse", feature = "cuda"))]
-compile_error!("The \"cuda\" feature is only supported with \"halo2-axiom\".");
-
 // use gates::flex_gate::MAX_PHASE;
-#[cfg(feature = "halo2-pse")]
-pub use halo2_proofs;
-#[cfg(all(feature = "halo2-axiom", not(feature = "cuda")))]
+#[cfg(not(feature = "cuda"))]
 pub use halo2_proofs_axiom as halo2_proofs;
-#[cfg(all(feature = "halo2-axiom", feature = "cuda"))]
+#[cfg(feature = "cuda")]
 pub use halo2_proofs_axiom_gpu as halo2_proofs;
 
 use halo2_proofs::halo2curves::ff;
@@ -53,11 +44,7 @@ pub mod utils;
 pub mod virtual_region;
 
 /// Constant representing whether the Layouter calls `synthesize` once just to get region shape.
-#[cfg(feature = "halo2-axiom")]
 pub const SKIP_FIRST_PASS: bool = false;
-/// Constant representing whether the Layouter calls `synthesize` once just to get region shape.
-#[cfg(feature = "halo2-pse")]
-pub const SKIP_FIRST_PASS: bool = true;
 
 /// Convenience Enum which abstracts the scenarios under a value is added to an advice column.
 #[derive(Clone, Copy, Debug)]
