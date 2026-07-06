@@ -114,6 +114,8 @@ pub fn crt<F: BigPrimeField>(
         // transpose of:
         // | prod | -1 | a | prod - a | 1 | out | prod - a + out
         // where prod is at relative row `offset`
+
+        let start = ctx.get_offset();
         ctx.assign_region(
             [
                 Constant(-F::ONE),
@@ -126,7 +128,7 @@ pub fn crt<F: BigPrimeField>(
             [-1, 2], // note the NEGATIVE index! this is using gate overlapping with the previous inner product call
         );
         let check_cell = ctx.last().unwrap();
-        let out_cell = ctx.get(-2);
+        let out_cell = ctx.to_assigned_value(Witness(out_v), start + 4);
 
         quot_assigned.push(new_quot_cell);
         out_assigned.push(out_cell);

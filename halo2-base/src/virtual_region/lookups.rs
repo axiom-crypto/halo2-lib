@@ -11,7 +11,7 @@ use crate::halo2_proofs::{
 use crate::utils::halo2::{constrain_virtual_equals_external, raw_assign_advice};
 use crate::{AssignedValue, ContextTag};
 
-use super::copy_constraints::SharedCopyConstraintManager;
+use super::copy_constraints::{CopyConstraintManagerKind, SharedCopyConstraintManager};
 use super::manager::VirtualRegionManager;
 
 /// Basic dynamic lookup table gadget.

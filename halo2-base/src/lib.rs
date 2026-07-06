@@ -6,6 +6,7 @@
 #![warn(missing_docs)]
 
 use getset::CopyGetters;
+use halo2_proofs_axiom_gpu::plonk::GpuAssigned;
 use itertools::Itertools;
 // Different memory allocator options:
 #[cfg(feature = "jemallocator")]
@@ -14,12 +15,12 @@ use jemallocator::Jemalloc;
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
-// mimalloc is fastest on Mac M2
-#[cfg(feature = "mimalloc")]
-use mimalloc::MiMalloc;
-#[cfg(feature = "mimalloc")]
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
+// // mimalloc is fastest on Mac M2
+// #[cfg(feature = "mimalloc")]
+// use mimalloc::MiMalloc;
+// #[cfg(feature = "mimalloc")]
+// #[global_allocator]
+// static GLOBAL: MiMalloc = MiMalloc;
 
 // use gates::flex_gate::MAX_PHASE;
 #[cfg(not(feature = "cuda"))]
@@ -45,6 +46,18 @@ pub mod virtual_region;
 
 /// Constant representing whether the Layouter calls `synthesize` once just to get region shape.
 pub const SKIP_FIRST_PASS: bool = false;
+
+use std::ffi::c_void;
+use std::ops::{Deref, DerefMut};
+
+use crate::virtual_region::copy_constraints::DummyCopyConstraintManager;
+
+#[link(name = "cudart")]
+unsafe extern "C" {
+    pub fn cudaMallocHost(ptr: *mut *const c_void, size: u64) -> i32;
+    pub fn cudaFreeHost(ptr: *const c_void) -> i32;
+
+}
 
 /// Convenience Enum which abstracts the scenarios under a value is added to an advice column.
 #[derive(Clone, Copy, Debug)]
@@ -149,6 +162,245 @@ impl<F: ScalarField> AsRef<AssignedValue<F>> for AssignedValue<F> {
     }
 }
 
+pub struct PageLockedVec<T>(Vec<T>);
+
+impl<T> Deref for PageLockedVec<T> {
+    type Target = [T];
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for PageLockedVec<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T> PageLockedVec<T> {
+    pub fn new_with_size(size: usize) -> Self {
+        unsafe {
+            let mut ptr = std::ptr::null();
+
+            assert!(cudaMallocHost(&mut ptr as *mut *const c_void, size as u64) == 0);
+
+            PageLockedVec(Vec::from_raw_parts(ptr as *mut T, 0, size))
+        }
+    }
+}
+
+impl<T> Drop for PageLockedVec<T> {
+    fn drop(&mut self) {
+        let mut v = vec![];
+        std::mem::swap(&mut v, &mut self.0);
+        let ptr = v.leak().as_ptr();
+        unsafe {
+            assert!(cudaFreeHost(ptr as *const c_void) == 0);
+        }
+    }
+}
+
+pub trait ContextKind<F: ScalarField> {
+    /// Concrete copy-constraint manager backing this context.
+    type CopyManager: virtual_region::copy_constraints::CopyConstraintManagerKind<F>;
+
+    fn assign_cell(&mut self, input: impl Into<QuantumCell<F>>);
+    fn last(&self) -> Option<AssignedValue<F>>;
+    fn constrain_equal(&mut self, a: &AssignedValue<F>, b: &AssignedValue<F>);
+    fn assign_region<Q>(
+        &mut self,
+        inputs: impl IntoIterator<Item = Q>,
+        gate_offsets: impl IntoIterator<Item = isize>,
+    ) where
+        Q: Into<QuantumCell<F>>;
+
+    fn assign_region_last<Q>(
+        &mut self,
+        inputs: impl IntoIterator<Item = Q>,
+        gate_offsets: impl IntoIterator<Item = isize>,
+    ) -> AssignedValue<F>
+    where
+        Q: Into<QuantumCell<F>>,
+    {
+        self.assign_region(inputs, gate_offsets);
+        self.last().unwrap()
+    }
+
+    fn assign_region_smart<Q>(
+        &mut self,
+        inputs: impl IntoIterator<Item = Q>,
+        gate_offsets: impl IntoIterator<Item = isize>,
+        equality_offsets: impl IntoIterator<Item = (isize, isize)>,
+        external_equality: impl IntoIterator<Item = (Option<ContextCell>, isize)>,
+    ) where
+        Q: Into<QuantumCell<F>>;
+
+    fn get_offset(&self) -> usize;
+    fn load_witness(&mut self, witness: F) -> AssignedValue<F>;
+    fn load_constant(&mut self, c: F) -> AssignedValue<F>;
+    fn load_zero(&mut self) -> AssignedValue<F>;
+    fn to_assigned_value(&self, qc: impl Into<QuantumCell<F>>, offset: usize) -> AssignedValue<F>;
+
+    fn witness_gen_only(&self) -> bool;
+    fn phase(&self) -> usize;
+    fn tag(&self) -> ContextTag;
+
+    /// Provides `&mut` access to the underlying copy-constraint manager. For
+    /// contexts that hold the manager behind a lock, this method takes the lock
+    /// only for the duration of `f`.
+    fn with_copy_manager<R>(&mut self, f: impl FnOnce(&mut Self::CopyManager) -> R) -> R;
+}
+
+#[derive(Clone, Debug)]
+pub struct PagedWitnessContext<F: ScalarField> {
+    break_points: Vec<usize>,
+    break_idx: usize,
+    advice: Vec<GpuAssigned<F>>,
+    idx: usize,
+}
+
+impl<F: ScalarField> PagedWitnessContext<F> {
+    pub fn new(break_points: Vec<usize>, size: usize) -> Self {
+        PagedWitnessContext {
+            break_points,
+            break_idx: 0,
+            advice: vec![F::ZERO.into(); size],
+            idx: 0,
+        }
+    }
+
+    pub fn push_advice(&mut self, val: impl Into<GpuAssigned<F>>) {
+        let val = val.into();
+        self.advice[self.idx] = val;
+        let idx = self.idx;
+        self.idx += 1;
+        if self.break_points.get(self.break_idx) == Some(&idx) {
+            self.advice[self.idx] = val;
+            self.idx += 1;
+            self.break_idx += 1;
+        }
+    }
+
+    pub fn get_advice(self) -> Vec<GpuAssigned<F>> {
+        self.advice
+    }
+}
+
+/// Static `type_id` returned by [`PagedWitnessContext::tag`]. All paged-witness
+/// contexts share the same tag because they operate purely in witness-gen mode
+/// where the tag is only used to route lookups to the right per-phase manager.
+const PAGED_WITNESS_TYPE_ID: &str = "halo2-base:PagedWitnessContext";
+
+impl<F: ScalarField> ContextKind<F> for PagedWitnessContext<F> {
+    type CopyManager = DummyCopyConstraintManager<F>;
+
+    fn assign_cell(&mut self, input: impl Into<QuantumCell<F>>) {
+        match input.into() {
+            QuantumCell::Existing(acell) => {
+                self.push_advice(acell.value);
+            }
+            QuantumCell::Witness(val) => {
+                self.push_advice(GpuAssigned::Trivial(val));
+            }
+            QuantumCell::WitnessFraction(val) => {
+                self.push_advice(val);
+            }
+            QuantumCell::Constant(c) => {
+                self.push_advice(GpuAssigned::Trivial(c));
+            }
+        }
+    }
+
+    fn last(&self) -> Option<AssignedValue<F>> {
+        if self.idx == 0 {
+            return None;
+        }
+
+        let value = match self.advice[self.idx - 1] {
+            GpuAssigned::Zero => Assigned::Zero,
+            GpuAssigned::Trivial(a) => Assigned::Trivial(a),
+            GpuAssigned::Rational(a, b) => Assigned::Rational(a, b),
+        };
+
+        Some(AssignedValue { value, cell: None })
+    }
+
+    fn constrain_equal(&mut self, _a: &AssignedValue<F>, _b: &AssignedValue<F>) {
+        // witness_gen_only: copy constraints are only relevant during keygen.
+    }
+
+    fn assign_region<Q>(
+        &mut self,
+        inputs: impl IntoIterator<Item = Q>,
+        _gate_offsets: impl IntoIterator<Item = isize>,
+    ) where
+        Q: Into<QuantumCell<F>>,
+    {
+        for input in inputs {
+            self.assign_cell(input);
+        }
+    }
+
+    fn assign_region_smart<Q>(
+        &mut self,
+        inputs: impl IntoIterator<Item = Q>,
+        _gate_offsets: impl IntoIterator<Item = isize>,
+        _equality_offsets: impl IntoIterator<Item = (isize, isize)>,
+        _external_equality: impl IntoIterator<Item = (Option<ContextCell>, isize)>,
+    ) where
+        Q: Into<QuantumCell<F>>,
+    {
+        for input in inputs {
+            self.assign_cell(input);
+        }
+    }
+
+    fn get_offset(&self) -> usize {
+        self.advice.len()
+    }
+
+    fn load_witness(&mut self, witness: F) -> AssignedValue<F> {
+        self.push_advice(GpuAssigned::Trivial(witness));
+        AssignedValue { value: Assigned::Trivial(witness), cell: None }
+    }
+
+    fn load_constant(&mut self, c: F) -> AssignedValue<F> {
+        self.push_advice(GpuAssigned::Trivial(c));
+        AssignedValue { value: Assigned::Trivial(c), cell: None }
+    }
+
+    fn load_zero(&mut self) -> AssignedValue<F> {
+        self.load_constant(F::ZERO)
+    }
+
+    fn to_assigned_value(&self, qc: impl Into<QuantumCell<F>>, _offset: usize) -> AssignedValue<F> {
+        let value = match qc.into() {
+            QuantumCell::Existing(acell) => acell.value,
+            QuantumCell::Witness(val) => Assigned::Trivial(val),
+            QuantumCell::WitnessFraction(val) => val,
+            QuantumCell::Constant(c) => Assigned::Trivial(c),
+        };
+        AssignedValue { value, cell: None }
+    }
+
+    fn witness_gen_only(&self) -> bool {
+        true
+    }
+
+    fn phase(&self) -> usize {
+        0
+    }
+
+    fn tag(&self) -> ContextTag {
+        (PAGED_WITNESS_TYPE_ID, 0)
+    }
+
+    fn with_copy_manager<R>(&mut self, f: impl FnOnce(&mut Self::CopyManager) -> R) -> R {
+        let mut dummy = DummyCopyConstraintManager::<F>::default();
+        f(&mut dummy)
+    }
+}
+
 /// Represents a single thread of an execution trace.
 /// * We keep the naming [Context] for historical reasons.
 ///
@@ -171,7 +423,7 @@ pub struct Context<F: ScalarField> {
     context_id: usize,
 
     /// Single column of advice cells.
-    pub advice: Vec<Assigned<F>>,
+    pub(crate) advice: Vec<Assigned<F>>,
 
     /// Slight optimization: since zero is so commonly used, keep a reference to the zero cell.
     zero_cell: Option<AssignedValue<F>>,
@@ -223,6 +475,13 @@ impl<F: ScalarField> Context<F> {
         (self.type_id, self.context_id)
     }
 
+    /// Returns the current offset in the `advice` column (equivalently, the number of cells
+    /// assigned so far). Callers use this after [`Self::assign_region`] together with
+    /// [`Self::to_assigned_value`] to reconstruct an [`AssignedValue`] without re-reading `advice`.
+    pub fn get_offset(&self) -> usize {
+        self.advice.len()
+    }
+
     fn latest_cell(&self) -> ContextCell {
         ContextCell::new(self.type_id, self.context_id, self.advice.len() - 1)
     }
@@ -268,25 +527,51 @@ impl<F: ScalarField> Context<F> {
         })
     }
 
-    /// Returns the [AssignedValue] of the cell at the given `offset` in the `advice` column of [Context]
-    /// * `offset`: the offset of the cell to be fetched
-    ///     * `offset` may be negative indexing from the end of the column (e.g., `-1` is the last cell)
-    /// * Assumes `offset` is a valid index in `advice`;
-    ///     * `0` <= `offset` < `advice.len()` (or `advice.len() + offset >= 0` if `offset` is negative)
-    pub fn get(&self, offset: isize) -> AssignedValue<F> {
-        let offset = if offset < 0 {
-            self.advice.len().wrapping_add_signed(offset)
-        } else {
-            offset as usize
+    /// Constructs an [AssignedValue] locally from a [QuantumCell] and an absolute `offset`,
+    /// without reading `advice`. Callers use this after [`Self::assign_region`] when they
+    /// already know the value being assigned and its position in the region, avoiding
+    /// the `advice`-index dereference done by [`Self::get`].
+    ///
+    /// * `qc`: the [QuantumCell] variant that was pushed at `offset`.
+    /// * `offset`: the absolute index within the `advice` column of this [Context].
+    pub fn to_assigned_value(
+        &self,
+        qc: impl Into<QuantumCell<F>>,
+        offset: usize,
+    ) -> AssignedValue<F> {
+        let value = match qc.into() {
+            QuantumCell::Existing(acell) => acell.value,
+            QuantumCell::Witness(val) => Assigned::Trivial(val),
+            QuantumCell::WitnessFraction(val) => val,
+            QuantumCell::Constant(c) => Assigned::Trivial(c),
         };
-        assert!(offset < self.advice.len());
         let cell = (!self.witness_gen_only).then_some(ContextCell::new(
             self.type_id,
             self.context_id,
             offset,
         ));
-        AssignedValue { value: self.advice[offset], cell }
+        AssignedValue { value, cell }
     }
+
+    // Returns the [AssignedValue] of the cell at the given `offset` in the `advice` column of [Context]
+    // * `offset`: the offset of the cell to be fetched
+    //     * `offset` may be negative indexing from the end of the column (e.g., `-1` is the last cell)
+    // * Assumes `offset` is a valid index in `advice`;
+    //     * `0` <= `offset` < `advice.len()` (or `advice.len() + offset >= 0` if `offset` is negative)
+    // pub fn get(&self, offset: isize) -> AssignedValue<F> {
+    //     let offset = if offset < 0 {
+    //         self.advice.len().wrapping_add_signed(offset)
+    //     } else {
+    //         offset as usize
+    //     };
+    //     assert!(offset < self.advice.len());
+    //     let cell = (!self.witness_gen_only).then_some(ContextCell::new(
+    //         self.type_id,
+    //         self.context_id,
+    //         offset,
+    //     ));
+    //     AssignedValue { value: self.advice[offset], cell }
+    // }
 
     /// Creates an equality constraint between two `advice` cells.
     /// * `a`: the first `advice` cell to be constrained equal
@@ -471,5 +756,79 @@ impl<F: ScalarField> Context<F> {
         let rand1 = self.load_witness(F::random(OsRng));
         let rand2 = self.load_witness(F::random(OsRng));
         self.constrain_equal(&rand1, &rand2);
+    }
+}
+
+impl<F: ScalarField> ContextKind<F> for Context<F> {
+    type CopyManager = virtual_region::copy_constraints::CopyConstraintManager<F>;
+
+    fn assign_cell(&mut self, input: impl Into<QuantumCell<F>>) {
+        <Self>::assign_cell(self, input)
+    }
+
+    fn last(&self) -> Option<AssignedValue<F>> {
+        <Self>::last(self)
+    }
+
+    fn constrain_equal(&mut self, a: &AssignedValue<F>, b: &AssignedValue<F>) {
+        <Self>::constrain_equal(self, a, b)
+    }
+
+    fn assign_region<Q>(
+        &mut self,
+        inputs: impl IntoIterator<Item = Q>,
+        gate_offsets: impl IntoIterator<Item = isize>,
+    ) where
+        Q: Into<QuantumCell<F>>,
+    {
+        <Self>::assign_region(self, inputs, gate_offsets)
+    }
+
+    fn assign_region_smart<Q>(
+        &mut self,
+        inputs: impl IntoIterator<Item = Q>,
+        gate_offsets: impl IntoIterator<Item = isize>,
+        equality_offsets: impl IntoIterator<Item = (isize, isize)>,
+        external_equality: impl IntoIterator<Item = (Option<ContextCell>, isize)>,
+    ) where
+        Q: Into<QuantumCell<F>>,
+    {
+        <Self>::assign_region_smart(self, inputs, gate_offsets, equality_offsets, external_equality)
+    }
+
+    fn get_offset(&self) -> usize {
+        <Self>::get_offset(self)
+    }
+
+    fn load_witness(&mut self, witness: F) -> AssignedValue<F> {
+        <Self>::load_witness(self, witness)
+    }
+
+    fn load_constant(&mut self, c: F) -> AssignedValue<F> {
+        <Self>::load_constant(self, c)
+    }
+
+    fn load_zero(&mut self) -> AssignedValue<F> {
+        <Self>::load_zero(self)
+    }
+
+    fn to_assigned_value(&self, qc: impl Into<QuantumCell<F>>, offset: usize) -> AssignedValue<F> {
+        <Self>::to_assigned_value(self, qc, offset)
+    }
+
+    fn witness_gen_only(&self) -> bool {
+        <Self>::witness_gen_only(self)
+    }
+
+    fn phase(&self) -> usize {
+        <Self>::phase(self)
+    }
+
+    fn tag(&self) -> ContextTag {
+        <Self>::tag(self)
+    }
+
+    fn with_copy_manager<R>(&mut self, f: impl FnOnce(&mut Self::CopyManager) -> R) -> R {
+        f(&mut self.copy_manager.lock().unwrap())
     }
 }

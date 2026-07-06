@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use getset::{Getters, MutGetters, Setters};
+use halo2_proofs_axiom::plonk::Circuit;
 use itertools::Itertools;
 
 use crate::{
@@ -23,13 +24,102 @@ use crate::{
         lookups::LookupAnyManager,
         manager::VirtualRegionManager,
     },
-    AssignedValue, Context,
+    AssignedValue, Context, PagedWitnessContext,
 };
 
 use super::BaseCircuitParams;
+use tracing::info;
 
 /// Keeping the naming `RangeCircuitBuilder` for backwards compatibility.
 pub type RangeCircuitBuilder<F> = BaseCircuitBuilder<F>;
+
+#[derive(Clone, Debug)]
+pub struct WitnessCircuitBuilder<F: ScalarField> {
+    pub main: PagedWitnessContext<F>,
+
+    pub lookup_manager: [LookupAnyManager<F, 1>; MAX_PHASE],
+    pub config_params: BaseCircuitParams,
+    pub assigned_instances: Vec<Vec<AssignedValue<F>>>,
+}
+
+impl<F: ScalarField> WitnessCircuitBuilder<F> {
+    pub fn new(break_points: Vec<usize>, config_params: BaseCircuitParams, size: usize) -> Self {
+        let core = MultiPhaseCoreManager::new(true);
+        let lookup_manager =
+            [(); MAX_PHASE].map(|_| LookupAnyManager::new(true, core.copy_manager.clone()));
+        Self {
+            main: PagedWitnessContext::new(break_points, size),
+            lookup_manager,
+            config_params,
+            assigned_instances: vec![],
+        }
+    }
+    pub fn main(&mut self) -> &mut PagedWitnessContext<F> {
+        &mut self.main
+    }
+
+    pub fn range_chip(&self) -> RangeChip<F> {
+        RangeChip::new(
+            self.config_params.lookup_bits.expect("lookup bits not set"),
+            self.lookup_manager.clone(),
+        )
+    }
+
+    pub fn assign_lookups_to_advice(&mut self, base_config: &super::BaseConfig<F>, phase: usize) {
+        match &base_config.base {
+            crate::gates::circuit::MaybeRangeConfig::WithRange(config) => {
+                let lookup_manager = self.lookup_manager.get(phase).expect("too many phases");
+                let lookup_cols = config
+                    .lookup_advice
+                    .get(phase)
+                    .expect("No special lookup advice columns")
+                    .iter()
+                    .map(|c| [*c])
+                    .collect_vec();
+                for col in lookup_cols.iter() {
+                    info!("lookup_col {}", col[0].index());
+                }
+
+                assert!(!lookup_cols.is_empty(), "range lookups require lookup advice columns");
+                let lookup_rows = lookup_manager.total_rows();
+                info!("lookup manager total rows {}", lookup_rows);
+                let assigned_rows = lookup_rows.div_ceil(lookup_cols.len());
+                info!("lookup manager assigned rows {}", assigned_rows);
+                assert!(
+                    assigned_rows <= config.gate.max_rows,
+                    "range lookups would be assigned to unusable rows"
+                );
+
+                let cells_to_lookup = lookup_manager.cells_to_lookup.lock().unwrap();
+                // Copy the cells to the config columns, going left to right, then top to bottom.
+                // Will panic if out of rows
+                let mut lookup_offset = 0;
+                let mut lookup_col = 0;
+                for advices in cells_to_lookup.iter().flat_map(|(_, advices)| advices) {
+                    if lookup_col >= lookup_cols.len() {
+                        lookup_col = 0;
+                        lookup_offset += 1;
+                    }
+                    for (advice, &column) in advices.iter().zip(lookup_cols[lookup_col].iter()) {
+                        // let bcell = raw_assign_advice(
+                        //     region,
+                        //     column,
+                        //     lookup_offset,
+                        //     Value::known(advice.value),
+                        // );
+
+                        self.main.advice
+                            [column.index() * (1 << self.config_params.k) + lookup_offset] =
+                            advice.value.into();
+                    }
+
+                    lookup_col += 1;
+                }
+            }
+            _ => {}
+        }
+    }
+}
 
 /// A circuit builder is a collection of virtual region managers that together assign virtual
 /// regions into a single physical circuit.
@@ -363,9 +453,14 @@ impl<F: ScalarField> BaseCircuitBuilder<F> {
                 .iter()
                 .map(|c| [*c])
                 .collect_vec();
+            for col in lookup_cols.iter() {
+                info!("lookup_col {}", col[0].index());
+            }
             assert!(!lookup_cols.is_empty(), "range lookups require lookup advice columns");
             let lookup_rows = lookup_manager.total_rows();
+            info!("lookup manager total rows {}", lookup_rows);
             let assigned_rows = lookup_rows.div_ceil(lookup_cols.len());
+            info!("lookup manager assigned rows {}", assigned_rows);
             assert!(
                 assigned_rows <= config.gate.max_rows,
                 "range lookups would be assigned to unusable rows"

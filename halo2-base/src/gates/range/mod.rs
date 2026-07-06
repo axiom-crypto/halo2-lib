@@ -12,7 +12,7 @@ use crate::{
         BigPrimeField, ScalarField,
     },
     virtual_region::lookups::LookupAnyManager,
-    AssignedValue, Context,
+    AssignedValue, Context, ContextKind,
     QuantumCell::{self, Constant, Existing, Witness},
 };
 
@@ -186,7 +186,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// Inputs:
     /// * `a`: [AssignedValue] value to be range checked
     /// * `range_bits`: number of bits in the range
-    fn range_check(&self, ctx: &mut Context<F>, a: AssignedValue<F>, range_bits: usize);
+    fn range_check(&self, ctx: &mut impl ContextKind<F>, a: AssignedValue<F>, range_bits: usize);
 
     /// Constrains that 'a' is less than 'b'.
     ///
@@ -198,7 +198,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// * num_bits: number of bits used to represent the values of `a` and `b`
     fn check_less_than(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
         num_bits: usize,
@@ -211,7 +211,7 @@ pub trait RangeInstructions<F: ScalarField> {
     ///
     /// ## Assumptions
     /// * `ceil(b.bits() / lookup_bits) * lookup_bits < F::CAPACITY`
-    fn check_less_than_safe(&self, ctx: &mut Context<F>, a: AssignedValue<F>, b: u64) {
+    fn check_less_than_safe(&self, ctx: &mut impl ContextKind<F>, a: AssignedValue<F>, b: u64) {
         let range_bits = bit_length(b).div_ceil(self.lookup_bits()) * self.lookup_bits();
 
         self.range_check(ctx, a, range_bits);
@@ -225,8 +225,12 @@ pub trait RangeInstructions<F: ScalarField> {
     ///
     /// ## Assumptions
     /// * `ceil(b.bits() / lookup_bits) * lookup_bits < F::CAPACITY`
-    fn check_big_less_than_safe(&self, ctx: &mut Context<F>, a: AssignedValue<F>, b: BigUint)
-    where
+    fn check_big_less_than_safe(
+        &self,
+        ctx: &mut impl ContextKind<F>,
+        a: AssignedValue<F>,
+        b: BigUint,
+    ) where
         F: BigPrimeField,
     {
         let range_bits = (b.bits() as usize).div_ceil(self.lookup_bits()) * self.lookup_bits();
@@ -243,7 +247,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// * num_bits: number of bits to represent the values
     fn is_less_than(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
         num_bits: usize,
@@ -257,7 +261,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// * b: upper bound as [u64] value
     fn is_less_than_safe(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: AssignedValue<F>,
         b: u64,
     ) -> AssignedValue<F> {
@@ -277,7 +281,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// For the current implementation using `is_less_than`, we require `(ceil(b.bits() / lookup_bits) + 1) * lookup_bits <= F::CAPACITY`
     fn is_big_less_than_safe(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: AssignedValue<F>,
         b: BigUint,
     ) -> AssignedValue<F>
@@ -302,7 +306,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// * the bounds on `b`, quotient, and remainder imply `b * quotient + remainder < F::MODULUS`
     fn div_mod(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<BigUint>,
         a_num_bits: usize,
@@ -315,10 +319,14 @@ pub trait RangeInstructions<F: ScalarField> {
         assert_div_mod_no_wrap::<F>(&b, a_num_bits);
         let a_val = fe_to_biguint(a.value());
         let (div, rem) = a_val.div_mod_floor(&b);
-        let [div, rem] = [div, rem].map(|v| biguint_to_fe(&v));
-        ctx.assign_region([Witness(rem), Constant(biguint_to_fe(&b)), Witness(div), a], [0]);
-        let rem = ctx.get(-4);
-        let div = ctx.get(-2);
+        let [div_val, rem_val] = [div, rem].map(|v| biguint_to_fe(&v));
+        let start = ctx.get_offset();
+        ctx.assign_region(
+            [Witness(rem_val), Constant(biguint_to_fe(&b)), Witness(div_val), a],
+            [0],
+        );
+        let rem = ctx.to_assigned_value(Witness(rem_val), start);
+        let div = ctx.to_assigned_value(Witness(div_val), start + 2);
         // Constrain that a_num_bits fulfills `div < 2 ** a_num_bits / b`.
         self.check_big_less_than_safe(
             ctx,
@@ -354,7 +362,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// * the native products used by the split division do not wrap in `F`
     fn div_mod_var(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
         a_num_bits: usize,
@@ -380,8 +388,9 @@ pub trait RangeInstructions<F: ScalarField> {
 
         let a = a.into();
         let b = b.into();
+        let b_offset = ctx.get_offset();
         ctx.assign_cell(b);
-        let b = ctx.get(-1);
+        let b = ctx.to_assigned_value(b, b_offset);
         self.range_check(ctx, b, b_num_bits);
         let a_val = fe_to_biguint(a.value());
         let b_val = fe_to_biguint(b.value());
@@ -390,12 +399,23 @@ pub trait RangeInstructions<F: ScalarField> {
         let (div_hi, div_lo) = div.div_mod_floor(&x);
 
         let x_fe = self.gate().pow_of_two()[b_num_bits];
-        let [div, div_hi, div_lo, rem] = [div, div_hi, div_lo, rem].map(|v| biguint_to_fe(&v));
+        let [div_val, div_hi_val, div_lo_val, rem_val] =
+            [div, div_hi, div_lo, rem].map(|v| biguint_to_fe(&v));
+        let start = ctx.get_offset();
         ctx.assign_region(
-            [Witness(div_lo), Witness(div_hi), Constant(x_fe), Witness(div), Witness(rem)],
+            [
+                Witness(div_lo_val),
+                Witness(div_hi_val),
+                Constant(x_fe),
+                Witness(div_val),
+                Witness(rem_val),
+            ],
             [0],
         );
-        let [div_lo, div_hi, div, rem] = [-5, -4, -2, -1].map(|i| ctx.get(i));
+        let div_lo = ctx.to_assigned_value(Witness(div_lo_val), start);
+        let div_hi = ctx.to_assigned_value(Witness(div_hi_val), start + 1);
+        let div = ctx.to_assigned_value(Witness(div_val), start + 3);
+        let rem = ctx.to_assigned_value(Witness(rem_val), start + 4);
         self.range_check(ctx, div_lo, b_num_bits);
         if a_num_bits <= b_num_bits {
             self.gate().assert_is_const(ctx, &div_hi, &F::ZERO);
@@ -425,7 +445,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// * limb_bits: number of bits in a limb
     fn get_last_bit(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: AssignedValue<F>,
         limb_bits: usize,
     ) -> AssignedValue<F> {
@@ -434,9 +454,10 @@ pub trait RangeInstructions<F: ScalarField> {
         let two = F::from(2u64);
         let h_v = F::from_bytes_le(&(a_big >> 1usize).to_bytes_le());
 
+        let start = ctx.get_offset();
         ctx.assign_region([Witness(bit_v), Witness(h_v), Constant(two), Existing(a)], [0]);
-        let half = ctx.get(-3);
-        let bit = ctx.get(-4);
+        let bit = ctx.to_assigned_value(Witness(bit_v), start);
+        let half = ctx.to_assigned_value(Witness(h_v), start + 1);
 
         self.range_check(ctx, half, limb_bits - 1);
         self.gate().assert_bit(ctx, bit);
@@ -488,7 +509,7 @@ impl<F: ScalarField> RangeChip<F> {
         Self { gate, lookup_bits, lookup_manager, limb_bases }
     }
 
-    fn add_cell_to_lookup(&self, ctx: &Context<F>, a: AssignedValue<F>) {
+    fn add_cell_to_lookup(&self, ctx: &impl ContextKind<F>, a: AssignedValue<F>) {
         let phase = ctx.phase();
         let manager = &self.lookup_manager[phase];
         manager.add_lookup(ctx.tag(), [a]);
@@ -511,7 +532,7 @@ impl<F: ScalarField> RangeChip<F> {
     /// * `ceil(range_bits / lookup_bits) * lookup_bits <= F::CAPACITY`
     fn _range_check(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: AssignedValue<F>,
         range_bits: usize,
     ) -> AssignedValue<F> {
@@ -533,16 +554,23 @@ impl<F: ScalarField> RangeChip<F> {
             let limbs = decompose_fe_to_u64_limbs(a.value(), num_limbs, self.lookup_bits)
                 .into_iter()
                 .map(|x| Witness(F::from(x)));
-            let row_offset = ctx.advice.len() as isize;
-            let acc = self.gate.inner_product(ctx, limbs, self.limb_bases[..num_limbs].to_vec());
+            let row_offset = ctx.get_offset();
+            let (_, cells) =
+                self.gate.inner_product_simple(ctx, limbs, self.limb_bases[..num_limbs].to_vec());
             // the inner product above must equal `a`
-            ctx.constrain_equal(&a, &acc);
+            ctx.constrain_equal(&a, &ctx.last().unwrap());
             // we fetch the cells to lookup by getting the indices where `limbs` were assigned in `inner_product`. Because `limb_bases[0]` is 1, the progression of indices is 0,1,4,...,4+3*i
-            self.add_cell_to_lookup(ctx, ctx.get(row_offset));
+            self.add_cell_to_lookup(ctx, ctx.to_assigned_value(cells[0], row_offset));
             for i in 0..num_limbs - 1 {
-                self.add_cell_to_lookup(ctx, ctx.get(row_offset + 1 + 3 * i as isize));
+                self.add_cell_to_lookup(
+                    ctx,
+                    ctx.to_assigned_value(cells[1 + 3 * i], row_offset + 1 + 3 * i),
+                );
             }
-            ctx.get(row_offset + 1 + 3 * (num_limbs - 2) as isize)
+            ctx.to_assigned_value(
+                cells[1 + 3 * (num_limbs - 2)],
+                row_offset + 1 + 3 * (num_limbs - 2),
+            )
         };
 
         // additional constraints for the last limb if rem_bits != 0
@@ -589,7 +617,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
     ///
     /// # Assumptions
     /// * `ceil(range_bits / lookup_bits) * lookup_bits <= F::CAPACITY`
-    fn range_check(&self, ctx: &mut Context<F>, a: AssignedValue<F>, range_bits: usize) {
+    fn range_check(&self, ctx: &mut impl ContextKind<F>, a: AssignedValue<F>, range_bits: usize) {
         self._range_check(ctx, a, range_bits);
     }
 
@@ -603,7 +631,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
     /// * num_bits: number of bits to represent the values
     fn check_less_than(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
         num_bits: usize,
@@ -617,9 +645,10 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         let pow_of_two = self.gate.pow_of_two[num_bits];
         let check_cell = {
             let shift_a_val = pow_of_two + a.value();
+            let diff_val = shift_a_val - b.value();
             // | a + 2^(num_bits) - b | b | 1 | a + 2^(num_bits) | - 2^(num_bits) | 1 | a |
             let cells = [
-                Witness(shift_a_val - b.value()),
+                Witness(diff_val),
                 b,
                 Constant(F::ONE),
                 Witness(shift_a_val),
@@ -627,8 +656,9 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
                 Constant(F::ONE),
                 a,
             ];
+            let start = ctx.get_offset();
             ctx.assign_region(cells, [0, 3]);
-            ctx.get(-7)
+            ctx.to_assigned_value(Witness(diff_val), start)
         };
 
         self.range_check(ctx, check_cell, num_bits);
@@ -645,7 +675,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
     /// * (`ceil(num_bits / lookup_bits) + 1) * lookup_bits <= F::CAPACITY`
     fn is_less_than(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
         num_bits: usize,
@@ -664,6 +694,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         let shift_a_val = pow_padded + a.value();
         let shifted_val = shift_a_val - b.value();
         let shifted_cell = {
+            let start = ctx.get_offset();
             ctx.assign_region(
                 [
                     Witness(shifted_val),
@@ -676,7 +707,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
                 ],
                 [0, 3],
             );
-            ctx.get(-7)
+            ctx.to_assigned_value(Witness(shifted_val), start)
         };
 
         // check whether a - b + 2^padded_bits < 2^padded_bits ?

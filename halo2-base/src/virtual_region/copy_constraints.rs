@@ -1,15 +1,18 @@
 use std::collections::{BTreeMap, HashMap};
+use std::marker::PhantomData;
 use std::ops::DerefMut;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use itertools::Itertools;
 use rayon::slice::ParallelSliceMut;
+use rustc_hash::FxHashMap;
 
 use crate::halo2_proofs::{
     circuit::{Cell, Region},
     plonk::{Assigned, Column, Fixed},
 };
 use crate::utils::halo2::{raw_assign_fixed, raw_constrain_equal, Halo2AssignedCell};
+use crate::utils::ScalarField;
 use crate::AssignedValue;
 use crate::{ff::Field, ContextCell};
 
@@ -41,46 +44,23 @@ pub struct CopyConstraintManager<F: Field + Ord> {
 
     // In circuit assignments
     /// Advice assignments, mapping from virtual [ContextCell] to assigned physical [Cell]
-    pub assigned_advices: HashMap<ContextCell, Cell>,
+    pub assigned_advices: FxHashMap<ContextCell, Cell>,
     /// Constant assignments, (key = constant, value = [Cell])
     pub assigned_constants: BTreeMap<F, Cell>,
     /// Flag for whether `assign_raw` has been called, for safety only.
     assigned: OnceLock<()>,
 }
 
+pub trait CopyConstraintManagerKind<F: Field + Ord> {
+    fn num_distinct_constants(&self) -> usize;
+    fn mock_external_assigned(&mut self, v: F) -> AssignedValue<F>;
+    fn load_external_assigned(&mut self, assigned_cell: Halo2AssignedCell<F>) -> AssignedValue<F>;
+    fn load_external_cell(&mut self, cell: Cell) -> ContextCell;
+    fn clear(&mut self);
+    fn push_constant_equality(&mut self, constant: F, cell: ContextCell);
+}
+
 impl<F: Field + Ord> CopyConstraintManager<F> {
-    /// Returns the number of distinct constants used.
-    pub fn num_distinct_constants(&self) -> usize {
-        self.constant_equalities.iter().map(|(x, _)| x).sorted().dedup().count()
-    }
-
-    /// Adds external raw [Halo2AssignedCell] to `self.assigned_advices` and returns a new virtual [AssignedValue]
-    /// that can be used in any virtual region. No copy constraint is imposed, as the virtual cell "points" to the
-    /// raw assigned cell. The returned [ContextCell] will have `type_id` the `TypeId::of::<Cell>()`.
-    pub fn load_external_assigned(
-        &mut self,
-        assigned_cell: Halo2AssignedCell<F>,
-    ) -> AssignedValue<F> {
-        let context_cell = self.load_external_cell(assigned_cell.cell());
-        let mut value = Assigned::Trivial(F::ZERO);
-        assigned_cell.value().map(|v| {
-            value = **v;
-        });
-        AssignedValue { value, cell: Some(context_cell) }
-    }
-
-    /// Adds external raw Halo2 cell to `self.assigned_advices` and returns a new virtual cell that can be
-    /// used as a tag (but will not be re-assigned). The returned [ContextCell] will have `type_id` the `TypeId::of::<Cell>()`.
-    pub fn load_external_cell(&mut self, cell: Cell) -> ContextCell {
-        self.load_external_cell_impl(Some(cell))
-    }
-
-    /// Mock to load an external cell for base circuit simulation. If any mock external cell is loaded, calling `assign_raw` will panic.
-    pub fn mock_external_assigned(&mut self, v: F) -> AssignedValue<F> {
-        let context_cell = self.load_external_cell_impl(None);
-        AssignedValue { value: Assigned::Trivial(v), cell: Some(context_cell) }
-    }
-
     fn load_external_cell_impl(&mut self, cell: Option<Cell>) -> ContextCell {
         let context_cell = ContextCell::new(EXTERNAL_CELL_TYPE_ID, 0, self.external_cell_count);
         self.external_cell_count += 1;
@@ -94,9 +74,44 @@ impl<F: Field + Ord> CopyConstraintManager<F> {
         }
         context_cell
     }
+}
+
+impl<F: Field + Ord> CopyConstraintManagerKind<F> for CopyConstraintManager<F> {
+    fn push_constant_equality(&mut self, constant: F, cell: ContextCell) {
+        self.constant_equalities.push((constant, cell));
+    }
+
+    /// Returns the number of distinct constants used.
+    fn num_distinct_constants(&self) -> usize {
+        self.constant_equalities.iter().map(|(x, _)| x).sorted().dedup().count()
+    }
+
+    /// Adds external raw [Halo2AssignedCell] to `self.assigned_advices` and returns a new virtual [AssignedValue]
+    /// that can be used in any virtual region. No copy constraint is imposed, as the virtual cell "points" to the
+    /// raw assigned cell. The returned [ContextCell] will have `type_id` the `TypeId::of::<Cell>()`.
+    fn load_external_assigned(&mut self, assigned_cell: Halo2AssignedCell<F>) -> AssignedValue<F> {
+        let context_cell = self.load_external_cell(assigned_cell.cell());
+        let mut value = Assigned::Trivial(F::ZERO);
+        assigned_cell.value().map(|v| {
+            value = **v;
+        });
+        AssignedValue { value, cell: Some(context_cell) }
+    }
+
+    /// Adds external raw Halo2 cell to `self.assigned_advices` and returns a new virtual cell that can be
+    /// used as a tag (but will not be re-assigned). The returned [ContextCell] will have `type_id` the `TypeId::of::<Cell>()`.
+    fn load_external_cell(&mut self, cell: Cell) -> ContextCell {
+        self.load_external_cell_impl(Some(cell))
+    }
+
+    /// Mock to load an external cell for base circuit simulation. If any mock external cell is loaded, calling `assign_raw` will panic.
+    fn mock_external_assigned(&mut self, v: F) -> AssignedValue<F> {
+        let context_cell = self.load_external_cell_impl(None);
+        AssignedValue { value: Assigned::Trivial(v), cell: Some(context_cell) }
+    }
 
     /// Clears state
-    pub fn clear(&mut self) {
+    fn clear(&mut self) {
         self.advice_equalities.clear();
         self.constant_equalities.clear();
         self.assigned_advices.clear();
@@ -171,4 +186,31 @@ impl<F: Field + Ord> VirtualRegionManager<F> for SharedCopyConstraintManager<F> 
         // so the second run still assigns constants in the pk
         manager.assigned_constants.clear();
     }
+}
+
+#[derive(Default)]
+pub struct DummyCopyConstraintManager<F> {
+    _dummy: PhantomData<F>,
+}
+
+impl<F: Field + Ord> CopyConstraintManagerKind<F> for DummyCopyConstraintManager<F> {
+    fn push_constant_equality(&mut self, constant: F, cell: ContextCell) {}
+
+    fn num_distinct_constants(&self) -> usize {
+        0
+    }
+
+    fn mock_external_assigned(&mut self, _v: F) -> AssignedValue<F> {
+        AssignedValue { value: Assigned::Zero, cell: None }
+    }
+
+    fn load_external_assigned(&mut self, _assigned_cell: Halo2AssignedCell<F>) -> AssignedValue<F> {
+        AssignedValue { value: Assigned::Zero, cell: None }
+    }
+
+    fn load_external_cell(&mut self, _cell: Cell) -> ContextCell {
+        ContextCell { type_id: "dummy", context_id: 0, offset: 0 }
+    }
+
+    fn clear(&mut self) {}
 }

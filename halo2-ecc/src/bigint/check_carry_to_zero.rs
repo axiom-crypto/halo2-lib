@@ -64,6 +64,7 @@ pub fn truncate<F: BigPrimeField>(
     let mut previous = None;
     for (a_limb, carry) in a.limbs.into_iter().zip(carries) {
         let neg_carry_val = bigint_to_fe(&-carry);
+        let start = ctx.get_offset();
         ctx.assign_region(
             [
                 Existing(a_limb),
@@ -73,7 +74,7 @@ pub fn truncate<F: BigPrimeField>(
             ],
             [0],
         );
-        let neg_carry = ctx.get(-3);
+        let neg_carry = ctx.to_assigned_value(Witness(neg_carry_val), start + 1);
 
         // i in 0..num_windows {
         // let idx = std::cmp::min(window * i + window - 1, k - 1);

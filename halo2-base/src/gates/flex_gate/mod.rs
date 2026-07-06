@@ -7,7 +7,8 @@ use crate::{
         poly::Rotation,
     },
     utils::ScalarField,
-    AssignedValue, Context,
+    virtual_region::copy_constraints::CopyConstraintManagerKind,
+    AssignedValue, Context, ContextKind,
     QuantumCell::{self, Constant, Existing, Witness, WitnessFraction},
 };
 use itertools::Itertools;
@@ -157,7 +158,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `b`: [QuantumCell] value to add to 'a`
     fn add(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
     ) -> AssignedValue<F> {
@@ -171,7 +172,7 @@ pub trait GateInstructions<F: ScalarField> {
     ///
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: [QuantumCell] value
-    fn inc(&self, ctx: &mut Context<F>, a: impl Into<QuantumCell<F>>) -> AssignedValue<F> {
+    fn inc(&self, ctx: &mut impl ContextKind<F>, a: impl Into<QuantumCell<F>>) -> AssignedValue<F> {
         self.add(ctx, a, Constant(F::ONE))
     }
 
@@ -183,7 +184,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `b`: [QuantumCell] value to subtract from 'a'
     fn sub(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
     ) -> AssignedValue<F> {
@@ -191,15 +192,16 @@ pub trait GateInstructions<F: ScalarField> {
         let b = b.into();
         let out_val = *a.value() - b.value();
         // slightly better to not have to compute -F::ONE since F::ONE is cached
+        let start = ctx.get_offset();
         ctx.assign_region([Witness(out_val), b, Constant(F::ONE), a], [0]);
-        ctx.get(-4)
+        ctx.to_assigned_value(Witness(out_val), start)
     }
 
     /// Constrains and returns `out = a - 1`.
     ///
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: [QuantumCell] value
-    fn dec(&self, ctx: &mut Context<F>, a: impl Into<QuantumCell<F>>) -> AssignedValue<F> {
+    fn dec(&self, ctx: &mut impl ContextKind<F>, a: impl Into<QuantumCell<F>>) -> AssignedValue<F> {
         self.sub(ctx, a, Constant(F::ONE))
     }
 
@@ -212,7 +214,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `c`: [QuantumCell] value
     fn sub_mul(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
         c: impl Into<QuantumCell<F>>,
@@ -221,8 +223,9 @@ pub trait GateInstructions<F: ScalarField> {
         let b = b.into();
         let c = c.into();
         let out_val = *a.value() - *b.value() * c.value();
-        ctx.assign_region_last([Witness(out_val), b, c, a], [0]);
-        ctx.get(-4)
+        let start = ctx.get_offset();
+        ctx.assign_region([Witness(out_val), b, c, a], [0]);
+        ctx.to_assigned_value(Witness(out_val), start)
     }
 
     /// Constrains and returns `a * (-1) = out`.
@@ -230,11 +233,12 @@ pub trait GateInstructions<F: ScalarField> {
     /// Defines a vertical gate of form | a | -a | 1 | 0 |, where (-a) = out.
     /// * `ctx`: the [Context] to add the constraints to
     /// * `a`: [QuantumCell] value to negate
-    fn neg(&self, ctx: &mut Context<F>, a: impl Into<QuantumCell<F>>) -> AssignedValue<F> {
+    fn neg(&self, ctx: &mut impl ContextKind<F>, a: impl Into<QuantumCell<F>>) -> AssignedValue<F> {
         let a = a.into();
         let out_val = -*a.value();
+        let start = ctx.get_offset();
         ctx.assign_region([a, Witness(out_val), Constant(F::ONE), Constant(F::ZERO)], [0]);
-        ctx.get(-3)
+        ctx.to_assigned_value(Witness(out_val), start + 1)
     }
 
     /// Constrains and returns  `0 + a * b = out`.
@@ -245,7 +249,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `b`: [QuantumCell] value to multiply 'a' by
     fn mul(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
     ) -> AssignedValue<F> {
@@ -264,7 +268,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `c`: [QuantumCell] value to add to 'a * b'
     fn mul_add(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
         c: impl Into<QuantumCell<F>>,
@@ -284,15 +288,16 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `b`: [QuantumCell] value to multiply 'a' by
     fn mul_not(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
     ) -> AssignedValue<F> {
         let a = a.into();
         let b = b.into();
         let out_val = (F::ONE - a.value()) * b.value();
+        let start = ctx.get_offset();
         ctx.assign_region_smart([Witness(out_val), a, b, b], [0], [(2, 3)], []);
-        ctx.get(-4)
+        ctx.to_assigned_value(Witness(out_val), start)
     }
 
     /// Constrains that x is boolean (e.g. 0 or 1).
@@ -300,7 +305,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// Defines a vertical gate of form | 0 | x | x | x |.
     /// * `ctx`: [Context] to add the constraints to
     /// * `x`: [QuantumCell] value to constrain
-    fn assert_bit(&self, ctx: &mut Context<F>, x: AssignedValue<F>) {
+    fn assert_bit(&self, ctx: &mut impl ContextKind<F>, x: AssignedValue<F>) {
         ctx.assign_region([Constant(F::ZERO), Existing(x), Existing(x), Existing(x)], [0]);
     }
 
@@ -314,7 +319,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `b`: [QuantumCell] value to divide 'a' by
     fn div_unsafe(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
     ) -> AssignedValue<F> {
@@ -323,17 +328,20 @@ pub trait GateInstructions<F: ScalarField> {
         // TODO: if really necessary, make `c` of type `Assigned<F>`
         // this would require the API using `Assigned<F>` instead of `F` everywhere, so leave as last resort
         let c = b.value().invert().unwrap() * a.value();
+        let start = ctx.get_offset();
         ctx.assign_region([Constant(F::ZERO), Witness(c), b, a], [0]);
-        ctx.get(-3)
+        ctx.to_assigned_value(Witness(c), start + 1)
     }
 
     /// Constrains that `a` is equal to `constant` value.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: [QuantumCell] value
     /// * `constant`: constant value to constrain `a` to be equal to
-    fn assert_is_const(&self, ctx: &mut Context<F>, a: &AssignedValue<F>, constant: &F) {
-        if !ctx.witness_gen_only {
-            ctx.copy_manager.lock().unwrap().constant_equalities.push((*constant, a.cell.unwrap()));
+    fn assert_is_const(&self, ctx: &mut impl ContextKind<F>, a: &AssignedValue<F>, constant: &F) {
+        if !ctx.witness_gen_only() {
+            let cell = a.cell.unwrap();
+            let constant = *constant;
+            ctx.with_copy_manager(|cm| cm.push_constant_equality(constant, cell));
         }
     }
 
@@ -345,7 +353,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `b`: Iterator of [QuantumCell] values to take inner product of `a` by
     fn inner_product<QA>(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl IntoIterator<Item = QA>,
         b: impl IntoIterator<Item = QuantumCell<F>>,
     ) -> AssignedValue<F>
@@ -364,7 +372,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `b`: Iterator of [QuantumCell]s to take inner product of `a` by
     fn inner_product_left_last<QA>(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl IntoIterator<Item = QA>,
         b: impl IntoIterator<Item = QuantumCell<F>>,
     ) -> (AssignedValue<F>, AssignedValue<F>)
@@ -382,7 +390,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// Assumes 'a' and 'b' are the same length.
     fn inner_product_left<QA>(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl IntoIterator<Item = QA>,
         b: impl IntoIterator<Item = QuantumCell<F>>,
     ) -> (AssignedValue<F>, Vec<AssignedValue<F>>)
@@ -399,7 +407,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `b`: Iterator of [QuantumCell] values to calculate the partial sums of the inner product of `a` by.
     fn inner_product_with_sums<'thread, QA>(
         &self,
-        ctx: &'thread mut Context<F>,
+        ctx: &'thread mut impl ContextKind<F>,
         a: impl IntoIterator<Item = QA>,
         b: impl IntoIterator<Item = QuantumCell<F>>,
     ) -> Box<dyn Iterator<Item = AssignedValue<F>> + 'thread>
@@ -409,7 +417,11 @@ pub trait GateInstructions<F: ScalarField> {
     /// Constrains and returns the sum of [QuantumCell]'s in iterator `a`.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: Iterator of [QuantumCell] values to sum
-    fn sum<Q>(&self, ctx: &mut Context<F>, a: impl IntoIterator<Item = Q>) -> AssignedValue<F>
+    fn sum<Q>(
+        &self,
+        ctx: &mut impl ContextKind<F>,
+        a: impl IntoIterator<Item = Q>,
+    ) -> AssignedValue<F>
     where
         Q: Into<QuantumCell<F>>,
     {
@@ -441,7 +453,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `a`: Iterator of [QuantumCell] values to sum
     fn partial_sums<'thread, Q>(
         &self,
-        ctx: &'thread mut Context<F>,
+        ctx: &'thread mut impl ContextKind<F>,
         a: impl IntoIterator<Item = Q>,
     ) -> Box<dyn Iterator<Item = AssignedValue<F>> + 'thread>
     where
@@ -460,13 +472,19 @@ pub trait GateInstructions<F: ScalarField> {
         assert_eq!(Some(len), hi);
 
         let mut sum = *start.value();
-        let cells = iter::once(start).chain(a.flat_map(|a| {
-            let a = a.into();
-            sum += a.value();
-            [a, Constant(F::ONE), Witness(sum)]
-        }));
-        ctx.assign_region(cells, (0..len).map(|i| 3 * i as isize));
-        Box::new((0..=len).rev().map(|i| ctx.get(-1 - 3 * (i as isize))))
+        let cells: Vec<QuantumCell<F>> = iter::once(start)
+            .chain(a.flat_map(|a| {
+                let a = a.into();
+                sum += a.value();
+                [a, Constant(F::ONE), Witness(sum)]
+            }))
+            .collect();
+        let row_offset = ctx.get_offset();
+        ctx.assign_region(cells.clone(), (0..len).map(|i| 3 * i as isize));
+        Box::new((0..=len).map(move |i| {
+            let k = 3 * i;
+            ctx.to_assigned_value(cells[k], row_offset + k)
+        }))
     }
 
     /// Calculates and constrains the accumulated product of 'a' and 'b' i.e. `x_i = b_1 * (a_1...a_{i - 1})
@@ -482,7 +500,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `b`: Iterator of [QuantumCell] values to take the accumulated product of `a` by
     fn accumulated_product<QA, QB>(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl IntoIterator<Item = QA>,
         b: impl IntoIterator<Item = QB>,
     ) -> Vec<AssignedValue<F>>
@@ -511,7 +529,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `var`: [QuantumCell] that represents the value of a variable added to the sum.
     fn sum_products_with_coeff_and_var(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         values: impl IntoIterator<Item = (F, QuantumCell<F>, QuantumCell<F>)>,
         var: QuantumCell<F>,
     ) -> AssignedValue<F>;
@@ -524,7 +542,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `b`: [QuantumCell] that contains a boolean value.
     fn or(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
     ) -> AssignedValue<F> {
@@ -554,7 +572,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `b`: [QuantumCell] that contains a boolean value.
     fn and(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
     ) -> AssignedValue<F> {
@@ -566,7 +584,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// Defines a vertical gate of form | 1 - a | a | 1 | 1 |, where 1 - a = out.
     /// * `ctx`: [Context] to add the constraints to.
     /// * `a`: [QuantumCell] that contains a boolean value.
-    fn not(&self, ctx: &mut Context<F>, a: impl Into<QuantumCell<F>>) -> AssignedValue<F> {
+    fn not(&self, ctx: &mut impl ContextKind<F>, a: impl Into<QuantumCell<F>>) -> AssignedValue<F> {
         self.sub(ctx, Constant(F::ONE), a)
     }
 
@@ -579,7 +597,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `sel`: [QuantumCell] that contains a boolean value.
     fn select(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
         sel: impl Into<QuantumCell<F>>,
@@ -594,7 +612,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `c`: [QuantumCell] that contains a boolean value.
     fn or_and(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
         c: impl Into<QuantumCell<F>>,
@@ -608,7 +626,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `bits` is non-empty
     fn bits_to_indicator(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         bits: &[AssignedValue<F>],
     ) -> Vec<AssignedValue<F>> {
         let k = bits.len();
@@ -616,18 +634,23 @@ pub trait GateInstructions<F: ScalarField> {
 
         // (inv_last_bit, last_bit) = (1, 0) if bits[k - 1] = 0
         let (inv_last_bit, last_bit) = {
+            let inv_last_bit_val = F::ONE - bits[k - 1].value();
+            let start = ctx.get_offset();
             ctx.assign_region(
                 [
-                    Witness(F::ONE - bits[k - 1].value()),
+                    Witness(inv_last_bit_val),
                     Existing(bits[k - 1]),
                     Constant(F::ONE),
                     Constant(F::ONE),
                 ],
                 [0],
             );
-            (ctx.get(-4), ctx.get(-3))
+            (
+                ctx.to_assigned_value(Witness(inv_last_bit_val), start),
+                ctx.to_assigned_value(Existing(bits[k - 1]), start + 1),
+            )
         };
-        let mut indicator = Vec::with_capacity(2 * (1 << k) - 2);
+        let mut indicator: Vec<AssignedValue<F>> = Vec::with_capacity(2 * (1 << k) - 2);
         let mut offset = 0;
         indicator.push(inv_last_bit);
         indicator.push(last_bit);
@@ -635,6 +658,7 @@ pub trait GateInstructions<F: ScalarField> {
             for old_idx in 0..(1 << idx) {
                 // inv_prod_val = (1 - bit) * indicator[offset + old_idx]
                 let inv_prod_val = (F::ONE - bit.value()) * indicator[offset + old_idx].value();
+                let start = ctx.get_offset();
                 ctx.assign_region(
                     [
                         Witness(inv_prod_val),
@@ -644,7 +668,7 @@ pub trait GateInstructions<F: ScalarField> {
                     ],
                     [0],
                 );
-                indicator.push(ctx.get(-4));
+                indicator.push(ctx.to_assigned_value(Witness(inv_prod_val), start));
 
                 // prod = bit * indicator[offset + old_idx]
                 let prod = self.mul(ctx, Existing(indicator[offset + old_idx]), Existing(*bit));
@@ -663,7 +687,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `len`: length of the `indicator` vector
     fn idx_to_indicator(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         idx: impl Into<QuantumCell<F>>,
         len: usize,
     ) -> Vec<AssignedValue<F>> {
@@ -689,9 +713,10 @@ pub trait GateInstructions<F: ScalarField> {
                         Witness(is_zero),
                         Constant(F::ZERO),
                     ];
+                    let start = ctx.get_offset();
                     ctx.assign_region_smart(cells, [0, 4], [(0, 6), (1, 5)], []); // note the two `idx` need to be constrained equal: (1, 5)
-                    idx = Existing(ctx.get(-3)); // replacing `idx` with Existing cell so future loop iterations constrain equality of all `idx`s
-                    ctx.get(-2)
+                    idx = Existing(ctx.to_assigned_value(idx, start + 5)); // replacing `idx` with Existing cell so future loop iterations constrain equality of all `idx`s
+                    ctx.to_assigned_value(Witness(is_zero), start + 6)
                 } else {
                     self.is_equal(ctx, idx, Constant(F::from(i as u64)))
                 }
@@ -708,7 +733,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `indicator`: Iterator of [AssignedValue]'s where `indicator[i] == 1` if `i == idx`, otherwise `0`
     fn select_by_indicator<Q>(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl IntoIterator<Item = Q>,
         indicator: impl IntoIterator<Item = AssignedValue<F>>,
     ) -> AssignedValue<F>
@@ -737,7 +762,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `idx`: [QuantumCell] with value `idx` where `idx` is the index of the cell to be selected
     fn select_from_idx<Q>(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         cells: impl IntoIterator<Item = Q>,
         idx: impl Into<QuantumCell<F>>,
     ) -> AssignedValue<F>
@@ -762,7 +787,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// Returns the "dot product" of `array2d` with `indicator` as a fixed length (1d) array of length `array2d[0].len()`.
     fn select_array_by_indicator<AR, AV>(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         array2d: &[AR],
         indicator: &[AssignedValue<F>],
     ) -> Vec<AssignedValue<F>>
@@ -786,7 +811,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// Defines a vertical gate of form `| out | a | inv | 1 | 0 | a | out | 0 |`, where out = 1 if a = 0, otherwise out = 0.
     /// * `ctx`: [Context] to add the constraints to
     /// * `a`: [QuantumCell] value to be constrained
-    fn is_zero(&self, ctx: &mut Context<F>, a: AssignedValue<F>) -> AssignedValue<F> {
+    fn is_zero(&self, ctx: &mut impl ContextKind<F>, a: AssignedValue<F>) -> AssignedValue<F> {
         let x = a.value();
         let (is_zero, inv) = if x.is_zero_vartime() {
             (F::ONE, Assigned::Trivial(F::ONE))
@@ -804,8 +829,9 @@ pub trait GateInstructions<F: ScalarField> {
             Witness(is_zero),
             Constant(F::ZERO),
         ];
+        let start = ctx.get_offset();
         ctx.assign_region_smart(cells, [0, 4], [(0, 6)], []);
-        ctx.get(-2)
+        ctx.to_assigned_value(Witness(is_zero), start + 6)
     }
 
     /// Constrains that the value of two cells are equal: b - a = 0, returns `1` if `a = b`, otherwise `0`.
@@ -814,7 +840,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `b`: [QuantumCell] value to compare to `a`
     fn is_equal(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
     ) -> AssignedValue<F> {
@@ -829,7 +855,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `range_bits`: range of bits needed to represent `a`
     fn num_to_bits(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: AssignedValue<F>,
         range_bits: usize,
     ) -> Vec<AssignedValue<F>>;
@@ -839,7 +865,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// Constrains that `exp` has at most `max_bits` bits.
     fn pow_var(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: AssignedValue<F>,
         exp: AssignedValue<F>,
         max_bits: usize,
@@ -859,7 +885,7 @@ pub trait GateInstructions<F: ScalarField> {
     /// * `coords` is non-empty
     fn lagrange_and_eval(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         coords: &[(AssignedValue<F>, AssignedValue<F>)],
         x: AssignedValue<F>,
     ) -> (AssignedValue<F>, AssignedValue<F>) {
@@ -937,12 +963,12 @@ impl<F: ScalarField> GateChip<F> {
     /// * `ctx`: [Context] of the circuit
     /// * `a`: Iterator of [QuantumCell] values
     /// * `b`: Iterator of [QuantumCell] values to take inner product of `a` by
-    fn inner_product_simple<QA>(
+    pub fn inner_product_simple<QA>(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl IntoIterator<Item = QA>,
         b: impl IntoIterator<Item = QuantumCell<F>>,
-    ) -> bool
+    ) -> (bool, Vec<QuantumCell<F>>)
     where
         QA: Into<QuantumCell<F>>,
     {
@@ -951,30 +977,30 @@ impl<F: ScalarField> GateChip<F> {
         let mut b = b.into_iter().peekable();
 
         let b_starts_with_one = matches!(b.peek(), Some(Constant(c)) if c == &F::ONE);
-        let cells = if b_starts_with_one {
+        let mut cells = vec![];
+        if b_starts_with_one {
             b.next();
             let start_a = a.next().unwrap().into();
             sum = *start_a.value();
-            iter::once(start_a)
+            cells.push(start_a);
         } else {
             sum = F::ZERO;
-            iter::once(Constant(F::ZERO))
+            cells.push(Constant(F::ZERO));
         }
-        .chain(a.zip(b).flat_map(|(a, b)| {
+        for (a, b) in a.zip(b) {
             let a = a.into();
             sum += *a.value() * b.value();
-            [a, b, Witness(sum)]
-        }));
+            cells.extend_from_slice(&[a, b, Witness(sum)]);
+        }
 
         if ctx.witness_gen_only() {
-            ctx.assign_region(cells, vec![]);
+            ctx.assign_region(cells.clone(), vec![]);
         } else {
-            let cells = cells.collect::<Vec<_>>();
             let lo = cells.len();
             let len = lo / 3;
-            ctx.assign_region(cells, (0..len).map(|i| 3 * i as isize));
+            ctx.assign_region(cells.clone(), (0..len).map(|i| 3 * i as isize));
         };
-        b_starts_with_one
+        (b_starts_with_one, cells)
     }
 }
 
@@ -993,7 +1019,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     /// * `b`: Iterator of [QuantumCell] values to take inner product of `a` by
     fn inner_product<QA>(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl IntoIterator<Item = QA>,
         b: impl IntoIterator<Item = QuantumCell<F>>,
     ) -> AssignedValue<F>
@@ -1016,7 +1042,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     /// * `b`: Iterator of [QuantumCell]s to take inner product of `a` by
     fn inner_product_left_last<QA>(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl IntoIterator<Item = QA>,
         b: impl IntoIterator<Item = QuantumCell<F>>,
     ) -> (AssignedValue<F>, AssignedValue<F>)
@@ -1026,18 +1052,20 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
         let a = a.into_iter();
         let (len, hi) = a.size_hint();
         assert_eq!(Some(len), hi);
-        let row_offset = ctx.advice.len();
-        let b_starts_with_one = self.inner_product_simple(ctx, a, b);
-        let a_last = if b_starts_with_one {
+        let row_offset = ctx.get_offset();
+        let (b_starts_with_one, cells) = self.inner_product_simple(ctx, a, b);
+        let (a_last, off) = if b_starts_with_one {
             if len == 1 {
-                ctx.get(row_offset as isize)
+                (cells[0], 0)
             } else {
-                ctx.get((row_offset + 1 + 3 * (len - 2)) as isize)
+                let off = 1 + 3 * (len - 2);
+                (cells[off], off)
             }
         } else {
-            ctx.get((row_offset + 1 + 3 * (len - 1)) as isize)
+            let off = 1 + 3 * (len - 1);
+            (cells[off], off)
         };
-        (ctx.last().unwrap(), a_last)
+        (ctx.last().unwrap(), ctx.to_assigned_value(a_last, off + row_offset))
     }
 
     /// Returns `(<a,b>, a_assigned)`. See `inner_product` for more details.
@@ -1053,7 +1081,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     /// Assumes 'a' and 'b' are the same length.
     fn inner_product_left<QA>(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl IntoIterator<Item = QA>,
         b: impl IntoIterator<Item = QuantumCell<F>>,
     ) -> (AssignedValue<F>, Vec<AssignedValue<F>>)
@@ -1062,19 +1090,20 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     {
         let a = a.into_iter().collect_vec();
         let len = a.len();
-        let row_offset = ctx.advice.len();
-        let b_starts_with_one = self.inner_product_simple(ctx, a, b);
+        let row_offset = ctx.get_offset();
+        let (b_starts_with_one, cells) = self.inner_product_simple(ctx, a, b);
         let a_assigned = (0..len)
             .map(|i| {
-                if b_starts_with_one {
+                let k = if b_starts_with_one {
                     if i == 0 {
-                        ctx.get(row_offset as isize)
+                        0
                     } else {
-                        ctx.get((row_offset + 1 + 3 * (i - 1)) as isize)
+                        1 + 3 * (i - 1)
                     }
                 } else {
-                    ctx.get((row_offset + 1 + 3 * i) as isize)
-                }
+                    1 + 3 * i
+                };
+                ctx.to_assigned_value(cells[k], row_offset + k)
             })
             .collect_vec();
         (ctx.last().unwrap(), a_assigned)
@@ -1090,21 +1119,21 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     /// * `b`: Iterator of [QuantumCell] values to calculate the partial sums of the inner product of `a` by
     fn inner_product_with_sums<'thread, QA>(
         &self,
-        ctx: &'thread mut Context<F>,
+        ctx: &'thread mut impl ContextKind<F>,
         a: impl IntoIterator<Item = QA>,
         b: impl IntoIterator<Item = QuantumCell<F>>,
     ) -> Box<dyn Iterator<Item = AssignedValue<F>> + 'thread>
     where
         QA: Into<QuantumCell<F>>,
     {
-        let row_offset = ctx.advice.len();
-        let b_starts_with_one = self.inner_product_simple(ctx, a, b);
-        if b_starts_with_one {
-            Box::new((row_offset..ctx.advice.len()).step_by(3).map(|i| ctx.get(i as isize)))
-        } else {
-            // in this case the first assignment is 0 so we skip it
-            Box::new((row_offset..ctx.advice.len()).step_by(3).skip(1).map(|i| ctx.get(i as isize)))
-        }
+        let row_offset = ctx.get_offset();
+        let (b_starts_with_one, cells) = self.inner_product_simple(ctx, a, b);
+        let start = if b_starts_with_one { 0 } else { 3 };
+        Box::new(
+            (start..cells.len())
+                .step_by(3)
+                .map(move |k| ctx.to_assigned_value(cells[k], row_offset + k)),
+        )
     }
 
     /// Constrains and returns the sum of products of `coeff * (a * b)` defined in `values` plus a variable `var` e.g.
@@ -1114,7 +1143,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     /// * `var`: [QuantumCell] that represents the value of a variable added to the sum
     fn sum_products_with_coeff_and_var(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         values: impl IntoIterator<Item = (F, QuantumCell<F>, QuantumCell<F>)>,
         var: QuantumCell<F>,
     ) -> AssignedValue<F> {
@@ -1143,7 +1172,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     /// * `sel`: [QuantumCell] that contains a boolean value
     fn select(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
         sel: impl Into<QuantumCell<F>>,
@@ -1178,7 +1207,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     /// * `c`: [QuantumCell] that contains a boolean value
     fn or_and(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
         c: impl Into<QuantumCell<F>>,
@@ -1203,8 +1232,9 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
             Constant(F::ONE),
             a,
         ];
+        let start = ctx.get_offset();
         ctx.assign_region_smart(cells, [0, 3, 7], [(4, 7), (0, 5)], []);
-        ctx.get(-5)
+        ctx.to_assigned_value(Witness(out_val), start + 6)
     }
 
     /// Constrains and returns little-endian bit vector representation of `a`.
@@ -1214,24 +1244,30 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     /// * `range_bits`: range of bits needed to represent `a`. Assumes `range_bits > 0`.
     fn num_to_bits(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: AssignedValue<F>,
         range_bits: usize,
     ) -> Vec<AssignedValue<F>> {
+        debug_assert!(range_bits > 0);
         let bits = a.value().to_u64_limbs(range_bits, 1).into_iter().map(|x| Witness(F::from(x)));
 
-        let mut bit_cells = Vec::with_capacity(range_bits);
-        let row_offset = ctx.advice.len();
-        let acc = self.inner_product(
+        let row_offset = ctx.get_offset();
+        let (_, cells) = self.inner_product_simple(
             ctx,
             bits,
             self.pow_of_two[..range_bits].iter().map(|c| Constant(*c)),
         );
+        let acc = ctx.last().unwrap();
         ctx.constrain_equal(&a, &acc);
-        debug_assert!(range_bits > 0);
-        bit_cells.push(ctx.get(row_offset as isize));
+
+        // b_starts_with_one is true since pow_of_two[0] == F::ONE, so:
+        //   cells[0]           = Witness(bit 0)
+        //   cells[1 + 3*(i-1)] = Witness(bit i) for i >= 1
+        let mut bit_cells: Vec<AssignedValue<F>> = Vec::with_capacity(range_bits);
+        bit_cells.push(ctx.to_assigned_value(cells[0], row_offset));
         for i in 1..range_bits {
-            bit_cells.push(ctx.get((row_offset + 1 + 3 * (i - 1)) as isize));
+            let k = 1 + 3 * (i - 1);
+            bit_cells.push(ctx.to_assigned_value(cells[k], row_offset + k));
         }
 
         for bit_cell in &bit_cells {
@@ -1245,7 +1281,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     /// Constrains that `exp` has at most `max_bits` bits.
     fn pow_var(
         &self,
-        ctx: &mut Context<F>,
+        ctx: &mut impl ContextKind<F>,
         a: AssignedValue<F>,
         exp: AssignedValue<F>,
         max_bits: usize,

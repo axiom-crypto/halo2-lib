@@ -9,7 +9,9 @@ use crate::{
     },
     utils::halo2::{raw_assign_advice, raw_constrain_equal},
     utils::ScalarField,
-    virtual_region::copy_constraints::{CopyConstraintManager, SharedCopyConstraintManager},
+    virtual_region::copy_constraints::{
+        CopyConstraintManager, CopyConstraintManagerKind, SharedCopyConstraintManager,
+    },
     Context, ContextCell,
 };
 use crate::{
@@ -141,7 +143,7 @@ impl<F: ScalarField> SinglePhaseCoreManager<F> {
 
     /// Returns total advice cells
     pub fn total_advice(&self) -> usize {
-        self.threads.iter().map(|ctx| ctx.advice.len()).sum::<usize>()
+        self.threads.iter().map(|ctx| ctx.get_offset()).sum::<usize>()
     }
 }
 
@@ -208,7 +210,7 @@ pub fn assign_with_constraints<F: ScalarField, const ROTATIONS: usize>(
         let mut basic_gate = basic_gates
                         .get(gate_index)
                         .unwrap_or_else(|| panic!("NOT ENOUGH ADVICE COLUMNS. Perhaps blinding factors were not taken into account. The max non-poisoned rows is {max_rows}"));
-        assert_eq!(ctx.selector.len(), ctx.advice.len());
+        assert_eq!(ctx.selector.len(), ctx.get_offset());
 
         for (i, (advice, &q)) in ctx.advice.iter().zip(ctx.selector.iter()).enumerate() {
             let column = basic_gate.value;
@@ -278,7 +280,7 @@ pub fn assign_witnesses<F: ScalarField>(
 ) {
     if basic_gates.is_empty() {
         assert_eq!(
-            threads.iter().map(|ctx| ctx.advice.len()).sum::<usize>(),
+            threads.iter().map(|ctx| ctx.get_offset()).sum::<usize>(),
             0,
             "Trying to assign threads in a phase with no columns"
         );

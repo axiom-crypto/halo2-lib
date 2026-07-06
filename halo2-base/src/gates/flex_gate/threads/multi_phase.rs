@@ -4,7 +4,7 @@ use itertools::Itertools;
 use crate::{
     gates::{circuit::CircuitBuilderStage, flex_gate::FlexGateConfigParams},
     utils::ScalarField,
-    virtual_region::copy_constraints::SharedCopyConstraintManager,
+    virtual_region::copy_constraints::{CopyConstraintManagerKind, SharedCopyConstraintManager},
     Context,
 };
 

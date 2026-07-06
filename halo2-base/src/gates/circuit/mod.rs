@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use tracing::info_span;
 
 use crate::utils::ScalarField;
 use crate::{
@@ -9,7 +10,7 @@ use crate::{
     virtual_region::manager::VirtualRegionManager,
 };
 
-use self::builder::BaseCircuitBuilder;
+use self::builder::{BaseCircuitBuilder, WitnessCircuitBuilder};
 
 use super::flex_gate::{FlexGateConfig, FlexGateConfigParams};
 use super::range::RangeConfig;
@@ -137,6 +138,23 @@ impl<F: ScalarField> BaseConfig<F> {
     }
 }
 
+impl<F: ScalarField> Circuit<F> for WitnessCircuitBuilder<F> {
+    type Config = BaseConfig<F>;
+    type FloorPlanner = SimpleFloorPlanner;
+    type Params = BaseCircuitParams;
+
+    fn without_witnesses(&self) -> Self {
+        todo!()
+    }
+
+    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+        todo!()
+    }
+
+    fn synthesize(&self, config: Self::Config, layouter: impl Layouter<F>) -> Result<(), Error> {
+        todo!()
+    }
+}
 impl<F: ScalarField> Circuit<F> for BaseCircuitBuilder<F> {
     type Config = BaseConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
@@ -167,38 +185,51 @@ impl<F: ScalarField> Circuit<F> for BaseCircuitBuilder<F> {
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         // only load lookup table if we are actually doing lookups
-        if let MaybeRangeConfig::WithRange(config) = &config.base {
-            config.load_lookup_table(&mut layouter).expect("load lookup table should not fail");
-        } else {
-            assert!(
-                self.lookup_manager.iter().all(|lookup_manager| lookup_manager.total_rows() == 0),
-                "range lookups were queued but the circuit was configured without a RangeConfig"
-            );
+        if !self.witness_gen_only() {
+            if let MaybeRangeConfig::WithRange(config) = &config.base {
+                info_span!("load_lookup_table").in_scope(|| {
+                    config
+                        .load_lookup_table(&mut layouter)
+                        .expect("load lookup table should not fail")
+                });
+            } else {
+                assert!(
+                    self.lookup_manager.iter().all(|lookup_manager| lookup_manager.total_rows() == 0),
+                    "range lookups were queued but the circuit was configured without a RangeConfig"
+                );
+            }
         }
+
         // Only FirstPhase (phase 0)
         layouter
             .assign_region(
                 || "BaseCircuitBuilder generated circuit",
                 |mut region| {
                     let usable_rows = config.gate().max_rows;
-                    self.core.phase_manager[0].assign_raw(
-                        &(config.gate().basic_gates[0].clone(), usable_rows),
-                        &mut region,
-                    );
+                    info_span!("assign_advice").in_scope(|| {
+                        self.core.phase_manager[0].assign_raw(
+                            &(config.gate().basic_gates[0].clone(), usable_rows),
+                            &mut region,
+                        );
+                    });
                     // Only assign cells to lookup if we're sure we're doing range lookups
                     if let MaybeRangeConfig::WithRange(config) = &config.base {
-                        self.assign_lookups_in_phase(config, &mut region, 0);
+                        info_span!("assign_lookups_in_phase")
+                            .in_scope(|| self.assign_lookups_in_phase(config, &mut region, 0));
                     }
                     // Impose equality constraints
                     if !self.core.witness_gen_only() {
-                        self.core.copy_manager.assign_raw(config.constants(), &mut region);
+                        info_span!("assign_equality").in_scope(|| {
+                            self.core.copy_manager.assign_raw(config.constants(), &mut region)
+                        });
                     }
                     Ok(())
                 },
             )
             .unwrap();
 
-        self.assign_instances(&config.instance, layouter.namespace(|| "expose"));
+        info_span!("assign_instances")
+            .in_scope(|| self.assign_instances(&config.instance, layouter.namespace(|| "expose")));
         Ok(())
     }
 }
