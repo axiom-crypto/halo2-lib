@@ -1062,8 +1062,7 @@ dependencies = [
 [[package]]
 name = "halo2-axiom"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0aee3f8178b78275038e5ea0e2577140056d2c4c87fccaf6777dc0a8eebe455a"
+source = "git+https://github.com/axiom-crypto/halo2.git?tag=v0.5.1#5f2df84fa4043d7b1f3ae8a98c08e2829e1d5d94"
 dependencies = [
  "ark-std",
  "blake2b_simd",
@@ -1085,9 +1084,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "halo2-axiom"
+version = "0.5.1"
+source = "git+https://github.com/axiom-crypto/halo2?branch=main#5f2df84fa4043d7b1f3ae8a98c08e2829e1d5d94"
+dependencies = [
+ "blake2b_simd",
+ "crossbeam",
+ "ff",
+ "group",
+ "halo2curves-axiom",
+ "itertools 0.11.0",
+ "maybe-rayon",
+ "pairing",
+ "rand",
+ "rand_core",
+ "rayon",
+ "rustc-hash",
+ "sha3",
+ "tracing",
+]
+
+[[package]]
 name = "halo2-axiom-gpu"
 version = "1.0.0-rc.0"
-source = "git+https://github.com/axiom-crypto/halo2-gpu.git?tag=v1.0.0-rc.0#fa3d662335d8f913660460d443509a84d1f3242f"
+source = "git+https://github.com/axiom-crypto/halo2-gpu.git?tag=v1.0.0-rc.1#62ecb5afc05ae1331212ccc34fcf2853bba7f668"
 dependencies = [
  "ahash",
  "anyhow",
@@ -1101,6 +1121,7 @@ dependencies = [
  "ff",
  "git-version",
  "group",
+ "halo2-axiom 0.5.1 (git+https://github.com/axiom-crypto/halo2?branch=main)",
  "halo2curves-axiom",
  "itertools 0.11.0",
  "lazy_static",
@@ -1125,14 +1146,14 @@ dependencies = [
 
 [[package]]
 name = "halo2-base"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "ark-std",
  "criterion",
  "criterion-macro",
  "env_logger 0.10.2",
  "getset",
- "halo2-axiom",
+ "halo2-axiom 0.5.1 (git+https://github.com/axiom-crypto/halo2.git?tag=v0.5.1)",
  "halo2-axiom-gpu",
  "itertools 0.11.0",
  "jemallocator",
@@ -1158,7 +1179,7 @@ dependencies = [
 
 [[package]]
 name = "halo2-ecc"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "ark-std",
  "criterion",
