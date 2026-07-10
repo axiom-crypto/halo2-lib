@@ -87,7 +87,7 @@ where
         let coeffs = a
             .into_iter()
             .enumerate()
-            .map(|(i, c)| if i % 2 == 0 { c } else { self.fp_chip().negate(ctx, c) })
+            .map(|(i, c)| if i.is_multiple_of(2) { c } else { self.fp_chip().negate(ctx, c) })
             .collect();
         FieldVector(coeffs)
     }

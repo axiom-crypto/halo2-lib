@@ -40,7 +40,7 @@ impl<F: BigPrimeField> Fp12Chip<'_, F> {
             // frobenius map is used infrequently so this is a small optimization
 
             let mut a_fp2 = FieldVector(vec![a[i].clone(), a[i + 6].clone()]);
-            if pow % 2 != 0 {
+            if !pow.is_multiple_of(2) {
                 a_fp2 = fp2_chip.conjugate(ctx, a_fp2);
             }
             // if `frob_coeff` is in `Fp` and not just `Fp2`, then we can be more efficient in multiplication

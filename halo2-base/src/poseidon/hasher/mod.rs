@@ -191,7 +191,7 @@ impl<F: ScalarField, const T: usize, const RATE: usize> PoseidonHasher<F, T, RAT
                 &state,
             );
         }
-        if max_len % RATE == 0 {
+        if max_len.is_multiple_of(RATE) {
             let is_last_perm = range.gate().is_equal(
                 ctx,
                 num_perm,
@@ -348,7 +348,7 @@ fn fix_len_array_squeeze<F: ScalarField, const T: usize, const RATE: usize>(
     state: &mut PoseidonState<F, T, RATE>,
     spec: &OptimizedPoseidonSpec<F, T, RATE>,
 ) -> AssignedValue<F> {
-    let exact = input_elements.len() % RATE == 0;
+    let exact = input_elements.len().is_multiple_of(RATE);
 
     for chunk in input_elements.chunks(RATE) {
         state.permutation(ctx, gate, chunk, None, spec);

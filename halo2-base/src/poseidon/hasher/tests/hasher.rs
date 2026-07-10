@@ -71,7 +71,7 @@ fn hasher_compact_inputs_compatiblity_verification<
     let true_witness = ctx.load_constant(Fr::ONE);
     let false_witness = ctx.load_zero();
     for payload in payloads {
-        assert!(payload.values.len() % RATE == 0);
+        assert!(payload.values.len().is_multiple_of(RATE));
         assert!(payload.values.len() >= payload.len);
         assert!(payload.values.len() == RATE || payload.values.len() - payload.len < RATE);
         let num_chunk = payload.values.len() / RATE;
@@ -139,7 +139,7 @@ fn hasher_compact_chunk_inputs_compatiblity_verification<
     let mut native_sponge = Poseidon::<Fr, T, RATE>::new(R_F, R_P);
     for (payload, is_final) in payloads {
         assert!(payload.values.len() == payload.len);
-        assert!(payload.values.len() % RATE == 0);
+        assert!(payload.values.len().is_multiple_of(RATE));
         let inputs = ctx.assign_witnesses(payload.values.clone());
 
         let is_final_witness = if is_final { true_witness } else { false_witness };
