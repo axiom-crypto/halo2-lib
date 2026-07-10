@@ -532,17 +532,9 @@ pub trait GateInstructions<F: ScalarField> {
         let b = b.into();
         let not_b_val = F::ONE - b.value();
         let out_val = *a.value() + b.value() - *a.value() * b.value();
-        let cells = [
-            Witness(not_b_val),
-            Constant(F::ONE),
-            b,
-            Constant(F::ONE),
-            b,
-            a,
-            Witness(not_b_val),
-            Witness(out_val),
-        ];
-        ctx.assign_region_smart(cells, [0, 4], [(0, 6), (2, 4)], []);
+        let cells =
+            [Constant(F::ONE), Constant(-F::ONE), b, Witness(not_b_val), a, Witness(out_val)];
+        ctx.assign_region_smart(cells, [0, 2], [], []);
         ctx.last().unwrap()
     }
 
@@ -680,18 +672,15 @@ pub trait GateInstructions<F: ScalarField> {
                         (F::ZERO, Assigned::Rational(F::ONE, *x))
                     };
                     let cells = [
+                        WitnessFraction(inv),
                         Witness(is_zero),
                         idx,
                         WitnessFraction(inv),
                         Constant(F::ONE),
-                        Constant(F::ZERO),
-                        idx,
-                        Witness(is_zero),
-                        Constant(F::ZERO),
                     ];
-                    ctx.assign_region_smart(cells, [0, 4], [(0, 6), (1, 5)], []); // note the two `idx` need to be constrained equal: (1, 5)
+                    ctx.assign_region_smart(cells, [0, 1], [(0, 3)], []); // note the two `idx` need to be constrained equal: (1, 5)
                     idx = Existing(ctx.get(-3)); // replacing `idx` with Existing cell so future loop iterations constrain equality of all `idx`s
-                    ctx.get(-2)
+                    ctx.get(-4)
                 } else {
                     self.is_equal(ctx, idx, Constant(F::from(i as u64)))
                 }
@@ -795,17 +784,14 @@ pub trait GateInstructions<F: ScalarField> {
         };
 
         let cells = [
+            WitnessFraction(inv),
             Witness(is_zero),
             Existing(a),
             WitnessFraction(inv),
             Constant(F::ONE),
-            Constant(F::ZERO),
-            Existing(a),
-            Witness(is_zero),
-            Constant(F::ZERO),
         ];
-        ctx.assign_region_smart(cells, [0, 4], [(0, 6)], []);
-        ctx.get(-2)
+        ctx.assign_region_smart(cells, [0, 1], [(0, 3)], []);
+        ctx.get(-4)
     }
 
     /// Constrains that the value of two cells are equal: b - a = 0, returns `1` if `a = b`, otherwise `0`.
@@ -1155,17 +1141,8 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
         let out_val = diff_val * sel.value() + b.value();
         // | a - b | 1 | b | a |
         // | b | sel | a - b | out |
-        let cells = [
-            Witness(diff_val),
-            Constant(F::ONE),
-            b,
-            a,
-            b,
-            sel,
-            Witness(diff_val),
-            Witness(out_val),
-        ];
-        ctx.assign_region_smart(cells, [0, 4], [(0, 6), (2, 4)], []);
+        let cells = [a, Constant(-F::ONE), b, Witness(diff_val), sel, Witness(out_val)];
+        ctx.assign_region_smart(cells, [0, 2], [], []);
         ctx.last().unwrap()
     }
 
