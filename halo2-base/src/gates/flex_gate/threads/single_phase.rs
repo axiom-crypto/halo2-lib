@@ -304,6 +304,11 @@ pub fn assign_witnesses<F: ScalarField>(
                 row_offset = 0;
                 gate_index += 1;
                 column = basic_gates[gate_index].value;
+                eprintln!(
+                    "column roll-over col: {}, break_point: {:?}",
+                    column.index(),
+                    break_point
+                );
 
                 raw_assign_advice(region, column, row_offset, Value::known(advice));
             }

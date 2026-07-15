@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use getset::{Getters, MutGetters, Setters};
 use halo2_proofs_axiom::plonk::Circuit;
+use halo2_proofs_axiom_gpu::plonk::GpuAssigned;
 use itertools::Itertools;
 
 use crate::{
@@ -43,12 +44,22 @@ pub struct WitnessCircuitBuilder<F: ScalarField> {
 }
 
 impl<F: ScalarField> WitnessCircuitBuilder<F> {
-    pub fn new(break_points: Vec<usize>, config_params: BaseCircuitParams, size: usize) -> Self {
+    /// Constructs a witness-only builder.
+    ///
+    /// * `break_points` is the phase-0 `ThreadBreakPoints` from the pinning.
+    /// * `num_advice_columns` is the number of advice columns in phase 0; the paged advice buffer
+    ///   has capacity `(1 << config_params.k) * num_advice_columns` and is laid out column-major.
+    pub fn new(
+        break_points: Vec<usize>,
+        config_params: BaseCircuitParams,
+        num_advice_columns: usize,
+    ) -> Self {
         let core = MultiPhaseCoreManager::new(true);
         let lookup_manager =
             [(); MAX_PHASE].map(|_| LookupAnyManager::new(true, core.copy_manager.clone()));
+        let n = 1 << config_params.k;
         Self {
-            main: PagedWitnessContext::new(break_points, size),
+            main: PagedWitnessContext::new(break_points, n, num_advice_columns),
             lookup_manager,
             config_params,
             assigned_instances: vec![],
@@ -91,10 +102,13 @@ impl<F: ScalarField> WitnessCircuitBuilder<F> {
                 );
 
                 let cells_to_lookup = lookup_manager.cells_to_lookup.lock().unwrap();
+
+                let mut lookup_advice = vec![GpuAssigned::Zero; lookup_cols.len() * assigned_rows];
                 // Copy the cells to the config columns, going left to right, then top to bottom.
                 // Will panic if out of rows
                 let mut lookup_offset = 0;
                 let mut lookup_col = 0;
+
                 for advices in cells_to_lookup.iter().flat_map(|(_, advices)| advices) {
                     if lookup_col >= lookup_cols.len() {
                         lookup_col = 0;
@@ -108,12 +122,19 @@ impl<F: ScalarField> WitnessCircuitBuilder<F> {
                         //     Value::known(advice.value),
                         // );
 
-                        self.main.advice
-                            [column.index() * (1 << self.config_params.k) + lookup_offset] =
+                        lookup_advice[lookup_col * assigned_rows + lookup_offset] =
                             advice.value.into();
                     }
 
                     lookup_col += 1;
+                }
+
+                for (i, column) in lookup_cols.iter().enumerate() {
+                    self.main.copy_gpu_advice(
+                        &lookup_advice[i * assigned_rows..(i + 1) * assigned_rows],
+                        column[0].index(),
+                        0,
+                    );
                 }
             }
             _ => {}

@@ -1141,6 +1141,7 @@ dependencies = [
  "num-bigint",
  "num-integer",
  "num-traits",
+ "openvm-cuda-common",
  "plotters",
  "poseidon-primitives",
  "pprof",
@@ -1154,6 +1155,7 @@ dependencies = [
  "serde_json",
  "test-case",
  "test-log",
+ "tracing",
 ]
 
 [[package]]

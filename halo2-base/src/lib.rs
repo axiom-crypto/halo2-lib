@@ -6,7 +6,11 @@
 #![warn(missing_docs)]
 
 use getset::CopyGetters;
+use halo2_proofs_axiom_gpu::cuda::utils::HALO2_GPU_CTX;
+
+use halo2_proofs_axiom_gpu::cuda::{DeviceBufferExt, DeviceBufferMutSlice};
 use halo2_proofs_axiom_gpu::plonk::GpuAssigned;
+use halo2_proofs_axiom_gpu::poly::batch_invert_assigned_inplace_device;
 use itertools::Itertools;
 // Different memory allocator options:
 #[cfg(feature = "jemallocator")]
@@ -27,6 +31,10 @@ static GLOBAL: Jemalloc = Jemalloc;
 pub use halo2_proofs_axiom as halo2_proofs;
 #[cfg(feature = "cuda")]
 pub use halo2_proofs_axiom_gpu as halo2_proofs;
+use openvm_cuda_common::copy::MemCopyH2D;
+use openvm_cuda_common::d_buffer::DeviceBuffer;
+use openvm_cuda_common::error::MemCopyError;
+use openvm_cuda_common::stream::{CudaEvent, GpuDeviceCtx};
 
 use halo2_proofs::halo2curves::ff;
 use halo2_proofs::plonk::Assigned;
@@ -162,6 +170,7 @@ impl<F: ScalarField> AsRef<AssignedValue<F>> for AssignedValue<F> {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct PageLockedVec<T>(Vec<T>);
 
 impl<T> Deref for PageLockedVec<T> {
@@ -177,14 +186,20 @@ impl<T> DerefMut for PageLockedVec<T> {
     }
 }
 
-impl<T> PageLockedVec<T> {
+impl<T: Copy> PageLockedVec<T> {
     pub fn new_with_size(size: usize) -> Self {
         unsafe {
             let mut ptr = std::ptr::null();
 
-            assert!(cudaMallocHost(&mut ptr as *mut *const c_void, size as u64) == 0);
+            assert!(
+                cudaMallocHost(
+                    &mut ptr as *mut *const c_void,
+                    (size * std::mem::size_of::<T>()) as u64
+                ) == 0
+            );
 
-            PageLockedVec(Vec::from_raw_parts(ptr as *mut T, 0, size))
+            // otherwise unsafe if T is not copy
+            PageLockedVec(Vec::from_raw_parts(ptr as *mut T, size, size))
         }
     }
 }
@@ -251,38 +266,239 @@ pub trait ContextKind<F: ScalarField> {
     fn with_copy_manager<R>(&mut self, f: impl FnOnce(&mut Self::CopyManager) -> R) -> R;
 }
 
-#[derive(Clone, Debug)]
+impl<F: ScalarField> Clone for PagedWitnessContext<F> {
+    fn clone(&self) -> Self {
+        unreachable!()
+    }
+}
+
+/// Witness-generation context that writes directly into a flat, column-major advice buffer.
+///
+/// The buffer holds one physical column of `n = 2^k` rows per advice column, laid out as
+/// `[col 0 rows 0..n) | col 1 rows 0..n) | ...]`, matching what
+/// [`halo2_proofs::plonk::create_proof_materialized`] and
+/// [`crate::gates::circuit::builder::WitnessCircuitBuilder::assign_lookups_to_advice`] expect.
+///
+/// `break_points[k]` is the `row_offset` of the last cell placed in physical column `k` before
+/// switching to column `k + 1`. Its semantics match the `ThreadBreakPoints` returned by
+/// [`assign_with_constraints`](crate::gates::flex_gate::threads::single_phase::assign_with_constraints):
+/// each entry is column-local, in `[0, max_rows)`, and the value at that row is duplicated into
+/// row 0 of the next column to preserve the gate-overlap copy constraint that keygen bakes into
+/// the proving key.
+#[derive(Debug)]
 pub struct PagedWitnessContext<F: ScalarField> {
     break_points: Vec<usize>,
     break_idx: usize,
-    advice: Vec<GpuAssigned<F>>,
-    idx: usize,
+    /// Rows per physical column (`2^k`).
+    n: usize,
+    /// Index of the physical column currently being written.
+    col: usize,
+    /// Row within the current column of the next cell to be written.
+    row_offset: usize,
+    /// Number of caller-visible cells pushed so far (excludes the duplicates written at
+    /// break points). Returned by [`ContextKind::get_offset`] so callers see a linear
+    /// index consistent with the base [`Context`] semantics.
+    linear_idx: usize,
+
+    zero_cell: Option<AssignedValue<F>>,
+    cur_break_point: Option<usize>,
+
+    cur_page_idx: usize,
+    cur_page_ptr: *mut GpuAssigned<F>,
+    cur_page_stage: usize,
+    paged_chunks: Vec<(
+        PageLockedVec<GpuAssigned<F>>, // assigned into
+        DeviceBuffer<GpuAssigned<F>>,  // copied into
+        DeviceBuffer<F>,               // tmp buf
+        CudaEvent,
+    )>,
+    final_advice_values: Vec<DeviceBuffer<F>>,
+    last_assigned: Option<Assigned<F>>,
 }
 
+const PAGED_WITNESS_PAGE_SIZE: usize = 1024 * 32;
+const PAGED_WITNESS_STAGES: usize = 3;
 impl<F: ScalarField> PagedWitnessContext<F> {
-    pub fn new(break_points: Vec<usize>, size: usize) -> Self {
+    pub fn new(break_points: Vec<usize>, n: usize, num_columns: usize) -> Self {
+        let cur_break_point = break_points.get(0).copied();
+        // TODO: generalize to non divisible case
+        assert!(n % PAGED_WITNESS_PAGE_SIZE == 0);
+
+        let mut paged_chunks: Vec<(
+            PageLockedVec<GpuAssigned<F>>, // assigned into
+            DeviceBuffer<GpuAssigned<F>>,  // copied into
+            DeviceBuffer<F>,               // tmp buf
+            CudaEvent,
+        )> = vec![];
+
+        for _ in 0..PAGED_WITNESS_STAGES {
+            paged_chunks.push((
+                PageLockedVec::new_with_size(PAGED_WITNESS_PAGE_SIZE),
+                DeviceBuffer::with_capacity_on(PAGED_WITNESS_PAGE_SIZE, &HALO2_GPU_CTX),
+                DeviceBuffer::with_capacity_on(PAGED_WITNESS_PAGE_SIZE * 2, &HALO2_GPU_CTX),
+                CudaEvent::new().unwrap(),
+            ));
+        }
+
         PagedWitnessContext {
             break_points,
-            break_idx: 0,
-            advice: vec![F::ZERO.into(); size],
-            idx: 0,
+            break_idx: 1,
+            n,
+            col: 0,
+            row_offset: 0,
+            linear_idx: 0,
+            zero_cell: None,
+            cur_break_point,
+            cur_page_idx: 0,
+            cur_page_ptr: paged_chunks[0].0.as_mut_ptr(),
+            cur_page_stage: 0,
+            paged_chunks,
+            final_advice_values: (0..num_columns)
+                .map(|_| {
+                    let mut buf = DeviceBuffer::with_capacity_on(n, &HALO2_GPU_CTX);
+                    buf.mut_slice(..).fill(F::ZERO, &HALO2_GPU_CTX).unwrap();
+                    buf
+                })
+                .collect_vec(),
+            last_assigned: None,
         }
     }
 
-    pub fn push_advice(&mut self, val: impl Into<GpuAssigned<F>>) {
+    fn write_advice(&mut self, val: GpuAssigned<F>) {
+        unsafe {
+            *self.cur_page_ptr.add(self.cur_page_idx) = val;
+        }
+
+        self.cur_page_idx += 1;
+        // maintain invariant that upon entry, self.cur_page_ptr and self.cur_page_idx is valid
+        if self.cur_page_idx == PAGED_WITNESS_PAGE_SIZE {
+            let (host_buf, dev_buf, tmp_buf, event) =
+                &mut self.paged_chunks[self.cur_page_stage % PAGED_WITNESS_STAGES];
+
+            host_buf.copy_to_on(dev_buf, &HALO2_GPU_CTX).unwrap();
+
+            // assert!(
+            //     self.cur_page_stage * PAGED_WITNESS_PAGE_SIZE <= self.final_advice_values.len()
+            // );
+
+            let global_off = self.cur_page_stage * PAGED_WITNESS_PAGE_SIZE;
+            let cur_col = global_off / self.n;
+            let local_off = global_off % self.n;
+            batch_invert_assigned_inplace_device(
+                dev_buf,
+                tmp_buf,
+                &self.final_advice_values[cur_col],
+                local_off,
+            )
+            .unwrap();
+            event.record_on(&HALO2_GPU_CTX.stream).unwrap();
+
+            // prepare next stage
+            self.cur_page_stage += 1;
+            let (host_buf, _, _, event) =
+                &mut self.paged_chunks[self.cur_page_stage % PAGED_WITNESS_STAGES];
+            event.synchronize().unwrap(); // wait for memcpy and kernels to complete
+            self.cur_page_idx = 0;
+            self.cur_page_ptr = host_buf.as_mut_ptr();
+        }
+    }
+
+    /// Writes a witness into the current `(col, row_offset)` slot. If `row_offset` matches the
+    /// next entry of `break_points`, advances to `(col + 1, 0)` and writes the same value there
+    /// as the gate-overlap duplicate before advancing `row_offset` to 1.
+    ///
+    /// This mirrors the layout produced by
+    /// [`assign_witnesses`](crate::gates::flex_gate::threads::single_phase::assign_witnesses) so
+    /// that the flat buffer satisfies the copy constraints in the proving key.
+    pub fn push_advice(&mut self, val: Assigned<F>) {
+        self.last_assigned = Some(val);
         let val = val.into();
-        self.advice[self.idx] = val;
-        let idx = self.idx;
-        self.idx += 1;
-        if self.break_points.get(self.break_idx) == Some(&idx) {
-            self.advice[self.idx] = val;
-            self.idx += 1;
+        // unsafe {
+        //     let advice_ptr = self.advice.as_mut_ptr();
+        //     *advice_ptr.add(self.linear_idx) = val;
+        // }
+
+        self.write_advice(val);
+
+        // self.advice[self.col * self.n + self.row_offset] = val;
+        if self.cur_break_point == Some(self.row_offset) {
+            for _ in (self.row_offset + 1)..self.n {
+                self.write_advice(F::ZERO.into());
+            }
+            self.write_advice(val);
+            self.col += 1;
+            self.row_offset = 0;
+            // self.advice[self.col * self.n] = val;
+            self.cur_break_point = self.break_points.get(self.break_idx).copied();
             self.break_idx += 1;
+            self.linear_idx = self.col * self.n;
         }
+        self.row_offset += 1;
+        self.linear_idx += 1;
     }
 
-    pub fn get_advice(self) -> Vec<GpuAssigned<F>> {
-        self.advice
+    // pub fn get_advice(self) -> Vec<GpuAssigned<F>> {
+    //     self.advice
+    // }
+
+    pub fn get_gpu_advice(mut self) -> Vec<DeviceBuffer<F>> {
+        // flush final page to gpu
+        if self.cur_page_idx > 0 {
+            let (host_buf, dev_buf, tmp_buf, _) =
+                &mut self.paged_chunks[self.cur_page_stage % PAGED_WITNESS_STAGES];
+
+            // for i in self.cur_page_idx..PAGED_WITNESS_PAGE_SIZE {
+            //     host_buf[i] = GpuAssigned::Zero;
+            // }
+
+            host_buf.copy_to_on(dev_buf, &HALO2_GPU_CTX).unwrap();
+            dev_buf
+                .mut_slice(self.cur_page_idx..PAGED_WITNESS_PAGE_SIZE)
+                .fill(GpuAssigned::Zero, &HALO2_GPU_CTX)
+                .unwrap();
+
+            let global_off = self.cur_page_stage * PAGED_WITNESS_PAGE_SIZE;
+            let cur_col = global_off / self.n;
+            let local_off = global_off % self.n;
+            batch_invert_assigned_inplace_device(
+                dev_buf,
+                tmp_buf,
+                &self.final_advice_values[cur_col],
+                local_off,
+            )
+            .unwrap();
+        }
+
+        let mut dev_val = vec![];
+        // need to perform a swap as the Drop is custom
+        std::mem::swap(&mut dev_val, &mut self.final_advice_values);
+        HALO2_GPU_CTX.stream.synchronize().unwrap();
+
+        dev_val
+    }
+
+    pub fn copy_gpu_advice(&mut self, slice: &[GpuAssigned<F>], col: usize, offset: usize) {
+        if slice.len() == 0 {
+            return;
+        }
+        let dev_buf = slice.to_device_on(&HALO2_GPU_CTX).unwrap();
+        let tmp = DeviceBuffer::with_capacity_on(slice.len() * 2, &HALO2_GPU_CTX);
+
+        batch_invert_assigned_inplace_device(
+            &dev_buf,
+            &tmp,
+            &self.final_advice_values[col],
+            offset,
+        )
+        .unwrap();
+    }
+}
+
+impl<F: ScalarField> Drop for PagedWitnessContext<F> {
+    fn drop(&mut self) {
+        for b in self.paged_chunks.iter() {
+            b.3.synchronize().unwrap(); // make sure all H2D copies complete before freeing the host buffers
+        }
     }
 }
 
@@ -300,29 +516,19 @@ impl<F: ScalarField> ContextKind<F> for PagedWitnessContext<F> {
                 self.push_advice(acell.value);
             }
             QuantumCell::Witness(val) => {
-                self.push_advice(GpuAssigned::Trivial(val));
+                self.push_advice(Assigned::Trivial(val));
             }
             QuantumCell::WitnessFraction(val) => {
                 self.push_advice(val);
             }
             QuantumCell::Constant(c) => {
-                self.push_advice(GpuAssigned::Trivial(c));
+                self.push_advice(Assigned::Trivial(c));
             }
         }
     }
 
     fn last(&self) -> Option<AssignedValue<F>> {
-        if self.idx == 0 {
-            return None;
-        }
-
-        let value = match self.advice[self.idx - 1] {
-            GpuAssigned::Zero => Assigned::Zero,
-            GpuAssigned::Trivial(a) => Assigned::Trivial(a),
-            GpuAssigned::Rational(a, b) => Assigned::Rational(a, b),
-        };
-
-        Some(AssignedValue { value, cell: None })
+        Some(AssignedValue { value: self.last_assigned?, cell: None })
     }
 
     fn constrain_equal(&mut self, _a: &AssignedValue<F>, _b: &AssignedValue<F>) {
@@ -356,21 +562,26 @@ impl<F: ScalarField> ContextKind<F> for PagedWitnessContext<F> {
     }
 
     fn get_offset(&self) -> usize {
-        self.advice.len()
+        self.linear_idx
     }
 
     fn load_witness(&mut self, witness: F) -> AssignedValue<F> {
-        self.push_advice(GpuAssigned::Trivial(witness));
+        self.push_advice(Assigned::Trivial(witness));
         AssignedValue { value: Assigned::Trivial(witness), cell: None }
     }
 
     fn load_constant(&mut self, c: F) -> AssignedValue<F> {
-        self.push_advice(GpuAssigned::Trivial(c));
+        self.push_advice(Assigned::Trivial(c));
         AssignedValue { value: Assigned::Trivial(c), cell: None }
     }
 
     fn load_zero(&mut self) -> AssignedValue<F> {
-        self.load_constant(F::ZERO)
+        if let Some(v) = &self.zero_cell {
+            return *v;
+        }
+        let v = self.load_constant(F::ZERO);
+        self.zero_cell = Some(v);
+        v
     }
 
     fn to_assigned_value(&self, qc: impl Into<QuantumCell<F>>, _offset: usize) -> AssignedValue<F> {
