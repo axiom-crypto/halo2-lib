@@ -212,6 +212,7 @@ pub trait RangeInstructions<F: ScalarField> {
     /// ## Assumptions
     /// * `ceil(b.bits() / lookup_bits) * lookup_bits < F::CAPACITY`
     fn check_less_than_safe(&self, ctx: &mut impl ContextKind<F>, a: AssignedValue<F>, b: u64) {
+        let _t = crate::instrument!("range_check_less_than_safe");
         let range_bits = bit_length(b).div_ceil(self.lookup_bits()) * self.lookup_bits();
 
         self.range_check(ctx, a, range_bits);
@@ -233,6 +234,7 @@ pub trait RangeInstructions<F: ScalarField> {
     ) where
         F: BigPrimeField,
     {
+        let _t = crate::instrument!("range_check_big_less_than_safe");
         let range_bits = (b.bits() as usize).div_ceil(self.lookup_bits()) * self.lookup_bits();
 
         self.range_check(ctx, a, range_bits);
@@ -265,6 +267,7 @@ pub trait RangeInstructions<F: ScalarField> {
         a: AssignedValue<F>,
         b: u64,
     ) -> AssignedValue<F> {
+        let _t = crate::instrument!("range_is_less_than_safe");
         let range_bits = bit_length(b).div_ceil(self.lookup_bits()) * self.lookup_bits();
 
         self.range_check(ctx, a, range_bits);
@@ -288,6 +291,7 @@ pub trait RangeInstructions<F: ScalarField> {
     where
         F: BigPrimeField,
     {
+        let _t = crate::instrument!("range_is_big_less_than_safe");
         let range_bits = (b.bits() as usize).div_ceil(self.lookup_bits()) * self.lookup_bits();
 
         self.range_check(ctx, a, range_bits);
@@ -314,6 +318,7 @@ pub trait RangeInstructions<F: ScalarField> {
     where
         F: BigPrimeField,
     {
+        let _t = crate::instrument!("range_div_mod");
         let a = a.into();
         let b = b.into();
         assert_div_mod_no_wrap::<F>(&b, a_num_bits);
@@ -371,6 +376,7 @@ pub trait RangeInstructions<F: ScalarField> {
     where
         F: BigPrimeField,
     {
+        let _t = crate::instrument!("range_div_mod_var");
         assert!(a_num_bits <= F::CAPACITY as usize);
         assert!(b_num_bits > 0 && b_num_bits <= F::CAPACITY as usize);
 
@@ -449,6 +455,7 @@ pub trait RangeInstructions<F: ScalarField> {
         a: AssignedValue<F>,
         limb_bits: usize,
     ) -> AssignedValue<F> {
+        let _t = crate::instrument!("range_get_last_bit");
         let a_big = fe_to_biguint(a.value());
         let bit_v = F::from(a_big.bit(0));
         let two = F::from(2u64);
@@ -618,6 +625,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
     /// # Assumptions
     /// * `ceil(range_bits / lookup_bits) * lookup_bits <= F::CAPACITY`
     fn range_check(&self, ctx: &mut impl ContextKind<F>, a: AssignedValue<F>, range_bits: usize) {
+        let _t = crate::instrument!("range_check");
         self._range_check(ctx, a, range_bits);
     }
 
@@ -636,6 +644,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         b: impl Into<QuantumCell<F>>,
         num_bits: usize,
     ) {
+        let _t = crate::instrument!("range_check_less_than");
         assert!(
             num_bits < F::CAPACITY as usize,
             "num_bits must leave one native-field bit of headroom for check_less_than"
@@ -680,6 +689,7 @@ impl<F: ScalarField> RangeInstructions<F> for RangeChip<F> {
         b: impl Into<QuantumCell<F>>,
         num_bits: usize,
     ) -> AssignedValue<F> {
+        let _t = crate::instrument!("range_is_less_than");
         let a = a.into();
         let b = b.into();
 

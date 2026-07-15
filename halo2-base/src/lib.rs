@@ -44,6 +44,8 @@ use virtual_region::copy_constraints::SharedCopyConstraintManager;
 /// Module that contains the main API for creating and working with circuits.
 /// `gates` is misleading because we currently only use one custom gate throughout.
 pub mod gates;
+/// Per-function timing instrumentation. See [`instrument`].
+pub mod instrument;
 /// Module for the Poseidon hash function.
 pub mod poseidon;
 /// Module for SafeType which enforce value range and realted functions.
@@ -411,8 +413,9 @@ impl<F: ScalarField> PagedWitnessContext<F> {
     /// [`assign_witnesses`](crate::gates::flex_gate::threads::single_phase::assign_witnesses) so
     /// that the flat buffer satisfies the copy constraints in the proving key.
     pub fn push_advice(&mut self, val: Assigned<F>) {
+        // coz::scope!("push_advice");
         self.last_assigned = Some(val);
-        let val = val.into();
+        let val = unsafe { std::ptr::read(&val as *const Assigned<F> as *const GpuAssigned<F>) };
         // unsafe {
         //     let advice_ptr = self.advice.as_mut_ptr();
         //     *advice_ptr.add(self.linear_idx) = val;
@@ -612,6 +615,121 @@ impl<F: ScalarField> ContextKind<F> for PagedWitnessContext<F> {
     }
 }
 
+/// Static `type_id` returned by [`DummyContext::tag`].
+const DUMMY_CONTEXT_TYPE_ID: &str = "halo2-base:DummyContext";
+
+/// A [`ContextKind`] impl whose operations are all no-ops apart from tracking
+/// the last assigned value so that [`ContextKind::assign_region_last`] and
+/// [`ContextKind::last`] can return a live cell. Intended for profiling the
+/// pure cost of the witness-generation code path without any advice-buffer
+/// writes or GPU traffic.
+#[derive(Debug, Default, Clone)]
+pub struct DummyContext<F: ScalarField> {
+    last_assigned: Option<Assigned<F>>,
+    _phantom: std::marker::PhantomData<F>,
+}
+
+impl<F: ScalarField> DummyContext<F> {
+    pub fn new() -> Self {
+        Self { last_assigned: None, _phantom: std::marker::PhantomData }
+    }
+
+    fn record(&mut self, value: Assigned<F>) {
+        self.last_assigned = Some(value);
+    }
+}
+
+impl<F: ScalarField> ContextKind<F> for DummyContext<F> {
+    type CopyManager = DummyCopyConstraintManager<F>;
+
+    fn assign_cell(&mut self, input: impl Into<QuantumCell<F>>) {
+        let value = match input.into() {
+            QuantumCell::Existing(acell) => acell.value,
+            QuantumCell::Witness(val) => Assigned::Trivial(val),
+            QuantumCell::WitnessFraction(val) => val,
+            QuantumCell::Constant(c) => Assigned::Trivial(c),
+        };
+        self.record(value);
+    }
+
+    fn last(&self) -> Option<AssignedValue<F>> {
+        Some(AssignedValue { value: self.last_assigned?, cell: None })
+    }
+
+    fn constrain_equal(&mut self, _a: &AssignedValue<F>, _b: &AssignedValue<F>) {}
+
+    fn assign_region<Q>(
+        &mut self,
+        inputs: impl IntoIterator<Item = Q>,
+        _gate_offsets: impl IntoIterator<Item = isize>,
+    ) where
+        Q: Into<QuantumCell<F>>,
+    {
+        for input in inputs {
+            self.assign_cell(input);
+        }
+    }
+
+    fn assign_region_smart<Q>(
+        &mut self,
+        inputs: impl IntoIterator<Item = Q>,
+        _gate_offsets: impl IntoIterator<Item = isize>,
+        _equality_offsets: impl IntoIterator<Item = (isize, isize)>,
+        _external_equality: impl IntoIterator<Item = (Option<ContextCell>, isize)>,
+    ) where
+        Q: Into<QuantumCell<F>>,
+    {
+        for input in inputs {
+            self.assign_cell(input);
+        }
+    }
+
+    fn get_offset(&self) -> usize {
+        0
+    }
+
+    fn load_witness(&mut self, witness: F) -> AssignedValue<F> {
+        self.record(Assigned::Trivial(witness));
+        AssignedValue { value: Assigned::Trivial(witness), cell: None }
+    }
+
+    fn load_constant(&mut self, c: F) -> AssignedValue<F> {
+        self.record(Assigned::Trivial(c));
+        AssignedValue { value: Assigned::Trivial(c), cell: None }
+    }
+
+    fn load_zero(&mut self) -> AssignedValue<F> {
+        self.load_constant(F::ZERO)
+    }
+
+    fn to_assigned_value(&self, qc: impl Into<QuantumCell<F>>, _offset: usize) -> AssignedValue<F> {
+        let value = match qc.into() {
+            QuantumCell::Existing(acell) => acell.value,
+            QuantumCell::Witness(val) => Assigned::Trivial(val),
+            QuantumCell::WitnessFraction(val) => val,
+            QuantumCell::Constant(c) => Assigned::Trivial(c),
+        };
+        AssignedValue { value, cell: None }
+    }
+
+    fn witness_gen_only(&self) -> bool {
+        true
+    }
+
+    fn phase(&self) -> usize {
+        0
+    }
+
+    fn tag(&self) -> ContextTag {
+        (DUMMY_CONTEXT_TYPE_ID, 0)
+    }
+
+    fn with_copy_manager<R>(&mut self, f: impl FnOnce(&mut Self::CopyManager) -> R) -> R {
+        let mut dummy = DummyCopyConstraintManager::<F>::default();
+        f(&mut dummy)
+    }
+}
+
 /// Represents a single thread of an execution trace.
 /// * We keep the naming [Context] for historical reasons.
 ///
@@ -691,6 +809,11 @@ impl<F: ScalarField> Context<F> {
     /// [`Self::to_assigned_value`] to reconstruct an [`AssignedValue`] without re-reading `advice`.
     pub fn get_offset(&self) -> usize {
         self.advice.len()
+    }
+
+    /// Read-only view of all advice cells assigned in this [Context] so far.
+    pub fn advice_cells(&self) -> &[Assigned<F>] {
+        &self.advice
     }
 
     fn latest_cell(&self) -> ContextCell {

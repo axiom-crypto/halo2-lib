@@ -253,6 +253,8 @@ pub trait GateInstructions<F: ScalarField> {
         a: impl Into<QuantumCell<F>>,
         b: impl Into<QuantumCell<F>>,
     ) -> AssignedValue<F> {
+        #[cfg(feature = "coz")]
+        coz::scope!("mul");
         let a = a.into();
         let b = b.into();
         let out_val = *a.value() * b.value();
@@ -1002,6 +1004,46 @@ impl<F: ScalarField> GateChip<F> {
         };
         (b_starts_with_one, cells)
     }
+
+    pub fn inner_product_simple_opt<QA>(
+        &self,
+        ctx: &mut impl ContextKind<F>,
+        a: impl IntoIterator<Item = QA>,
+        b: impl IntoIterator<Item = QuantumCell<F>>,
+    ) -> bool
+    where
+        QA: Into<QuantumCell<F>>,
+    {
+        let mut sum;
+        let mut a = a.into_iter();
+        let mut b = b.into_iter().peekable();
+
+        let b_starts_with_one = matches!(b.peek(), Some(Constant(c)) if c == &F::ONE);
+        let cells = if b_starts_with_one {
+            b.next();
+            let start_a = a.next().unwrap().into();
+            sum = *start_a.value();
+            iter::once(start_a)
+        } else {
+            sum = F::ZERO;
+            iter::once(Constant(F::ZERO))
+        }
+        .chain(a.zip(b).flat_map(|(a, b)| {
+            let a = a.into();
+            sum += *a.value() * b.value();
+            [a, b, Witness(sum)]
+        }));
+
+        if ctx.witness_gen_only() {
+            ctx.assign_region(cells, vec![]);
+        } else {
+            let cells = cells.collect::<Vec<_>>();
+            let lo = cells.len();
+            let len = lo / 3;
+            ctx.assign_region(cells, (0..len).map(|i| 3 * i as isize));
+        };
+        b_starts_with_one
+    }
 }
 
 impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
@@ -1026,7 +1068,7 @@ impl<F: ScalarField> GateInstructions<F> for GateChip<F> {
     where
         QA: Into<QuantumCell<F>>,
     {
-        self.inner_product_simple(ctx, a, b);
+        self.inner_product_simple_opt(ctx, a, b);
         ctx.last().unwrap()
     }
 
