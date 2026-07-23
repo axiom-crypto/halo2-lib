@@ -63,6 +63,10 @@ jobs:
       - name: Generate Cargo.lock
         run: cargo generate-lockfile
 
+      # TODO: Remove this workaround once the Rust toolchain is bumped to 1.96 or newer
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
       - name: Run cargo audit
         uses: actions-rs/audit-check@v1
         with:
