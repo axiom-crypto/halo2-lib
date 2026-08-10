@@ -368,7 +368,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
 dependencies = [
  "lazy_static",
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -1062,7 +1062,7 @@ dependencies = [
 [[package]]
 name = "halo2-axiom"
 version = "0.5.3"
-source = "git+https://github.com/axiom-crypto/halo2.git?branch=main#5e4f0e524956f23b50d51b3a2f7bb07834948598"
+source = "git+https://github.com/axiom-crypto/halo2.git?tag=v0.5.3#5e4f0e524956f23b50d51b3a2f7bb07834948598"
 dependencies = [
  "ark-std",
  "blake2b_simd",
@@ -1086,7 +1086,7 @@ dependencies = [
 [[package]]
 name = "halo2-axiom-gpu"
 version = "1.0.1"
-source = "git+https://github.com/axiom-crypto/halo2-gpu.git?branch=main#bd1d5cd9494d2c73ca895b9927db730bed6246ed"
+source = "git+https://github.com/axiom-crypto/halo2-gpu.git?tag=v1.0.1#a799de8f62c626c788a02731e8f5b20ca0d8730e"
 dependencies = [
  "ahash",
  "anyhow",
@@ -1442,7 +1442,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if 1.0.0",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -1633,7 +1633,7 @@ checksum = "b410bbe7e14ab526a0e86877eb47c6996a2bd7746f027ba551028c925390e4e9"
 [[package]]
 name = "openvm-cuda-builder"
 version = "2.0.1"
-source = "git+https://github.com/openvm-org/stark-backend.git?branch=main#362c7ad8c6b042b320471a137e3eadec7ec69a44"
+source = "git+https://github.com/openvm-org/stark-backend.git?tag=v2.0.1#d667af5929d0ea9e5194adf639d6bddeb8c10f9a"
 dependencies = [
  "cc",
  "glob",
@@ -1642,7 +1642,7 @@ dependencies = [
 [[package]]
 name = "openvm-cuda-common"
 version = "2.0.1"
-source = "git+https://github.com/openvm-org/stark-backend.git?branch=main#362c7ad8c6b042b320471a137e3eadec7ec69a44"
+source = "git+https://github.com/openvm-org/stark-backend.git?tag=v2.0.1#d667af5929d0ea9e5194adf639d6bddeb8c10f9a"
 dependencies = [
  "bytesize",
  "ctor",
@@ -2735,7 +2735,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
