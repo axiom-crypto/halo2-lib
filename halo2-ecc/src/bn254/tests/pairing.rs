@@ -100,9 +100,9 @@ fn bench_pairing() -> Result<(), Box<dyn std::error::Error>> {
             bench_params.lookup_bits,
             bench_params.limb_bits,
             bench_params.num_limbs,
-            stats.proof_time.time.elapsed(),
+            stats.proof_time,
             stats.proof_size,
-            stats.verify_time.time.elapsed()
+            stats.verify_time
         )?;
     }
     Ok(())

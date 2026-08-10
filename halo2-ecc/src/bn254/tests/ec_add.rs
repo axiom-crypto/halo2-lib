@@ -102,9 +102,9 @@ fn bench_ec_add() -> Result<(), Box<dyn std::error::Error>> {
             bench_params.limb_bits,
             bench_params.num_limbs,
             bench_params.batch_size,
-            stats.proof_time.time.elapsed(),
+            stats.proof_time,
             stats.proof_size,
-            stats.verify_time.time.elapsed()
+            stats.verify_time
         )?;
     }
     Ok(())
