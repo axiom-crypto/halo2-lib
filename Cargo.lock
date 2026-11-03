@@ -1062,7 +1062,7 @@ dependencies = [
 [[package]]
 name = "halo2-axiom"
 version = "0.5.3"
-source = "git+https://github.com/axiom-crypto/halo2.git?branch=main#5e4f0e524956f23b50d51b3a2f7bb07834948598"
+source = "git+https://github.com/axiom-crypto/halo2.git?tag=v0.5.3#5e4f0e524956f23b50d51b3a2f7bb07834948598"
 dependencies = [
  "ark-std",
  "blake2b_simd",
@@ -1086,7 +1086,7 @@ dependencies = [
 [[package]]
 name = "halo2-axiom-gpu"
 version = "1.0.2"
-source = "git+https://github.com/axiom-crypto/halo2-gpu.git?branch=main#30f8ef5563ab1b040bb84a1bee28ef259f6d70f0"
+source = "git+https://github.com/axiom-crypto/halo2-gpu.git?tag=v1.0.2#3fa910d223ce015b12e0812d95748a714a39280b"
 dependencies = [
  "ahash",
  "anyhow",
@@ -1633,7 +1633,7 @@ checksum = "b410bbe7e14ab526a0e86877eb47c6996a2bd7746f027ba551028c925390e4e9"
 [[package]]
 name = "openvm-cuda-builder"
 version = "2.1.0"
-source = "git+https://github.com/openvm-org/stark-backend.git?branch=main#a6b4761ad9a098f3a166740d22ad60b96400cd65"
+source = "git+https://github.com/openvm-org/stark-backend.git?tag=v2.1.0#a6b4761ad9a098f3a166740d22ad60b96400cd65"
 dependencies = [
  "cc",
  "glob",
@@ -1642,7 +1642,7 @@ dependencies = [
 [[package]]
 name = "openvm-cuda-common"
 version = "2.1.0"
-source = "git+https://github.com/openvm-org/stark-backend.git?branch=main#a6b4761ad9a098f3a166740d22ad60b96400cd65"
+source = "git+https://github.com/openvm-org/stark-backend.git?tag=v2.1.0#a6b4761ad9a098f3a166740d22ad60b96400cd65"
 dependencies = [
  "bytesize",
  "ctor",
