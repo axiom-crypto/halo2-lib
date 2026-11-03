@@ -22,8 +22,9 @@ use crate::{
     },
     Context,
 };
-use ark_std::{end_timer, perf_trace::TimerInfo, start_timer};
+use ark_std::{end_timer, start_timer};
 use rand::{rngs::StdRng, SeedableRng};
+use std::time::{Duration, Instant};
 
 use super::fs::gen_srs;
 
@@ -220,28 +221,37 @@ impl BaseTester {
         let config_params = builder.calculate_params(Some(self.unusable_rows));
 
         let params = gen_srs(self.k);
-        let vk_time = start_timer!(|| "Generating vkey");
+        let vk_timer = start_timer!(|| "Generating vkey");
+        let vk_start = Instant::now();
         let vk = keygen_vk(&params, &builder).unwrap();
-        end_timer!(vk_time);
-        let pk_time = start_timer!(|| "Generating pkey");
+        let vk_time = vk_start.elapsed();
+        end_timer!(vk_timer);
+
+        let pk_timer = start_timer!(|| "Generating pkey");
+        let pk_start = Instant::now();
         let pk = keygen_pk(&params, vk, &builder).unwrap();
-        end_timer!(pk_time);
+        let pk_time = pk_start.elapsed();
+        end_timer!(pk_timer);
 
         let break_points = builder.break_points();
         drop(builder);
         // create real proof
-        let proof_time = start_timer!(|| "Proving time");
+        let proof_timer = start_timer!(|| "Proving time");
+        let proof_start = Instant::now();
         let mut builder = RangeCircuitBuilder::prover(config_params.clone(), break_points);
         let range = RangeChip::new(self.lookup_bits.unwrap_or(0), builder.lookup_manager().clone());
         f(builder.pool(0), &range, logic_input);
         let proof = gen_proof(&params, &pk, builder);
-        end_timer!(proof_time);
+        let proof_time = proof_start.elapsed();
+        end_timer!(proof_timer);
 
         let proof_size = proof.len();
 
-        let verify_time = start_timer!(|| "Verify time");
+        let verify_timer = start_timer!(|| "Verify time");
+        let verify_start = Instant::now();
         check_proof(&params, pk.get_vk(), &proof, self.expect_satisfied);
-        end_timer!(verify_time);
+        let verify_time = verify_start.elapsed();
+        end_timer!(verify_timer);
 
         BenchStats { config_params, vk_time, pk_time, proof_time, proof_size, verify_time }
     }
@@ -252,13 +262,13 @@ pub struct BenchStats {
     /// Config params
     pub config_params: BaseCircuitParams,
     /// Vkey gen time
-    pub vk_time: TimerInfo,
+    pub vk_time: Duration,
     /// Pkey gen time
-    pub pk_time: TimerInfo,
+    pub pk_time: Duration,
     /// Proving time
-    pub proof_time: TimerInfo,
+    pub proof_time: Duration,
     /// Proof size in bytes
     pub proof_size: usize,
     /// Verify time
-    pub verify_time: TimerInfo,
+    pub verify_time: Duration,
 }

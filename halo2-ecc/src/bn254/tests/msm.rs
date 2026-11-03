@@ -103,9 +103,9 @@ fn bench_msm() -> Result<(), Box<dyn std::error::Error>> {
             bench_params.num_limbs,
             bench_params.batch_size,
             bench_params.window_bits,
-            stats.proof_time.time.elapsed(),
+            stats.proof_time,
             stats.proof_size,
-            stats.verify_time.time.elapsed(),
+            stats.verify_time,
         )?;
     }
     Ok(())
